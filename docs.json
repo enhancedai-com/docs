@@ -16,7 +16,9 @@
           {
             "group": "Getting started",
             "pages": [
-              "index"
+              "index",
+              "getting-started/git-flow",
+              "getting-started/delivery-flow"
             ]
           },
           {
