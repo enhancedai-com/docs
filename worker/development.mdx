@@ -1,0 +1,117 @@
+---
+title: "Development"
+description: "Set up your development environment and run the Worker service locally"
+---
+
+## Repository
+
+The Worker source code is available at:
+
+**Repository**: [https://github.com/enhancedai-com/Flux-Prompt-Worker](https://github.com/enhancedai-com/Flux-Prompt-Worker)
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- Node.js (v18 or higher)
+- pnpm package manager
+- Temporal server running (see [Temporal setup](/worker/overview#temporal-integration))
+- Access to the required environment variables
+
+## Installation
+
+Clone the repository and install dependencies:
+
+```bash
+git clone https://github.com/enhancedai-com/Flux-Prompt-Worker.git
+cd Flux-Prompt-Worker
+pnpm install
+```
+
+## Development commands
+
+### Build
+
+Compile the TypeScript code:
+
+```bash
+pnpm run build
+```
+
+This generates the compiled JavaScript in the `dist` directory.
+
+### Start
+
+Run the compiled application:
+
+```bash
+pnpm start
+```
+
+### Development mode
+
+Start the application in watch mode for automatic reloading on file changes:
+
+```bash
+pnpm run start:dev
+```
+
+This is the recommended command for local development.
+
+### Debug mode
+
+Start with debugging enabled and watch mode:
+
+```bash
+pnpm run start:debug
+```
+
+Use this when you need to debug the application with breakpoints.
+
+### Production mode
+
+Run the production build:
+
+```bash
+pnpm run start:prod
+```
+
+This runs the compiled code from `dist/main` without watch mode.
+
+## Code quality
+
+### Format code
+
+Format all files using Biome:
+
+```bash
+pnpm run format
+```
+
+This automatically formats your code according to the project's style guidelines.
+
+### Lint and fix
+
+Run the linter and automatically fix issues:
+
+```bash
+pnpm run lint:fix
+```
+
+This checks your code for issues and applies automatic fixes where possible.
+
+## Development workflow
+
+1. **Clone the repository** and install dependencies
+2. **Set up environment variables** (see [configuration](/worker/overview#configuration))
+3. **Start Temporal server** if running locally
+4. **Run in development mode**: `pnpm run start:dev`
+5. **Make changes** to the codebase
+6. **Format and lint** before committing: `pnpm run format && pnpm run lint:fix`
+7. **Build** to verify compilation: `pnpm run build`
+
+## Next steps
+
+- [Learn about Worker workflows](/worker/workflows/process-single-node)
+- [Explore Worker activities](/worker/activities/notify-status)
+- [Understand the Worker overview](/worker/overview)

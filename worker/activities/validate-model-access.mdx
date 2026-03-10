@@ -1,0 +1,113 @@
+---
+title: "validateModelAccess"
+description: "Validates that a user has access to use a specific AI model"
+---
+
+## Overview
+
+The `validateModelAccessActivity` checks whether a user has permission to use a specific AI model and system. This validation ensures proper access control and billing before executing AI operations.
+
+## Purpose
+
+- Verify user permissions for AI models
+- Enforce access control policies
+- Prevent unauthorized model usage
+- Ensure billing is properly configured
+
+## When it's executed
+
+This activity is called before executing any AI model operations:
+
+1. **Before text generation**: Validates access before calling AI models
+2. **Model-specific operations**: Before any operation that requires a specific model
+3. **Access verification**: As part of the workflow validation phase
+
+## Signature
+
+```typescript
+async validateModelAccessActivity({
+  flowId: string,
+  model: string,
+  aiSystem: string
+}): Promise<boolean>
+```
+
+## Inputs
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `flowId` | `string` | ID of the flow requesting model access |
+| `model` | `string` | Name/identifier of the AI model to validate |
+| `aiSystem` | `string` | AI system/provider (e.g., `openai`, `anthropic`) |
+
+## Outputs
+
+Returns `true` if the user has access to the model, `false` otherwise. The workflow should throw an error if validation fails.
+
+## Implementation details
+
+The activity makes an HTTP POST request to the main API's validation endpoint:
+
+```
+POST ${URL_MAIN_API}/worker/validate-model-access
+```
+
+The request includes:
+- `flowId`: Flow identifier
+- `model`: Model name
+- `aiSystem`: AI system/provider
+
+The request is authenticated using the `INTERNAL_API_KEY` header.
+
+## Example usage in workflow
+
+```typescript
+// Validate model access before processing
+await validateModelAccessActivity({
+  flowId: node.flowId,
+  model: node.data.aiModel,
+  aiSystem: node.data.AiSystem,
+});
+
+// If validation fails, the activity throws an error
+// If successful, continue with model operations
+```
+
+## Error handling
+
+The activity returns `false` if:
+
+- The user doesn't have access to the specified model
+- The flow doesn't have permission for the model
+- The model is not available in the user's plan
+- The API request fails
+
+The workflow should check the return value and throw an error if validation fails:
+
+```typescript
+const hasAccess = await validateModelAccessActivity({
+  flowId,
+  model,
+  aiSystem,
+});
+
+if (!hasAccess) {
+  throw new Error("User does not have access to this model");
+}
+```
+
+## API integration
+
+The activity communicates with the main API's internal endpoint:
+
+- **Endpoint**: `/worker/validate-model-access`
+- **Method**: POST
+- **Authentication**: Internal API key (`INTERNAL_API_KEY`)
+- **Request body**: `{ flowId, model, aiSystem }`
+- **Response**: `{ success: boolean }`
+
+## Related documentation
+
+- [processSingleNode workflow](/worker/workflows/process-single-node)
+- [chargeTokensActivity](/worker/activities/charge-tokens)
+- [Worker overview](/worker/overview)

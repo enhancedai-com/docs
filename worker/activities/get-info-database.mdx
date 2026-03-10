@@ -1,0 +1,108 @@
+---
+title: "getInfoInDatabase"
+description: "Queries the database to retrieve node information"
+---
+
+## Overview
+
+The `getInfoInDatabaseActivity` executes a database query to retrieve information about a node. It's used to fetch node configuration, type, and data before processing.
+
+## Purpose
+
+- Retrieve node details from the database
+- Get node type to determine processing logic
+- Access node configuration and data
+- Validate node existence before execution
+
+## When it's executed
+
+This activity is called early in the workflow execution:
+
+1. **After status notification**: Right after notifying that execution has started
+2. **Before processing**: Before any node-specific processing begins
+3. **Node validation**: To ensure the node exists and can be processed
+
+## Signature
+
+```typescript
+async getInfoInDatabaseActivity({
+  query: string,
+  params: any[]
+}): Promise<any>
+```
+
+## Inputs
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `query` | `string` | SQL query string to execute |
+| `params` | `any[]` | Array of parameters for the SQL query (prevents SQL injection) |
+
+## Outputs
+
+Returns the first row from the query result as an object. If no rows are found, throws an error.
+
+## Implementation details
+
+The activity uses the `DatabaseService` to execute the query. It:
+
+1. Executes the query with the provided parameters
+2. Checks if any rows were returned
+3. Throws an error if no data is found
+4. Returns the first row as an object
+
+## Example usage in workflow
+
+```typescript
+// Get node information
+const node = await getInfoInDatabaseActivity({
+  query: `SELECT type, flow_id, data FROM flows_nodes WHERE node_id = $1`,
+  params: [nodeId],
+});
+
+// Access node properties
+const nodeType = node.type;
+const flowId = node.flow_id;
+const nodeData = node.data;
+```
+
+## Common query patterns
+
+### Get node by ID
+
+```typescript
+const node = await getInfoInDatabaseActivity({
+  query: `SELECT type, flow_id, data FROM flows_nodes WHERE node_id = $1`,
+  params: [nodeId],
+});
+```
+
+### Get multiple nodes
+
+```typescript
+const nodes = await getInfoInDatabaseActivity({
+  query: `SELECT node_id, type, data FROM flows_nodes WHERE flow_id = $1`,
+  params: [flowId],
+});
+```
+
+## Error handling
+
+The activity throws an error if:
+
+- No rows are returned from the query
+- The database connection fails
+- The query syntax is invalid
+
+## Return structure
+
+The returned object structure depends on the query, but typically includes:
+
+- `type`: Node type (e.g., `TEXT_GENERATOR`)
+- `flow_id`: ID of the flow containing the node
+- `data`: JSON object containing node configuration and settings
+
+## Related documentation
+
+- [processSingleNode workflow](/worker/workflows/process-single-node)
+- [Worker overview](/worker/overview)

@@ -3,9 +3,9 @@
   "theme": "mint",
   "name": "Mint Starter Kit",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#3650DE",
+    "light": "#6C84F0",
+    "dark": "#2439A8"
   },
   "favicon": "/favicon.svg",
   "navigation": {
@@ -17,16 +17,17 @@
             "group": "Getting started",
             "pages": [
               "index",
-              "getting-started/git-flow",
-              "getting-started/delivery-flow"
+              "getting-started/overview",
+              "getting-started/git-workflow",
+              "getting-started/delivery-workflow",
+              "getting-started/ai-workflow-dev"
             ]
           },
           {
             "group": "Main API",
             "pages": [
               "main-api/overview",
-              "main-api/development",
-              "main-api/env-example"
+              "main-api/development"
             ]
           },
           {
@@ -34,27 +35,42 @@
             "pages": [
               "worker/overview",
               "worker/development",
-              "worker/env-example"
+              {
+                "group": "Workflows",
+                "pages": [
+                  "worker/workflows/process-single-node",
+                  "worker/workflows/process-agent"
+                ]
+              },
+              {
+                "group": "Activities",
+                "pages": [
+                  "worker/activities/notify-status",
+                  "worker/activities/get-info-database",
+                  "worker/activities/validate-model-access",
+                  "worker/activities/charge-tokens",
+                  "worker/activities/generate-file",
+                  "worker/activities/generate-execution-logs",
+                  "worker/activities/node-execution-error"
+                ]
+              }
             ]
           },
           {
             "group": "Client",
             "pages": [
               "client/overview",
-              "client/development",
-              "client/env-example"
+              "client/development"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "🚧 API reference",
         "groups": [
           {
             "group": "API documentation",
-            "pages": [
-              "api-reference/introduction"
-            ]
+            "pages": ["api-reference/introduction"]
           },
           {
             "group": "Endpoint examples",
@@ -88,15 +104,15 @@
   },
   "contextual": {
     "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "perplexity",
+      "mcp",
+      "cursor",
+      "vscode"
+    ]
   },
   "footer": {
     "socials": {

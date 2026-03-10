@@ -1,0 +1,99 @@
+---
+title: "notifyStatus"
+description: "Sends status updates to users about node execution status"
+---
+
+## Overview
+
+The `notifyStatusActivity` sends real-time status updates to users about the execution status of nodes in a workflow. This activity is used throughout the workflow execution lifecycle to keep users informed of progress.
+
+## Purpose
+
+- Notify users when node execution starts
+- Update users when nodes complete successfully
+- Alert users when nodes fail
+- Provide real-time feedback on workflow progress
+
+## When it's executed
+
+This activity is called at three key points:
+
+1. **Workflow start**: When a node execution begins (status: `PENDING`)
+2. **Workflow completion**: When a node executes successfully (status: `COMPLETED`)
+3. **Workflow failure**: When a node execution fails (status: `FAILED`)
+
+## Signature
+
+```typescript
+async notifyStatusActivity({
+  nodes: Record<string, { status: string }>,
+  userId: string,
+  flowId: string
+}): Promise<void>
+```
+
+## Inputs
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `nodes` | `Record<string, { status: string }>` | Object mapping node IDs to their status objects. Each status object contains a `status` field (`PENDING`, `COMPLETED`, or `FAILED`) |
+| `userId` | `string` | ID of the user to notify |
+| `flowId` | `string` | ID of the flow containing the nodes |
+
+## Outputs
+
+Returns `void`. The activity completes when the notification is successfully sent.
+
+## Implementation details
+
+The activity uses the `NotificationService` to send status updates. It formats the payload and calls the notification service's `sendStatusUpdate` method, which handles the actual delivery mechanism (WebSocket, HTTP webhook, etc.).
+
+## Example usage in workflow
+
+```typescript
+// Notify that execution is starting
+await notifyStatusActivity({
+  nodes: {
+    [nodeId]: {
+      status: "PENDING",
+    },
+  },
+  userId,
+  flowId,
+});
+
+// Notify successful completion
+await notifyStatusActivity({
+  nodes: {
+    [nodeId]: {
+      status: "COMPLETED",
+    },
+  },
+  userId,
+  flowId,
+});
+
+// Notify failure
+await notifyStatusActivity({
+  nodes: {
+    [nodeId]: {
+      status: "FAILED",
+    },
+  },
+  userId,
+  flowId,
+});
+```
+
+## Status values
+
+| Status | Description | When used |
+|--------|-------------|-----------|
+| `PENDING` | Node execution has started | At workflow start |
+| `COMPLETED` | Node executed successfully | After successful completion |
+| `FAILED` | Node execution encountered an error | When an error occurs |
+
+## Related documentation
+
+- [processSingleNode workflow](/worker/workflows/process-single-node)
+- [Worker overview](/worker/overview)

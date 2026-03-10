@@ -1,0 +1,114 @@
+---
+title: "Project overview"
+description: "Learn about FluxPrompt's architecture, components, and how they work together"
+---
+
+## Architecture overview
+
+FluxPrompt consists of several interconnected components that work together to execute workflows, manage queues, and provide user interfaces.
+
+### Main API (Nest.js)
+
+The main API is built with Nest.js and serves as the central service responsible for all system processes. It handles:
+
+- User authentication and authorization
+- Flow and node management
+- API endpoints for workflow execution
+- Business logic and data processing
+- Integration with the PostgreSQL database using TypeORM
+
+The main API acts as the entry point for most operations and coordinates with other services in the system.
+
+### PostgreSQL database
+
+The primary database stores all application data including:
+
+- User accounts and authentication data
+- Flows, nodes, and their configurations
+- Execution history and logs
+- Billing and usage information
+- System configuration
+
+TypeORM serves as the ORM layer, providing type-safe database operations and migrations.
+
+### Temporal orchestrator
+
+Temporal manages the execution queues for nodes and agents. It provides:
+
+- Workflow orchestration and state management
+- Reliable execution of long-running processes
+- Queue management for node and agent processing
+- Retry logic and error handling
+- Workflow history and state persistence
+
+Temporal ensures that workflows execute reliably even in the face of failures or system restarts.
+
+### Temporal database
+
+A dedicated database stores Temporal's internal data:
+
+- Workflow execution state
+- Activity execution history
+- Queue information and metadata
+- Temporal's internal state management data
+
+This database is separate from the main PostgreSQL database and is managed by Temporal.
+
+### Worker service
+
+The worker is a microservice responsible for processing workflow executions. It:
+
+- Processes agent and node executions from the Temporal queue
+- Executes Temporal activities
+- Handles the actual AI model calls and processing
+- Manages resource-intensive operations
+- Reports execution results back to Temporal
+
+The worker runs as a separate service to isolate processing workloads from the main API.
+
+### React frontend
+
+The main frontend application built with React provides:
+
+- Visual workflow builder for creating nodes and connections
+- Dashboard for monitoring workflows and usage
+- User interface for managing flows, agents, and configurations
+- Real-time updates and execution monitoring
+- Forms and data input interfaces
+
+This is the primary interface users interact with to build and manage their AI workflows.
+
+### Temporal UI
+
+A separate frontend application provides visualization and debugging tools for Temporal workflows:
+
+- Workflow execution visualization
+- Queue status monitoring
+- Activity execution details
+- Debugging and troubleshooting tools
+- Workflow history inspection
+
+Use the Temporal UI to monitor and debug workflow executions, inspect queue states, and understand system behavior.
+
+## Key concepts
+
+### Nodes
+
+Nodes are the building blocks of workflows. Each node represents a specific operation such as:
+
+- Text generation using AI models
+- Data transformation
+- Conditional logic
+- API calls
+- File operations
+
+Nodes connect to each other through edges, creating a directed graph that defines the workflow execution path.
+
+### Agents
+
+Agents are complete workflows that can be executed independently. They consist of multiple connected nodes and can be triggered via API, webhooks, or scheduled events.
+
+## Next steps
+
+- [Learn about the git flow](/getting-started/git-flow)
+- [Learn about the delivery flow](/getting-started/delivery-flow)

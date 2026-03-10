@@ -1,0 +1,146 @@
+---
+title: "processSingleNode"
+description: "Detailed documentation of the processSingleNode workflow that executes individual nodes"
+---
+
+## Overview
+
+The `processSingleNode` workflow executes a single node within a workflow. It handles the complete lifecycle of node execution, including validation, processing, token charging, file generation, and error handling.
+
+## Purpose
+
+This workflow is designed to:
+
+- Execute a single node independently
+- Validate user access to required AI models
+- Process the node based on its type
+- Track token usage for billing
+- Generate output files when configured
+- Handle errors gracefully with comprehensive logging
+- Notify users of execution status changes
+
+## Workflow signature
+
+```typescript
+export async function processSingleNode(
+  nodeId: string,
+  userId: string,
+  sessionId: string,
+  flowId: string
+)
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|----------|------|-------------|
+| `nodeId` | `string` | Unique identifier of the node to execute |
+| `userId` | `string` | ID of the user executing the workflow |
+| `sessionId` | `string` | Session identifier for tracking execution context |
+| `flowId` | `string` | ID of the flow containing the node |
+
+### Return value
+
+Returns `"Node executed successfully"` on successful completion, or throws an error on failure.
+
+## Execution flow
+
+The workflow follows this sequence:
+
+<Steps>
+  <Step title="Set initial status">
+    Notifies the user that the node execution has started by setting status to `PENDING` using [`notifyStatusActivity`](/worker/activities/notify-status).
+  </Step>
+  <Step title="Retrieve node information">
+    Queries the database to get node details (type, flow_id, data) using [`getInfoInDatabaseActivity`](/worker/activities/get-info-database).
+  </Step>
+  <Step title="Validate node exists">
+    Throws an error if the node is not found in the database.
+  </Step>
+  <Step title="Process by node type">
+    Executes different logic based on the node type:
+    <ul>
+      <li><strong>TEXT_GENERATOR</strong>: Validates model access, generates text, charges tokens, and optionally generates files</li>
+      <li><strong>Other types</strong>: Currently throws an error (not yet supported)</li>
+    </ul>
+  </Step>
+  <Step title="Log successful execution">
+    Creates an execution log entry with success status using [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs).
+  </Step>
+  <Step title="Notify completion">
+    Updates the node status to `COMPLETED` using [`notifyStatusActivity`](/worker/activities/notify-status).
+  </Step>
+</Steps>
+
+## Node type: TEXT_GENERATOR
+
+When processing a `TEXT_GENERATOR` node, the workflow:
+
+1. **Validates model access**: Uses [`validateModelAccessActivity`](/worker/activities/validate-model-access) to ensure the user has access to the specified AI model and system
+2. **Generates text**: Executes [`textGeneratorActivity`](/worker/activities/text-generator) to produce the output (note: this activity is not documented as per requirements)
+3. **Validates tokens**: Ensures both input and output tokens are returned
+4. **Charges tokens**: Records token usage for billing using [`chargeTokensActivity`](/worker/activities/charge-tokens)
+5. **Generates file** (optional): If `saveOutput` and `fileType` are configured, generates a file using [`generateFileActivity`](/worker/activities/generate-file)
+
+## Error handling
+
+The workflow implements comprehensive error handling:
+
+<Steps>
+  <Step title="Catch errors">
+    All errors are caught in a try-catch block
+  </Step>
+  <Step title="Extract error information">
+    Extracts error message and stack trace for logging
+  </Step>
+  <Step title="Log error">
+    Creates an execution log entry with error status using [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs)
+  </Step>
+  <Step title="Update node data">
+    Updates the node's data with execution status using [`nodeExecutionErrorActivity`](/worker/activities/node-execution-error)
+  </Step>
+  <Step title="Notify failure">
+    Updates the node status to `FAILED` using [`notifyStatusActivity`](/worker/activities/notify-status)
+  </Step>
+  <Step title="Re-throw error">
+    Re-throws the error to allow Temporal to handle retries if configured
+  </Step>
+</Steps>
+
+## Activities used
+
+This workflow uses the following activities:
+
+- [`notifyStatusActivity`](/worker/activities/notify-status) - Status notifications (start, completion, failure)
+- [`getInfoInDatabaseActivity`](/worker/activities/get-info-database) - Database queries
+- [`validateModelAccessActivity`](/worker/activities/validate-model-access) - Model access validation
+- [`chargeTokensActivity`](/worker/activities/charge-tokens) - Token billing
+- [`generateFileActivity`](/worker/activities/generate-file) - File generation (optional)
+- [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs) - Execution logging
+- [`nodeExecutionErrorActivity`](/worker/activities/node-execution-error) - Error handling
+
+## Status transitions
+
+The node status progresses through these states:
+
+1. **PENDING** - Workflow started, node execution beginning
+2. **COMPLETED** - Node executed successfully
+3. **FAILED** - Node execution encountered an error
+
+## Example usage
+
+```typescript
+// Triggered by Temporal when a node execution is requested
+await processSingleNode(
+  "node-123",
+  "user-456",
+  "session-789",
+  "flow-abc"
+);
+```
+
+## Related documentation
+
+- [Worker overview](/worker/overview)
+- [Activities documentation](/worker/activities/notify-status)
+- [processAgent workflow](/worker/workflows/process-agent) (in development)

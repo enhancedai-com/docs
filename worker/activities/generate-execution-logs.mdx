@@ -1,0 +1,137 @@
+---
+title: "generateExecutionLogs"
+description: "Creates execution log entries for workflow tracking and debugging"
+---
+
+## Overview
+
+The `generateExecutionLogsActivity` creates log entries in the database to track workflow executions. These logs are used for debugging, auditing, and monitoring workflow performance.
+
+## Purpose
+
+- Track workflow execution history
+- Record success and failure information
+- Store error stack traces for debugging
+- Maintain execution metadata for analysis
+- Enable workflow auditing and compliance
+
+## When it's executed
+
+This activity is called at two key points:
+
+1. **After successful execution**: Logs successful node completion with execution details
+2. **On error**: Logs error information including stack traces and error messages
+
+## Signature
+
+```typescript
+async generateExecutionLogsActivity({
+  nodeId: string,
+  flowId: string,
+  userId: string,
+  sessionId: string,
+  message: string,
+  errorStack: any,
+  metadata: any,
+  isError: boolean
+}): Promise<void>
+```
+
+## Inputs
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `nodeId` | `string` | ID of the node being logged |
+| `flowId` | `string` | ID of the flow containing the node |
+| `userId` | `string` | ID of the user executing the workflow |
+| `sessionId` | `string` | Session identifier for tracking execution context |
+| `message` | `string` | Log message describing the execution result |
+| `errorStack` | `any` | Error stack trace (null for successful executions) |
+| `metadata` | `any` | Additional metadata about the execution (typically node data) |
+| `isError` | `boolean` | Flag indicating whether this is an error log |
+
+## Outputs
+
+Returns `void`. The activity completes when the log entry is successfully created.
+
+## Implementation details
+
+The activity inserts a record into the `execution_logs` table with the following structure:
+
+- `nodeId`: Node identifier
+- `flowId`: Flow identifier
+- `userId`: User identifier
+- `sessionId`: Session identifier
+- `message`: Log message
+- `errorStack`: Error stack trace (nullable)
+- `metadata`: JSON metadata (typically node configuration)
+- `isError`: Boolean error flag
+
+## Example usage in workflow
+
+### Success logging
+
+```typescript
+await generateExecutionLogsActivity({
+  nodeId,
+  flowId,
+  userId,
+  sessionId,
+  message: 'Node executed successfully',
+  errorStack: null,
+  metadata: node.data,
+  isError: false,
+});
+```
+
+### Error logging
+
+```typescript
+const errorMessage = error instanceof Error ? error.message : String(error || "Error unknown in workflow");
+const stack = error.cause?.stack || error.stack || 'No stack';
+
+await generateExecutionLogsActivity({
+  nodeId,
+  flowId,
+  userId,
+  sessionId,
+  message: errorMessage,
+  errorStack: stack,
+  metadata: node.data,
+  isError: true,
+});
+```
+
+## Log structure
+
+Each log entry contains:
+
+- **Execution context**: `nodeId`, `flowId`, `userId`, `sessionId`
+- **Result information**: `message`, `isError`
+- **Debugging data**: `errorStack`, `metadata`
+
+## Error handling
+
+The activity may throw an error if:
+
+- Database connection fails
+- The insert query fails
+- Required fields are missing
+
+Errors in logging should not block workflow execution, but they may be caught and handled silently.
+
+## Use cases
+
+Execution logs are used for:
+
+- **Debugging**: Understanding why workflows failed
+- **Monitoring**: Tracking workflow success rates
+- **Auditing**: Maintaining execution history
+- **Analytics**: Analyzing workflow performance
+- **Troubleshooting**: Identifying patterns in failures
+
+## Related documentation
+
+- [processSingleNode workflow](/worker/workflows/process-single-node)
+- [nodeExecutionErrorActivity](/worker/activities/node-execution-error)
+- [Worker overview](/worker/overview)

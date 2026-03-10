@@ -1,0 +1,127 @@
+---
+title: "🚧 generateFile"
+description: "Generates output files from node execution results"
+---
+
+## Overview
+
+The `generateFileActivity` creates output files from node execution results. It's used when nodes are configured to save their output to a file.
+
+## Purpose
+
+- Generate output files from node results
+- Save node outputs for later retrieval
+- Provide file URLs for download
+- Support file-based output storage
+
+## When it's executed
+
+This activity is called conditionally:
+
+1. **After successful execution**: Only when `saveOutput` is enabled in node configuration
+2. **When file type is specified**: Requires `fileType` to be configured
+3. **Before completion**: Executes before marking the workflow as complete
+
+## Signature
+
+```typescript
+async generateFileActivity({
+  nodeId: string,
+  fileType: string
+}): Promise<string>
+```
+
+## Inputs
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `nodeId` | `string` | ID of the node generating the file |
+| `fileType` | `string` | File extension/type (e.g., `txt`, `json`, `md`) |
+
+## Outputs
+
+Returns a URL string pointing to the generated file. The URL format is:
+
+```
+${URL_MAIN_API}/internal-api/generate-file/${nodeId}.${fileType}
+```
+
+## Implementation details
+
+<Warning>
+This activity is currently a placeholder implementation. The actual file generation logic is not yet implemented.
+</Warning>
+
+The current implementation returns a URL string without actually generating the file. The file generation endpoint is expected to handle the actual file creation when accessed.
+
+## Example usage in workflow
+
+```typescript
+// Check if file generation is enabled
+if (node.data.saveOutput && node.data.fileType) {
+  const fileUrl = await generateFileActivity({
+    nodeId,
+    fileType: node.data.fileType,
+  });
+
+  if (!fileUrl) {
+    throw new Error("Failed to generate file");
+  }
+
+  // File URL can be saved to database or returned to user
+  // TODO: Save fileUrl to database
+}
+```
+
+## Configuration
+
+File generation is controlled by node configuration:
+
+- `saveOutput`: Boolean flag enabling file generation
+- `fileType`: String specifying the file extension/type
+
+## Supported file types
+
+The activity accepts any file type string. Common types include:
+
+- `txt` - Plain text files
+- `json` - JSON data files
+- `md` - Markdown files
+- `csv` - CSV data files
+- `html` - HTML files
+
+## Error handling
+
+The activity may return an empty string or throw an error if:
+
+- File generation fails
+- The file type is invalid
+- Storage is unavailable
+- The node ID is invalid
+
+The workflow should validate the returned URL:
+
+```typescript
+const fileUrl = await generateFileActivity({
+  nodeId,
+  fileType: node.data.fileType,
+});
+
+if (!fileUrl) {
+  throw new Error("Failed to generate file");
+}
+```
+
+## Future implementation
+
+The activity is marked as TODO and will be fully implemented to:
+
+- Actually generate files from node output
+- Store files in appropriate storage (S3, local filesystem, etc.)
+- Return accessible file URLs
+- Handle file generation errors properly
+
+## Related documentation
+
+- [processSingleNode workflow](/worker/workflows/process-single-node)
+- [Worker overview](/worker/overview)
