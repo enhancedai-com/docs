@@ -51,6 +51,7 @@
                   "worker/activities/charge-tokens",
                   "worker/activities/generate-file",
                   "worker/activities/generate-execution-logs",
+                  "worker/activities/scripting",
                   "worker/activities/node-execution-error"
                 ]
               }

@@ -1,0 +1,120 @@
+---
+title: "Scripting node"
+description: "Runs user JavaScript or Python in AWS Lambda via the scripting activity; variables, output, and console behavior for developers."
+---
+
+## Overview
+
+The **scripting** node runs code the user provides in **JavaScript** or **Python**. The Worker resolves the node from the database, invokes the matching Lambda executor, persists `result` and `console` on the node row, and returns the same payload to the workflow.
+
+The Temporal activity [`scriptingActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`ScriptingService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/scripting/scripting.service.ts).
+
+## When it runs
+
+`scriptingActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **scripting** (`NodeType.SCRIPTING`).
+
+## Activity signature
+
+```typescript
+async scriptingActivity({
+  nodeId: string,
+  sessionId: string,
+  userId: string,
+}): Promise<ScriptingResponse>
+```
+
+`ScriptingResponse`:
+
+```typescript
+{
+  result?: unknown;   // script “output”
+  console?: unknown[]; // collected logs
+}
+```
+
+## End-to-end flow
+
+1. Load `flows_nodes` by `nodeId` and read `data` (language, script source, variables).
+2. Choose the Lambda function from `data.language` and env vars (see below).
+3. Build the script string: prefer merged `scriptData[]` rows (`text` joined by newlines); if empty, use `data.script`.
+4. Invoke Lambda with `{ script, variables }`.
+5. On success, merge `result` and `console` into `data` and `UPDATE flows_nodes`.
+6. Return `{ result, console }` to the workflow.
+
+Lambda errors (missing function, runtime errors, timeouts) surface as thrown errors in the Worker.
+
+## Outputs
+
+| Concept | Meaning |
+| -------- | -------- |
+| **Output** | Stored in `result`. How it is set depends on the runtime (see [Executors](#executors)). |
+| **Console** | Stored in `console`: every line produced by the sandbox `console` API (`log`, `warn`, `error`), including `[ERROR]` / `[WARN]` prefixes where applicable. |
+
+## Node `data` fields (Worker expectations)
+
+| Field | Role |
+| ----- | ----- |
+| `language` | `JavaScript` or `Python` (see `Language` enum in the Worker). Selects which Lambda to call. |
+| `script` | Fallback script string when `scriptData` is empty or has no usable text. |
+| `scriptData` | Optional array of rows; each row’s `text` is concatenated with newlines and used as the script when non-empty. |
+| `variables` | Array of `{ name, value }` entries for substitution and (Python) injection (see [Variables](#variables)). |
+
+After execution, `data` is updated with `result` and `console` from Lambda.
+
+## Variables
+
+Both executors:
+
+1. Build a map of variable `name` → string `value`.
+2. Replace every occurrence of `{{name}}` in the script with that string (regex / global replace).
+
+**Python** also injects assignments at the top of the wrapped file so each name is available as a Python variable (values JSON-serialized for literals).
+
+**JavaScript** also spreads `variablesMap` onto the VM sandbox so names are available as identifiers in addition to `{{name}}` placeholders.
+
+## Executors
+
+Execution happens in AWS Lambda, not inside the Worker process.
+
+### Python (`py-scripting-node`)
+
+- **Timeout:** 30 seconds (subprocess).
+- **API:** `console.log`, `console.error`, `console.warn`; **`setResult(value)`** sets the structured output `result`.
+- **Output:** The wrapper prints a JSON line with `{ result, console }`. If the process exits non-zero, the Lambda returns an `error` string (stderr).
+- Placeholders `{{varName}}` are applied after the variable map is built.
+
+### JavaScript (`js-scripting-node`)
+
+- **Timeout:** 30 seconds (`vm.runInContext`).
+- **API:** `console.log`, `console.error`, `console.warn`; **`setResult(value)`** sets `result`.
+- **Output:** `result` is `scriptResult` if `setResult` was used; otherwise the **last expression** value from `vm.runInContext` when it is not `undefined`; otherwise `null`.
+- On uncaught errors, the handler returns `error` (timeout message or `err.message`) and may still return partial `console` logs.
+
+## Environment variables (Worker)
+
+| Variable | Purpose |
+| -------- | -------- |
+| `LAMBDA_JS_SCRIPTING_NODE` | Name of the JS Lambda (for `language === JavaScript`). |
+| `LAMBDA_PY_SCRIPTING_NODE` | Name of the Python Lambda (for `language === Python`). |
+| `AWS_REGION` | AWS region for `LambdaClient` (default in code: `us-east-1`). |
+
+If `language` does not match a configured Lambda, `ScriptingService` throws.
+
+## Local development
+
+When `NODE_ENV === 'local'`, [`ScriptingModule`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/scripting/scripting.module.ts) configures the AWS SDK `LambdaClient` with explicit credentials from the environment:
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+
+Set these (and region / function names) so local Worker runs can invoke the same Lambdas your AWS account deploys.
+
+<Note>
+Console links to edit Lambda code require an AWS login and are environment-specific. Function names in your account should match `LAMBDA_*_SCRIPTING_NODE`.
+</Note>
+
+## Related documentation
+
+- [`processSingleNode` workflow](/worker/workflows/process-single-node)
+- [Worker overview](/worker/overview)
+- [Worker development](/worker/development)
