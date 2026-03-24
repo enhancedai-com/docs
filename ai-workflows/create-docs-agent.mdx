@@ -1,7 +1,31 @@
 ---
 title: "Create Mintlify documentation"
-description: "How to use the create-docs command in Cursor, what to tell the agent, and how to publish via git and the Mintlify dashboard."
+description: "How to use the create-docs command in Cursor, what to tell the agent, local Mint CLI preview, and how to publish via git and the Mintlify dashboard."
 ---
+
+## Run the docs locally
+
+To use the Mintlify CLI (`mint dev`, `mint validate`, `mint broken-links`, and so on), install the **`mint`** package **globally** once on your machine. As in the [documentation repository README](https://github.com/enhancedai-com/docs/blob/main/README.md), use either:
+
+```bash
+npm i -g mint
+```
+
+or
+
+```bash
+pnpm add -g mint
+```
+
+The README also lists **Node.js** requirements (v20.17.0 or higher).
+
+From the **documentation project root** (the folder that contains `docs.json`), start the local preview:
+
+```bash
+mint dev
+```
+
+The site is served at **http://localhost:3000** (see the [README](https://github.com/enhancedai-com/docs/blob/main/README.md) for details).
 
 ## Overview
 
