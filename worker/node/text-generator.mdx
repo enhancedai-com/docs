@@ -1,0 +1,102 @@
+---
+title: "Text generator"
+sidebarTitle: "Text generator"
+description: "Temporal activity that runs the AI Text Generator node: Vercel AI SDK, provider routing, memory, web search, and multimodal handling."
+---
+
+## Overview
+
+The **text generator** node produces LLM output using the Vercel AI SDK (`generateText`). The Worker loads node configuration from Postgres, resolves the concrete model via `system_ai_models`, builds system/messages/tools, calls the provider, persists results on the node row, and returns token usage to the workflow for billing.
+
+[`textGeneratorActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`TextGeneratorService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/text-generator/ai-generator.service.ts).
+
+For **product and UI** details (inputs, provider knobs, model capability tables), see [AI Text Generator](/worker/text-generator).
+
+## When it runs
+
+`textGeneratorActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **text generator** (`NodeType.TEXT_GENERATOR`). The workflow typically calls [`validateModelAccessActivity`](/worker/activities/validate-model-access) before execution and [`chargeTokensActivity`](/worker/activities/charge-tokens) afterward using the returned token counts.
+
+## Activity signature
+
+```typescript
+async textGeneratorActivity({
+  nodeId: string,
+  sessionId: string,
+  userId: string,
+}): Promise<TextGeneratorResponse>
+```
+
+`TextGeneratorResponse`:
+
+```typescript
+{
+  output?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+}
+```
+
+The activity returns only these fields; richer state (generated text, logs, previews, memory) is written to `flows_nodes.data` inside `TextGeneratorService.process`.
+
+## End-to-end flow
+
+1. **Load node** — `SELECT` from `flows_nodes` by `nodeId`; read `data` (prompt, provider fields, memory flags, etc.).
+2. **Resolve model field** — From `data.AiSystem`, the service picks which property holds the model id (`aiModel`, `groqModel`, `geminiModel`, `anthropicModel`, or `perplexityType`). See `getModelFieldByAiSystem` in the service.
+3. **Load model metadata** — `SELECT` from `system_ai_models` where `modelName` matches that id (`aiCompany`, limits, `isVisionModel`, etc.).
+4. **Instantiate model** — `selectModel` maps `aiCompany` to a client (`openai`, `anthropic`, `gemini`, `perplexity`, `xai`, `groq`) and returns a `LanguageModel`. Anthropic ids are normalized via an internal map when the stored id matches known keys.
+5. **Build request** — `buildConfig` composes `system`, `messages`, optional web-search `tools`, and `cleanedPrompt` (used for memory). Persona and instructions append to `system`. Prompt lines come from `promptData` + `prompt`; context from `contentData` + `content`. Memory injects prior turns when `memory` is true and `sessionId` is present.
+6. **Generate** — `generateText` with provider-specific options from `buildGenerateTextOptions` (temperature, max tokens, stop sequences, Perplexity search context, OpenAI reasoning effort, etc.). `autoToken` interacts with `maxOutputToken` from `system_ai_models`.
+7. **Persist** — `UPDATE flows_nodes` with `text`, structured `logs` from `buildAILog`, `executionStatus: "COMPLETED"`, `nodeUsedTokens`, appended `previewResponses`, and updated `userSessionsChat` when memory is enabled.
+8. **Return** — `output`, `inputTokens`, `outputTokens` from `result.totalUsage`.
+
+## Persisted node `data` highlights
+
+| Field | Role |
+| ----- | ----- |
+| `text` | Model output string. |
+| `logs` | Human-readable execution log (model id, tools used, search queries, URLs, token usage, finish reason). |
+| `executionStatus` | Set to `COMPLETED` on success. |
+| `nodeUsedTokens` | Input token count from usage (used for display; billing uses activity return values). |
+| `previewResponses` | Previous outputs plus the new output appended. |
+| `userSessionsChat` | When `memory` is true, the current session’s `memories` gain new user/assistant entries from this run. |
+
+## Web search
+
+When `node.webSearch` is true, `buildConfig` attaches provider-specific tools:
+
+| `AiSystem` | Tool source (conceptually) |
+| ---------- | -------------------------- |
+| OpenAI | `openai.tools.webSearch` |
+| Anthropic | `anthropic.tools.webSearch_20250305` |
+| Gemini | `google.tools.googleSearch` |
+
+Other providers throw if web search is requested without support. Logs include tool calls, search queries, and URLs when present.
+
+## Multimodal
+
+If `multimodalEnabled` is true and `system_ai_models.isVisionModel` is true, URLs in the prompt are extracted; non-file URLs are stripped from the text sent as prompt. File URLs are validated (type, size via `HEAD`), capped at **3 files**, and merged into messages as `image` or `file` parts depending on provider. Limits include max sizes per type (images 5MB, generic 10MB, PDF/video/audio rules as in code).
+
+## Session memory
+
+When `memory` is true, `sessionId` is **required** (throws if missing). The service loads `userSessionsChat` for that session, applies `processMemoryFilter` using `selectedType` / `selectedNumber` / `selectedIndex` (first/last N entries or words, or all), and prepends those messages. After generation, if `cleanedPrompt` is non-empty, new user and assistant memory entries are appended for that session.
+
+## Provider-specific generation options
+
+`buildGenerateTextOptions` branches on `modelInfo.aiCompany` (lowercased). Typical mappings:
+
+- **Anthropic** — `anthropicToken`, `anthropicTemperature`, `anthropicTopP`, `anthropicTopK`; max output resolved with `autoToken` vs `system_ai_models.maxOutputToken`.
+- **Gemini** — `geminiMaxOutputTokens`, `temperature`, `topP`, `topK`.
+- **OpenAI** — `aiTokens`, `aiTemperature`, `aiPp` (top P), `aiFp` (mapped to topK in options), optional `aiEffort` → `providerOptions.openai.reasoningEffort`.
+- **Perplexity** — `max_tokens` / `perplexityTokens`, temperature, top P/K, `search_context_size` in provider options.
+- **XAI** — `aiTokens`, `aiTemperature`.
+- **Groq** — `groqMaxTokens`, temperature/topP (with fallbacks), `seed`, `groqStop` as stop sequences.
+
+Unsupported or missing providers throw during model selection.
+
+## Related documentation
+
+- [AI Text Generator](/worker/text-generator) — Field-level and model-matrix reference
+- [`processSingleNode` workflow](/worker/workflows/process-single-node)
+- [Validate model access](/worker/activities/validate-model-access)
+- [Charge tokens](/worker/activities/charge-tokens)
+- [Worker overview](/worker/overview)

@@ -36,6 +36,13 @@
               "worker/overview",
               "worker/development",
               {
+                "group": "Node",
+                "pages": [
+                  "worker/node/scripting",
+                  "worker/node/text-generator"
+                ]
+              },
+              {
                 "group": "Workflows",
                 "pages": [
                   "worker/workflows/process-single-node",
@@ -51,7 +58,6 @@
                   "worker/activities/charge-tokens",
                   "worker/activities/generate-file",
                   "worker/activities/generate-execution-logs",
-                  "worker/activities/scripting",
                   "worker/activities/node-execution-error"
                 ]
               }
@@ -119,5 +125,15 @@
     "socials": {
       "github": "https://github.com/enhancedai-com"
     }
-  }
+  },
+  "redirects": [
+    {
+      "source": "/worker/activities/scripting",
+      "destination": "/worker/node/scripting"
+    },
+    {
+      "source": "/worker/activities/text-generator",
+      "destination": "/worker/node/text-generator"
+    }
+  ]
 }

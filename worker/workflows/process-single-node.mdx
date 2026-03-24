@@ -61,6 +61,7 @@ The workflow follows this sequence:
     Executes different logic based on the node type:
     <ul>
       <li><strong>TEXT_GENERATOR</strong>: Validates model access, generates text, charges tokens, and optionally generates files</li>
+      <li><strong>SCRIPTING</strong>: Runs user JavaScript or Python via Lambda (see the <a href="/worker/node/scripting">Scripting node</a> doc)</li>
       <li><strong>Other types</strong>: Currently throws an error (not yet supported)</li>
     </ul>
   </Step>
@@ -77,7 +78,7 @@ The workflow follows this sequence:
 When processing a `TEXT_GENERATOR` node, the workflow:
 
 1. **Validates model access**: Uses [`validateModelAccessActivity`](/worker/activities/validate-model-access) to ensure the user has access to the specified AI model and system
-2. **Generates text**: Executes [`textGeneratorActivity`](/worker/activities/text-generator) to produce the output (note: this activity is not documented as per requirements)
+2. **Generates text**: Executes [`textGeneratorActivity`](/worker/node/text-generator) to produce the output
 3. **Validates tokens**: Ensures both input and output tokens are returned
 4. **Charges tokens**: Records token usage for billing using [`chargeTokensActivity`](/worker/activities/charge-tokens)
 5. **Generates file** (optional): If `saveOutput` and `fileType` are configured, generates a file using [`generateFileActivity`](/worker/activities/generate-file)
@@ -114,6 +115,8 @@ This workflow uses the following activities:
 - [`notifyStatusActivity`](/worker/activities/notify-status) - Status notifications (start, completion, failure)
 - [`getInfoInDatabaseActivity`](/worker/activities/get-info-database) - Database queries
 - [`validateModelAccessActivity`](/worker/activities/validate-model-access) - Model access validation
+- [`textGeneratorActivity`](/worker/node/text-generator) - AI text generation (TEXT_GENERATOR nodes)
+- [`scriptingActivity`](/worker/node/scripting) - Script execution (SCRIPTING nodes)
 - [`chargeTokensActivity`](/worker/activities/charge-tokens) - Token billing
 - [`generateFileActivity`](/worker/activities/generate-file) - File generation (optional)
 - [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs) - Execution logging

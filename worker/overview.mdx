@@ -74,10 +74,11 @@ Activities are the actual operations performed by workflows. They can:
 - [`notifyStatusActivity`](/worker/activities/notify-status) - Sends status updates to users
 - [`getInfoInDatabaseActivity`](/worker/activities/get-info-database) - Queries the database
 - [`validateModelAccessActivity`](/worker/activities/validate-model-access) - Validates user access to AI models
+- [`textGeneratorActivity`](/worker/node/text-generator) - Runs the AI Text Generator node (LLM call, persistence, token usage)
 - [`chargeTokensActivity`](/worker/activities/charge-tokens) - Records token usage for billing
 - [`generateFileActivity`](/worker/activities/generate-file) - Generates output files
 - [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs) - Creates execution logs
-- [`scriptingActivity`](/worker/activities/scripting) - Runs user JavaScript or Python via Lambda
+- [`scriptingActivity`](/worker/node/scripting) - Runs user JavaScript or Python via Lambda
 - [`nodeExecutionErrorActivity`](/worker/activities/node-execution-error) - Handles node execution errors
 
 ## Execution flow
