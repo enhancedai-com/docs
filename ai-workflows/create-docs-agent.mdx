@@ -1,0 +1,66 @@
+---
+title: "Create Mintlify documentation"
+description: "How to use the create-docs command in Cursor, what to tell the agent, and where the Mintlify skill and publish flow live."
+---
+
+## Overview
+
+This guide explains how to generate **MDX** pages for the documentation site (Mintlify) using the **Cursor agent**. The agent follows the workflow in [`.cursor/commands/create-docs.md`](https://github.com/enhancedai-com/docs/blob/main/.cursor/commands/create-docs.md) and applies patterns from the [`.cursor/skills/mintlify.md`](https://github.com/enhancedai-com/docs/blob/main/.cursor/skills/mintlify.md) skill.
+
+<Note>
+  In a local clone, paths are `docs/.cursor/commands/create-docs.md` and `docs/.cursor/skills/mintlify.md` (the `.cursor` folder sits under `docs/`).
+</Note>
+
+## When to use
+
+Use this flow when you need to **document a feature** (API, worker, activity, internal flow) and want the agent to **create or update `.mdx` files** with Mintlify structure and components that match the project.
+
+## How to run in Cursor
+
+<Steps>
+  <Step title="Open Cursor chat">
+    Open the chat panel (Composer or Chat) in the workspace that contains the `docs/` folder of the documentation repository.
+  </Step>
+  <Step title="Invoke the command">
+    In the message field, reference the agent file with `@` and choose **`create-docs.md`** (full path: `docs/.cursor/commands/create-docs.md`). That loads the agent instructions into the conversation context.
+  </Step>
+  <Step title="Send your request">
+    Describe what you want documented. The agent will ask for **required information** before writing files; answer with as much detail and as many references as you can.
+  </Step>
+</Steps>
+
+<Tip>
+  You can attach files to the chat with `@` (for example source code, TypeScript types, or OpenAPI) so the agent can use them as factual references.
+</Tip>
+
+## What the agent asks before writing
+
+The official flow requires **all** of the following. Without them, the agent should collect the details first, then plan and generate the `.mdx` files.
+
+| Information | What to provide |
+| ----------- | --------------- |
+| **Feature name(s)** | What you are documenting (endpoint, activity, module, and so on). You can list more than one. |
+| **Description** | Behavior, audience, when to use it, and anything another developer must know. |
+| **Reference files** | Code, types, schemas, specs; paste into chat or use `@file`. |
+| **Where to save** | A folder under `docs/`, for example `docs/worker/activities/`. If unsure, ask for a suggestion based on navigation in `docs.json`. |
+
+After that, the agent **lists the `.mdx` files it plans to create** and should **confirm with you** before writing everything.
+
+## What the agent uses under the hood
+
+- **Mintlify skill** — Voice, `docs.json`, components (`ParamField`, `CodeGroup`, `Steps`, and so on), internal links, and frontmatter conventions. Path in the repo: `docs/.cursor/skills/mintlify.md`.
+- **create-docs command** — Agent steps: read the skill, collect inputs, plan pages, align with existing pages, generate MDX, and remind you about navigation. Path: `docs/.cursor/commands/create-docs.md`.
+
+## After the files are created
+
+1. **Add each new page** to the `navigation` section of **`docs.json`** (under the correct tab and group). Pages not listed in navigation do not appear in the sidebar.
+2. Review titles, frontmatter descriptions, and code examples.
+3. Optionally run `mint validate` and `mint broken-links` from the docs project folder.
+
+<Warning>
+  Always use **`docs.json`** for configuration and navigation. The `mint.json` file is deprecated in current Mintlify.
+</Warning>
+
+## Where this page lives in the repository
+
+On GitHub: the [`ai-workflows`](https://github.com/enhancedai-com/docs/tree/main/ai-workflows) folder in the **enhancedai-com/docs** repository — this guide sits alongside other AI-related workflows, per team organization.

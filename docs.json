@@ -24,6 +24,12 @@
             ]
           },
           {
+            "group": "Ai Workflows",
+            "pages": [
+              "ai-workflows/create-docs-agent"
+            ]
+          },
+          {
             "group": "Main API",
             "pages": [
               "main-api/overview",
