@@ -1,6 +1,6 @@
 ---
 title: "Create Mintlify documentation"
-description: "How to use the create-docs command in Cursor, what to tell the agent, and where the Mintlify skill and publish flow live."
+description: "How to use the create-docs command in Cursor, what to tell the agent, and how to publish via git and the Mintlify dashboard."
 ---
 
 ## Overview
@@ -56,6 +56,8 @@ After that, the agent **lists the `.mdx` files it plans to create** and should *
 1. **Add each new page** to the `navigation` section of **`docs.json`** (under the correct tab and group). Pages not listed in navigation do not appear in the sidebar.
 2. Review titles, frontmatter descriptions, and code examples.
 3. Optionally run `mint validate` and `mint broken-links` from the docs project folder.
+4. **Commit and push** your changes to the **documentation repository** so the remote has the updated `.mdx` files and `docs.json`.
+5. **Deploy manually** in the [Mintlify dashboard](https://dashboard.mintlify.com/enhancedai-ee242787/enhancedai-ee242787). Pushing to the repo does not publish the site by itself; open the dashboard and trigger a deploy after your push.
 
 <Warning>
   Always use **`docs.json`** for configuration and navigation. The `mint.json` file is deprecated in current Mintlify.
