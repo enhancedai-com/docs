@@ -1,0 +1,364 @@
+---
+title: "Version control API"
+description: "API endpoints for managing flow versions, publishing to production, and restoring history snapshots"
+---
+
+## Base path
+
+All version control endpoints are scoped to a specific flow:
+
+```
+/flow/:flowId/versions
+```
+
+All endpoints require JWT authentication.
+
+## Enable and disable version control
+
+Version control is toggled through the main flow update endpoint, not a dedicated version endpoint.
+
+```
+PATCH /flow/:flowId
+```
+
+### Enable
+
+Set `versionControlEnabled` to `true` in the request body. The system creates a `V 1.0` deployed version and a `Staging` working version, both containing the flow's current nodes and edges.
+
+```json
+{
+  "versionControlEnabled": true
+}
+```
+
+### Disable
+
+Set `versionControlEnabled` to `false`. Optionally include `sourceVersionId` to choose which version's state is extracted back into the base flow. If omitted, the deployed version is used.
+
+```json
+{
+  "versionControlEnabled": false,
+  "sourceVersionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+## Get deployed version
+
+Retrieves the currently deployed (production) version with its full node and edge data.
+
+```
+GET /flow/:flowId/versions/deployed
+```
+
+### Response
+
+Returns `null` if version control is not enabled or no deployed version exists.
+
+<ResponseField name="id" type="string">
+  UUID of the deployed version.
+</ResponseField>
+
+<ResponseField name="flowId" type="string">
+  UUID of the parent flow.
+</ResponseField>
+
+<ResponseField name="versionName" type="string">
+  Display name of the version (for example, `V 1.0`).
+</ResponseField>
+
+<ResponseField name="currentHistoryId" type="string">
+  UUID of the active history snapshot.
+</ResponseField>
+
+<ResponseField name="updatedBy" type="string">
+  User ID of the last modifier.
+</ResponseField>
+
+<ResponseField name="isStaging" type="boolean">
+  Whether this is a staging version.
+</ResponseField>
+
+<ResponseField name="isDeployed" type="boolean">
+  Whether this is the production version.
+</ResponseField>
+
+<ResponseField name="nodes" type="array">
+  Array of node objects in this version.
+</ResponseField>
+
+<ResponseField name="edges" type="array">
+  Array of edge objects in this version.
+</ResponseField>
+
+<ResponseField name="createdAt" type="datetime">
+  Timestamp when the version was created.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="datetime">
+  Timestamp when the version was last updated.
+</ResponseField>
+
+## Create version
+
+Creates a new version by copying nodes and edges from an existing source version.
+
+```
+POST /flow/:flowId/versions/create
+```
+
+### Request body
+
+<ParamField body="versionName" type="string" required>
+  Display name for the new version.
+</ParamField>
+
+<ParamField body="sourceVersionId" type="string" required>
+  UUID of the version to copy nodes and edges from.
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the version was created.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable status message.
+</ResponseField>
+
+<ResponseField name="newVersion" type="FlowVersionDetailDto">
+  The created version with its full node and edge data. Same shape as the [deployed version response](#get-deployed-version).
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://your-api.com/flow/{flowId}/versions/create \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "versionName": "Experiment A",
+    "sourceVersionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  }'
+```
+
+```typescript TypeScript
+const response = await FlowVersionService.createVersion(flowId, {
+  versionName: "Experiment A",
+  sourceVersionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+});
+```
+</CodeGroup>
+
+## Publish to production
+
+Copies the current state of a source version into the deployed version and increments the production version number.
+
+```
+POST /flow/:flowId/versions/push-to-production
+```
+
+### Request body
+
+<ParamField body="versionId" type="string" required>
+  UUID of the version to publish. Cannot be the deployed version itself.
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the deployment succeeded.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable status message.
+</ResponseField>
+
+<ResponseField name="deployedVersion" type="FlowVersionDetailDto">
+  The updated deployed version with its full node and edge data.
+</ResponseField>
+
+### Behavior
+
+- Version control must be enabled on the flow
+- The source version cannot be the deployed version
+- The production version name is auto-incremented:
+  - Same source as last publish: minor version increments (for example, `V 1.0` to `V 1.1`)
+  - Different source: major version increments, minor resets (for example, `V 1.1` to `V 2.0`)
+- A history snapshot labeled `Published as V x.y` is created on the source version
+
+### Example
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://your-api.com/flow/{flowId}/versions/push-to-production \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "versionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  }'
+```
+
+```typescript TypeScript
+const response = await FlowVersionService.pushToProduction(
+  flowId,
+  "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+);
+```
+</CodeGroup>
+
+## Rollback version
+
+Restores a version to a previous history snapshot. Creates a new history entry with the restored snapshot's nodes and edges — the original history is preserved.
+
+```
+POST /flow/:flowId/versions/rollback
+```
+
+### Request body
+
+<ParamField body="versionId" type="string" required>
+  UUID of the version to roll back.
+</ParamField>
+
+<ParamField body="historyId" type="string" required>
+  UUID of the history snapshot to restore.
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the rollback succeeded.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable status message.
+</ResponseField>
+
+<ResponseField name="newHistoryId" type="string">
+  UUID of the newly created history entry.
+</ResponseField>
+
+<ResponseField name="version" type="FlowVersionSummaryDto">
+  The updated version summary.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://your-api.com/flow/{flowId}/versions/rollback \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "versionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "historyId": "f6e5d4c3-b2a1-0987-fedc-ba9876543210"
+  }'
+```
+
+```typescript TypeScript
+const response = await FlowVersionService.rollback(
+  flowId,
+  "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "f6e5d4c3-b2a1-0987-fedc-ba9876543210"
+);
+```
+</CodeGroup>
+
+## List versions
+
+Returns a paginated list of all versions for a flow.
+
+```
+GET /flow/:flowId/versions
+```
+
+### Query parameters
+
+<ParamField query="page" type="number" default="1">
+  Page number.
+</ParamField>
+
+<ParamField query="pageSize" type="number" default="10">
+  Number of versions per page.
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="FlowVersionSummaryDto[]">
+  Array of version summaries, each containing:
+  - `id` — Version UUID
+  - `versionName` — Display name
+  - `isStaging` — Whether this is the staging version
+  - `isDeployed` — Whether this is the production version
+  - `historyCount` — Number of history snapshots
+  - `updatedBy` — User ID of last modifier
+  - `createdAt` / `updatedAt` — Timestamps
+</ResponseField>
+
+<ResponseField name="meta" type="object">
+  Pagination metadata with `total`, `page`, `pageSize`, and `totalPages`.
+</ResponseField>
+
+### Example
+
+```bash cURL
+curl https://your-api.com/flow/{flowId}/versions?page=1&pageSize=10 \
+  -H "Authorization: Bearer {token}"
+```
+
+## List version history
+
+Returns a paginated list of history snapshots for a specific version.
+
+```
+GET /flow/:flowId/versions/:versionId/history
+```
+
+### Query parameters
+
+<ParamField query="page" type="number" default="1">
+  Page number.
+</ParamField>
+
+<ParamField query="pageSize" type="number" default="10">
+  Number of history entries per page.
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="VersionHistoryEntryDto[]">
+  Array of history entries, each containing:
+  - `id` — History snapshot UUID
+  - `flowVersionId` — Parent version UUID
+  - `updatedBy` — User ID who created this snapshot
+  - `nodeCount` — Number of nodes in this snapshot
+  - `edgeCount` — Number of edges in this snapshot
+  - `isCurrent` — Whether this is the version's active snapshot
+  - `versionName` — Optional label (for example, `Published as V 1.1`)
+  - `createdAt` — Timestamp
+</ResponseField>
+
+<ResponseField name="meta" type="object">
+  Pagination metadata with `total`, `page`, `pageSize`, and `totalPages`.
+</ResponseField>
+
+### Example
+
+```bash cURL
+curl https://your-api.com/flow/{flowId}/versions/{versionId}/history?page=1&pageSize=10 \
+  -H "Authorization: Bearer {token}"
+```
+
+## Errors
+
+The version control endpoints return standard HTTP error codes with descriptive messages.
+
+| Status | Condition |
+| ------ | --------- |
+| `400`  | `sourceVersionId` is missing when creating a version |
+| `400`  | Flow not found |
+| `400`  | Version control is not enabled on the flow |
+| `400`  | Attempting to publish the deployed version to itself |
+| `404`  | Version or history snapshot not found |

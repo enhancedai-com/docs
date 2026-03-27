@@ -1,0 +1,235 @@
+---
+title: "Version control"
+description: "How the frontend manages flow versions, history snapshots, and production deployments"
+---
+
+## Overview
+
+The version control UI lets users toggle versioning on a flow, switch between versions, create new versions, publish to production, and restore previous history snapshots. It is built with React Query for data fetching, Zustand for cross-component state, and URL parameters for version routing.
+
+Version control only appears when the flow has `versionControlEnabled: true`. The toggle is available in the flow settings modal on `/dashboard-beta` routes.
+
+## Architecture
+
+Version control spans four layers:
+
+- **Service layer** — `FlowVersionService` wraps all version API calls
+- **React Query hooks** — `useFlowVersions` provides queries and mutations with cache invalidation
+- **Zustand store** — `storeVersionControl` shares computed props between the editor and the top bar
+- **UI components** — `VersionControlDropdown`, `RestoreConfirmModal`, and `VersionNameModal`
+
+### Data flow
+
+1. `CoreNodeDisplay` fetches versions, deployed version, and history using React Query hooks
+2. It computes `VersionControlProps` (version items, handlers, UI state) in a `useMemo`
+3. Props are stored in the Zustand store via `setVersionControlProps`
+4. `AgentTopBar` reads from the store and renders `VersionControlDropdown` inside a popover
+5. User actions in the dropdown call handlers defined in `CoreNodeDisplay`, which trigger mutations and page reloads
+
+## URL parameter
+
+The `versionId` query parameter controls which version is active:
+
+- **Present** (`?versionId=abc-123`) — The user is editing a specific version. All node and edge operations include this ID.
+- **Absent** — The user is viewing the deployed (production) version.
+
+Switching versions updates the URL and triggers a full page reload. This ensures all components re-fetch with the correct version context.
+
+```typescript
+// Reading the current version
+const urlVersionId = new URLSearchParams(window.location.search).get('versionId') || '';
+
+// All node/edge operations pass it through
+await FlowService.deleteNode({ flowId, nodeId, versionId: urlVersionId });
+await FlowService.updateNode({ id, ...data, versionId: urlVersionId });
+```
+
+## Components
+
+### VersionControlDropdown
+
+The main UI for version management. Rendered inside a popover in `AgentTopBar`.
+
+**Props:**
+
+```typescript
+interface VersionControlDropdownProps {
+  isDarkTheme: boolean;
+  selectedVersionId: string;
+  onSelectVersion: (id: string) => void;
+  onShowHistory: (id: string) => void;
+  onHideHistory: () => void;
+  onNavigateToProduction: () => void;
+  onAddNew: () => void;
+  onPublish: () => void;
+  liveVersion: VersionItem;
+  versions: VersionItem[];
+  historyEntries: VersionItem[];
+  historyVersionName: string;
+  onRestore?: (id: string) => void;
+  showHistory?: boolean;
+}
+```
+
+The dropdown has two views:
+
+**Main view** — Displays the currently live (deployed) version at the top and a list of user versions below it. Each version has a clock icon to view its history. The **Add New** button opens `VersionNameModal` to create a version.
+
+**History view** — Shows the history snapshots for a selected version. The current snapshot is marked with a "Current" badge. Past snapshots have a **Restore** button that opens `RestoreConfirmModal`.
+
+### VersionItem
+
+The shared data shape used for both versions and history entries in the dropdown:
+
+```typescript
+interface VersionItem {
+  id: string;
+  name: string;
+  owner: string;
+  lastModified: string;
+  isLive?: boolean;
+  publishedInfo?: string;
+}
+```
+
+### RestoreConfirmModal
+
+Confirmation dialog before restoring a version to a previous history snapshot.
+
+**Props:**
+
+```typescript
+interface RestoreConfirmModalProps {
+  show: boolean;
+  onHide: () => void;
+  onConfirm: () => void;
+  currentVersionName: string;
+  restoreVersionName: string;
+}
+```
+
+Displays a visual transition from the current version (orange dot) to the restore target (green dot) with a **Restore** button to confirm.
+
+### VersionNameModal
+
+Input modal for entering a version name when creating a new version.
+
+**Props:**
+
+```typescript
+interface VersionNameModalProps {
+  show: boolean;
+  onHide: () => void;
+  onSubmit: (versionName: string) => void;
+  title: string;
+  label?: string;         // default: "Enter version name"
+  placeholder?: string;   // default: "V 2.0"
+  submitButtonText?: string; // default: "Create"
+}
+```
+
+Validates that the input is non-empty before calling `onSubmit` with the trimmed value. The input clears on submit and on close.
+
+## State management
+
+### Zustand store
+
+`storeVersionControl` shares version control state between `CoreNodeDisplay` (which computes it) and `AgentTopBar` (which renders the dropdown).
+
+```typescript
+interface VersionControlStore {
+  versionControlProps: VersionControlProps | null;
+  setVersionControlProps: (props: VersionControlProps | null) => void;
+  isProductionView: boolean;
+  setIsProductionView: (value: boolean) => void;
+}
+```
+
+- `versionControlProps` is `null` when version control is disabled. The dropdown only renders when this value exists.
+- `isProductionView` tracks whether the user is viewing the deployed version.
+- Props are cleared on `CoreNodeDisplay` unmount.
+
+### React Query hooks
+
+All hooks are in `useFlowVersions.ts`.
+
+**Queries:**
+
+| Hook | Query key | Description |
+| ---- | --------- | ----------- |
+| `useDeployedVersion(flowId, enabled)` | `['flow-version-deployed', flowId]` | Fetches the deployed version with nodes and edges. Returns `null` on 404. |
+| `useVersions(flowId, page, pageSize, enabled)` | `['flow-versions', flowId, page, pageSize]` | Paginated list of all versions. Default page size is 50. |
+| `useVersionHistory(flowId, versionId, page, pageSize, enabled)` | `['flow-version-history', flowId, versionId, page, pageSize]` | Paginated history for a specific version. Only enabled when `versionId` is truthy. |
+
+**Mutations:**
+
+| Hook | Invalidates | Description |
+| ---- | ----------- | ----------- |
+| `useCreateVersion()` | `['flow-versions']` | Creates a new version from a source version. |
+| `usePushToProduction()` | `['flow-version-deployed']`, `['flow-versions']`, `['flow-version-history']` | Publishes a version to production. |
+| `useRollback()` | `['flow-versions']`, `['flow-version-history']` | Restores a version to a previous history snapshot. |
+
+## Service layer
+
+`FlowVersionService` provides static methods that map to the [version control API endpoints](/main-api/version-control-api):
+
+```typescript
+FlowVersionService.getDeployedVersion(flowId)
+FlowVersionService.createVersion(flowId, { versionName, sourceVersionId })
+FlowVersionService.pushToProduction(flowId, versionId)
+FlowVersionService.rollback(flowId, versionId, historyId)
+FlowVersionService.getVersions(flowId, page, pageSize)
+FlowVersionService.getVersionHistory(flowId, versionId, page, pageSize)
+```
+
+## User workflows
+
+### Enabling version control
+
+1. User opens the flow settings modal (available on `/dashboard-beta` routes)
+2. Toggles the **Enable Version Control** switch
+3. The frontend calls `FlowService.updateFlow(flowId, { versionControlEnabled: true })`
+4. The API returns a `versionId` for the new staging version
+5. The page reloads with `?versionId={versionId}` in the URL
+6. The version control dropdown appears in the top bar
+
+### Switching versions
+
+1. User clicks a version in the dropdown
+2. The URL updates to `?versionId={selectedId}`
+3. The page reloads and all queries re-fetch with the new version context
+
+### Creating a new version
+
+1. User clicks **Add New** in the dropdown
+2. `VersionNameModal` opens for name input
+3. On submit, `createVersionMutation` is called with the current version as the source
+4. The page reloads to show the new version
+
+### Publishing to production
+
+1. User clicks **Publish** while viewing a non-deployed version
+2. `pushToProductionMutation` is called with the selected version ID
+3. React Query invalidation refreshes the deployed version, version list, and history
+4. The live version in the dropdown updates to reflect the new production state
+
+### Restoring a history snapshot
+
+1. User clicks the clock icon on a version to view its history
+2. The dropdown switches to history view with a list of snapshots
+3. User clicks **Restore** on a past snapshot
+4. `RestoreConfirmModal` shows the transition from current to target
+5. On confirmation, `rollbackMutation` is called
+6. The page reloads with the restored state
+
+### Disabling version control
+
+1. User toggles the switch off in flow settings
+2. The frontend calls `updateFlow` with `versionControlEnabled: false` and the current `versionId`
+3. The `versionId` URL parameter is removed
+4. The page reloads without version control UI
+
+## Next steps
+
+- [Version control concepts](/main-api/version-control) — How versioning, history snapshots, and semantic versioning work
+- [Version control API](/main-api/version-control-api) — Endpoint reference for all version operations

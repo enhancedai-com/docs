@@ -1,0 +1,108 @@
+---
+title: "Version control"
+description: "Track, manage, and deploy flow versions with staging, production, and history snapshots"
+---
+
+## What is version control?
+
+Version control lets you manage multiple versions of a flow and its nodes and edges. When enabled on a flow, you get a **staging** version for active development and a **deployed** (production) version that represents the live state. Each version maintains a full history of snapshots, so you can inspect or restore any previous state.
+
+## Key concepts
+
+### Versions
+
+A version is a named snapshot of a flow's nodes and edges. Each flow can have multiple versions:
+
+- **Deployed version** — The production version. When external systems execute the flow, they use the deployed version's nodes and edges.
+- **Staging version** — The working version created automatically when version control is enabled. This is where you make changes before publishing.
+- **Custom versions** — Additional named versions you create from any existing version, useful for experimentation or parallel development.
+
+### History snapshots
+
+Every version tracks a history of snapshots. Each snapshot captures the complete set of nodes and edges at a point in time. When you save changes to a version, a new history snapshot is created. You can restore any previous snapshot to revert a version to an earlier state.
+
+### Semantic versioning
+
+Production versions follow a `V major.minor` naming convention (for example, `V 1.0`, `V 1.1`, `V 2.0`). When you publish a staging version to production:
+
+- If the **same version** that last published is publishing again, the **minor** number increments (for example, `V 1.0` to `V 1.1`)
+- If a **different version** publishes, the **major** number increments and the minor resets (for example, `V 1.1` to `V 2.0`)
+
+## How it works
+
+### Enabling version control
+
+You enable version control by updating the flow through the `PATCH /flow/:id` endpoint with `versionControlEnabled: true`. The system then:
+
+1. Creates a **deployed version** named `V 1.0` containing the flow's current nodes and edges
+2. Creates a **staging version** with a copy of the same nodes and edges
+3. Migrates all nodes and edges from the base flow into version-scoped history snapshots
+4. Removes the original non-versioned node and edge records
+5. Sets `versionControlEnabled = true` on the flow
+
+From this point, all edits happen within a specific version rather than directly on the flow.
+
+### Editing and saving
+
+When you edit a flow with version control enabled, all node and edge modifications are automatically saved to the currently selected version. This applies to every operation — updating a node, adding a node, deleting a node, connecting edges, and updating edge data. Each save creates a new history snapshot on the active version, preserving the previous state.
+
+The staging version is the default target for edits. You select which version to edit using the `versionId` URL parameter in the frontend.
+
+### Flow execution
+
+When a flow with version control is executed (via the API or webhooks), the system loads nodes and edges from the **deployed version** by default. You can optionally pass a `versionId` parameter to execute a specific version instead.
+
+<Warning>
+  If version control is enabled but no deployed version exists, the flow has no nodes or edges to execute. Make sure a version is published to production before triggering executions.
+</Warning>
+
+### Publishing to production
+
+Publishing copies the current state of a source version (typically staging) into the deployed version. The system:
+
+1. Creates a new history snapshot on the deployed version with the source version's nodes and edges
+2. Creates a history snapshot on the source version labeled `Published as V x.y`
+3. Updates the flow's production version number
+
+### Restoring a previous state
+
+You can restore any version to a previous history snapshot. The system creates a new history entry with the restored snapshot's nodes and edges and updates the version's current history pointer. This is non-destructive — the history entry you restored from remains in the history.
+
+### Disabling version control
+
+You disable version control by updating the flow with `versionControlEnabled: false`. You can optionally pass a `sourceVersionId` to choose which version's nodes and edges are extracted back into the base flow. If omitted, the deployed version is used. All version and history records are removed.
+
+## Data model
+
+### Flow fields
+
+When version control is enabled, these fields are set on the flow:
+
+- `versionControlEnabled` — Whether version control is active
+- `deployedVersionId` — UUID of the current production version
+- `lastPublisherVersionId` — UUID of the version that last published to production
+- `currentProductionMajor` / `currentProductionMinor` — Current production version numbers
+
+### Version record
+
+Each version stores:
+
+- `versionName` — Display name (for example, `V 1.0`, `Staging`, or a custom name)
+- `currentHistoryId` — Pointer to the active history snapshot
+- `isStaging` — Whether this is the working staging version
+- `isDeployed` — Whether this is the production version
+- `updatedBy` — The user who last modified this version
+
+### History snapshot
+
+Each history entry stores:
+
+- `flowVersionId` — The parent version
+- `updatedBy` — The user who created this snapshot
+- `versionName` — Optional label (for example, `Published as V 1.1`)
+
+Nodes and edges reference a `flowVersionHistoryId` to associate them with a specific snapshot.
+
+## Next steps
+
+- [Version control API reference](/main-api/version-control-api) — Endpoint details for all version control operations

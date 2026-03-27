@@ -32,7 +32,14 @@
             "group": "Main API",
             "pages": [
               "main-api/overview",
-              "main-api/development"
+              "main-api/development",
+              {
+                "group": "Version control",
+                "pages": [
+                  "main-api/version-control",
+                  "main-api/version-control-api"
+                ]
+              }
             ]
           },
           {
@@ -72,7 +79,8 @@
             "group": "Client",
             "pages": [
               "client/overview",
-              "client/development"
+              "client/development",
+              "client/version-control"
             ]
           }
         ]
