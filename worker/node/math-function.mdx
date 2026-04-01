@@ -1,0 +1,81 @@
+---
+title: "Math function"
+sidebarTitle: "Math function"
+description: "Temporal activity for the math function node: substitute named variables into a formula string and evaluate with expr-eval."
+---
+
+## Overview
+
+The **math function** node evaluates a numeric expression stored on the node. You provide a **formula** string and a list of **variables**; each variable **name** is replaced by its **value** (as text) in the formula, then the expression is evaluated with [`expr-eval`](https://github.com/silentmatt/expr-eval) (`Parser`).
+
+[`mathFunctionActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`MathFunctionService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/math-function/math-function.service.ts).
+
+## When it runs
+
+`mathFunctionActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **function** (`NodeType.FUNCTION`, stored value `mathFunction`).
+
+## Activity signature
+
+```typescript
+async mathFunctionActivity({
+  nodeId: string,
+  sessionId: string,
+  userId: string,
+}): Promise<MathFunctionResponse>
+```
+
+`MathFunctionResponse`:
+
+```typescript
+{
+  result: number;
+}
+```
+
+The activity returns `{ result }`; the same number is written to `flows_nodes.data.result` (see [Persisted node `data`](#persisted-node-data)).
+
+## End-to-end flow
+
+1. **Load node** — `SELECT` from `flows_nodes` by `nodeId`; read `data`.
+2. **Read inputs** — `formula` (string, default `""`) and `variables` (array, default `[]`).
+3. **Substitute** — Start from `formula`. For each entry in `variables`, replace every **whole-word** occurrence of `variable.name` with `variable.value` using a global regex `\b<name>\b`.
+4. **Evaluate** — `new Parser().evaluate(expression)`; the result must be a **number** (`result` is typed as `number` in the service return).
+5. **Persist** — `UPDATE flows_nodes` with `data` containing `result` and `executionStatus: "COMPLETED"`.
+6. **Return** — `{ result }`.
+
+## Node `data` fields (Worker expectations)
+
+| Field | Role |
+| ----- | ---- |
+| `formula` | Expression string, e.g. `a + b * 2`. Defaults to empty string if missing. |
+| `variables` | Array of `{ id: string; name: string; value: string }`. Each `name` is substituted by `value` before evaluation. |
+
+`id` on each variable is not used by the Worker; it is kept for UI or persistence only.
+
+## Variable substitution
+
+- Replacements run **in array order**, repeatedly updating the working string.
+- Matching uses **word boundaries** (`\b`), so `x` does not replace the `x` inside `max`.
+- Values are inserted as **literal substrings** into the expression (they should form valid `expr-eval` syntax, typically numeric literals).
+
+## Persisted node `data`
+
+On success, the service sets:
+
+| Field | Role |
+| ----- | ---- |
+| `result` | Numeric evaluation result. |
+| `executionStatus` | `"COMPLETED"`. |
+
+Other `data` fields are preserved via spread (`...nodeData`).
+
+## Errors
+
+- Missing node row → `Node not found`.
+- Invalid expression, division by zero, or other evaluation failures → thrown by `Parser().evaluate` (and propagate to the workflow).
+
+## Related documentation
+
+- [`processSingleNode` workflow](/worker/workflows/process-single-node)
+- [Worker overview](/worker/overview)
+- [Worker development](/worker/development)

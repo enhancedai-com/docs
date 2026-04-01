@@ -1,0 +1,140 @@
+---
+title: "API caller"
+sidebarTitle: "API caller"
+description: "Temporal activity for the API caller node: HTTP requests with query params, JSON or form bodies, custom headers, Basic auth, and TLS options."
+---
+
+## Overview
+
+The **API caller** node performs a single HTTP request configured on the node row. The Worker resolves the URL and credentials (preferring **edge-linked** values when present), merges query parameters into the URL, builds headers and body from `contentType` and related fields, executes the request with [undici](https://undici.nodejs.org/)’s `Agent` (optional TLS verification control), then stores the **response body as text** and returns it from the activity.
+
+[`apiCallerActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`ApiCallerService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/api-caller/api-caller.service.ts).
+
+## When it runs
+
+`apiCallerActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **API caller** (`NodeType.API_CALLER`, stored value `apiCaller`).
+
+## Activity signature
+
+```typescript
+async apiCallerActivity({
+  nodeId: string,
+  sessionId: string,
+  userId: string,
+}): Promise<ApiCallerResponse>
+```
+
+`ApiCallerResponse`:
+
+```typescript
+{
+  result: string; // raw response body as text
+}
+```
+
+The same string is written to `flows_nodes.data.text` on success (see [Persisted node `data`](#persisted-node-data)).
+
+## Resolving URL and secrets (edge vs static)
+
+Some fields can come either from **static** properties on `data` or from the **first row** of an edge-driven array (when the UI passes dynamic inputs):
+
+| Concept | Static field | Edge-driven (takes precedence when non-empty) |
+| ------- | ------------ | --------------------------------------------- |
+| Request URL | `url` | `urlData[0].text` |
+| Custom headers (JSON) | `jsonAuth` | `jsonAuthData[0].text` |
+| Basic auth username | `username` | `usernameData[0].text` |
+| Basic auth password | `password` | `passwordData[0].text` |
+
+Resolution rule: if the `*Data` array exists and has **length &gt; 0**, use **`[0].text`**; otherwise use the static field. After resolution, **`url` is required** — if still missing, the service throws: `No URL provided: urlData and url are both missing or empty`.
+
+The service copies resolved values back onto a merged `ApiCallerNodeData` object (`resolvedNodeData`) so downstream logic always reads `url`, `jsonAuth`, `username`, and `password` from the effective values.
+
+## Node `data` fields
+
+Types reference: [`ApiCallerNodeData`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/api-caller/api-caller.type.ts).
+
+### Request line
+
+| Field | Role |
+| ----- | ---- |
+| `method` | HTTP method: `GET`, `POST`, `PUT`, `DELETE`, or `PATCH`. |
+| `url` | Base URL string (used if `urlData` is absent or empty). |
+| `urlData` | Optional `EdgeDataItem[]`; first item’s `text` overrides `url` when present. |
+| `queryParams` | Optional `{ key, value }[]`. Each pair is appended to the URL search string (`key` required; `value` may be `undefined` and is skipped with the key). |
+
+### Headers and auth
+
+| Field | Role |
+| ----- | ---- |
+| `jsonAuth` | String containing **JSON** of header key/value pairs (e.g. `{"Authorization":"Bearer …"}`). Parsed with `JSON.parse` and merged into the request headers. If parsing fails, merge is **skipped** (no throw). |
+| `jsonAuthData` | Optional; first `text` overrides `jsonAuth` when non-empty. |
+| `username` | If set, triggers **HTTP Basic** auth: `Authorization: Basic base64(username:password)`. Password defaults to empty string when omitted. |
+| `password` | Used with Basic auth when `username` is set. |
+| `passwordData` / `usernameData` | Optional edge overrides for `password` / `username`. |
+
+If both `jsonAuth` (custom headers) and Basic auth apply, Basic sets `Authorization` **after** the JSON merge, so Basic **wins** for `Authorization` when both are present.
+
+| Field | Role |
+| ----- | ---- |
+| `contentType` | Optional. When set, becomes `Content-Type` on the request. Also drives how the body is built (see [Request body](#request-body)). |
+
+### Request body
+
+| Field | Role |
+| ----- | ---- |
+| `jsonRequestBody` | String. Interpretation depends on `contentType` (and effective content type — see below). |
+| `formDataParams` | `{ key, value }[]` for `application/x-www-form-urlencoded` bodies. |
+
+**Effective content type** for body building is `nodeData.contentType ?? headers['Content-Type']` (headers already include `jsonAuth` and possibly `Content-Type` from `contentType`).
+
+Behavior of `buildRequestBody`:
+
+- **`application/x-www-form-urlencoded`**
+  - If `formDataParams` has entries: build `URLSearchParams` from key/value pairs (skip entries with missing `key` or `undefined` value).
+  - Else if `jsonRequestBody` is set: parse it as JSON into an object, then append each key with `String(value)` into `URLSearchParams`.
+- **`application/json`**
+  - If `jsonRequestBody` is set: parse with a tolerant path — first strict `JSON.parse`; on failure, a regex tries to add quotes around unquoted object keys, then parse again. If both fail, throws `Invalid JSON in request body`.
+
+If no body applies, the request is sent **without** a body (`undefined`).
+
+The fetch call passes `body` as a string: either the form-encoded string, or `JSON.stringify` of the parsed object for JSON.
+
+### TLS
+
+| Field | Role |
+| ----- | ---- |
+| `validateCertificate` | Boolean; default **`true`** if omitted. When `false`, the undici `Agent` uses `connect.rejectUnauthorized: false` (allows self-signed or mismatched certificates). **Use with care.** |
+
+## End-to-end flow
+
+1. Load `flows_nodes` by `nodeId` and cast `data` to `ApiCallerNodeData`.
+2. Resolve URL and auth-related fields (edge vs static).
+3. Construct `URL`, apply `queryParams` via `searchParams.set`.
+4. Build `RequestInit`: method, headers, body, and `dispatcher` with TLS options.
+5. `fetch(url, options)`.
+6. If `!response.ok`, read `response.text()` for the error payload, log `nodeId`, status, and body, then throw `HTTP <status>: <body>`.
+7. On success, read full response as **text** (`response.text()`).
+8. `UPDATE flows_nodes`: merge `resolvedNodeData` with `text` (response body) and `executionStatus: 'COMPLETED'`.
+9. Return `{ result: responseText }`.
+
+## Persisted node `data`
+
+On success, the stored JSON includes the merged caller configuration plus:
+
+| Field | Role |
+| ----- | ---- |
+| `text` | Response body as a **string** (not parsed as JSON by the Worker). |
+| `executionStatus` | `'COMPLETED'`. |
+
+## Errors
+
+- Missing node → `Node not found`.
+- Missing URL after resolution → see above.
+- HTTP status outside 2xx → thrown error with status and body text.
+- Invalid JSON body (JSON content type path) → `Invalid JSON in request body`.
+
+## Related documentation
+
+- [`processSingleNode` workflow](/worker/workflows/process-single-node)
+- [Worker overview](/worker/overview)
+- [Worker development](/worker/development)

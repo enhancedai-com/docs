@@ -51,7 +51,10 @@
                 "group": "Node",
                 "pages": [
                   "worker/node/scripting",
-                  "worker/node/text-generator"
+                  "worker/node/text-generator",
+                  "worker/node/audio-transcriber",
+                  "worker/node/math-function",
+                  "worker/node/api-caller"
                 ]
               },
               {

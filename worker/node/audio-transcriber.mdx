@@ -1,0 +1,116 @@
+---
+title: "Audio transcriber"
+sidebarTitle: "Audio transcriber"
+description: "Temporal activity for the Audio Transcriber node: AI speech-to-text (OpenAI, Groq), chunked processing for large files, and optional YouTube transcript via SearchAPI."
+---
+
+## Overview
+
+The **audio transcriber** node turns audio into text. The Worker loads node configuration from Postgres, then either:
+
+- **AI transcription** — Uses the Vercel AI SDK [`experimental_transcribe`](https://sdk.vercel.ai/docs/reference/ai-sdk-core/transcribe) with OpenAI or Groq Whisper models, reading the audio from a URL in `data.inputPreview`.
+- **YouTube transcript** — When `data.type` is `ytTranscript`, fetches captions via [SearchAPI](https://www.searchapi.io/) (no speech-to-text model).
+
+[`audioTranscriberActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`AudioTranscriberService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/audio-transcriber/audio-transcriber.service.ts).
+
+<Note>
+Unlike the [text generator](/worker/node/text-generator), the [`processSingleNode`](/worker/workflows/process-single-node) workflow does not call [validate model access](/worker/activities/validate-model-access) or [charge tokens](/worker/activities/charge-tokens) for this node type. Token or billing behavior for transcription is handled outside this workflow path if applicable.
+</Note>
+
+## When it runs
+
+`audioTranscriberActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **audio transcriber** (`NodeType.AUDIO_TRANSCRIBER`).
+
+## Activity signature
+
+```typescript
+async audioTranscriberActivity({
+  nodeId: string,
+  sessionId: string,
+  userId: string,
+}): Promise<AudioTranscriberResponse>
+```
+
+`AudioTranscriberResponse`:
+
+```typescript
+{
+  text: string;
+}
+```
+
+The activity returns `{ text }`; the same string is merged into `flows_nodes.data` (see [Persisted node `data`](#persisted-node-data)).
+
+## Routing by `data.type`
+
+| `data.type` | Behavior |
+| ----------- | -------- |
+| `ytTranscript` (or missing with YouTube-only setup) | Requires `youtubeUrl`. Uses SearchAPI `youtube_transcripts` engine. |
+| `audio` (default when `type` is omitted) | Requires `inputPreview` (audio URL) and `aiModel`. Uses AI transcription. |
+
+If `type === 'ytTranscript'`, `youtubeUrl` must be present or the service throws. Otherwise the **audio** path requires `inputPreview` and a supported `aiModel`.
+
+## AI transcription flow
+
+1. **Load node** — `SELECT` from `flows_nodes` by `nodeId`; read `data`.
+2. **Resolve model** — `resolveTranscriptionModel(aiModel)` maps the stored key to a transcription model instance from `AiProviderService` (see [Models](#models)).
+3. **Discover size** — `HEAD` request to `inputPreview`; read `content-length` and `content-type` (MIME).
+4. **Small file** — If size **≤ 24 MB** (`CHUNK_SIZE_LIMIT`), call `transcribe({ model, audio: new URL(url) })` so the SDK fetches the URL directly.
+5. **Large file** — If size **> 24 MB**:
+   - `GET` the full file into a buffer.
+   - **Segment** with `fluent-ffmpeg`: stream copy (`-c copy`), segment format, **600 seconds** per segment (`-segment_time 600`), output pattern `audio-chunk-<token>-%03d.<ext>`.
+   - For each segment file (sorted by name), call `transcribe({ model, audio: chunkBuffer })`.
+   - **Concatenate** segment texts with newline (`join('\n')`).
+6. **Persist** — `UPDATE flows_nodes` with merged `data` (see below).
+7. **Return** — `{ text }`.
+
+Temporal [`Context.current().heartbeat()`](https://docs.temporal.io/develop/typescript/activity-heartbeats) is called before/after heavy steps (download, per-chunk transcription, YouTube fetch) so long runs stay healthy.
+
+### Chunking details
+
+- **Threshold:** 24 MB — files at or below this size use a single `transcribe` call with the remote URL.
+- **MIME → extension:** Unknown MIME defaults to `.mp3` for temp files; known types include `audio/mpeg`, `audio/wav`, `audio/ogg`, `audio/webm`, `audio/flac`, `audio/aac`, `audio/mp4`, `audio/x-m4a`, etc. (see `MIME_TO_EXT` in the service).
+- **FFmpeg:** Uses `ffmpeg-static` when available (`ffmpeg.setFfmpegPath`). Segments are written under the OS temp directory and deleted after reading.
+
+### Models
+
+`aiModel` must match one of these keys; anything else throws `Unsupported model`.
+
+| `aiModel` value | Provider API model |
+| --------------- | ------------------ |
+| `openAi` | `whisper-1` |
+| `groq` | `whisper-large-v3` |
+| `groq_v3_turbo` | `whisper-large-v3-turbo` |
+
+## YouTube transcript flow (`ytTranscript`)
+
+1. Parse **video id** from `youtubeUrl` with a regex for `youtu.be/<id>` or `youtube.com/watch?v=<id>`.
+2. Call SearchAPI: `GET https://www.searchapi.io/api/v1/search?engine=youtube_transcripts&video_id=<id>&api_key=<SEARCH_API_KEY>` with a **150 s** abort timeout.
+3. Read `transcripts` from the JSON body; each item contributes `text`. Join all with spaces.
+4. If no transcripts, throw `No transcript available for this video.`
+
+Requires `process.env.SEARCH_API_KEY` at runtime.
+
+## Persisted node `data`
+
+On success, the service sets:
+
+| Field | Role |
+| ----- | ---- |
+| `text` | Full transcript (AI or YouTube). |
+| `executionStatus` | `"COMPLETED"`. |
+| `previewResponses` | Previous previews plus the new `text` appended. |
+
+Other `data` fields are preserved via spread (`...nodeData`).
+
+## Errors
+
+- Missing node row → `Node not found`.
+- AI path: bad or missing URL, non-OK `HEAD`/`GET`, FFmpeg failure, or provider/SDK errors — logged and rethrown.
+- YouTube path: invalid URL, SearchAPI non-2xx, empty `transcripts`, or missing `SEARCH_API_KEY` (undefined in URL).
+
+## Related documentation
+
+- [`processSingleNode` workflow](/worker/workflows/process-single-node)
+- [Worker overview](/worker/overview)
+- [Worker development](/worker/development)
