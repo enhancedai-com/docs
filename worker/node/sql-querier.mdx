@@ -1,0 +1,188 @@
+---
+title: "SQL querier"
+sidebarTitle: "SQL querier"
+description: "Temporal activity for the SQL querier node: connects to MySQL, PostgreSQL, MongoDB, SQL Server, or Firebase, runs a query or filter, and returns the results as JSON text."
+---
+
+## Overview
+
+The **SQL querier** node connects to an external database, executes a configured query or document filter, serializes the result as JSON, and stores it on the node row. It supports five database engines — **MySQL**, **PostgreSQL**, **MongoDB**, **SQL Server**, and **Firebase Firestore** — each with optional SSL/TLS.
+
+[`sqlQuerierActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`SqlQuerierService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/sql-querier/sql-querier.service.ts). Low-level connection logic lives in [`DatabaseConnectService`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/sql-querier/database-connect.service.ts).
+
+## When it runs
+
+`sqlQuerierActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **SQL querier** (`NodeType.SQL_QUERIER`, stored value `sqlQuerier`).
+
+## Activity signature
+
+```typescript
+async sqlQuerierActivity({
+  nodeId: string,
+  sessionId: string,
+  userId: string,
+}): Promise<SqlQuerierResponse>
+```
+
+`SqlQuerierResponse`:
+
+```typescript
+{
+  text: string; // JSON-serialized query result
+}
+```
+
+The same string is written to `flows_nodes.data.text` on success (see [Persisted node data](#persisted-node-data)).
+
+## Resolving the query (edge vs static)
+
+The effective query is resolved with the following priority:
+
+| Priority | Source | Condition |
+| -------- | ------ | --------- |
+| 1 (highest) | `queryData[0].text` | `queryData` array exists and has length > 0 |
+| 2 (fallback) | `query` | static field on the node data |
+
+For MongoDB, the filter document is always read from the static `filter` field. Firebase uses `filterOptions`.
+
+## Supported databases
+
+<Tabs>
+  <Tab title="MySQL">
+    Uses [`mysql2/promise`](https://github.com/sidorares/node-mysql2) — creates a new connection per execution, runs the query with `.execute()`, and closes the connection in a `finally` block.
+
+    SSL: when `ssl` is `true`, adds `{ rejectUnauthorized: true, ca }` to the connection options.
+
+    Required fields: `host`, `port`, `username`, `password`, `database`, plus the resolved query.
+  </Tab>
+  <Tab title="PostgreSQL">
+    Uses the [`pg`](https://node-postgres.com/) client — creates a new `Client` per execution, calls `.query()`, and ends the client in a `finally` block.
+
+    SSL: when `ssl` is `true`, sets `ssl: { ca }` on the client config.
+
+    Required fields: `host`, `port`, `username`, `password`, `database`, plus the resolved query.
+  </Tab>
+  <Tab title="MongoDB">
+    Uses the [MongoDB Node.js driver](https://www.mongodb.com/docs/drivers/node/current/) — connects with the full URI, calls `.find(filter).toArray()` on the configured collection, and closes the client in a `finally` block.
+
+    SSL: passes `ssl` and `ca` directly to `MongoClient` options.
+
+    Required fields: `uri`, `database`, `collection`. `filter` is optional (defaults to `{}`).
+  </Tab>
+  <Tab title="SQL Server">
+    Uses [`mssql`](https://github.com/tediousjs/node-mssql) — calls `sqlServer.connect()` with the resolved config, runs the query, and closes the pool in a `finally` block. Returns `result.recordset`.
+
+    SSL: when `ssl` is `true`, sets `options.encrypt: true` and `options.cryptoCredentialsDetails: { ca }`.
+
+    Required fields: `host` (used as `server`), `port`, `username`, `password`, `database`, plus the resolved query.
+  </Tab>
+  <Tab title="Firebase">
+    Uses [`firebase/firestore/lite`](https://firebase.google.com/docs/firestore) — initializes a Firebase app per execution, queries a Firestore collection, applies optional `where` clauses from `filterOptions`, maps documents to `{ id, ...data }`, and calls `deleteApp` in a `finally` block.
+
+    Required fields: `projectId`, `apiKey`, `authDomain`, `databaseURL`, `collection`. `filterOptions` is optional.
+  </Tab>
+</Tabs>
+
+## Node `data` fields
+
+Types reference: [`SqlQuerierNodeData`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/sql-querier/sql-querier.type.ts).
+
+### Common fields
+
+| Field | Role |
+| ----- | ---- |
+| `dbms` | Database engine: `mysql`, `postgresql`, `mongodb`, `sqlserver`, or `firebase`. Case-insensitive. |
+| `query` | Fallback SQL/query string when `queryData` is absent or empty. |
+| `queryData` | Optional `{ text: string }[]`; first item's `text` is used when present. |
+| `ssl` | Boolean. When `true`, enables SSL/TLS. Defaults to `false`. |
+| `ca` | Optional PEM-encoded CA certificate string for SSL verification. |
+
+### MySQL, PostgreSQL, and SQL Server
+
+| Field | Role |
+| ----- | ---- |
+| `host` | Hostname or IP address of the database server. |
+| `port` | Port number. |
+| `username` | Database user. |
+| `password` | Database password. |
+| `database` | Database / catalog name to connect to. |
+
+### MongoDB
+
+| Field | Role |
+| ----- | ---- |
+| `uri` | Full MongoDB connection URI (e.g. `mongodb+srv://…`). |
+| `database` | Database name. |
+| `collection` | Collection to query. |
+| `filter` | Optional MongoDB filter document (e.g. `{ "status": "active" }`). Defaults to `{}`. |
+
+### Firebase
+
+| Field | Role |
+| ----- | ---- |
+| `projectId` | Firebase project ID. |
+| `apiKey` | Firebase API key. |
+| `authDomain` | Firebase auth domain. |
+| `databaseURL` | Firebase database URL. |
+| `collection` | Firestore collection name. |
+| `filterOptions` | Optional `FirebaseFilterType` or `FirebaseFilterType[]`. Each filter becomes a Firestore `where` clause. |
+
+`FirebaseFilterType`:
+
+```typescript
+{
+  field: string;
+  operator: '==' | '!=' | '>' | '>=' | '<' | '<=' | 'array-contains' | 'in' | 'array-contains-any';
+  value: any;
+}
+```
+
+## End-to-end flow
+
+<Steps>
+  <Step title="Load node">
+    Query `flows_nodes` by `nodeId`. Cast `data` to `SqlQuerierNodeData`. Throw `Node not found` if no rows are returned.
+  </Step>
+  <Step title="Resolve query">
+    If `queryData` has length > 0, use `queryData[0].text`; otherwise use `query`.
+  </Step>
+  <Step title="Execute against database">
+    Dispatch on `dbms` (case-insensitive). Call the appropriate method on `DatabaseConnectService`. Each method opens a connection, runs the query, and closes the connection in a `finally` block.
+  </Step>
+  <Step title="Serialize result">
+    Call `JSON.stringify(result, null, 2)` on the returned rows or documents to produce `text`.
+  </Step>
+  <Step title="Persist result">
+    `UPDATE flows_nodes SET data = $1::jsonb` with the merged node data, setting `text`, `executionStatus: 'COMPLETED'`, and clearing `errorMessage` / `errorStatusCode`.
+  </Step>
+  <Step title="Return">
+    Return `{ text }` to the workflow.
+  </Step>
+</Steps>
+
+## Persisted node `data`
+
+On success, the stored JSON includes all original node data plus:
+
+| Field | Value |
+| ----- | ----- |
+| `text` | JSON-serialized query result (pretty-printed with 2-space indent). |
+| `executionStatus` | `'COMPLETED'`. |
+| `errorMessage` | `null`. |
+| `errorStatusCode` | `null`. |
+
+## Errors
+
+| Cause | Error thrown |
+| ----- | ------------ |
+| Node not found in `flows_nodes` | `Node not found` |
+| `dbms` value not recognized | `Unsupported database type: <dbms>` |
+| Connection or query failure (any engine) | Original driver error, re-thrown after logging |
+
+Each `DatabaseConnectService` method logs the failure with `console.error` before re-throwing, so the error appears in Worker logs with context (e.g. `Postgres query failed`, `MongoDB query failed`).
+
+## Related documentation
+
+- [`processSingleNode` workflow](/worker/workflows/process-single-node)
+- [Worker overview](/worker/overview)
+- [Worker development](/worker/development)

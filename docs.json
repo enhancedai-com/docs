@@ -55,7 +55,8 @@
                   "worker/node/audio-transcriber",
                   "worker/node/math-function",
                   "worker/node/api-caller",
-                  "worker/node/counter"
+                  "worker/node/counter",
+                  "worker/node/sql-querier"
                 ]
               },
               {
