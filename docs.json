@@ -54,7 +54,8 @@
                   "worker/node/text-generator",
                   "worker/node/audio-transcriber",
                   "worker/node/math-function",
-                  "worker/node/api-caller"
+                  "worker/node/api-caller",
+                  "worker/node/counter"
                 ]
               },
               {

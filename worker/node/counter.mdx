@@ -1,0 +1,103 @@
+---
+title: "Counter"
+sidebarTitle: "Counter"
+description: "Temporal activity for the counter node: increment, decrement, or wait with an optional timed delay."
+---
+
+## Overview
+
+The **counter** node performs one of three operations on a numeric value stored in the node: increment (`up`), decrement (`down`), or wait (`wait`). In wait mode, execution pauses for a configurable number of seconds before returning the existing text value unchanged.
+
+[`counterActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`CounterService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/counter/counter.service.ts).
+
+## When it runs
+
+`counterActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **counter** (`NodeType.COUNTER`, stored value `counterNode`).
+
+<Note>
+  The proxy for `counterActivity` uses a `startToCloseTimeout` of **2 minutes** (instead of the default 1 minute). This accounts for wait mode, where execution can pause up to 60 seconds.
+</Note>
+
+## Activity signature
+
+```typescript
+async counterActivity({
+  nodeId: string,
+  sessionId: string,
+  userId: string,
+}): Promise<CounterResponse>
+```
+
+`CounterResponse`:
+
+```typescript
+{
+  text: string; // resulting value after the operation
+}
+```
+
+## Node `data` fields
+
+Types reference: [`CounterNodeData`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/counter/counter.type.ts).
+
+| Field | Role |
+| ----- | ---- |
+| `counterMode` | Operation mode: `'up'`, `'down'`, or `'wait'`. Takes precedence over `isIncreasing`. |
+| `isIncreasing` | Legacy boolean. Used as fallback when `counterMode` is absent: `true` → `up`, `false` → `down`. Defaults to `up` when both are undefined. |
+| `text` | Current counter value (as a string) for `up`/`down`, or the pass-through value returned in `wait` mode. |
+| `waitSeconds` | Static delay in seconds for `wait` mode. Ignored unless `counterMode` is `'wait'`. |
+| `waitSecondsData` | Optional `{ text: string }[]` fed by edge inputs. When present and non-empty, `[0].text` overrides `waitSeconds`. A cap of **60 seconds** is applied. |
+| `executionStatus` | Set to `'COMPLETED'` by the Worker after a successful run. |
+
+## Resolving `counterMode`
+
+```typescript
+const counterMode =
+  nodeData.counterMode ?? (nodeData.isIncreasing !== false ? 'up' : 'down');
+```
+
+`counterMode` explicit always wins. When absent, `isIncreasing` decides: any value other than `false` (including `undefined`) resolves to `'up'`.
+
+## Resolving `waitSeconds` (wait mode only)
+
+```typescript
+const waitSecondsFromInput =
+  nodeData.waitSecondsData && nodeData.waitSecondsData.length > 0
+    ? Math.min(60, Math.max(0, Number(nodeData.waitSecondsData[0]?.text) || 0))
+    : null;
+
+const waitSeconds = waitSecondsFromInput ?? Number(nodeData.waitSeconds) ?? 0;
+```
+
+Edge-driven input (`waitSecondsData`) takes precedence over the static `waitSeconds` field. The cap of 60 seconds is applied **only** to the dynamic value; `waitSeconds` is used as-is.
+
+## End-to-end flow
+
+1. **Load node** — `SELECT` from `flows_nodes` by `nodeId`; cast `data` to `CounterNodeData`.
+2. **Resolve mode** — derive `counterMode` from `counterMode` or `isIncreasing` fallback.
+3. **Resolve delay** — if `wait` mode, derive `waitSeconds` from edge input or static field.
+4. **Execute**:
+   - **`up`** — parse `text` as a number (default `0`), add 1, convert back to string.
+   - **`down`** — parse `text` as a number (default `0`), subtract 1, convert back to string.
+   - **`wait`** — if `waitSeconds > 0`, await `setTimeout(waitSeconds * 1000)`; return `text` unchanged.
+5. **Persist** — `UPDATE flows_nodes` with merged `data`, setting `text` to the output value and `executionStatus: 'COMPLETED'`.
+6. **Return** — `{ text: outputText }`.
+
+## Persisted node `data`
+
+On success, the stored JSON merges all existing fields with:
+
+| Field | Value |
+| ----- | ----- |
+| `text` | Result after the operation (new count, or unchanged value in wait mode). |
+| `executionStatus` | `'COMPLETED'`. |
+
+## Errors
+
+- Missing node row → `Node not found`.
+
+## Related documentation
+
+- [`processSingleNode` workflow](/worker/workflows/process-single-node)
+- [Worker overview](/worker/overview)
+- [Worker development](/worker/development)
