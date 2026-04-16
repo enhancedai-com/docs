@@ -1,0 +1,218 @@
+---
+title: "Add a multimodal model"
+description: "How to register a new model with image or PDF capabilities in the frontend AI configuration"
+---
+
+## Location
+
+Model configurations live in:
+
+```
+src/components/AiConfigs/constants.ts
+```
+
+Models are organized by provider into arrays: `optionsArray` (OpenAI), `anthropicOptions`, `geminiOptions`, `groqOptions`, `xAiOptions`, and others.
+
+## Tag format
+
+All tags must be objects with `label` and `tooltip` properties:
+
+```typescript
+tags: [{ label: 'Label Text', tooltip: 'Tooltip description' }]
+```
+
+<Warning>
+  Never use plain string arrays for tags. All tags must have both `label` and `tooltip` properties.
+</Warning>
+
+## Multimodal tag types
+
+<Tabs>
+  <Tab title="Images + PDF">
+    For models that support both images and PDFs:
+
+    ```typescript
+    {
+      label: 'Multimodal (Images, PDF)',
+      tooltip: 'Max: 10 images or 1 PDF per request | Images 26MB, PDF 43MB each',
+    }
+    ```
+
+    **Models:** GPT-5, GPT-5.1, GPT-5.2, GPT-4.1, GPT-4o, Claude models
+  </Tab>
+  <Tab title="Images only">
+    For models that support images but not PDFs:
+
+    ```typescript
+    {
+      label: 'Multimodal (Images Only)',
+      tooltip: 'Max: 10 images per request | 26MB per file | No PDF support',
+    }
+    ```
+
+    **Models:** Grok 4, Llama 4 models
+  </Tab>
+  <Tab title="Text only">
+    For models without multimodal support:
+
+    ```typescript
+    { label: 'Text Only', tooltip: 'No multimodal support' }
+    ```
+  </Tab>
+</Tabs>
+
+## Step-by-step guide
+
+<Steps>
+  <Step title="Locate the provider array">
+    Find the correct array for your model provider:
+
+    | Provider | Array |
+    |----------|-------|
+    | OpenAI | `optionsArray` |
+    | Anthropic | `anthropicOptions` |
+    | Gemini | `geminiOptions` |
+    | Groq | `groqOptions` |
+    | X AI | `xAiOptions` |
+  </Step>
+  <Step title="Add or update the model entry">
+    Add a new entry or modify an existing one in the array:
+
+    ```typescript
+    {
+      value: 'model-name',
+      name: 'Model Display Name',
+      disabled: false,
+      tags: [
+        {
+          label: 'Multimodal (Images, PDF)',
+          tooltip: 'Max: 10 images or 1 PDF per request | Images 26MB, PDF 43MB each',
+        },
+        { label: '128,000 Tokens', tooltip: 'Context window' },
+        { label: 'Reasoning', tooltip: 'Advanced reasoning capabilities' },
+      ],
+      description: 'Model description here.',
+    }
+    ```
+  </Step>
+  <Step title="Convert string tags to objects (if needed)">
+    If the model already exists with string tags, convert them:
+
+    ```typescript
+    // Before
+    tags: ['New', '400,000 Tokens', '128,000 Tokens']
+
+    // After
+    tags: [
+      { label: 'New', tooltip: 'Latest model release' },
+      { label: '400,000 Tokens', tooltip: 'Output token limit' },
+      { label: '128,000 Tokens', tooltip: 'Context window' },
+    ]
+    ```
+  </Step>
+  <Step title="Add the multimodal tag">
+    Insert the multimodal tag at the beginning or in a logical position:
+
+    ```typescript
+    tags: [
+      { label: 'New', tooltip: 'Latest model release' },
+      {
+        label: 'Multimodal (Images, PDF)',
+        tooltip: 'Max: 10 images or 1 PDF per request | Images 26MB, PDF 43MB each',
+      },
+      // ... other tags
+    ]
+    ```
+  </Step>
+</Steps>
+
+## Complete examples
+
+<Accordion title="OpenAI model (GPT-5.2)">
+```typescript
+{
+  value: 'gpt-5.2',
+  name: 'gpt-5.2',
+  disabled: false,
+  tags: [
+    { label: 'New', tooltip: 'Latest model release' },
+    {
+      label: 'Multimodal (Images, PDF)',
+      tooltip: 'Max: 10 images or 1 PDF per request | Images 26MB, PDF 43MB each',
+    },
+    { label: '400,000 Tokens', tooltip: 'Output token limit' },
+    { label: '128,000 Tokens', tooltip: 'Context window' },
+    { label: 'Training up to Nov 2025', tooltip: 'Knowledge cutoff' },
+    { label: 'Reasoning', tooltip: 'Advanced reasoning capabilities' },
+  ],
+  description: 'GPT-5.2 is our best general-purpose model, part of the GPT-5 flagship model family.',
+}
+```
+</Accordion>
+
+<Accordion title="Anthropic model (Claude 4.5 Sonnet)">
+```typescript
+{
+  value: 'claude-4-5-sonnet-latest',
+  name: 'Claude 4.5 Sonnet',
+  tags: [
+    {
+      label: 'Multimodal (Images, PDF)',
+      tooltip: 'Max: 100 images or 5 PDFs per request | Images 5MB, PDF 6MB each',
+    },
+  ],
+  description: 'Latest Claude 4.5 Sonnet model with advanced reasoning and multimodal capabilities.',
+}
+```
+</Accordion>
+
+<Accordion title="X AI model (images only)">
+```typescript
+{
+  value: 'grok-4-0709',
+  name: 'Grok 4',
+  tags: [
+    {
+      label: 'Multimodal (Images Only)',
+      tooltip: 'Max: 10 images per request | 26MB per file | No PDF support',
+    },
+    { label: '256K Tokens', tooltip: '256,000 context window' },
+  ],
+  description: 'Most capable Grok model with vision capabilities for images only.',
+}
+```
+</Accordion>
+
+<Accordion title="Groq model (text only)">
+```typescript
+{
+  value: 'llama3-70b-8192',
+  name: 'Llama 3 70B',
+  disabled: false,
+  tags: [
+    { label: 'Text Only', tooltip: 'No multimodal support' },
+    { label: '8,192 Tokens', tooltip: 'Context window' },
+  ],
+  description: 'Llama 3 70B model optimized for high performance.',
+}
+```
+</Accordion>
+
+## Important notes
+
+<Note>
+  The tooltip should include specific limits and file size restrictions for multimodal models.
+</Note>
+
+- Use consistent labels: `'Multimodal (Images, PDF)'`, `'Multimodal (Images Only)'`, or `'Text Only'`
+- Research the model's actual capabilities and limits from official documentation before adding tags
+- This frontend configuration is for display purposes. Make sure the backend also supports the model for multimodal requests
+
+## Verification
+
+After adding a model:
+
+1. Check for TypeScript/linting errors
+2. Verify the model appears correctly in the UI
+3. Test that multimodal tags display with proper tooltips
+4. Ensure the model works with multimodal file uploads (backend integration)

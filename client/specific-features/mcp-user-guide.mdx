@@ -1,0 +1,173 @@
+---
+title: "MCP Server node user guide"
+description: "How to connect to and use MCP servers in your workflows without writing code"
+---
+
+## What this does for you
+
+**MCP (Model Context Protocol)** lets your workflow talk to an external service that exposes **tools** — actions the service can run for you, such as fetching data, creating records, or running calculations. The **MCP Server** node picks one tool, sends it instructions, and stores the result in the node's output so the next steps in your flow can use it.
+
+Think of it as a **bridge**: your flow stays in the product, while the heavy lifting happens on a vendor's or your team's MCP-compatible server.
+
+## Quick glossary
+
+| Term | Meaning |
+|------|---------|
+| **MCP server** | A web address (URL) that speaks the MCP protocol over HTTPS |
+| **Tool** | A named action the server offers. You choose one tool per run. |
+| **Bearer token** | A secret string some servers require. Treat it like a password. |
+| **Workspace** | Your team or company context. Saved connections need a workspace. |
+| **Personal / Team (OAuth)** | **Personal** ties the connection to you; **Team** shares it with the workspace. |
+
+## Remote HTTP vs stdio
+
+<Tabs>
+  <Tab title="Remote HTTP">
+    A public `https://` MCP endpoint with bearer or OAuth authentication. Same model as connecting to remote servers in the MCP spec.
+  </Tab>
+  <Tab title="Npm package (stdio / npx)">
+    You save an Integrations connection with the **package name** from the vendor's docs (e.g. `@modelcontextprotocol/server-github`) and your authentication. The backend runs `npx -y <package>` — this is **not** running MCP on your laptop; it runs in the product's API environment.
+
+    If a vendor gives you **only** a stdio npm package and **no** HTTPS URL, choose **Npm package** in Integrations.
+  </Tab>
+</Tabs>
+
+## How it fits together
+
+1. You create a **connection** (saved URL + optional token, or OAuth)
+2. You configure the **MCP Server** node to use that connection (or a custom URL)
+3. The **backend** calls the remote server; the result appears in the node output
+
+## Path A — MCP (HTTP) saved connection
+
+Use **Integrations** when you have an HTTPS MCP URL and optionally a bearer token.
+
+<Steps>
+  <Step title="Open Integrations">
+    Go to **Integrations**, find **MCP**, and choose **Connect**.
+  </Step>
+  <Step title="Enter credentials">
+    | Field | What to enter |
+    |-------|---------------|
+    | **How to connect** | **Web address (HTTPS)** for a remote URL, or **Npm package** for stdio |
+    | **MCP server web address** | Full URL including `https://` (often ends with `/mcp`) |
+    | **Secret token** | Only if the server docs say to send an API key or bearer token |
+    | **MCP package name** | Exact name from the docs (for npm) |
+    | **Authentication** | Raw token, `NAME=value` lines, or JSON for npm packages |
+  </Step>
+  <Step title="Use it in the MCP Server node">
+    1. Add an **MCP Server** node to your flow
+    2. Pick the connection you created in the **MCP (HTTP)** card
+    3. Click **Load tools from URL**, optionally pick a tool
+    4. Set **Input mode** to **Prompt** or **Arguments**, then run
+  </Step>
+</Steps>
+
+<Warning>
+  Do not use **Use saved integration** (OAuth) at the same time as an **MCP (HTTP)** saved connection. Pick one authentication path per run.
+</Warning>
+
+## Path B — OAuth MCP (e.g. Magic Patterns)
+
+Some providers use OAuth (a browser login) instead of a static API key.
+
+<Steps>
+  <Step title="Connect via OAuth">
+    In **Integrations**, find **MCP Integrations**, choose **Personal** or **Team**, then **Connect**. Complete the browser sign-in.
+  </Step>
+  <Step title="Configure the node">
+    In the **MCP Server** node, select the OAuth integration under **Use saved integration**. Clear the **MCP (HTTP)** connection if it was set. Load tools, optionally pick one, and run.
+  </Step>
+</Steps>
+
+## Field-by-field reference
+
+### MCP Server URL
+
+The full HTTPS endpoint. With a workspace and a saved connection, this field is hidden. Without a workspace, enter it directly or connect another node's output to the URL handle.
+
+### MCP (HTTP) connection
+
+Lists connections from Integrations (yours and teammates'). The backend uses the stored URL and optional bearer token via `integrationId`.
+
+### Use saved integration
+
+OAuth-backed MCP hosts. Mutually exclusive with MCP (HTTP) for a given run.
+
+### Auth token
+
+Manual bearer when not using OAuth or a saved connection. Hidden with a workspace unless the `authToken` handle is wired.
+
+### Tools
+
+1. **Load tools from URL** — refreshes the tool list
+2. **Select tool** — optional; if empty, the backend picks the best tool for your prompt
+3. **Tool Name** — appears when using handles from other nodes
+
+### Input mode
+
+| Mode | When to use |
+|------|-------------|
+| **Prompt** | Describe what you want in plain language. The backend picks a tool and builds arguments. |
+| **Arguments** | Send a JSON object of parameters exactly as the tool expects. Requires a selected tool. |
+
+## Worked examples
+
+<Accordion title="Official MCP reference host (HTTPS)">
+  1. In **Integrations → MCP (HTTP)**, create a connection with the reference URL
+  2. In the node, select that connection, **Load tools from URL**, optionally pick a tool
+  3. Start with **Prompt** mode and a simple instruction
+</Accordion>
+
+<Accordion title="Magic Patterns (OAuth)">
+  1. In **Integrations → MCP Integrations**, connect with **Personal** or **Team**
+  2. In the node, select the integration under **Use saved integration**
+  3. Load tools, optionally pick a tool, use **Prompt** to describe the design or action
+</Accordion>
+
+<Accordion title="Bring your own remote MCP (Cloudflare or similar)">
+  1. Deploy your server to get a stable `https://.../mcp` URL
+  2. If the guide says "API key in Authorization: Bearer", paste that key when creating the connection
+  3. Save, select the connection in the node, load tools, run
+</Accordion>
+
+## Chaining with other nodes
+
+### Referencing this node's output
+
+Use placeholders like `{{mylabel.text}}` where `mylabel` is the node's label (lowercased, no spaces) and `text` is the output field.
+
+**Example:** if the node label is **GitHub MCP**, use `{{githubmcp.text}}`.
+
+### Feeding the MCP node from upstream nodes
+
+Connect handles into **MCP Server URL**, **Tool Name**, **Prompt**, and **Auth token** so earlier steps supply values dynamically.
+
+## Prompt vs Arguments decision tree
+
+1. **Do you have exact JSON from the vendor's example?** → **Arguments**
+2. **Is the tool's purpose easy to describe in a sentence?** → **Prompt**
+3. **Does the tool need very precise field names and zero interpretation?** → **Arguments**
+
+## Troubleshooting
+
+| Problem | What to check |
+|---------|---------------|
+| Select a workspace | Saved HTTP and some OAuth flows need workspace context |
+| No tools / empty list | Wrong URL, missing `https://`, token missing or expired |
+| Tool not in list | Click **Load tools from URL** again after changes |
+| OAuth and HTTP both set | Clear one path before using the other |
+| Prompt mode errors | Prompt must not be empty |
+| Arguments mode errors | JSON must be a single object `{}` with at least one property |
+| Long wait / timeout | Remote servers can be slow; retry or narrow the request |
+| Connection not ready (canvas) | Wait for the live connection to finish, then run again |
+
+## Security and hygiene
+
+<Warning>
+  Treat bearer tokens like passwords. Revoke them if exposed. Only connect to trusted MCP URLs.
+</Warning>
+
+- Prefer saved connections over pasting secrets into the node
+- For OAuth providers, use **Team** only when your organization approves shared access
+- Copying a flow to another workspace does not transfer integration access

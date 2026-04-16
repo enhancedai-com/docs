@@ -1,0 +1,70 @@
+---
+title: "Flow canvas autosave"
+description: "How the canvas prevents spurious PATCH calls on flow load and gates non-critical saves"
+---
+
+## Goal
+
+Avoid spurious `PATCH /flow/update-node-data` when a flow opens. Server data on load is treated as source of truth until the user interacts or the post-ready window passes.
+
+## Store
+
+In `src/store/storeFlows.ts`:
+
+- `flowCanvasPhase` — `'idle' | 'loading' | 'hydrating' | 'ready'`
+- `flowLoadGeneration` — incremented on each load start
+- `flowCanvasReadyAtMs`, `flowCanvasUserGestureUnlock` — used by the patch gate
+- `beginFlowCanvasLoad()`, `setFlowCanvasPhase()`, `unlockFlowCanvasUserGesture()`
+
+## Lifecycle
+
+In `CoreNodeDisplay.tsx` / `CoreNodeDisplaySpaces.tsx`:
+
+1. `beginFlowCanvasLoad()` when the flow fetch starts
+2. After `isLoading` goes from `true` to `false`: `hydrating` then two `requestAnimationFrame` ticks, then `ready`
+3. On `ready`, capture-phase `pointerdown` / `keydown` on `window` calls `unlockFlowCanvasUserGesture()` once
+
+## Patch gate
+
+Located at `src/util/autosave/flowCanvasPatchGate.ts`.
+
+Non-critical saves call `canUnlockNonCriticalPatch`, which is allowed only if:
+
+- Phase is `ready`, **and**
+- `userGestureUnlock` is true, **or** `readyAtMs === 0`, **or** elapsed time >= `POST_READY_NON_CRITICAL_PATCH_MAX_WAIT_MS` (default 3500ms)
+
+<Note>
+  Critical `changeType` values (`execute`, `delete-edges`, `update-edge`, `connect`) still send immediately when the phase allows. See `CRITICAL_CHANGE_TYPES` in `nodedata_autosave.ts`.
+</Note>
+
+## Autosave core
+
+In `src/util/autosave/nodedata_autosave.ts`:
+
+- For `changeType === 'default'`, local `handleChanges` runs when the debounce fires
+- Merged payloads per node, respects `flowLoadGeneration`
+- Integrates the patch gate before `FlowService.updateNodeData` for non-critical types
+
+## Other touchpoints
+
+| File | Behavior |
+|------|----------|
+| `ReactFlowBody.tsx` | `onlyRenderVisibleElements` on `ReactFlow` |
+| `hooks/useInputSizeTracking.ts` | Defers size PATCH after load, skips bad measurements |
+| `FlowGlobalNode.tsx`, `OutputControllerNode.tsx`, `DecisionPaths.tsx`, `Scripting.tsx`, `FlowCaller.tsx` | Avoid saves when persisted data already matches |
+| `ThirdPartyIntegrationNode.tsx` / `useThirdPartyPersist.ts` | Phase checks, structured field values, blob seeding |
+| `FlowService.ts` | Dev-only logging on `updateNodeData` (optional) |
+
+## Tests
+
+Run the patch gate unit tests:
+
+```bash
+pnpm run test:patch-gate
+```
+
+Tests are in `tests/unit/util/autosave/flowCanvasPatchGate.test.ts`. New specs belong under `tests/`, not `src/`.
+
+## Manual check
+
+Open a heavy flow: no `update-node-data` PATCH should fire until the first gesture or ~3.5s after ready (except critical change types). Edit a node and confirm the PATCH runs after interaction.

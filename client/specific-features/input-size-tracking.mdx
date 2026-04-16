@@ -1,0 +1,109 @@
+---
+title: "Input size tracking"
+description: "How the useInputSizeTracking hook automatically tracks and persists textarea dimensions"
+---
+
+## Overview
+
+`useInputSizeTracking` is a React hook that automatically tracks and persists the size (width and height) of textarea elements. It uses the `ResizeObserver` API to monitor size changes and auto-saves the dimensions to the node's data after a debounce period.
+
+## Purpose
+
+This hook enables users to resize textarea inputs and have their preferred dimensions automatically saved and restored. It's useful in the flow canvas where users can customize input field sizes per node.
+
+## Key features
+
+- **Automatic size tracking** — uses `ResizeObserver` to detect textarea dimension changes
+- **Debounced auto-save** — saves size changes after 500ms of inactivity
+- **Size restoration** — restores previously saved dimensions on mount
+- **Flexible textarea selection** — finds textareas via ref or DOM query selector
+- **Collapsed state handling** — disables tracking when the node is collapsed
+
+## Parameters
+
+```typescript
+interface UseInputSizeTrackingOptions {
+  nodeId: string;
+  inputSize?: InputSize;
+  collapsed?: boolean;
+  edges: any[];
+  flowId?: string;
+  setNodeState: any;
+  setSaving: any;
+  setSchema: any;
+  sizeKey?: string;
+  textareaRef?: React.RefObject<HTMLTextAreaElement>;
+  textareaName?: string;
+}
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `nodeId` | string | Yes | Unique identifier for the node |
+| `inputSize` | InputSize | No | Previously saved size `{ width, height }` |
+| `collapsed` | boolean | No | Whether the node is collapsed (default: `false`) |
+| `edges` | any[] | Yes | Flow edges array for autosave |
+| `flowId` | string | No | Flow identifier |
+| `setNodeState` | any | Yes | Function to update node state |
+| `setSaving` | any | Yes | Function to set saving status |
+| `setSchema` | any | Yes | Function to update schema |
+| `sizeKey` | string | No | Key to store size in node data (default: `'inputSize'`) |
+| `textareaRef` | RefObject | No | Direct ref to textarea |
+| `textareaName` | string | No | Name attribute to find specific textarea |
+
+## Return value
+
+Returns `InputSize | undefined`:
+
+- `InputSize` — object with `width` and `height` properties (both strings, e.g., `"300px"`)
+- `undefined` — if no size has been set or saved
+
+## How it works
+
+<Steps>
+  <Step title="Initialization">
+    On mount, the hook finds the target textarea element either via a provided `textareaRef` or a DOM query using `nodeId` and optionally `textareaName`.
+  </Step>
+  <Step title="Size restoration">
+    If `savedInputSize` is provided, it applies those dimensions to the textarea's inline styles. This happens only once per node to prevent flickering.
+  </Step>
+  <Step title="Size monitoring">
+    A `ResizeObserver` watches for size changes, updates local state immediately, and debounces auto-save by 500ms. It only saves if dimensions actually changed.
+  </Step>
+  <Step title="Auto-save">
+    After the debounce period, if the size changed, it calls `nodeDataAutoSaveDynamic` to persist the new dimensions.
+  </Step>
+  <Step title="Cleanup">
+    Properly disconnects observers and clears timeouts on unmount or when dependencies change.
+  </Step>
+</Steps>
+
+## Usage example
+
+```typescript
+const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+const inputSize = useInputSizeTracking({
+  nodeId: 'my-node-id',
+  inputSize: nodeData?.inputSize,
+  collapsed: isCollapsed,
+  edges: flowEdges,
+  flowId: currentFlowId,
+  setNodeState: updateNode,
+  setSaving: setIsSaving,
+  setSchema: updateSchema,
+  textareaRef: textareaRef,
+  sizeKey: 'inputSize',
+});
+```
+
+## Important notes
+
+<Note>
+  The hook handles textarea discovery with a 100ms fallback timeout if the element isn't immediately available.
+</Note>
+
+- Size tracking is disabled when `collapsed` is `true`
+- Only saves when dimensions actually differ from saved values
+- Uses inline styles (`element.style.width/height`) for size management
+- Initial size is applied only once per node to prevent visual flickering when `savedInputSize` updates after a save

@@ -1,0 +1,278 @@
+---
+title: "Autosave system"
+description: "How the debounced autosave caching mechanism (nodeDataAutoSaveDynamic) works and how to use it correctly"
+---
+
+## Overview
+
+The autosave system (`nodeDataAutoSaveDynamic`) is a debounced caching mechanism that automatically saves node data changes to the backend. It prevents unnecessary API calls by caching data and only saving when changes are detected.
+
+## How it works
+
+### Core components
+
+1. **Cache map** — stores pending save operations by cache key
+2. **Debounce timer** — delays save operations by 800ms (`DEBOUNCE_DELAY`)
+3. **Deep equality check** — compares new data with cached data to prevent duplicate saves
+4. **Critical change types** — some operations bypass debounce and save immediately
+
+### Flow diagram
+
+```
+User Action
+    ↓
+nodeDataAutoSaveDynamic called
+    ↓
+Update local state (setNodeState)
+    ↓
+Generate cache key: ${flowId}:${id}:${changeType}
+    ↓
+Is critical change? → YES → Save immediately
+    ↓ NO
+Check cache for existing entry
+    ↓
+Is data equal to cached? → YES → Skip save
+    ↓ NO
+Clear existing timer (if any)
+    ↓
+Set new timer (800ms debounce)
+    ↓
+After 800ms → Save to backend
+    ↓
+Update cache with saved data
+```
+
+## Cache mechanism
+
+### Cache key structure
+
+```typescript
+const cacheKey = `${flowId}:${id || 'global'}:${changeType}`;
+```
+
+- `flowId` — the ID of the current flow
+- `id` — the node ID (or `'global'` if not provided)
+- `changeType` — the type of change (default: `'default'`)
+
+### Cache entry
+
+```typescript
+type SaveCacheEntry = {
+  lastData: any;
+  timer: NodeJS.Timeout | null;
+  timestamp: number;
+};
+```
+
+### Cache behavior
+
+- **Same cache key = same timer** — multiple calls with the same cache key cancel previous timers
+- **Deep equality check** — if new data equals cached data, the save is skipped
+- **Timer cancellation** — new calls cancel previous timers and create new ones
+- **Automatic cleanup** — cache entries older than 5 minutes (`CACHE_MAX_AGE`) are removed
+
+### Critical change types
+
+These change types bypass debounce and save immediately:
+
+```typescript
+const CRITICAL_CHANGE_TYPES = [
+  'execute',
+  'delete-edges',
+  'update-edge',
+  'connect',
+];
+```
+
+## API reference
+
+### Function signature
+
+```typescript
+nodeDataAutoSaveDynamic({
+  setEdges?: Function,
+  setNodeState: Function,
+  id: string,
+  flowTriggerData?: object,
+  flowId: string,
+  objectData: object,
+  setSchema?: Function,
+  newEdges: Edge[],
+  changeType?: string,
+  connectData?: Edge,
+  deleteEdges?: Edge[],
+  updateEdge?: object,
+  objectCallerData?: object[],
+  setSaving: Function,
+})
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `setNodeState` | Function | Yes | React Flow's `setNodes` function |
+| `id` | string | Yes | Unique node identifier |
+| `flowId` | string | Yes | Flow identifier (returns early if not provided) |
+| `objectData` | object | Yes | Data object to save (merged with existing node data) |
+| `newEdges` | Edge[] | Yes | Current array of edges |
+| `setSaving` | Function | Yes | Function to update save status |
+| `changeType` | string | No | Type of change (default: `'default'`) |
+| `setSchema` | Function | No | Schema update function |
+| `objectCallerData` | object[] | No | Additional context data |
+| `flowTriggerData` | object | No | Flow execution trigger data |
+
+## Usage patterns
+
+### Simple property update
+
+```typescript
+const handleNameChange = (newName: string) => {
+  nodeDataAutoSaveDynamic({
+    newEdges: edges,
+    setNodeState,
+    id,
+    flowId,
+    objectData: { name: newName },
+    setSchema,
+    setSaving,
+  });
+};
+```
+
+### With debounce hook
+
+```typescript
+useDebounceEffect(
+  () => {
+    nodeDataAutoSaveDynamic({
+      newEdges: edges,
+      setNodeState,
+      id,
+      flowId,
+      objectData: {
+        size: { height: size.height, width: size.width },
+      },
+      setSchema,
+      setSaving,
+    });
+  },
+  [size],
+  500,
+);
+```
+
+### Critical change (immediate save)
+
+```typescript
+const handleExecute = () => {
+  nodeDataAutoSaveDynamic({
+    newEdges: edges,
+    setNodeState,
+    id,
+    flowId,
+    changeType: 'execute',
+    objectData: { text: processedData, textData: inputData },
+    setSchema,
+    setSaving,
+  });
+};
+```
+
+## Common pitfalls
+
+<Accordion title="Cache key collision">
+  **Problem:** Multiple calls with the same `changeType` share the same cache key, causing the last call to cancel previous ones.
+
+  ```typescript
+  // Wrong: both use changeType='default'
+  nodeDataAutoSaveDynamic({ ..., changeType: 'default', objectData: { prop1: 'value1' } });
+  nodeDataAutoSaveDynamic({ ..., changeType: 'default', objectData: { prop2: 'value2' } });
+  // Only prop2 saves!
+  ```
+
+  **Solution:** Merge related data into a single call:
+
+  ```typescript
+  nodeDataAutoSaveDynamic({
+    ...,
+    changeType: 'default',
+    objectData: { prop1: 'value1', prop2: 'value2' },
+  });
+  ```
+</Accordion>
+
+<Accordion title="Async operations">
+  **Problem:** Making autosave calls before async operations complete causes race conditions.
+
+  ```typescript
+  // Wrong
+  nodeDataAutoSaveDynamic({ ..., objectData: { saveOutput: true } });
+  const fileLink = await uploadFile();
+  nodeDataAutoSaveDynamic({ ..., objectData: { fileLink } });
+  ```
+
+  **Solution:** Wait for async operations, then merge:
+
+  ```typescript
+  const fileLink = await uploadFile();
+  nodeDataAutoSaveDynamic({
+    ...,
+    objectData: { saveOutput: true, fileLink },
+  });
+  ```
+</Accordion>
+
+<Accordion title="Not handling errors">
+  **Problem:** If an async operation fails, related data might not be saved.
+
+  **Solution:** Save critical data even if async operations fail:
+
+  ```typescript
+  const handleChange = async () => {
+    const newSaveOutput = !saveOutput;
+    try {
+      const fileLink = await uploadFile();
+      nodeDataAutoSaveDynamic({
+        ...,
+        objectData: { saveOutput: newSaveOutput, fileLink },
+      });
+    } catch (error) {
+      nodeDataAutoSaveDynamic({
+        ...,
+        objectData: { saveOutput: newSaveOutput },
+      });
+    }
+  };
+  ```
+</Accordion>
+
+## Best practices
+
+<Tip>
+  Always merge related updates into a single `nodeDataAutoSaveDynamic` call. Same cache key = same timer = cancellation of previous calls.
+</Tip>
+
+1. **Merge related updates** — combine all related data changes into one call
+2. **Use appropriate change types** — `'execute'` for critical operations, `'default'` for general updates
+3. **Handle async operations** — wait for async calls to complete before saving
+4. **Use debounce hooks for frequent updates** — wrap size/position changes in `useDebounceEffect`
+5. **Save critical data** — always persist critical synchronous data even when async fails
+6. **Avoid unnecessary calls** — check if data actually changed before calling autosave
+
+## Troubleshooting
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Data not saving | `flowId` is undefined or cache key collision | Verify `flowId` is provided; check for duplicate cache keys |
+| Only last update saves | Multiple calls with same cache key cancel previous timers | Merge all updates into a single call |
+| Works in dev, fails in prod | Timing differences cause cache conflicts | Always merge related updates after async operations |
+| Cache not clearing | Cache cleanup runs every 60s, removes entries older than 5 min | This is expected behavior |
+
+## Configuration constants
+
+```typescript
+const DEBOUNCE_DELAY = 800;          // Milliseconds before save
+const CACHE_CLEANUP_INTERVAL = 60000; // Cleanup every 60 seconds
+const CACHE_MAX_AGE = 300000;         // 5 minutes cache age
+```

@@ -1,0 +1,396 @@
+---
+title: "Edge propagation system"
+description: "How the frontend transfers data between connected nodes in real time and synchronizes with the backend"
+---
+
+## Overview
+
+The frontend edge propagation system transfers data between connected nodes in the React Flow diagram. It runs entirely in the browser and synchronizes with the backend during flow execution.
+
+### Key concepts
+
+| Term | Description |
+|------|-------------|
+| **Edge** | A connection between two nodes with a source (output) and target (input) |
+| **Source node** | The node that provides data through output handles |
+| **Target node** | The node that receives data through input handles |
+| **Handle** | A specific connection point on a node (e.g., `promptIn`, `output`) |
+| **Propagation** | Real-time process of updating connected nodes when source data changes |
+
+### System characteristics
+
+- **Real-time updates** — changes propagate immediately in the UI
+- **Debounced saves** — backend syncs are debounced (800ms) for performance
+- **Critical changes** — execute operations bypass debouncing for immediate sync
+- **Bidirectional sync** — frontend and backend synchronize during flow execution
+- **Two storage patterns** — array-based (default) and direct property storage
+
+## Architecture
+
+### Core files
+
+| File | Purpose |
+|------|---------|
+| `src/util/dataStoredToType.ts` | Central configuration for handle-to-property mappings |
+| `src/util/autosave/utilis.ts` | `getOutputByType`, `givingDataToNode`, `flowTriggerDataHandle` |
+| `src/util/autosave/changeTypes.ts` | `modifyData`, `handleChanges`, `connect`, `deleteEdgesData` |
+| `src/util/autosave/nodedata_autosave.ts` | `nodeDataAutoSaveDynamic` — main orchestrator |
+| `src/util/autosave/propagateDownstreamFromSeeds.ts` | BFS propagation along outgoing edges |
+
+### Configuration
+
+**`allNodesTargetBasedOnType`** maps input handles to data property names:
+
+```typescript
+{
+  commandTextNode: {
+    promptIn: 'prompt',
+    contentIn: 'content',
+  }
+}
+```
+
+**`allValuesByType`** lists all updatable properties for each node type:
+
+```typescript
+{
+  commandTextNode: ['prompt', 'content', 'instruction', 'persona', 'text']
+}
+```
+
+## Core methods
+
+### getOutputByType
+
+Extracts output data from a source node based on its type and source handle.
+
+**Location:** `src/util/autosave/utilis.ts`
+
+| Node type | Source handle | Extraction logic |
+|-----------|--------------|------------------|
+| `nodesBox` | Any `-out` | Extracts from `selectedId` in objectCallerData |
+| `commandContentNode` | — | Returns `data.text.result` |
+| `tableProcessor` | — | Returns table cell at current `completed` index |
+| `mathFunction` | `output` | Returns `data.result` |
+| `scripting` | `output` | Returns `data.result` |
+| `scripting` | `console` | Returns `data.console` |
+| `mediaBox` | `mediaOutput` | Returns joined URLs |
+| `commandTextNode` | `output` | Returns `data.text` |
+| `commandTextNode` | `fileLink` | Returns `data.fileLink.src` |
+| `commandTextNode` | `logs` | Returns `data.logs` |
+| `commandTextNode` | `output-memory` | Returns filtered memories |
+| `outputController` / `reportBuilder` | — | Returns processed `textData` with filters |
+| **Default** | — | Returns `data.text` |
+
+### modifyData
+
+Updates all target nodes connected to a source node through edges. This is the core propagation engine.
+
+**Location:** `src/util/autosave/changeTypes.ts`
+
+**Process:**
+
+1. Update source node with `objectData`
+2. Filter edges where `source = id` or `target = id`
+3. Build `combinedData` via `getOutputByType`
+4. Map through all nodes and apply type-specific update logic
+
+#### Node-specific update logic
+
+<Accordion title="fluxBox / libraryNode">
+  Handles dynamic text and file link inputs. Updates `textData` and `fileLinkData` objects keyed by variable input node ID.
+
+  ```typescript
+  if (nd.type === 'fluxBox' || nd.type === 'libraryNode') {
+    const textData = nd.data?.textData || {};
+    const fileLinkData = nd.data?.fileLinkData || {};
+    // Updates arrays per variable key
+  }
+  ```
+</Accordion>
+
+<Accordion title="mathFunction">
+  Updates formula data and variables arrays:
+
+  ```typescript
+  if (nd.type === 'mathFunction') {
+    // Update formulaData array if formula handle is connected
+    // Update variables array with connected values
+  }
+  ```
+</Accordion>
+
+<Accordion title="scripting">
+  Similar to mathFunction — updates script data and variables arrays.
+</Accordion>
+
+<Accordion title="fileSave">
+  Updates file names and contents:
+
+  ```typescript
+  if (nd.type === 'fileSave') {
+    const files = nd.data?.files || [];
+    // Maps over files, updating fileName and value from combinedData
+  }
+  ```
+</Accordion>
+
+<Accordion title="fluxObject">
+  Handles entry additions during execution:
+
+  ```typescript
+  if (nd.type === 'fluxObject' && changeType === 'execute') {
+    // Pushes new entry with content, timestamp, and role
+  }
+  ```
+</Accordion>
+
+<Accordion title="Generic nodes">
+  For standard nodes like `commandTextNode`, `apiCaller`, `imageGenerator`:
+
+  ```typescript
+  // Builds key mapping from allNodesTargetBasedOnType
+  // Creates *Data arrays (promptData, contentData, etc.)
+  ```
+</Accordion>
+
+### nodeDataAutoSaveDynamic
+
+Main orchestrator that coordinates React state updates and backend synchronization.
+
+**Location:** `src/util/autosave/nodedata_autosave.ts`
+
+Key features:
+
+1. **Immediate React state update** via `setNodeState`
+2. **Critical vs non-critical changes** — critical types save immediately, others are debounced
+3. **Debouncing** — 800ms delay for non-critical saves
+4. **Save deduplication** — skips save if data equals cached data
+5. **Backend sync** via `FlowService.updateNodeData`
+
+## Data storage patterns
+
+### Pattern 1: array-based storage (default)
+
+Used by most nodes including `commandTextNode`, `apiCaller`, `imageGenerator`, `sqlQuerier`.
+
+```typescript
+interface NodeData {
+  promptData?: Array<{
+    id: string;     // Source node ID
+    text: string;   // The data content
+    label: string;  // Source node label for UI display
+  }>;
+}
+```
+
+**Use this when:**
+- Node accepts multiple inputs on the same handle
+- You need to track which source provided which data
+- You want to preserve connection order
+
+**Reading in a component:**
+
+```typescript
+const promptText = data?.promptData
+  ?.map((item: { text: string }) => item.text)
+  .join('\n');
+```
+
+### Pattern 2: direct property storage (nodePassOnlyText)
+
+Used by nodes configured in the `nodePassOnlyText` object.
+
+```typescript
+export const nodePassOnlyText = {
+  imageReaderNode: 'inputPreview',
+  audioReaderNode: 'inputPreview',
+  documentSummarizer: 'inputPreview',
+  arrayNode: 'content',
+  imageGenerator: 'inputPreview',
+  mathFunction: 'varId',
+  fluxBox: 'varId',
+  libraryNode: 'varId',
+  fileSave: 'varId',
+  outputController: 'customFileName',
+};
+```
+
+**Use this when:**
+- Only one source should connect (single value)
+- Backend uses a direct property (must match)
+- No need for source metadata
+
+**Reading in a component:**
+
+```typescript
+const fileName = data?.customFileName || '';
+```
+
+### Comparison
+
+| Aspect | Array-based | Direct property |
+|--------|-------------|-----------------|
+| **Structure** | `promptData: [{id, text, label}]` | `customFileName: "value"` |
+| **Multiple sources** | Yes | No, overwrites |
+| **Metadata** | Includes `id` and `label` | Only value |
+| **Reading** | `.map().join()` | Direct access |
+| **Configuration** | Default for all nodes | Must add to `nodePassOnlyText` |
+
+## How to add new edges
+
+<Steps>
+  <Step title="Define target handle mapping">
+    In `src/util/dataStoredToType.ts`, add your node type and its input handles:
+
+    ```typescript
+    export const allNodesTargetBasedOnType = {
+      myNewNode: {
+        myInputHandle: 'myProperty',
+        anotherInput: 'anotherProperty',
+      },
+    };
+    ```
+
+    Handle IDs use camelCase with `In` suffix (e.g., `promptIn`). Property names are typically the handle without the suffix.
+  </Step>
+  <Step title="Add to allValuesByType (optional)">
+    List all updatable properties:
+
+    ```typescript
+    export const allValuesByType = {
+      myNewNode: ['myProperty', 'anotherProperty', 'text', 'result'],
+    };
+    ```
+  </Step>
+  <Step title="Update getOutputByType (if custom source output)">
+    If your node produces output in a custom format, add extraction logic in `src/util/autosave/utilis.ts` before the generic default case.
+
+    Not needed if your node outputs through `data.text` (default case) or is purely a target.
+  </Step>
+  <Step title="Add special handling in modifyData (if needed)">
+    Only needed for custom data structures beyond generic patterns. Add before the generic `if (check)` case in `src/util/autosave/changeTypes.ts`.
+  </Step>
+  <Step title="Add to nodePassOnlyText (if using direct property)">
+    Add to **both** files:
+    - `src/util/autosave/changeTypes.ts`
+    - `src/util/autosave/nodedata_autosave.ts`
+
+    The value must match the property name from `allNodesTargetBasedOnType`.
+  </Step>
+  <Step title="Update component to read data">
+    For array-based:
+
+    ```typescript
+    const myPropertyText = data?.myPropertyData
+      ?.map((item: { text: string }) => item.text)
+      .join('\n');
+    ```
+
+    For direct property:
+
+    ```typescript
+    const myValue = data?.myDirectProperty || '';
+    ```
+
+    <Warning>
+      Always read from the `data` prop in execution callbacks, never from local state variables.
+    </Warning>
+  </Step>
+  <Step title="Test your implementation">
+    - **Connection** — connect an edge, verify data appears in React DevTools
+    - **Propagation** — update source node, verify target updates
+    - **Multiple sources** (array pattern) — connect multiple sources, verify all stored
+    - **Deletion** — delete the edge, verify data is removed
+    - **Execution** — execute a flow, verify correct data flow
+    - **Persistence** — refresh the page, verify edges and data persist
+  </Step>
+</Steps>
+
+## Scoped downstream propagation
+
+In `src/util/autosave/propagateDownstreamFromSeeds.ts`:
+
+- After `changeType: 'execute'`, `delete-edges`, and `connect`, the canvas runs `modifyData` in a **BFS** starting from explicit seeds
+- Each node is processed at most once per wave (`visited` set)
+- Step cap of `(nodes + edges) * 2` avoids infinite loops on cycles
+- Secondary hops use `changeType` treated as `'default'` so execute-specific branches don't re-fire
+
+## Troubleshooting
+
+<Accordion title="Edge not propagating data">
+  **Symptoms:** edge is visible but target shows no data.
+
+  1. Check handle mapping in `allNodesTargetBasedOnType`
+  2. Verify source node has expected data property
+  3. Check `getOutputByType` logic for custom source types
+  4. Add `console.log` in `modifyData` when your target node is processed
+
+  **Common causes:** typo in handle ID, missing entry in `allNodesTargetBasedOnType`, wrong `sourceHandle` name.
+</Accordion>
+
+<Accordion title="Data structure mismatch (array vs direct property)">
+  **Symptoms:** `Cannot read property 'map' of undefined` or data doesn't show.
+
+  1. Check if node is in `nodePassOnlyText`
+  2. Check backend handling in `src/app-api/folw/helpers/helpers.ts`
+  3. Match frontend pattern to backend pattern
+</Accordion>
+
+<Accordion title="Old/stale values during execution">
+  **Symptoms:** edge updates but execution uses old value.
+
+  **Root cause:** React state closure capturing old values.
+
+  **Fix:** Always read from the `data` prop in execution callbacks:
+
+  ```typescript
+  const onExecute = useCallback(async () => {
+    const currentFileName = data?.customFileName || '';
+    await upload(currentFileName);
+  }, [data]);
+  ```
+</Accordion>
+
+<Accordion title="Edge deleted but data remains">
+  1. Check if `deleteEdgesData` was called
+  2. Check node's deletion handling in `changeTypes.ts`
+  3. Verify `changeType` is `'delete-edges'`
+</Accordion>
+
+<Accordion title="Race condition during flow execution">
+  **Symptoms:** first node executes, second node uses old value.
+
+  1. Read from `data` prop, not local state
+  2. Ensure backend sync completes
+  3. Check `flowTriggerData` timing
+</Accordion>
+
+## Best practices
+
+1. **Always read from data prop in execution** — state closures can give stale values
+2. **Match backend data patterns** — frontend and backend must use the same data structure
+3. **Use `nodePassOnlyText` for single-value properties** — simpler and matches backend pattern
+4. **Use appropriate change types** — critical types (`execute`, `connect`, `delete-edges`) save immediately
+5. **Include `data` in `useCallback` dependencies** — ensures callbacks update when data changes
+6. **Handle both connection and execution scenarios** — nodes receive data from edge connections (frontend) and flow execution (backend)
+
+## Key differences from backend
+
+| Aspect | Frontend | Backend |
+|--------|----------|---------|
+| **Execution** | Browser-based, async | Server-based, synchronous |
+| **State management** | React hooks + React Flow | Simple nodes array |
+| **Performance strategy** | Debouncing (800ms) | Immediate processing |
+| **Sync direction** | Bidirectional | Unidirectional |
+| **Persistence** | Backend API + local state | Database via TypeORM |
+
+## Tests
+
+Run the edge propagation unit tests:
+
+```bash
+pnpm run test:edge-propagation
+```
+
+Tests are in `tests/unit/util/autosave/edgePropagation.test.ts` and cover: execute and delete-edges downstream chains, multi-incoming handle merge, sibling and disjoint isolation, and cycle termination.

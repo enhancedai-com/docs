@@ -85,7 +85,20 @@
             "pages": [
               "client/overview",
               "client/development",
-              "client/version-control"
+              "client/version-control",
+              {
+                "group": "Specific features",
+                "pages": [
+                  "client/specific-features/edge-propagation",
+                  "client/specific-features/autosave-system",
+                  "client/specific-features/flow-canvas-autosave",
+                  "client/specific-features/input-size-tracking",
+                  "client/specific-features/add-multimodal-model",
+                  "client/specific-features/third-party-integration-node",
+                  "client/specific-features/mcp-node",
+                  "client/specific-features/mcp-user-guide"
+                ]
+              }
             ]
           }
         ]

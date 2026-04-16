@@ -1,0 +1,52 @@
+---
+title: "MCP Server node"
+description: "Technical architecture of the MCP Server node for calling tools on Model Context Protocol servers"
+---
+
+## Overview
+
+The **MCP Server** node calls tools on a **Model Context Protocol** server. It supports:
+
+- **Remote HTTP(S)** transport (JSON-RPC over HTTP with optional SSE), including saved connections and manual URL or handles
+- **Stdio (npx)** transport for any npm package name, executed on the product backend with environment secrets stored encrypted on `user_integrations`
+- **OAuth-backed** MCP hosts (e.g. Magic Patterns): connecting via `CredentialsForm` with an empty auth token triggers OAuth auto-discovery
+
+## Inputs
+
+| Input | Description |
+|-------|-------------|
+| **MCP Server URL** | Used for remote HTTP when not using a saved connection. Can be wired from other nodes via handles. Not used when the saved connection is stdio. |
+| **MCP connection (Integrations)** | `ThirdPartyIntegration/common/ConnectionStatus` on the node. Pick **Remote HTTP** or **Stdio (npx package)**. Stored as encrypted JSON with a `transport` field. |
+| **Auth token** | Manual bearer for remote HTTP when not using a saved connection. |
+| **Tool** | Optionally pick a tool after loading. If left empty, the backend uses Haiku to pick the best match for your prompt. |
+| **Prompt** | Natural-language prompt required. The backend resolves tool arguments from the prompt and schema via Anthropic. |
+
+## Output
+
+- **text** — JSON or plain string result from the MCP `tools/call` response.
+
+## Execution
+
+- **Canvas:** calls `POST /mcp_call` with Socket.IO for the async result event `mcp-call`
+- **API / server runs:** the flux executor runs the same MCP logic synchronously (no socket), including optional auto tool selection
+
+## Third-party integration provider `mcp`
+
+- **Pull** object type `list_tools` — returns the tool catalog from the saved server (HTTP or stdio)
+- **Push** — not supported for this provider; use the MCP Server node for `tools/call`
+
+## Related backend
+
+| Component | Description |
+|-----------|-------------|
+| `McpCallController` | Registered on `AppApiModule` (not a feature sub-module) |
+| `McpCallService` | HTTP path uses axios + SSE; stdio path uses `@modelcontextprotocol/sdk` (`Client` + `StdioClientTransport`, `npx -y <package>`) |
+| `McpExecutionOrchestratorService` | Orchestrates MCP execution |
+| `McpPromptResolverService` | Optional `toolName` on `POST /mcp_call` triggers `resolveToolFromPrompt` (catalog + Haiku) |
+| `McpStdioConfigService` | Validates package names, applies fixed list/call timeouts |
+| `McpAdapter` | Encrypts stored credentials (`transport: remote_http | stdio_npx`) |
+| `user_integrations` | Provider enum value `mcp` |
+
+<Note>
+  MCP call services and controllers live under `src/app-api/mcp_call/` but are registered on `AppApiModule`, not a feature sub-module import.
+</Note>

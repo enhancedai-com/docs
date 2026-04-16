@@ -1,0 +1,136 @@
+---
+title: "Third-party integration node"
+description: "Architecture and data model of the node for pulling and pushing data to external services"
+---
+
+## Overview
+
+The Third-Party Integration node allows users to **pull data from** or **push data to** external services (Slack, WordPress, Zapier, Stripe, and others). It appears on the flow canvas as a configurable node with provider selection, mode (pull/push), connection status, and dynamic form fields.
+
+**Responsibilities:**
+
+- Let the user choose an integration provider and mode (pull/push)
+- Manage OAuth or API-key connection state per provider
+- Render provider-specific fields and validate required values
+- Persist configuration via the autosave system and optional JSON blob config
+- Execute pull or push by calling `ThirdPartyIntegrationService`
+
+## Data model
+
+### Node payload (`data`)
+
+| Key | Description |
+|-----|-------------|
+| `provider` | Selected provider ID (e.g. `slack`, `wordpress`) |
+| `mode` | `'pull'` or `'push'` |
+| `integrationId` | Connected integration ID (after OAuth or connection selection) |
+| `connectedByUserId` | User ID that established the connection |
+| `connectedByUserName` | Display name for the connected user |
+| Form fields | Provider/mode-specific fields stored as top-level keys |
+| `blobConfig` | Optional JSON string of the full node config |
+| `output` | Result of the last pull or push execution |
+
+Reserved keys (`RESERVED_DATA_KEYS` / `BLOB_RESERVED_KEYS`) include `provider`, `mode`, `integrationId`, `blobConfig`, `output`, and connection-related keys.
+
+### Local state
+
+- **Form values** — synced from `data` into `formValues` and persisted after debounce
+- **Blob panel** — open/closed state (`blobOpen`) is local only
+- **Loading / validation** — used for UX and debounce
+
+### Blob JSON
+
+- **Serialization:** `serializeNodeToBlobConfig(data)` builds a JSON string from the current config, excluding reserved keys
+- **Application:** pasted JSON is parsed, enriched with provider defaults via `enrichMergedWithObjectDefaults`, then persisted including `blobConfig`
+
+## Architecture
+
+The node is split into **constants**, **utils**, **hooks**, and **UI components**. The main component composes hooks and delegates rendering to subcomponents.
+
+```
+ThirdPartyIntegrationNode
+  ├── useThirdPartyNodeState     (local state, derived config)
+  ├── useThirdPartyPersist       (persist + blob update)
+  ├── useThirdPartyEdges         (edge removal)
+  ├── useThirdPartyFieldDebounce (debounced field persistence)
+  ├── useThirdPartySubmit        (validation + pull/push execution)
+  ├── nodeConfigUtils            (blob serialization + enrichment)
+  └── constants                  (reserved keys, action field names)
+```
+
+**Data flow:**
+
+- **Store (flows, thirdPartyIntegration):** `data` comes from the flow store; connection state from the third-party integration store
+- **Services:** `FlowService` (edges), `ThirdPartyIntegrationService` (pull/push), `nodeDataAutoSaveDynamic` (persistence)
+- **Autosave:** persist and blob updates go through `nodeDataAutoSaveDynamic` with the appropriate `changeType`
+
+## Interaction flow
+
+<Steps>
+  <Step title="Provider and mode selection">
+    User selects provider (e.g. Slack) and mode (pull/push). Connected edges are removed, state is updated, and config is persisted with blob serialization.
+  </Step>
+  <Step title="Connection">
+    For providers requiring OAuth, the user connects via `ConnectionStatus`. When a connection is chosen or disconnected, the node updates `integrationId` / `connectedByUserId` and persists.
+  </Step>
+  <Step title="Form fields">
+    User fills provider/mode-specific fields. Changes are debounced; on flush, the node merges form data, optionally removes edges for action fields, and calls `persistWithBlob`.
+  </Step>
+  <Step title="Blob panel (optional)">
+    User can show/hide the JSON config, generate/copy it, or paste and apply. Apply uses `enrichMergedWithObjectDefaults` and persists the full payload.
+  </Step>
+  <Step title="Run">
+    User clicks Run or a flow trigger fires. `useThirdPartySubmit` validates, builds the payload, calls `pullData` or `pushData`, then persists the result with `changeType: 'execute'`.
+  </Step>
+</Steps>
+
+## Code division
+
+| File | Responsibility |
+|------|----------------|
+| `constants.ts` | `ACTION_FIELD_NAMES`, `RESERVED_DATA_KEYS`, `BLOB_RESERVED_KEYS` |
+| `nodeConfigUtils.ts` | `enrichMergedWithObjectDefaults`, `serializeNodeToBlobConfig` |
+| `hooks/useThirdPartyNodeState.ts` | Local state, derived config, sync effects |
+| `hooks/useThirdPartyPersist.ts` | `persist(payload)`, `persistWithBlob(...)` |
+| `hooks/useThirdPartyEdges.ts` | `removeConnectedEdges()`, `removeEdgesForField(fieldName)` |
+| `hooks/useThirdPartyFieldDebounce.ts` | Debounced effect for field changes |
+| `hooks/useThirdPartySubmit.ts` | Validation, payload build, pull/push execution |
+| `ThirdPartyIntegrationNode.tsx` | Main layout, handler composition |
+| `common/ConnectionRequiredMessage.tsx` | "Connect above to access {providerName}" message |
+| `common/NodeConfigBlobSection.tsx` | Blob toggle, generate/copy, collapse + input |
+| `common/ConnectionStatus.tsx` | Connection state and connect/disconnect UI |
+| `common/BlobInput.tsx` | Textarea for blob JSON and Apply |
+| `common/PullModePanel.tsx` | Pull-mode fields from provider config |
+| `common/PushModePanel.tsx` | Push-mode fields from provider config |
+| `registry.ts` | Provider registration and `getProvider` / `getProviderIds` |
+| `types.ts` | `ThirdPartyMode`, `IntegrationProviderConfig`, field definitions |
+
+## Adding a new provider
+
+<Steps>
+  <Step title="Create provider config">
+    Implement an `IntegrationProviderConfig` in `providers/<name>/<Name>Config.ts` with `id`, `name`, `authMethod`, `pullConfig` and/or `pushConfig` (including `getFields`, actions, etc.).
+  </Step>
+  <Step title="Register the provider">
+    Call `registerProvider(yourConfig)` in `registry.ts`.
+  </Step>
+  <Step title="Add OAuth support (optional)">
+    Add a `ConnectionCard` and/or OAuth entry points if the provider uses OAuth. Wire connection callbacks in `ConnectionStatus` or provider-specific components.
+  </Step>
+</Steps>
+
+Fields and validations (required, pattern, etc.) are defined on the provider's field config. The panels and submit hook use them for rendering and validation.
+
+## Quick reference
+
+| Need to... | Look at |
+|------------|---------|
+| Change reserved keys or action field names | `constants.ts` |
+| Change how blob is built or applied | `nodeConfigUtils.ts` |
+| Change when form syncs or blob is generated | `useThirdPartyNodeState.ts` |
+| Change persist + blob update logic | `useThirdPartyPersist.ts` |
+| Change edge removal behavior | `useThirdPartyEdges.ts` |
+| Change debounce or field persistence | `useThirdPartyFieldDebounce.ts` |
+| Change validation or execution | `useThirdPartySubmit.ts` |
+| Change main layout or handler wiring | `ThirdPartyIntegrationNode.tsx` |
+| Change connect-required or blob UI | `ConnectionRequiredMessage.tsx`, `NodeConfigBlobSection.tsx` |
