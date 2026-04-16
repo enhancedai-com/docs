@@ -39,6 +39,26 @@
                   "main-api/version-control",
                   "main-api/version-control-api"
                 ]
+              },
+              {
+                "group": "Specific features",
+                "pages": [
+                  "main-api/specific-features/flow-data-architecture",
+                  "main-api/specific-features/objects-system",
+                  "main-api/specific-features/check-multiple-targets",
+                  "main-api/specific-features/edge-propagation-backend",
+                  "main-api/specific-features/add-new-model",
+                  "main-api/specific-features/add-multimodal-model",
+                  "main-api/specific-features/third-party-integrations-architecture",
+                  "main-api/specific-features/notion-integration-setup",
+                  "main-api/specific-features/notion-user-guide",
+                  "main-api/specific-features/slack-integration-setup",
+                  "main-api/specific-features/stripe-integration-setup",
+                  "main-api/specific-features/stripe-user-guide",
+                  "main-api/specific-features/zapier-user-guide",
+                  "main-api/specific-features/local-development",
+                  "main-api/specific-features/output-controller-stall-incident"
+                ]
               }
             ]
           },

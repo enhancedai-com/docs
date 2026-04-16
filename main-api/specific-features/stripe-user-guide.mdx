@@ -1,0 +1,110 @@
+---
+title: "Stripe integration user guide"
+description: "How to connect Stripe and use pull and push modes in your flows"
+---
+
+## Overview
+
+The Stripe node lets you interact with your Stripe account in two directions:
+
+| Mode | What it does |
+|------|-------------|
+| **Pull** | Lists or searches Stripe objects (customers, invoices, charges, etc.) and brings the data into your flow |
+| **Push** | Creates or updates resources in Stripe (customers, products, prices, invoices) |
+
+## Connecting your Stripe account
+
+To connect, you need two pieces of information:
+
+- **Secret API key** -- found in your Stripe Dashboard under Developers > API keys. The key starts with `sk_test_` (test mode) or `sk_live_` (live mode).
+- **Mode** -- choose `test` or `live` to match the key you are using.
+
+<Warning>
+Never share your secret API key publicly. Test-mode keys only access test data; live-mode keys access real transactions and customer information.
+</Warning>
+
+## Adding the node
+
+<Steps>
+  <Step title="Open the node picker">
+    In the flow editor, open the node menu and navigate to **Third Party Integration > Stripe**.
+  </Step>
+  <Step title="Enter credentials">
+    Paste your secret API key and select the mode (`test` or `live`).
+  </Step>
+  <Step title="Choose Pull or Push">
+    Select the direction you need and configure the options described below.
+  </Step>
+</Steps>
+
+## Pull mode
+
+Pull mode retrieves data from Stripe into your flow. Choose the object type you want to query:
+
+| Object | Description |
+|--------|-------------|
+| Customers | List or search customer records |
+| Charges | List charges against your account |
+| Invoices | List invoices |
+| Subscriptions | List subscriptions |
+| Payment Intents | List payment intents |
+| Payouts | List payouts |
+| Products | List products in your catalog |
+| Prices | List prices (supports filtering by Product ID) |
+| Balance | Returns your current Stripe balance |
+| Disputes | List disputed charges |
+
+### Filters
+
+Most object types support the following filters:
+
+| Filter | Description |
+|--------|-------------|
+| Date from / Date to | Restrict results to a date range |
+| Status | Filter by object status (e.g., `paid`, `open`, `active`) |
+| Customer ID | Return only objects tied to a specific customer |
+| Limit | Maximum number of results to return |
+| Search query | Free-text search (where supported by the Stripe API) |
+
+<Tip>
+The **Balance** object returns your current account balance and does not accept any filters. The **Prices** object supports an additional **Product ID** filter to narrow results to a specific product.
+</Tip>
+
+## Push mode
+
+Push mode creates or updates resources in Stripe. The available actions and their required fields are listed below.
+
+| Action | Required fields | Optional fields |
+|--------|----------------|-----------------|
+| Create customer | Email | Name, Metadata (JSON) |
+| Update customer | Customer ID | Email, Name, Metadata (JSON) |
+| Create product | Name | Description, Metadata (JSON) |
+| Create price | Product ID, Unit amount (in dollars), Currency | Recurring interval |
+| Create invoice | Customer ID | Currency, Amount, Description, Due date, Metadata (JSON) |
+| Finalize invoice | Invoice ID | -- |
+| Send invoice | Invoice ID | -- |
+
+### Metadata format
+
+When you supply metadata, it must be a valid JSON object whose values are all strings:
+
+```json
+{
+  "order_id": "12345",
+  "source": "enhanced-flow"
+}
+```
+
+## Get Data vs Run flow
+
+- **Get Data** -- executes the Stripe node in isolation so you can preview results without running the full flow. Useful for verifying filters and confirming your API key works.
+- **Run flow** -- executes the entire flow end-to-end, passing Stripe data to downstream nodes.
+
+## Troubleshooting
+
+| Problem | Likely cause | What to do |
+|---------|-------------|------------|
+| Invalid API key | The key is mistyped or belongs to a different mode | Double-check the key in your Stripe Dashboard and confirm the mode matches (`test` vs `live`) |
+| Permission errors | The key does not have access to the requested resource | Use an unrestricted key or update the key's permissions in Stripe |
+| Empty results | Filters are too narrow, or the object type has no data in the selected mode | Widen filters, remove the date range, or switch between test and live mode |
+| Invoice action fails | The invoice is in a state that does not allow the action (e.g., finalizing an already-finalized invoice) | Check the invoice status in Stripe before running the action |

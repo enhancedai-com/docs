@@ -1,0 +1,73 @@
+---
+title: "Notion integration setup"
+description: "How to create a Notion public integration and configure OAuth for FluxPrompt"
+---
+
+## Overview
+
+FluxPrompt connects to Notion through OAuth. Before your users can link their Notion workspaces, you need a **public integration** registered in Notion's developer portal. This guide walks you through creating and configuring that integration.
+
+<Steps>
+  <Step title="Create a Notion integration">
+    Go to [notion.so/my-integrations](https://www.notion.so/my-integrations) and click **New integration**.
+
+    - Give it a name (e.g., "FluxPrompt").
+    - Select the workspace you want to develop against.
+    - Click **Submit**.
+
+    This creates an internal integration by default. You will convert it to a public integration in the next step.
+  </Step>
+
+  <Step title="Configure OAuth">
+    In your integration's settings, switch to the **Distribution** tab and enable **Public integration**.
+
+    Set the **Redirect URI** to:
+
+    ```
+    https://app.fluxprompt.ai/oauth-callback/integration/notion
+    ```
+
+    <Warning>
+    The redirect URI must match exactly, including the protocol and path. A mismatch causes OAuth to fail silently or return an `invalid_redirect_uri` error.
+    </Warning>
+  </Step>
+
+  <Step title="Set required capabilities">
+    Under the **Capabilities** tab, enable the following permissions:
+
+    | Capability | Required |
+    |---|---|
+    | Read content | Yes |
+    | Update content | Yes |
+    | Insert content | Yes |
+
+    These are the minimum capabilities needed for both pull and push operations in FluxPrompt flows.
+  </Step>
+
+  <Step title="Get your credentials">
+    Navigate to the **Secrets** tab (or **OAuth credentials** section) and copy the following values:
+
+    - **OAuth client ID**
+    - **OAuth client secret**
+
+    Store these securely. You will add them to your FluxPrompt environment configuration.
+  </Step>
+
+  <Step title="Submit for public integration review (production)">
+    Before your integration can be used by anyone outside your own workspace, Notion requires a review. Go to the **Distribution** tab and submit the integration for review.
+
+    Notion typically reviews within a few business days. Until approved, only members of the development workspace can authorize the integration.
+  </Step>
+</Steps>
+
+## Summary for your technical team
+
+Add the following to your server environment:
+
+| Variable | Value |
+|---|---|
+| `NOTION_CLIENT_ID` | OAuth client ID from step 4 |
+| `NOTION_CLIENT_SECRET` | OAuth client secret from step 4 |
+| Redirect URI | `https://app.fluxprompt.ai/oauth-callback/integration/notion` |
+
+Once these are configured and the integration is approved, your users can connect their Notion workspace directly from the Third Party Integration node.

@@ -1,0 +1,91 @@
+---
+title: "Edge propagation (backend)"
+description: "How the backend propagates data through connected nodes using getOutputByType, modifyData, and addConnectToNodes"
+---
+
+## Overview
+
+The edge propagation system is responsible for moving data between connected nodes during flow execution. When a node produces output, that output must travel along edges to reach downstream nodes. Three core methods handle this process:
+
+| Method | Role |
+|--------|------|
+| `getOutputByType` | Extracts output data from a source node based on its type |
+| `modifyData` | Updates target nodes that are connected via edges, propagating changes through the graph |
+| `addConnectToNodes` | Orchestrates the full propagation -- calls `getOutputByType` and `modifyData` together |
+
+## getOutputByType
+
+This function lives in `helpers.ts` and is the first step in propagation. Given a source node, it inspects the node type and returns the appropriate output data.
+
+Different node types produce output in different ways, so `getOutputByType` contains type-specific handling for:
+
+- `commandTextNode` -- returns the text content
+- `nodesBox` -- returns the grouped output of contained nodes
+- `mathFunction` -- returns the computed result
+- `scripting` -- returns the script execution result
+- Other node types with custom output logic
+
+```typescript
+// Simplified signature
+function getOutputByType(
+  node: FlowNode,
+  nodes: FlowNode[],
+  edges: Edge[]
+): OutputData
+```
+
+## modifyData
+
+Once `getOutputByType` has extracted the output from a source node, `modifyData` pushes that data into every target node connected by an edge. It walks the graph and updates each downstream node's input data.
+
+This function is called during flow execution in `apiV2` and is the mechanism that makes data flow through connected nodes.
+
+```typescript
+// Simplified signature
+function modifyData(
+  nodes: FlowNode[],
+  edges: Edge[],
+  sourceNodeId: string
+): FlowNode[]
+```
+
+## addConnectToNodes
+
+This is the top-level orchestrator. During flow execution, `addConnectToNodes` is called to update nodes and propagate changes. It coordinates `getOutputByType` and `modifyData` to ensure that when a node finishes processing, all downstream nodes receive the updated data.
+
+The call path during a flow run looks like:
+
+```
+apiV2
+  └── addConnectToNodes
+        ├── getOutputByType (extract source output)
+        └── modifyData (push to connected targets)
+```
+
+## Data flow through edges
+
+Edges define the connections between nodes. Each edge has:
+
+- A **source handle** -- identifies which output port on the source node the edge originates from
+- A **target handle** -- identifies which input port on the target node the edge connects to
+
+When propagation runs, the system matches source handles to target handles to determine where data should go and how it should be mapped.
+
+## Third-party integration connection pruning
+
+When a third-party integration node (such as Stripe or Zapier) is involved, the propagation system prunes connections that are no longer valid. If a node's configuration changes in a way that removes an output handle, edges connected to that handle are cleaned up so downstream nodes do not receive stale or invalid data.
+
+<Tip>
+When you add a new node type, you need to add handling in both `getOutputByType` (so the system knows how to extract its output) and `modifyData` (so the system knows how to write data into it). Missing either one will cause propagation to silently skip the node.
+</Tip>
+
+## Helper functions
+
+Several utility functions support the propagation system:
+
+| Function | Purpose |
+|----------|---------|
+| `givingDataToNode` | Determines whether a source node should send data to a specific target node |
+| `getIds` | Extracts node and handle IDs from edge definitions |
+| `nodePassOnlyText` | Checks whether a node type only passes plain text (no structured data) |
+| `validateBlobConfigJson` | Validates JSON configuration stored in node blob fields before propagation |

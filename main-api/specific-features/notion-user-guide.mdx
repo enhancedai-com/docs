@@ -1,0 +1,143 @@
+---
+title: "Notion integration user guide"
+description: "How to connect to Notion and use pull and push modes in your flows"
+---
+
+## Overview
+
+The Notion integration lets you read from and write to your Notion workspace directly inside a flow. Here is what you can do:
+
+| Feature | Mode | Description |
+|---|---|---|
+| Pull pages | Pull | Search and retrieve pages by query |
+| Pull database records | Pull | Query a database with filters and sorts |
+| Pull blocks / page content | Pull | Fetch the content blocks of a specific page |
+| Create or update a page | Push | Create a new page or update an existing page's properties |
+| Append content to a page | Push | Add blocks to the end of an existing page |
+| Create or update a database record | Push | Insert a new row or modify an existing row in a database |
+
+## Adding the Notion node
+
+1. Open the node picker in your flow.
+2. Navigate to **Third Party Integration** and select **Notion**.
+
+## Connecting your Notion account
+
+When you first add the node, you are prompted to connect your Notion account via OAuth. During the authorization flow, Notion asks you to select which pages and databases you want to share with FluxPrompt.
+
+<Tip>
+You can change shared pages later from **Settings & Members → Connections** inside Notion.
+</Tip>
+
+## Pull mode
+
+### Pages
+
+Search for pages in your connected workspace.
+
+| Option | Description |
+|---|---|
+| Search query | Text to match against page titles |
+| Limit | Maximum number of pages to return |
+
+Results include the page ID, title, URL, and last-edited timestamp.
+
+### Database records
+
+Query a specific Notion database with optional filters and sorting.
+
+| Option | Description |
+|---|---|
+| Database | Select from your shared databases |
+| Filter builder | Build filters on database properties (e.g., Status equals "Done") |
+| Sort | Order results by a property, ascending or descending |
+| Limit | Maximum number of records to return |
+
+### Blocks / page content
+
+Retrieve the content blocks of a single page, returned as Markdown.
+
+| Option | Description |
+|---|---|
+| Page ID | The ID of the page to fetch |
+| Limit | Maximum number of blocks to return |
+
+The output is converted to Markdown so downstream nodes can process it as plain text.
+
+## Push mode
+
+### Create a page
+
+| Option | Description |
+|---|---|
+| Parent | The parent page or database |
+| Title | Page title |
+| Content | Page body, supplied as Markdown |
+
+Markdown is automatically converted to Notion blocks.
+
+### Update page properties
+
+| Option | Description |
+|---|---|
+| Page ID | The page to update |
+| Title | New title value |
+
+### Append content to a page
+
+| Option | Description |
+|---|---|
+| Page ID | The page to append to |
+| Content | Markdown content appended as new blocks at the end of the page |
+
+### Create a database record
+
+| Option | Description |
+|---|---|
+| Database | Target database |
+| Properties editor | Set values for each database property (title, select, number, date, etc.) |
+
+### Update a database record
+
+| Option | Description |
+|---|---|
+| Record ID | The row to update |
+| Properties | New values for the properties you want to change |
+
+## Get Data vs Run flow
+
+| Action | Behavior |
+|---|---|
+| **Get Data** | Executes only the Notion node and returns its output. Use this to preview results while building your flow. |
+| **Run flow** | Executes the entire flow. The Notion node runs in sequence with every other node. |
+
+## Tips and troubleshooting
+
+<Accordion title="I connected but no pages appear">
+During the OAuth flow you must explicitly share pages or databases with FluxPrompt. Open Notion, go to **Settings & Members → Connections**, find FluxPrompt, and add the pages you need.
+</Accordion>
+
+<Accordion title="Pull returns empty results for a database">
+Make sure the database itself (not just its parent page) was shared during the OAuth step. Also verify your filter criteria are not excluding all records.
+</Accordion>
+
+<Accordion title="Push fails with a permissions error">
+Your Notion integration needs **Update content** and **Insert content** capabilities. Ask your workspace admin to verify these are enabled in the integration settings at notion.so/my-integrations.
+</Accordion>
+
+<Accordion title="Markdown formatting looks wrong after push">
+Notion supports a subset of Markdown. Complex elements like nested tables or HTML embeds may not convert perfectly. Simplify your Markdown or break it into smaller blocks.
+</Accordion>
+
+## Quick reference
+
+| Task | Mode | Key options |
+|---|---|---|
+| Search pages | Pull → Pages | query, limit |
+| Query database | Pull → Database records | database, filter, sort, limit |
+| Get page content | Pull → Blocks | page ID, limit |
+| Create page | Push → Create page | parent, title, content |
+| Update page | Push → Update page | page ID, title |
+| Append to page | Push → Append content | page ID, content |
+| New database row | Push → Create database record | database, properties |
+| Edit database row | Push → Update database record | record ID, properties |

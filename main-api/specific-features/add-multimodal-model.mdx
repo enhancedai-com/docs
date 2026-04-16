@@ -1,0 +1,125 @@
+---
+title: "Add multimodal support to a model"
+description: "How to enable image and PDF processing for an existing AI model"
+---
+
+Multimodal support lets a model accept images and PDFs alongside text input. Before you begin, the model must already be registered in the backend. If it is not, complete the [Add a new AI model](/main-api/specific-features/add-new-model) guide first.
+
+## Provider-specific configuration
+
+Each provider has its own supported-models list and file limits. Find your provider below and add the model to the appropriate array.
+
+### OpenAI
+
+Add the model string to `MULTIMODAL_SUPPORTED_MODELS` in `openAI.service.ts`.
+
+```typescript
+// openAI.service.ts
+const MULTIMODAL_SUPPORTED_MODELS = [
+  // ... existing models
+  'gpt-4o-new-variant',
+];
+```
+
+**Limits:** 10 images, 1 PDF, 26 MB per image, 43 MB per PDF.
+
+### Google Gemini
+
+Add the model string to `GEMINI_MULTIMODAL_SUPPORTED_MODELS` in `gemini.service.ts`.
+
+```typescript
+// gemini.service.ts
+const GEMINI_MULTIMODAL_SUPPORTED_MODELS = [
+  // ... existing models
+  'gemini-2.5-pro',
+];
+```
+
+**Limits:** 3,600 files total, 26 MB per file.
+
+### Groq
+
+Add the model string to `GROQ_MULTIMODAL_SUPPORTED_MODELS` in `groq.service.ts`.
+
+```typescript
+// groq.service.ts
+const GROQ_MULTIMODAL_SUPPORTED_MODELS = [
+  // ... existing models
+  'llama-4-scout',
+];
+```
+
+**Limits:** 1 image, 5 MB. PDF is not supported.
+
+### Anthropic
+
+Anthropic models support multimodal input automatically. You do not need to add the model to any list.
+
+**Limits:** 100 images, 5 PDFs.
+
+## Provider limits comparison
+
+| Provider | Max images | Max PDFs | Max image size | Max PDF size |
+|---|---|---|---|---|
+| OpenAI | 10 | 1 | 26 MB | 43 MB |
+| Google Gemini | 3,600 (total files) | 3,600 (total files) | 26 MB | 26 MB |
+| Groq | 1 | Not supported | 5 MB | N/A |
+| Anthropic | 100 | 5 | N/A (automatic) | N/A (automatic) |
+
+## Provider limits verification
+
+The `multimodal-file-processor.service.ts` file contains a `PROVIDER_LIMITS` configuration object that enforces the constraints above at runtime. When you add a new provider or change limits, update this object to match.
+
+```typescript
+// multimodal-file-processor.service.ts
+const PROVIDER_LIMITS = {
+  openAi: { maxImages: 10, maxPdfs: 1, maxImageSize: 26_000_000, maxPdfSize: 43_000_000 },
+  gemini: { maxFiles: 3600, maxFileSize: 26_000_000 },
+  groq: { maxImages: 1, maxImageSize: 5_000_000, supportsPdf: false },
+  anthropic: { maxImages: 100, maxPdfs: 5 },
+};
+```
+
+<Warning>
+  If the `PROVIDER_LIMITS` object does not match the supported-models array for a provider, requests may be accepted by the model list check but rejected during file validation, or vice versa.
+</Warning>
+
+## Processing pipeline
+
+When a user sends multimodal content, the system processes it in this order:
+
+1. **URL detection** -- The input is scanned for image and PDF URLs.
+2. **Download** -- Detected files are downloaded to a temporary buffer.
+3. **Validation** -- File type, count, and size are checked against `PROVIDER_LIMITS`.
+4. **Content array** -- Valid files are converted into the provider-specific content array format.
+5. **Request** -- The content array is sent to the provider alongside the text prompt.
+
+## Testing checklist
+
+After adding multimodal support, verify the following:
+
+- [ ] The model string is in the correct `*_MULTIMODAL_SUPPORTED_MODELS` array (unless Anthropic).
+- [ ] `PROVIDER_LIMITS` reflects the correct constraints for the provider.
+- [ ] Sending an image with text returns a valid response.
+- [ ] Sending a PDF with text returns a valid response (if the provider supports PDFs).
+- [ ] Exceeding the file count limit returns a clear error message.
+- [ ] Exceeding the file size limit returns a clear error message.
+- [ ] Sending an unsupported file type is rejected gracefully.
+
+## Troubleshooting
+
+<Accordion title="Model accepts text but rejects images">
+  Verify that the model string in the supported-models array matches exactly what the technologies registry uses. A mismatch (e.g., `gpt-4o` vs `gpt-4o-2024-08-06`) causes the multimodal check to fail while text-only requests still work.
+</Accordion>
+
+<Accordion title="File too large errors despite correct limits">
+  The size check uses raw bytes. If you are testing with base64-encoded content, the encoded size is roughly 33% larger than the original file. Ensure you are comparing against the original file size, not the encoded size.
+</Accordion>
+
+<Accordion title="PDF processing fails for Groq models">
+  Groq does not support PDF input. The `PROVIDER_LIMITS` for Groq sets `supportsPdf: false`. If you need PDF support, consider routing the request to a different provider.
+</Accordion>
+
+<Accordion title="Multimodal works locally but fails in production">
+  Check that the production environment has network access to download files from the URLs provided by users. Firewall rules or proxy settings can block the download step in the processing pipeline.
+</Accordion>

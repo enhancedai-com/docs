@@ -1,0 +1,183 @@
+---
+title: "Local development"
+description: "How to set up and run the backend locally with Docker for databases"
+---
+
+## Compose files
+
+The project includes three Docker Compose files for different workflows:
+
+| File | Purpose | What it starts |
+|------|---------|---------------|
+| `docker-compose.yaml` | Full stack | All services (API, databases, workers) in containers |
+| `docker-compose-dev.yaml` | Dev API in Docker | API running in a container with hot reload, plus databases |
+| `docker-compose-local.yaml` | Databases only | PostgreSQL and Redis -- you run the API on your host machine |
+
+<Warning>
+Only one stack should bind ports 5432, 6379, and 3001 at a time. If you start the full stack and then try to start the local databases, you will get port conflicts. Stop one before starting another.
+</Warning>
+
+## Guided setup
+
+The quickest way to get started is the interactive setup wizard:
+
+```bash
+pnpm dev:wizard
+```
+
+On Windows, you can also run:
+
+```cmd
+dev-wizard.cmd
+```
+
+The wizard walks you through prerequisites, environment configuration, and starting the services.
+
+## Prerequisites
+
+Before setting up manually, make sure you have:
+
+- **Node.js** (check `.nvmrc` or `package.json` for the required version)
+- **pnpm** (the project uses pnpm workspaces)
+- **Docker Desktop** with Compose v2 enabled
+- A configured **`.env`** file (see below)
+
+## First-time setup
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone <repository-url>
+    cd enhanced
+    ```
+  </Step>
+  <Step title="Install dependencies">
+    ```bash
+    pnpm install
+    ```
+  </Step>
+  <Step title="Configure your .env file">
+    Copy the example environment file and update the database and Redis settings to point to localhost:
+
+    ```dotenv
+    TYPEORM_HOST=localhost
+    TYPEORM_PORT=5432
+    REDIS_HOST=localhost
+    REDIS_PORT=6379
+    ```
+
+    These values assume you are running databases via `docker-compose-local.yaml` and the API on your host machine.
+  </Step>
+  <Step title="Start the databases">
+    ```bash
+    pnpm infra:up
+    ```
+
+    This starts PostgreSQL and Redis using `docker-compose-local.yaml`.
+  </Step>
+  <Step title="Start the API">
+    ```bash
+    pnpm dev:api
+    ```
+
+    The API starts on port 3001 by default.
+  </Step>
+  <Step title="Verify">
+    ```bash
+    curl http://localhost:3001/health
+    ```
+
+    You should receive a 200 response.
+  </Step>
+</Steps>
+
+## Daily workflow
+
+Once you have completed the first-time setup, your typical day looks like this:
+
+<Steps>
+  <Step title="Start databases">
+    ```bash
+    pnpm infra:up
+    ```
+  </Step>
+  <Step title="Start the API">
+    ```bash
+    pnpm dev:api
+    ```
+
+    Useful flags:
+
+    | Flag | Effect |
+    |------|--------|
+    | `--watch` | Restart on file changes |
+    | `--debug` | Enable the Node.js inspector for attaching a debugger |
+  </Step>
+  <Step title="Work on your changes">
+    The API is running locally. Make code changes and test them.
+  </Step>
+  <Step title="Stop when done">
+    Stop the API with `Ctrl+C`, then stop the databases:
+
+    ```bash
+    pnpm infra:down
+    ```
+  </Step>
+</Steps>
+
+## Dev API in Docker
+
+If you prefer running the API inside a container (with hot reload), use:
+
+```bash
+pnpm infra:dev:up
+```
+
+This uses `docker-compose-dev.yaml` and mounts your source code into the container so changes are reflected without rebuilding.
+
+## VS Code / Cursor debug configurations
+
+The repository includes launch configurations for attaching a debugger:
+
+| Configuration | What it does |
+|--------------|-------------|
+| Attach to API | Attaches the debugger to the running API process (requires `--debug` flag) |
+| Launch API | Starts the API with the debugger attached from the beginning |
+
+<Tip>
+When using the `--debug` flag, the API waits for a debugger to attach before proceeding. Open the Run and Debug panel in VS Code or Cursor and select the appropriate configuration.
+</Tip>
+
+## Legacy npm scripts
+
+If you encounter older documentation referencing npm scripts, here is how they map:
+
+| Legacy script | Current equivalent |
+|--------------|-------------------|
+| `npm run start:dev` | `pnpm dev:api` |
+| `npm run docker:up` | `pnpm infra:up` |
+| `npm run docker:down` | `pnpm infra:down` |
+| `npm run migration:run` | `pnpm migration:run` |
+
+## Migrations
+
+Database migrations run automatically when the API starts (`migrationsRun: true` in the TypeORM configuration). If you need to run migrations manually:
+
+```bash
+pnpm migration:run
+```
+
+<Tip>
+If you are creating a new migration, generate it with the TypeORM CLI and place it in the migrations directory. It will be picked up automatically on the next API start.
+</Tip>
+
+## Related files
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yaml` | Full-stack Compose definition |
+| `docker-compose-dev.yaml` | Dev API in Docker Compose definition |
+| `docker-compose-local.yaml` | Databases-only Compose definition |
+| `.env` / `.env.example` | Environment variable configuration |
+| `ormconfig.ts` | TypeORM connection and migration settings |
+| `.vscode/launch.json` | Debug configurations for VS Code / Cursor |

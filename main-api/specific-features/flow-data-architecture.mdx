@@ -1,0 +1,350 @@
+---
+title: "Flow data architecture"
+description: "Database schema and service layer for persisting React Flow canvas data"
+---
+
+The flow data architecture uses three normalized PostgreSQL tables and a layered service architecture to persist React Flow canvas state. This page covers the database schema, entity definitions, service layer, data mapping patterns, and common operations.
+
+## Overview
+
+The system stores canvas data across three tables:
+
+- **`flows`** -- Top-level flow metadata and ownership.
+- **`flows_nodes`** -- Individual nodes on the canvas.
+- **`flows_nodes_edges`** -- Connections (edges) between nodes.
+
+A layered service architecture sits above the database: `FlowService` orchestrates operations through `FlowNodeService` and `FlowEdgeService`.
+
+## Database schema
+
+### `flows`
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | `uuid` (PK) | Flow identifier |
+| `name` | `varchar` | Display name |
+| `userId` | `uuid` (FK) | Owning user |
+| `companyUserId` | `uuid` (FK) | Company-user association |
+| `spaceId` | `uuid` (FK) | Space scope |
+| `createdAt` | `timestamp` | Creation timestamp |
+| `updatedAt` | `timestamp` | Last update timestamp |
+
+### `flows_nodes`
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | `uuid` (PK) | Node record identifier |
+| `nodeId` | `varchar` | React Flow node ID |
+| `flowId` | `uuid` (FK) | Parent flow |
+| `type` | `varchar` | Node type (e.g., `fluxBox`, `trigger`) |
+| `positionX` | `float` | X coordinate on canvas |
+| `positionY` | `float` | Y coordinate on canvas |
+| `data` | `jsonb` | Node-specific payload |
+| `extras` | `jsonb` | Forward-compatible extension fields |
+| `createdAt` | `timestamp` | Creation timestamp |
+| `updatedAt` | `timestamp` | Last update timestamp |
+
+### `flows_nodes_edges`
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | `uuid` (PK) | Edge record identifier |
+| `edgeId` | `varchar` | React Flow edge ID |
+| `flowId` | `uuid` (FK) | Parent flow |
+| `source` | `varchar` | Source node ID |
+| `target` | `varchar` | Target node ID |
+| `sourceHandle` | `varchar` | Source handle identifier |
+| `targetHandle` | `varchar` | Target handle identifier |
+| `extras` | `jsonb` | Forward-compatible extension fields |
+| `createdAt` | `timestamp` | Creation timestamp |
+| `updatedAt` | `timestamp` | Last update timestamp |
+
+## Entity definitions
+
+### Flow
+
+```typescript
+@Entity('flows')
+export class Flow {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column()
+  name: string;
+
+  @Column({ type: 'uuid' })
+  userId: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  companyUserId: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  spaceId: string;
+
+  @OneToMany(() => FlowNode, (node) => node.flow)
+  nodes: FlowNode[];
+
+  @OneToMany(() => FlowEdge, (edge) => edge.flow)
+  edges: FlowEdge[];
+}
+```
+
+### FlowNode
+
+```typescript
+@Entity('flows_nodes')
+export class FlowNode {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column()
+  nodeId: string;
+
+  @Column()
+  type: string;
+
+  @Column({ type: 'float' })
+  positionX: number;
+
+  @Column({ type: 'float' })
+  positionY: number;
+
+  @Column({ type: 'jsonb', default: {} })
+  data: Record<string, any>;
+
+  @Column({ type: 'jsonb', default: {} })
+  extras: Record<string, any>;
+
+  @ManyToOne(() => Flow, (flow) => flow.nodes)
+  flow: Flow;
+}
+```
+
+### FlowEdge
+
+```typescript
+@Entity('flows_nodes_edges')
+export class FlowEdge {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column()
+  edgeId: string;
+
+  @Column()
+  source: string;
+
+  @Column()
+  target: string;
+
+  @Column({ nullable: true })
+  sourceHandle: string;
+
+  @Column({ nullable: true })
+  targetHandle: string;
+
+  @Column({ type: 'jsonb', default: {} })
+  extras: Record<string, any>;
+
+  @ManyToOne(() => Flow, (flow) => flow.edges)
+  flow: Flow;
+}
+```
+
+## Service layer
+
+`FlowService` is the orchestrator. It delegates node-level and edge-level persistence to dedicated services.
+
+### FlowService (orchestrator)
+
+| Method | Description |
+|---|---|
+| `getFlow(flowId)` | Load a flow with all nodes and edges |
+| `saveFlow(flowId, nodes, edges)` | Persist full canvas state in a transaction |
+| `createFlow(userId, name)` | Create a new empty flow |
+| `duplicateFlow(flowId)` | Deep-copy a flow with new IDs |
+| `clearFlow(flowId)` | Remove all nodes and edges from a flow |
+
+### FlowNodeService
+
+| Method | Description |
+|---|---|
+| `upsertNodes(flowId, nodes)` | Insert or update nodes for a flow |
+| `deleteRemovedNodes(flowId, currentNodeIds)` | Remove nodes no longer on the canvas |
+| `getNodesByFlow(flowId)` | Retrieve all nodes for a flow |
+
+### FlowEdgeService
+
+| Method | Description |
+|---|---|
+| `upsertEdges(flowId, edges)` | Insert or update edges for a flow |
+| `deleteRemovedEdges(flowId, currentEdgeIds)` | Remove edges no longer on the canvas |
+| `getEdgesByFlow(flowId)` | Retrieve all edges for a flow |
+
+## Data mapping
+
+### Node mapping (React Flow JSON to database columns)
+
+| React Flow property | Database column | Notes |
+|---|---|---|
+| `id` | `nodeId` | String identifier from React Flow |
+| `type` | `type` | Node component type |
+| `position.x` | `positionX` | Extracted from nested object |
+| `position.y` | `positionY` | Extracted from nested object |
+| `data` | `data` | Stored as JSONB |
+| *(remaining properties)* | `extras` | Catch-all for forward compatibility |
+
+### Edge mapping
+
+| React Flow property | Database column | Notes |
+|---|---|---|
+| `id` | `edgeId` | String identifier from React Flow |
+| `source` | `source` | Source node ID |
+| `target` | `target` | Target node ID |
+| `sourceHandle` | `sourceHandle` | Handle identifier |
+| `targetHandle` | `targetHandle` | Handle identifier |
+| *(remaining properties)* | `extras` | Catch-all for forward compatibility |
+
+### The `extras` pattern
+
+The `extras` JSONB column stores any React Flow properties that do not have a dedicated database column. This allows the schema to remain stable when React Flow adds new properties or when custom node data evolves. During reads, `extras` is spread back into the returned object.
+
+<Tip>
+  When you add a new property that most nodes will use, consider promoting it from `extras` to a dedicated column with a migration. This improves query performance for filtering and indexing.
+</Tip>
+
+## Transaction safety
+
+All write operations that modify nodes and edges together run inside a database transaction. This prevents partial saves where nodes are persisted but edges are not, or vice versa.
+
+```typescript
+async saveFlow(flowId: string, nodes: FlowNodeDto[], edges: FlowEdgeDto[]) {
+  await this.dataSource.transaction(async (manager) => {
+    const nodeIds = nodes.map((n) => n.nodeId);
+    const edgeIds = edges.map((e) => e.edgeId);
+
+    await this.flowNodeService.upsertNodes(flowId, nodes, manager);
+    await this.flowNodeService.deleteRemovedNodes(flowId, nodeIds, manager);
+
+    await this.flowEdgeService.upsertEdges(flowId, edges, manager);
+    await this.flowEdgeService.deleteRemovedEdges(flowId, edgeIds, manager);
+  });
+}
+```
+
+## Common operations
+
+### Reading a flow
+
+Load the flow entity with its relations. The service maps database rows back into React Flow JSON, spreading `extras` into each object.
+
+### Saving a flow
+
+The `saveFlow` method receives the full current canvas state. It uses an **upsert** (insert-or-update) for nodes and edges, then deletes any rows whose IDs are no longer present in the payload.
+
+### Creating a flow
+
+Creates a `flows` row with ownership fields populated. No nodes or edges are created.
+
+### Duplicating a flow
+
+Deep-copies all three tables. New UUIDs are generated for each row, and internal references (e.g., edge source/target) are remapped to the new node IDs.
+
+### Clearing a flow
+
+Deletes all rows from `flows_nodes` and `flows_nodes_edges` for the given flow. The `flows` row itself is preserved.
+
+## Upsert logic: full-sync strategy
+
+The save operation follows a full-sync strategy:
+
+1. **Upsert** all nodes and edges from the payload (insert new, update existing).
+2. **Delete** any database rows whose IDs are not in the payload.
+
+This means the frontend must send the complete canvas state on every save. Partial updates are not supported -- omitting a node from the payload deletes it.
+
+<Warning>
+  If the frontend sends an incomplete node list (for example, due to a rendering bug), the missing nodes will be permanently deleted. Ensure the frontend always sends the full canvas state.
+</Warning>
+
+## Indexes and constraints
+
+### `flows`
+
+| Index / Constraint | Columns | Type |
+|---|---|---|
+| PK | `id` | Primary key |
+| FK | `userId` | Foreign key to `users` |
+| FK | `companyUserId` | Foreign key to `company_users` |
+| FK | `spaceId` | Foreign key to `spaces` |
+| Index | `userId` | B-tree |
+
+### `flows_nodes`
+
+| Index / Constraint | Columns | Type |
+|---|---|---|
+| PK | `id` | Primary key |
+| FK | `flowId` | Foreign key to `flows` |
+| Unique | `flowId, nodeId` | Composite unique |
+| Index | `flowId` | B-tree |
+
+### `flows_nodes_edges`
+
+| Index / Constraint | Columns | Type |
+|---|---|---|
+| PK | `id` | Primary key |
+| FK | `flowId` | Foreign key to `flows` |
+| Unique | `flowId, edgeId` | Composite unique |
+| Index | `flowId` | B-tree |
+
+## Architecture diagram
+
+```
+┌─────────────────────────────────────────────┐
+│              FlowController                 │
+│         (REST API endpoints)                │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────┐
+│              FlowService                    │
+│          (orchestrator layer)               │
+│                                             │
+│  getFlow ─ saveFlow ─ createFlow            │
+│  duplicateFlow ─ clearFlow                  │
+└──────┬──────────────────────┬───────────────┘
+       │                      │
+       ▼                      ▼
+┌──────────────┐   ┌─────────────────┐
+│FlowNodeService│   │ FlowEdgeService │
+│              │   │                 │
+│ upsertNodes  │   │ upsertEdges    │
+│ deleteRemoved│   │ deleteRemoved  │
+│ getByFlow    │   │ getByFlow      │
+└──────┬───────┘   └──────┬──────────┘
+       │                   │
+       ▼                   ▼
+┌──────────────┐   ┌─────────────────┐
+│ flows_nodes  │   │flows_nodes_edges│
+│   (table)    │   │    (table)      │
+└──────────────┘   └─────────────────┘
+       │                   │
+       └───────┬───────────┘
+               ▼
+        ┌────────────┐
+        │   flows    │
+        │  (table)   │
+        └────────────┘
+```
+
+## Key file locations
+
+| File | Purpose |
+|---|---|
+| `src/entities/flow.entity.ts` | Flow entity definition |
+| `src/entities/flow-node.entity.ts` | FlowNode entity definition |
+| `src/entities/flow-edge.entity.ts` | FlowEdge entity definition |
+| `src/services/flow.service.ts` | Orchestrator service |
+| `src/services/flow-node.service.ts` | Node persistence logic |
+| `src/services/flow-edge.service.ts` | Edge persistence logic |
+| `src/controllers/flow.controller.ts` | REST API endpoints |

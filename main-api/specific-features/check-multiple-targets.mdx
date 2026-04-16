@@ -1,0 +1,118 @@
+---
+title: "checkMultipleTargets"
+description: "Canvas persistence function that keeps denormalized node data aligned with graph edges"
+---
+
+`checkMultipleTargets` is a synchronous function used during canvas persistence. It takes nodes, edges, and a context object, then returns an adjusted copy of the nodes array with denormalized data aligned to the current graph edges.
+
+<Warning>
+  This function is synchronous and runs on the main thread. It is part of the canvas persistence path, not the flow execution path. Heavy node arrays can block the event loop -- see the technical report on the `changeText` commit at the bottom of this page.
+</Warning>
+
+## Where it is called
+
+`checkMultipleTargets` is called exclusively from `flow.controller.ts` in response to these controller actions:
+
+- `updateNodeData`
+- Reconnect edge
+- New connection
+- Delete edge
+- Delete node
+
+It is not called during flow execution, node processing, or any async pipeline.
+
+## `changeText` early return
+
+When the context indicates a `changeText` operation, the function returns the `nds` array immediately without any propagation logic. This short-circuits the entire control flow.
+
+```typescript
+if (context.action === 'changeText') {
+  return nds;
+}
+```
+
+## Control flow order
+
+After the `changeText` check, the function processes branches in this order:
+
+1. **Copy edges** -- Creates a working copy of the edges array.
+2. **Check edges length** -- If no edges exist, returns nodes as-is.
+3. **`deleteData`** -- Handles edge deletion scenarios.
+4. **`changeLabel`** -- Handles node label changes.
+5. **`updateEdge`** -- Handles edge reconnection.
+6. **`connectData`** -- Handles new edge creation.
+7. **Fallback** -- Runs `getIds` + `modifyData` for any remaining cases.
+
+## Branch descriptions
+
+<Accordion title="deleteData -- edge deletion">
+  Triggered when an edge is removed. The behavior depends on the target node type and its remaining connections:
+
+  - **fluxBox with text or fileLink**: Clears the text or file reference that was propagated through the deleted edge.
+  - **Single text input node**: Resets the node's input text to its default or empty state.
+  - **Aggregated array node**: Removes the specific entry from the node's input array that corresponded to the deleted edge's source.
+</Accordion>
+
+<Accordion title="changeLabel -- node label update">
+  Triggered when a node's label changes. Propagates the new label to all connected target nodes that display the source node's label in their data (e.g., as an input reference name).
+</Accordion>
+
+<Accordion title="updateEdge -- edge reconnection">
+  Triggered when an existing edge is reconnected to a different source or target. Cleans up data from the old connection and propagates data from the new connection in a single pass.
+</Accordion>
+
+<Accordion title="connectData -- new edge creation">
+  Triggered when a new edge is added between two nodes. Reads the source node's output data and writes it into the target node's input data, following the target node's expected input format.
+</Accordion>
+
+<Accordion title="Fallback -- getIds + modifyData">
+  If no specific branch matches, the function falls back to a generic strategy:
+
+  1. `getIds` collects the source and target node IDs from the edges.
+  2. `modifyData` propagates data from source nodes to target nodes based on the collected IDs.
+
+  This handles edge cases and non-standard controller actions.
+</Accordion>
+
+## Controller action to branch mapping
+
+| Controller action | Branch triggered |
+|---|---|
+| `updateNodeData` | Fallback (`getIds` + `modifyData`) |
+| Reconnect edge | `updateEdge` |
+| New connection | `connectData` |
+| Delete edge | `deleteData` |
+| Delete node | `deleteData` (for each removed edge) |
+
+## Technical report: `changeText` commit (2343e8ad)
+
+### The problem
+
+Before commit `2343e8ad`, the `changeText` action went through the full `checkMultipleTargets` control flow. On canvases with many nodes and edges, this caused the event loop to block for a noticeable duration on every keystroke. Users experienced input lag when typing in node text fields because each character change triggered a full propagation pass.
+
+### The fix
+
+The commit added the early return for `changeText` at the top of the function. Since text edits within a single node do not affect graph topology or other nodes' denormalized data, propagation is unnecessary. The early return eliminates the blocking computation entirely for the most frequent user action (typing).
+
+```typescript
+// Before: changeText went through all branches
+// After (2343e8ad): immediate return, no propagation
+if (context.action === 'changeText') {
+  return nds;
+}
+```
+
+<Tip>
+  If you add a new context action that does not affect other nodes, consider adding a similar early return to avoid unnecessary computation.
+</Tip>
+
+### Impact
+
+The fix reduced the per-keystroke processing time from O(nodes * edges) to O(1) for text changes, eliminating the input lag reported by users with large canvases.
+
+## Key files
+
+| File | Purpose |
+|---|---|
+| `src/controllers/flow.controller.ts` | All call sites for `checkMultipleTargets` |
+| `src/utils/check-multiple-targets.ts` | Function implementation |

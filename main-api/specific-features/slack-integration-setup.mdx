@@ -1,0 +1,101 @@
+---
+title: "Slack integration setup"
+description: "How to configure a Slack app with OAuth and bot token scopes for FluxPrompt"
+---
+
+## Overview
+
+FluxPrompt connects to Slack through a custom Slack app that uses OAuth with bot token scopes. This guide walks you through creating the app, setting the correct scopes, and obtaining the credentials FluxPrompt needs.
+
+<Steps>
+  <Step title="Create a Slack app">
+    Go to [api.slack.com/apps](https://api.slack.com/apps) and click **Create New App**. Choose **From scratch**.
+
+    - Enter an app name (e.g., "FluxPrompt").
+    - Select the workspace you want to develop against.
+    - Click **Create App**.
+  </Step>
+
+  <Step title="Configure the OAuth redirect URL">
+    In the left sidebar, navigate to **OAuth & Permissions**. Under **Redirect URLs**, add:
+
+    ```
+    https://app.fluxprompt.ai/oauth-callback/integration/slack
+    ```
+
+    Click **Save URLs**.
+  </Step>
+
+  <Step title="Add Bot Token Scopes">
+    On the same **OAuth & Permissions** page, scroll to **Scopes → Bot Token Scopes** and add the following:
+
+    | Scope | Purpose |
+    |---|---|
+    | `channels:read` | List public channels |
+    | `channels:history` | Read messages in public channels |
+    | `channels:manage` | Create and archive public channels |
+    | `groups:read` | List private channels the bot is in |
+    | `groups:history` | Read messages in private channels |
+    | `groups:write` | Manage private channels |
+    | `chat:write` | Post messages |
+    | `users:read` | List workspace members |
+    | `reactions:write` | Add emoji reactions |
+    | `files:read` | Access files shared in channels |
+    | `files:write` | Upload files |
+
+    <Warning>
+    Do **not** add `search:read` to Bot Token Scopes. This scope is only valid as a User Token Scope. Adding it to bot scopes causes an `invalid_scope` error during the OAuth flow.
+    </Warning>
+  </Step>
+
+  <Step title="Install the app to your workspace">
+    Scroll to the top of the **OAuth & Permissions** page and click **Install to Workspace**. Authorize the requested permissions.
+
+    After installation you will see a **Bot User OAuth Token** (`xoxb-...`). FluxPrompt does not need this token directly — it obtains its own token during the user OAuth flow — but installation is required before other users can authorize.
+  </Step>
+
+  <Step title="Get your credentials">
+    In the left sidebar, go to **Basic Information**. Under **App Credentials**, copy:
+
+    - **Client ID**
+    - **Client Secret**
+
+    Add these to your FluxPrompt server environment.
+  </Step>
+
+  <Step title="Reinstall after changing scopes">
+    If you modify scopes after the initial install, you must reinstall the app. Go to **OAuth & Permissions** and click **Reinstall to Workspace**. Existing user tokens also need to be re-authorized to pick up the new scopes.
+  </Step>
+</Steps>
+
+## Scope summary
+
+Copy-paste the full list of bot token scopes:
+
+```
+channels:read
+channels:history
+channels:manage
+groups:read
+groups:history
+groups:write
+chat:write
+users:read
+reactions:write
+files:read
+files:write
+```
+
+## Troubleshooting
+
+<Accordion title="invalid_scope error during OAuth">
+This almost always means a user-only scope was added to the bot token scopes list. The most common offender is `search:read`. Remove it from Bot Token Scopes, reinstall the app, and try the OAuth flow again.
+</Accordion>
+
+<Accordion title="OAuth flow succeeds but the bot cannot read messages">
+Make sure the bot has been invited to the channel. Bot token scopes grant permission, but the bot still needs to be a member of private channels and, in some workspace configurations, public channels as well.
+</Accordion>
+
+<Accordion title="Scopes changed but users still get old permissions">
+After updating scopes, each user must re-authorize. The easiest way is to disconnect and reconnect the Slack integration from within FluxPrompt.
+</Accordion>

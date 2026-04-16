@@ -1,0 +1,153 @@
+---
+title: "Third-party integrations architecture"
+description: "Adapter pattern, credential storage, and provider extensibility for external service integrations"
+---
+
+## Overview
+
+The third-party integrations system acts as a bridge between your FluxPrompt flows and external services such as WordPress, Slack, Notion, Zapier, and Stripe. Every integration operates in one of two modes:
+
+- **Pull mode** — fetch data from an external service into your flow (e.g., read Notion pages, list Slack channels).
+- **Push mode** — send data from your flow to an external service (e.g., post a Slack message, create a Stripe product).
+
+Some providers support both modes; others support only one.
+
+## User journey
+
+The lifecycle of an integration follows three phases:
+
+1. **Connect** — You save credentials (API key, OAuth token, or webhook URL) to link your account.
+2. **Use in flow** — You add a Third Party Integration node to a flow and select the connected provider.
+3. **Collaboration** — Other workspace members can use your connection via `connectedByUserId`, without seeing your raw credentials.
+
+### Connection states
+
+Every integration node can be in one of three states from the perspective of the current user:
+
+| State | Meaning |
+|---|---|
+| **Connected by me** | You authenticated the integration yourself. |
+| **Connected by another user** | A teammate connected and shared access via `connectedByUserId`. |
+| **Not connected** | No credentials exist; the node cannot run until someone connects. |
+
+## Supported providers
+
+| Provider | Auth method | Pull | Push |
+|---|---|---|---|
+| WordPress | Credentials (URL + app password) | Yes | Yes |
+| Slack | OAuth | Yes | Yes |
+| Zapier | Webhook URL | No | Yes |
+| Stripe | Secret API key | Yes | Yes |
+| Notion | OAuth | Yes | Yes |
+
+## Adapter pattern
+
+Every provider is implemented as a class that conforms to the `IIntegrationProviderAdapter` interface. This keeps provider-specific logic isolated and makes the system easy to extend.
+
+<Tip>
+The adapter pattern means you can add a new provider without modifying any existing provider code. Each adapter is self-contained and registered once in the service layer.
+</Tip>
+
+```typescript
+export interface IIntegrationProviderAdapter {
+  /** Whether this provider uses OAuth, credentials, or webhook. */
+  connectionMode(): ConnectionMode;
+
+  /** Return the OAuth authorization URL (OAuth providers only). */
+  getInstallUrl(state: string): string;
+
+  /** Exchange an OAuth authorization code for tokens. */
+  exchangeCode(code: string): Promise<TokenSet>;
+
+  /** Refresh an expired access token. */
+  refreshAccessToken(refreshToken: string): Promise<TokenSet>;
+
+  /** Store user-supplied credentials (non-OAuth providers). */
+  connectWithCredentials(credentials: Record<string, string>): Promise<void>;
+
+  /** Pull data from the external service. */
+  pull(params: PullParams): Promise<PullResult>;
+
+  /** Push data to the external service. */
+  push(params: PushParams): Promise<PushResult>;
+
+  /** Return dynamic option lists for the node UI (e.g., channels, databases). */
+  getOptions(optionType: string, query?: string): Promise<Option[]>;
+}
+```
+
+## Adding a new provider (backend)
+
+<Steps>
+  <Step title="Create the adapter">
+    Add a new file at `src/app-api/integrations/adapters/<provider>.adapter.ts` that implements `IIntegrationProviderAdapter`. Define the connection mode, authentication flow, and pull/push logic for your provider.
+  </Step>
+  <Step title="Register in IntegrationsService">
+    Open `IntegrationsService` and add your adapter to the provider map so the service can resolve it at runtime:
+
+    ```typescript
+    this.adapters.set(IntegrationProvider.NEW_PROVIDER, new NewProviderAdapter());
+    ```
+  </Step>
+  <Step title="Add to the provider enum">
+    Add a new entry to the `IntegrationProvider` enum so the value is available across the codebase:
+
+    ```typescript
+    export enum IntegrationProvider {
+      // ...existing providers
+      NEW_PROVIDER = 'new_provider',
+    }
+    ```
+  </Step>
+</Steps>
+
+## Adding a new provider (frontend)
+
+<Steps>
+  <Step title="Create a config file">
+    Add a config file that describes the UI for your provider: display name, icon, connection fields, pull/push option schemas, and any help text. This file lives alongside the other provider configs in the frontend integrations directory.
+  </Step>
+  <Step title="Register in registry.ts">
+    Import your config and add it to the provider registry so the Third Party Integration node can render the correct UI when a user selects your provider.
+  </Step>
+</Steps>
+
+## Database schema
+
+Integration credentials are stored in the `user_integrations` table:
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | UUID | Primary key |
+| `userId` | UUID | Owner of the connection |
+| `provider` | enum | Provider identifier |
+| `providerAccountId` | text | External account ID (nullable) |
+| `accessToken` | text | OAuth access token (encrypted at rest) |
+| `refreshToken` | text | OAuth refresh token (encrypted at rest) |
+| `expiresAt` | timestamp | Token expiry |
+| `apiCredentialsEncrypted` | text | Non-OAuth credentials, AES-256-GCM encrypted |
+| `metadata` | JSONB | Provider-specific extra data |
+
+A **UNIQUE constraint** on `(userId, provider)` ensures each user has at most one connection per provider.
+
+All sensitive fields are encrypted with **AES-256-GCM** before being written to the database. Tokens are decrypted only at request time inside the adapter.
+
+## Credential sharing
+
+When a flow is shared or collaboratively edited, the integration node stores a `connectedByUserId` field in `node.data`. At execution time the system uses the following fallback logic:
+
+1. Try the **current user's** credentials for the provider.
+2. If none exist, try the credentials of the user identified by `connectedByUserId`.
+3. If the provider is webhook-based, fall back to a **webhook stub** (Zapier).
+4. If no credentials can be resolved, return an **error** prompting the user to connect.
+
+## NestJS module structure
+
+The integrations system is organized as a standard NestJS module:
+
+- **IntegrationsModule** — declares the controller, service, and adapter providers.
+- **IntegrationsController** — exposes REST endpoints for connecting, disconnecting, pulling, and pushing.
+- **IntegrationsService** — resolves the correct adapter, manages credential CRUD, and orchestrates pull/push calls.
+- **Individual adapters** — injected via the DI container and resolved by provider key.
+
+This structure lets you unit-test each adapter in isolation and swap implementations without touching the controller or service layers.

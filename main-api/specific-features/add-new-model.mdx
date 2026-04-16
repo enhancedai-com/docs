@@ -1,0 +1,138 @@
+---
+title: "Add a new AI model"
+description: "Step-by-step guide to register a new AI model in the backend"
+---
+
+Adding a new AI model requires changes across several files: the model enum, the DTO validation layer, the technologies registry, and the pricing seeder. Follow each step in order to ensure the model is fully registered and available.
+
+<Steps>
+  <Step title="Add to the model enum">
+    If the model belongs to OpenAI, add it to the enum in `src/enums/openAIModel.enum.ts`. Other providers may not require an enum entry -- skip this step if no provider-specific enum exists for your target provider.
+
+    ```typescript
+    // src/enums/openAIModel.enum.ts
+    export enum OpenAIModel {
+      // ... existing entries
+      CLAUDE_4_HAIKU = 'claude-4-haiku',
+    }
+    ```
+  </Step>
+
+  <Step title="Add to the DTO">
+    Register the model string in the appropriate DTO array so that incoming API requests pass validation. Open `src/app-api/openAI/dto/openAi.dto.ts` and add the model to the correct category:
+
+    | DTO array | Use case |
+    |---|---|
+    | `OpenAITextModels` | Standard text-generation models |
+    | `OpenAICompletionModels` | Completion-style models |
+    | `OpenAIReasoningModels` | Chain-of-thought / reasoning models |
+    | `OpenAIImageModels` | Image-generation models |
+
+    ```typescript
+    // src/app-api/openAI/dto/openAi.dto.ts
+    export const OpenAITextModels = [
+      // ... existing models
+      'claude-4-haiku',
+    ];
+    ```
+  </Step>
+
+  <Step title="Add to the technologies registry">
+    Create a technology entry in `src/technologies/technologies.ts`. Each entry requires the following configuration properties:
+
+    | Property | Description |
+    |---|---|
+    | `type` | One of `Text`, `Image`, `Audio`, or `OCR` |
+    | `system` | Provider key (see table below) |
+    | `model` | The model identifier string |
+    | `enabled` | Whether the model is active |
+    | `description` | Short human-readable label |
+
+    **Available providers:**
+
+    | Provider | `system` key |
+    |---|---|
+    | OpenAI | `openAi` |
+    | Anthropic | `anthropic` |
+    | Google Gemini | `gemini` |
+    | Groq | `groq` |
+    | Perplexity | `perplexity` |
+    | X AI | `xai` |
+    | Mistral | `mistral` |
+    | Replicate | `replicate` |
+    | Stability AI | `stabilityAi` |
+    | Ideogram | `ideogram` |
+    | Fal | `fal` |
+
+    ```typescript
+    // src/technologies/technologies.ts
+    {
+      type: 'Text',
+      system: 'anthropic',
+      model: 'claude-4-haiku',
+      enabled: true,
+      description: 'Claude 4 Haiku',
+    }
+    ```
+  </Step>
+
+  <Step title="Add pricing in the seeder">
+    Define input and output token prices in `src/database/seeders/modelPrice/data.ts`. Each model needs two entries -- one for input tokens and one for output tokens. Both entries require a `fluxConversion` value that maps the provider's token pricing to the internal credit system.
+
+    ```typescript
+    // src/database/seeders/modelPrice/data.ts
+    {
+      model: 'claude-4-haiku',
+      type: 'input',
+      price: 0.00025,
+      fluxConversion: 0.5,
+    },
+    {
+      model: 'claude-4-haiku',
+      type: 'output',
+      price: 0.00125,
+      fluxConversion: 2.5,
+    },
+    ```
+  </Step>
+
+  <Step title="Write the SQL script for production">
+    For production deployments, insert the pricing rows directly into the database. Use `gen_random_uuid()` to generate primary keys.
+
+    ```sql
+    INSERT INTO flux.public.model_price (id, model, type, price, flux_conversion)
+    VALUES
+      (gen_random_uuid(), 'claude-4-haiku', 'input', 0.00025, 0.5),
+      (gen_random_uuid(), 'claude-4-haiku', 'output', 0.00125, 2.5);
+    ```
+
+    <Warning>
+      Run this SQL in a transaction and verify the rows before committing. Incorrect pricing values affect billing for all users immediately.
+    </Warning>
+  </Step>
+</Steps>
+
+## Full example: adding `claude-4-haiku` (Anthropic)
+
+This example walks through every file you need to touch when adding an Anthropic text model.
+
+1. **Enum** -- Skip. Anthropic models do not use the OpenAI enum.
+2. **DTO** -- Add `'claude-4-haiku'` to `OpenAITextModels`.
+3. **Technologies** -- Add the entry with `system: 'anthropic'` and `type: 'Text'`.
+4. **Seeder** -- Add input and output pricing entries with appropriate `fluxConversion` values.
+5. **SQL** -- Write and run the production INSERT statement.
+
+## Pre-merge checklist
+
+Use this checklist before opening your pull request:
+
+- [ ] Model string is consistent across all files (enum, DTO, technologies, seeder, SQL).
+- [ ] The DTO array matches the model's capability (text, completion, reasoning, or image).
+- [ ] The `system` key in technologies matches an existing provider.
+- [ ] Both input and output pricing entries exist in the seeder.
+- [ ] The production SQL script uses `gen_random_uuid()` and targets the correct table.
+- [ ] The `enabled` flag in technologies is set to `true` if the model should be available immediately.
+
+<Tip>
+  After deploying, verify the model appears in the technology list by calling the relevant API endpoint or checking the admin panel.
+</Tip>

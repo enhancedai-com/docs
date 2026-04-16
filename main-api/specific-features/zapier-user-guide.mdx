@@ -1,0 +1,123 @@
+---
+title: "Zapier integration user guide"
+description: "How to receive data from Zapier and send data to Zapier using webhook flows"
+---
+
+## Overview
+
+The Zapier node connects your flows to thousands of apps through Zapier. It supports three interaction modes:
+
+| Mode | Direction | What it does |
+|------|-----------|-------------|
+| Pull -- Webhook Listener | Receive from Zapier | Listens for incoming POST requests sent by a Zapier Zap |
+| Pull -- Poll Zapier Endpoint | Receive from any URL | Makes a GET request to a Zapier endpoint (or any JSON URL) |
+| Push -- Send to webhook | Send to Zapier | Sends a POST request to a Zapier Catch Hook URL |
+
+## Adding the node
+
+In the flow editor, open the node menu and navigate to **Third Party Integration > Zapier**. Then choose your mode.
+
+## Connection modes
+
+| Mode | Credentials needed | When to use |
+|------|-------------------|-------------|
+| Webhook mode | None | You want Zapier to push data into your flow via a webhook URL |
+| Zapier App mode | API key | You want to authenticate requests between your flow and Zapier |
+
+## Pull -- Webhook Listener
+
+Use the Webhook Listener when you want Zapier to send data into your flow.
+
+<Steps>
+  <Step title="Copy the webhook URL">
+    After adding the node, copy the webhook URL shown in the node configuration panel.
+  </Step>
+  <Step title="Configure a Zap in Zapier">
+    In Zapier, create a new Zap. For the action step, choose **Webhooks by Zapier > POST**. Paste the webhook URL you copied.
+  </Step>
+  <Step title="Send a test payload from Zapier">
+    Use Zapier's test feature to send a sample payload. This lets you verify the connection and see the data structure.
+  </Step>
+  <Step title="Load last received">
+    Back in your flow, click **Load last received** to pull in the most recent payload. Your flow will use this data as its input.
+  </Step>
+</Steps>
+
+<Tip>
+The Webhook Listener always uses the last received payload. If Zapier sends multiple requests before you run the flow, only the most recent one is used.
+</Tip>
+
+## Pull -- Poll Zapier Endpoint
+
+Use this mode to make a GET request to any URL that returns JSON.
+
+<Steps>
+  <Step title="Enter the URL">
+    Paste the endpoint URL into the node configuration. This can be a Zapier webhook URL or any publicly accessible JSON endpoint.
+  </Step>
+  <Step title="Set an optional limit">
+    If the endpoint returns an array, you can set a limit to cap the number of items retrieved.
+  </Step>
+  <Step title="Fetch the data">
+    Click **Get Data** to execute the GET request and preview the response.
+  </Step>
+</Steps>
+
+## Push -- Send to webhook
+
+Use this mode to send data from your flow to Zapier.
+
+<Steps>
+  <Step title="Get your Catch Hook URL from Zapier">
+    In Zapier, create a Zap with a **Webhooks by Zapier > Catch Hook** trigger. Copy the webhook URL.
+  </Step>
+  <Step title="Paste the URL">
+    Enter the Catch Hook URL in the node configuration.
+  </Step>
+  <Step title="Choose a payload format">
+    Select **JSON** or **Form Data** depending on what your Zap expects.
+  </Step>
+  <Step title="Add custom headers (optional)">
+    If the receiving endpoint requires specific headers, add them in the headers section.
+  </Step>
+  <Step title="Test the push">
+    Click **Test Push** to send a sample payload and confirm the Zap receives it.
+  </Step>
+</Steps>
+
+<Warning>
+The Catch Hook URL must start with `https://hooks.zapier.com/`. The node rejects URLs that do not match this pattern.
+</Warning>
+
+## Get Data vs Run flow
+
+| Action | Behavior |
+|--------|----------|
+| **Get Data** | Executes only the Zapier node so you can preview what is sent or received without running the full flow |
+| **Run flow** | Executes the entire flow, passing data through all connected nodes |
+
+## Tips and troubleshooting
+
+<Accordion title="Webhook URL is not receiving data">
+Make sure the Zap is turned on in Zapier. Draft or paused Zaps do not send requests. Also confirm you copied the correct webhook URL from the node -- each node instance has a unique URL.
+</Accordion>
+
+<Accordion title="Poll endpoint returns an error">
+Verify the URL is publicly accessible and returns valid JSON. If the endpoint requires authentication, you may need to include credentials in the URL or switch to Zapier App mode with an API key.
+</Accordion>
+
+<Accordion title="Push payload is not arriving in Zapier">
+Check that the Catch Hook URL starts with `https://hooks.zapier.com/`. Confirm the Zap's trigger step is set to Catch Hook (not Catch Raw Hook, unless you need the raw body). Use **Test Push** to isolate the issue.
+</Accordion>
+
+<Accordion title="Data format looks wrong in Zapier">
+Switch between JSON and Form Data payload formats. Zapier handles these differently -- JSON is usually the right choice unless the downstream Zap step specifically expects form-encoded data.
+</Accordion>
+
+## Quick reference
+
+| Task | Mode | Key config |
+|------|------|-----------|
+| Receive data from a Zap | Pull -- Webhook Listener | Copy webhook URL into Zapier action step |
+| Fetch data from a URL | Pull -- Poll Zapier Endpoint | Enter the GET endpoint URL |
+| Send data to a Zap | Push -- Send to webhook | Paste `https://hooks.zapier.com/...` URL |

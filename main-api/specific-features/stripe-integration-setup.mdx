@@ -1,0 +1,52 @@
+---
+title: "Stripe integration setup"
+description: "How to obtain Stripe API credentials for the third-party integration node"
+---
+
+## Overview
+
+The Stripe integration uses a **secret API key** that you provide on a per-user basis. This key is encrypted (AES-256-GCM) and stored separately from any platform-level `STRIPE_KEY` that FluxPrompt may use for its own billing. Your key is used exclusively for operations triggered by the Third Party Integration node in your flows.
+
+<Steps>
+  <Step title="Open the Stripe Dashboard">
+    Log in to your Stripe account at [dashboard.stripe.com](https://dashboard.stripe.com). If you do not have an account, create one and complete the onboarding steps.
+  </Step>
+
+  <Step title="Create a secret API key">
+    Navigate to **Developers → API keys**. Click **Create secret key** (or reveal an existing one).
+
+    - **Test mode** keys start with `sk_test_`.
+    - **Live mode** keys start with `sk_live_`.
+
+    Copy the key immediately — Stripe only shows it once.
+  </Step>
+
+  <Step title="Align the key mode with your use case">
+    The mode of your secret key must match the mode you intend to operate in:
+
+    | Secret key prefix | Stripe mode | Use case |
+    |---|---|---|
+    | `sk_test_` | Test | Development and testing; no real charges |
+    | `sk_live_` | Live | Production; real charges and payouts |
+
+    Using a test key in a flow that targets live data (or vice versa) results in "resource not found" errors because test and live objects are separate.
+  </Step>
+</Steps>
+
+## Security notes
+
+<Warning>
+- Never commit your secret key to version control.
+- If a key is exposed, rotate it immediately from the Stripe Dashboard (**Developers → API keys → Roll key**).
+- For tighter security, create a **restricted key** with only the permissions your flow needs (e.g., read-only access to products, write access to customers). Restricted keys limit the blast radius if a key is compromised.
+</Warning>
+
+## Related code
+
+The Stripe adapter lives at:
+
+```
+src/app-api/integrations/adapters/stripe.adapter.ts
+```
+
+This adapter implements `IIntegrationProviderAdapter` and handles credential storage, pull operations (e.g., list products, list customers), and push operations (e.g., create product, create price) against the Stripe API.

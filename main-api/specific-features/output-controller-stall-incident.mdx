@@ -1,0 +1,78 @@
+---
+title: "Output controller stall incident"
+description: "Post-mortem analysis of event loop blocking caused by regex segmentation on large HTML documents"
+---
+
+## Symptom
+
+Flows executed via `apiV2` caused the API to stop responding to health checks while the Node.js process remained running. The process was alive but unresponsive -- no requests were served, and health check probes failed.
+
+## Call path
+
+The stall originated in the edge propagation pipeline:
+
+```
+apiV2
+  └── addConnectToNodes / modifyData
+        └── getOutputByType
+              └── segmentation on outputController / reportBuilder textData
+```
+
+When an Output Controller or Report Builder node contained large `textData`, the propagation step attempted to segment that text before merging it into downstream nodes.
+
+## Root cause
+
+The functions `splitTextIntoSegments` and `processTextSegments` used multiple regular expressions to split text content into logical segments. Among these were markdown-table patterns that performed poorly on certain inputs.
+
+When the input was a very large HTML document (hundreds of kilobytes or more), these regex patterns consumed excessive CPU time synchronously on the main thread. Because Node.js runs JavaScript on a single event loop, this blocked all other work -- including health checks, new requests, and in-flight responses.
+
+The key factors:
+
+1. **Unbounded input** -- there was no size cap on the text passed to segmentation.
+2. **Expensive regex patterns** -- markdown-table matching patterns had backtracking behavior on non-matching HTML content.
+3. **Synchronous execution** -- the work ran on the main thread with no yielding or offloading.
+
+<Warning>
+Any synchronous work on unbounded user content -- regex matching, JSON parsing, large `JSON.stringify` calls -- can block the event loop and make the entire API unresponsive. Always validate input size before performing expensive operations.
+</Warning>
+
+## Fix implemented
+
+The fix addressed the problem at multiple levels:
+
+<Steps>
+  <Step title="Cap input size">
+    A new constant `FLOW_TEXT_SEGMENT_PARSE_MAX_CHARS` was added to `flowTextSegmentation.ts`. Text exceeding this limit skips segmentation entirely and is passed through as a single block.
+  </Step>
+  <Step title="Fast path for HTML documents">
+    A detection check for HTML content (`DOCTYPE` or `<html` at the start of the string) was added. HTML documents bypass the markdown-oriented segmentation logic since it provides no value for HTML and is where the performance problem occurred.
+  </Step>
+  <Step title="Centralize segmentation logic">
+    The segmentation entry point was consolidated into `segmentsForOutputControllerMerge`, giving a single place to enforce size limits and content-type checks.
+  </Step>
+</Steps>
+
+## User impact
+
+- Affected runs hung or timed out because the API was unresponsive during the stall period.
+- The scope was limited to flows that pushed large HTML content through an Output Controller or Report Builder node.
+- Flows using smaller text payloads or non-HTML content were not affected.
+
+## Prevention guidelines
+
+To avoid similar incidents in the future:
+
+1. **Never run unbounded regex on user-scaled content.** Always check input size first and bail out or truncate if it exceeds a safe threshold.
+2. **Consider bounds, streaming, or worker threads** for any operation whose cost scales with user input size. If you cannot guarantee a fast return, offload the work.
+3. **Test with large inputs.** Include pathological cases (large HTML, deeply nested JSON, repeated patterns) in performance testing.
+4. **Monitor event loop lag.** Instrumentation that detects event loop delays can catch these issues before they become full outages.
+
+## Lessons learned
+
+<Tip>
+Regex performance is not just about correctness -- a pattern that works fine on 1 KB of input can lock up the process on 500 KB. When writing regex that will run against user content, always assume the input could be arbitrarily large and test accordingly.
+</Tip>
+
+<Tip>
+Centralizing text-processing logic into a single entry point (like `segmentsForOutputControllerMerge`) makes it easier to add guards. If segmentation had been called from multiple places with no shared gate, the fix would have required changes in every call site.
+</Tip>

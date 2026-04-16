@@ -1,0 +1,160 @@
+---
+title: "Objects system"
+description: "User-defined data containers for nodesBox nodes in flow execution"
+---
+
+Objects are user-defined data containers that nodesBox nodes read and write during flow execution. They are stored in the `flow_objects` table and scoped to an owner (user, company user, or space).
+
+## Storage
+
+The `UserObject` entity maps to the `flow_objects` table.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | `uuid` (PK) | Record identifier |
+| `objectId` | `varchar` | Logical object identifier |
+| `name` | `varchar` | Display name |
+| `isCreating` | `boolean` | Whether the object is being created |
+| `localObject` | `boolean` | Scoped to a specific flow |
+| `sessionEnabled` | `boolean` | Whether session tracking is active |
+| `selectedSession` | `varchar` | Currently active session key |
+| `sessions` | `jsonb` | Session data (see `FluxObjectSession`) |
+| `flowId` | `uuid` (FK) | Parent flow (set when `localObject` is true) |
+| `text` | `jsonb` | Object content (see `FluxObjectTextItem`) |
+| `userId` | `uuid` (FK) | Owning user |
+| `companyUserId` | `uuid` (FK) | Owning company user |
+| `spaceId` | `uuid` (FK) | Owning space |
+
+## Interfaces
+
+```typescript
+interface FluxObjectTextItem {
+  key: string;
+  value: string;
+}
+
+interface FluxObjectSession {
+  id: string;
+  name: string;
+  text: FluxObjectTextItem[];
+}
+
+interface FluxObject {
+  objectId: string;
+  name: string;
+  isCreating: boolean;
+  localObject: boolean;
+  sessionEnabled: boolean;
+  selectedSession: string;
+  sessions: FluxObjectSession[];
+  text: FluxObjectTextItem[];
+}
+
+interface ObjectOwner {
+  userId?: string;
+  companyUserId?: string;
+  spaceId?: string;
+}
+```
+
+## Ownership model
+
+Objects follow a priority-based ownership resolution. The system checks for an owner in this order:
+
+1. **Space** (`spaceId`) -- highest priority.
+2. **Company user** (`companyUserId`) -- used when no space is set.
+3. **User** (`userId`) -- fallback.
+
+When resolving objects for a request, the service filters by the most specific owner available. This means a space-scoped object is returned even if user-level objects also exist.
+
+<Tip>
+  If you need an object visible to all members of a space, set `spaceId`. If you need it private to one user within a company, set `companyUserId` and leave `spaceId` null.
+</Tip>
+
+## ObjectsService methods
+
+| Method | Description |
+|---|---|
+| `getObjectsByOwner(owner: ObjectOwner)` | Retrieve all objects for the resolved owner |
+| `getObjectsGroupedBySpaceIds(spaceIds: string[])` | Group objects by space for bulk loading |
+| `toJsonArray(objects: UserObject[])` | Convert entity array to `FluxObject[]` |
+| `saveObjects(owner: ObjectOwner, objects: FluxObject[])` | Persist a full set of objects for an owner |
+| `updateObject(id: string, partial: Partial<FluxObject>)` | Patch a single object |
+| `seedFromUser(sourceUserId: string, targetOwner: ObjectOwner)` | Copy objects from one user to a new owner |
+
+## REST endpoints
+
+The objects system is accessed through several endpoints across different controllers.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `PATCH` | `/user/update` | Update user-level objects |
+| `GET` | `/user/spaces` | List spaces with their objects |
+| `GET` | `/auth/me` | Return current user profile including objects |
+| `PATCH` | `/company-spaces/:id` | Update objects for a specific space |
+| `GET` | `/company-spaces` | List all company spaces with objects |
+| `GET` | `/company-spaces/:id` | Get a single space with its objects |
+| `GET` | `/company/user-company` | Get company user data including objects |
+| `POST` | `/company/:id/add-user` | Add a user to a company and seed their objects |
+| `POST` | `/internal/objects-migration/migrate` | Bulk migration endpoint for objects |
+
+<Warning>
+  The `/internal/objects-migration/migrate` endpoint is intended for one-time data migrations. Do not expose it to external clients.
+</Warning>
+
+## Flow execution
+
+During flow execution, objects are loaded, modified, and saved back. The process follows these steps:
+
+### Owner resolution
+
+The execution context determines the owner using the same priority chain (space, company user, user). Objects are loaded for that owner before any node processes them.
+
+### `clearObjects()` processing
+
+Some flows include a `clearObjects` instruction that resets object text content before execution begins. This ensures nodes start with a clean state when the flow is configured to do so.
+
+### `objectCaller()` execution
+
+The `objectCaller()` function is invoked by nodesBox nodes to read from or write to objects during execution. It locates the target object by `objectId`, performs the requested operation (read, append, overwrite), and returns the result to the node.
+
+```typescript
+// Simplified objectCaller flow
+async function objectCaller(
+  objectId: string,
+  operation: 'read' | 'append' | 'overwrite',
+  value?: string,
+  owner: ObjectOwner,
+) {
+  const objects = await objectsService.getObjectsByOwner(owner);
+  const target = objects.find((o) => o.objectId === objectId);
+
+  if (operation === 'read') {
+    return target.text;
+  }
+
+  // append or overwrite logic
+  // ...
+
+  await objectsService.saveObjects(owner, objects);
+}
+```
+
+## Local objects
+
+When `localObject` is set to `true`, the object is scoped to a specific flow via the `flowId` foreign key. Local objects:
+
+- Are only visible within the flow they belong to.
+- Are not returned by `getObjectsByOwner` unless the flow context matches.
+- Are useful for flow-specific state that should not leak into other flows.
+
+## Key files
+
+| File | Purpose |
+|---|---|
+| `src/entities/user-object.entity.ts` | UserObject entity definition |
+| `src/services/objects.service.ts` | ObjectsService with CRUD and ownership logic |
+| `src/interfaces/flux-object.interface.ts` | FluxObject and related interfaces |
+| `src/controllers/user.controller.ts` | User-level object endpoints |
+| `src/controllers/company-spaces.controller.ts` | Space-level object endpoints |
+| `src/services/flux/object-caller.ts` | Object read/write during flow execution |
