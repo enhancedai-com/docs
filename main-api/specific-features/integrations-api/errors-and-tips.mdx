@@ -1,0 +1,160 @@
+---
+title: "Errors, tips, and FAQ"
+description: "Common HTTP errors, troubleshooting, tips & tricks, frequently asked questions, and where to get more help."
+---
+
+When something goes wrong, the response will not be a green `200`. This page covers the codes you might see, plus tips for getting the most out of the Integrations API.
+
+## Common errors
+
+### 400 Bad Request
+
+The request body is missing a required field, or one of the IDs is not a valid UUID.
+
+**Common causes:**
+
+- On `POST /integrations/agents`: you sent **neither** `folderId` nor `folderName` — supply at least one.
+- `folderId` is not a UUID, or `folderName` is an empty string.
+- The path `:id` on `GET`/`PATCH /integrations/agents/:id` is not a UUID.
+
+**Fix:** Check that `name`, `type`, and either `folderId` or `folderName` are all present and spelled correctly. UUIDs look like `9f2b3c4a-1111-2222-3333-444455556666`.
+
+### 401 Unauthorized
+
+Your API key is missing, expired, or wrong.
+
+**Fix:** Re-copy your key from the FluxPrompt UI. Make sure it is pasted into the `api-key` header without extra spaces. If you regenerated your key recently, the old one stops working immediately.
+
+### 403 Forbidden
+
+You're authenticated, but you don't have permission to do this thing — usually because the space or folder belongs to someone else, or because a folder you targeted by `folderId` lives in a different space than the `spaceId` you sent.
+
+**Fix:** Check that the `spaceId` you sent is one you have access to. The list returned by [`GET /integrations/folders`](/main-api/specific-features/integrations-api/list-folders) only shows folders you can use, so when in doubt, list folders again and pick a fresh ID from there.
+
+### 404 Not Found
+
+The folder you referenced via `folderId` doesn't exist (or you can't see it). On `GET`/`PATCH /integrations/agents/:id`, the agent ID either doesn't exist or you don't have access to it.
+
+**Fix:** Re-fetch the folder list and copy a current ID. Or use [`GET /integrations/agents`](/main-api/specific-features/integrations-api/list-agents) to confirm the agent exists and is visible to you.
+
+### 422 Unprocessable Entity
+
+**Possible causes:**
+
+- You sent `folderName: "Shared"` or `folderName: "Default"`. These names are reserved — pick another.
+- You sent a `content` field, but its structure is invalid (e.g., missing a node ID, wrong handle name).
+- You called `PATCH` with an empty body (neither `name` nor `content`).
+
+**Fix:** Either fix the field, omit `content` (the default template will be used on `POST`), or make sure your `PATCH` body has at least one of `name`/`content`.
+
+### 500 Internal Server Error
+
+Something went wrong on our side. This is rare.
+
+**Fix:** Wait a minute and retry. If it keeps happening, contact support and include the time of the request.
+
+## Tips & tricks
+
+### Save your requests as a Postman Collection
+
+After you set up a request once, click the **Save** button (top-right of the request panel) and save it to a Collection called something like `FluxPrompt Integrations`. Now your requests are one click away forever.
+
+### Test in staging before production
+
+If your team has a staging environment, test there first. Just change the `baseUrl` variable in your Postman environment from `https://api.fluxprompt.ai` to `https://api-staging.fluxprompt.ai`. Nothing else needs to change.
+
+### Use a Space API key for integrations
+
+If you're setting up a third-party tool (Zapier, Make, n8n, etc.) that should only see one space, ask your admin to give you a **Space-level API key** instead of your personal one. The system automatically restricts everything to that space — even the list of folders and agents.
+
+<Note>
+A Space API key naturally cannot create flows in your *private* folder, since by definition it is scoped to one space. Use a User API key for the private-folder workflow.
+</Note>
+
+### Hide your API key in Postman
+
+When sharing screen recordings or screenshots, avoid showing the key. In Postman, mark the variable as **Secret** type when creating it — the value is hidden by default.
+
+### Bookmark the URL reference
+
+You'll use these constantly:
+
+| What | Method | URL |
+|------|--------|-----|
+| List folders | `GET` | `{{baseUrl}}/integrations/folders` |
+| List folders by name | `GET` | `{{baseUrl}}/integrations/folders?name=<text>` |
+| List agents (with their endpoints) | `GET` | `{{baseUrl}}/integrations/agents` |
+| Search agents by name | `GET` | `{{baseUrl}}/integrations/agents?name=<text>` |
+| Search agents by name (deprecated) | `GET` | `{{baseUrl}}/integrations/agents?search=<text>` |
+| Create an agent | `POST` | `{{baseUrl}}/integrations/agents` |
+| Get an agent's full JSON | `GET` | `{{baseUrl}}/integrations/agents/<id>` |
+| Update an agent | `PATCH` | `{{baseUrl}}/integrations/agents/<id>` |
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="Can I use this without Postman?">
+    Yes — any tool that can make HTTP requests works (curl, Insomnia, Hoppscotch, Zapier, your code editor, etc.). Postman is just the most beginner-friendly.
+  </Accordion>
+
+  <Accordion title="Should I use folderId or folderName?">
+    If you already have a folder UUID handy, use `folderId` — it's the most explicit. If you want a one-shot call that works whether or not the folder exists yet, use `folderName`. Most automation scripts end up using `folderName` because it's idempotent.
+  </Accordion>
+
+  <Accordion title="Is the spaceId I send the same as the one in the URL when I open a space in the FluxPrompt UI?">
+    Yes. There is no separate "API space ID" — the front end and the API share the same UUIDs.
+  </Accordion>
+
+  <Accordion title="What does space: null actually mean?">
+    It means the folder lives in your *private* area — not in any team space. To create flows there from the API, leave `spaceId` out of the request body.
+  </Accordion>
+
+  <Accordion title="Why was ?search= renamed to ?name=?">
+    Consistency: the new `?name=` filter on `GET /integrations/folders` filters by folder name, and we wanted both endpoints to use the same parameter. The old `?search=` keeps working as a deprecated alias on `/agents`.
+  </Accordion>
+
+  <Accordion title="Does PATCH /integrations/agents/:id merge nodes into the existing flow, or replace them?">
+    It **replaces**. When `content` is provided, the API performs a full sync — any node or edge not in your payload is removed. If you only want to tweak one piece, GET first, modify in memory, then PATCH back the whole thing.
+  </Accordion>
+
+  <Accordion title="Can I move an agent to a different folder or space via PATCH?">
+    No — PATCH only updates `name` and `content`. Use the UI to move agents between folders or spaces.
+  </Accordion>
+
+  <Accordion title="Can I delete an agent via the API?">
+    Not yet. For now, deletion is UI-only. If your workflow needs API deletion, let your admin know.
+  </Accordion>
+
+  <Accordion title="How many flows can I create?">
+    There is no specific limit imposed by this endpoint, but your account's plan limits still apply (the same way they do in the UI).
+  </Accordion>
+
+  <Accordion title="My API key stopped working. Why?">
+    Most common cause: someone (you or an admin) regenerated it. Always pull the current value from your profile.
+  </Accordion>
+
+  <Accordion title="I see flows from other spaces I don't expect. Is that a leak?">
+    No — those are spaces you actually have access to. The endpoint only returns what you can already see in the UI. If you want a tighter scope, use a Space-level API key.
+  </Accordion>
+
+  <Accordion title="How do I actually call the agent's URL after I have it?">
+    That is documented separately, in the Flow Global Node settings of each flow (look for the **Copy API Schema** button). The schema explains the request body for that specific flow.
+  </Accordion>
+</AccordionGroup>
+
+## Where to get more help
+
+<CardGroup cols={2}>
+  <Card title="In-app help" icon="circle-question">
+    Click the `?` icon in the top-right of FluxPrompt for contextual help.
+  </Card>
+  <Card title="Engineering team" icon="slack">
+    Ping your usual Slack channel.
+  </Card>
+  <Card title="API base reference" icon="book">
+    Available at `<baseUrl>/flux-documentation` — your team can give you the credentials.
+  </Card>
+  <Card title="Back to overview" icon="arrow-left" href="/main-api/specific-features/integrations-api/overview">
+    Return to the Integrations API overview.
+  </Card>
+</CardGroup>

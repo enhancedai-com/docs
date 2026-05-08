@@ -1,0 +1,186 @@
+---
+title: "Update an agent"
+description: "PATCH /integrations/agents/:id — change the agent's display name, replace its full nodes+edges content, or both."
+---
+
+<Tag>v1.3</Tag>
+
+This endpoint lets you change the agent's display name, replace its full nodes+edges content, or both, without touching the UI.
+
+| Method | Path |
+|--------|------|
+| `PATCH` | `/integrations/agents/:id` |
+
+## When to use this
+
+- Bulk-rename agents from a CSV.
+- Push a new flow definition you generated or edited externally.
+- Roll back to a previous JSON you exported via [`GET /integrations/agents/:id`](/main-api/specific-features/integrations-api/get-agent).
+
+## What's in scope
+
+You **can** update:
+
+- **`name`** — the display name shown in the UI.
+- **`content`** — the full agent JSON (`nodes` + `edges`).
+
+You **cannot** use this endpoint to:
+
+- Move the agent to another folder or space (use the UI).
+- Change the agent's `type` from `agent` to `chat` or vice versa (delete and recreate).
+- Toggle version control or partially patch a single node (use the UI flow editor).
+
+<Warning>
+When `content` is provided, the API performs a **full sync**: every node and edge not in your payload is removed. If you only want to tweak one piece, GET first, modify in memory, then PATCH back the whole thing.
+</Warning>
+
+## Build the request
+
+<Steps>
+  <Step title="Open a new tab in Postman">
+    Click **+ New Tab** or press `Ctrl/Cmd + T`.
+  </Step>
+  <Step title="Set the method and URL">
+    Set the method to **PATCH** and paste:
+
+    ```text
+    {{baseUrl}}/integrations/agents/<flowId>
+    ```
+  </Step>
+  <Step title="Add the headers">
+    On the **Headers** tab:
+
+    | Key | Value |
+    |-----|-------|
+    | `api-key` | `{{apiKey}}` |
+    | `Content-Type` | `application/json` |
+  </Step>
+  <Step title="Add the body">
+    On the **Body** tab, choose **raw**, then select **JSON**. Paste one of the example bodies below.
+  </Step>
+  <Step title="Send">
+    Click **Send**.
+  </Step>
+</Steps>
+
+## Path parameters
+
+<ParamField path="id" type="string (uuid)" required>
+  The agent's UUID.
+</ParamField>
+
+## Request body fields
+
+<ParamField body="name" type="string">
+  The new display name.
+</ParamField>
+
+<ParamField body="content" type="object">
+  The full agent JSON — `{ nodes: [...], edges: [...] }`. When provided, the API performs a full sync.
+
+  <Expandable title="content">
+    <ParamField body="nodes" type="object[]">
+      Full nodes array. Same shape as in `GET /integrations/agents/:id`.
+    </ParamField>
+    <ParamField body="edges" type="object[]">
+      Full edges array.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<Warning>
+The body must contain **at least one** of `name` or `content`. An empty body returns **422 Unprocessable Entity**.
+</Warning>
+
+## Example bodies
+
+<Tabs>
+  <Tab title="Rename only">
+    ```json
+    {
+      "name": "Marketing Helper (v2)"
+    }
+    ```
+  </Tab>
+  <Tab title="Replace content only">
+    Full sync of nodes and edges:
+
+    ```json
+    {
+      "content": {
+        "nodes": [
+          {
+            "id": "globalStarter_xxx",
+            "type": "globalStarter",
+            "data": { "label": "Start" },
+            "position": { "x": 0, "y": 0 },
+            "width": 100,
+            "height": 100
+          }
+        ],
+        "edges": []
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Both at once">
+    ```json
+    {
+      "name": "Marketing Helper (v2)",
+      "content": {
+        "nodes": [ /* ... */ ],
+        "edges": [ /* ... */ ]
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Example response
+
+The PATCH responds with the **same shape as `GET /integrations/agents/:id`** — useful when chaining calls:
+
+```json
+{
+  "id": "flow-uuid-1",
+  "name": "Marketing Helper (v2)",
+  "type": "agent",
+  "spaceId": "space-uuid-123",
+  "folderId": "1a2b3c4d-aaaa-bbbb-cccc-ddddeeeeffff",
+  "content": {
+    "nodes": [ /* ... */ ],
+    "edges": []
+  }
+}
+```
+
+## Round-trip workflow
+
+The two endpoints compose nicely. A typical "bulk-edit one field across many agents" script looks like this:
+
+```text
+for each agent in GET /integrations/agents:
+  full = GET /integrations/agents/{agent.id}
+  modify full.content.nodes (e.g. swap a model name)
+  PATCH /integrations/agents/{agent.id}  with { content: full.content }
+```
+
+<Tip>
+Because `GET` and `PATCH` use the exact same `content` shape, you don't need to re-map any fields between calls.
+</Tip>
+
+## Errors
+
+| Status | Cause |
+|--------|-------|
+| `401 Unauthorized` | Bad or missing API key. |
+| `404 Not Found` | `flowId` doesn't exist or you don't have access. |
+| `422 Unprocessable Entity` | Body is empty (neither `name` nor `content`), or `content` is malformed (missing node IDs, wrong handle names, etc.). |
+
+For the full error reference, see [errors and tips](/main-api/specific-features/integrations-api/errors-and-tips).
+
+## Next step
+
+<Card title="Errors and tips" icon="life-buoy" href="/main-api/specific-features/integrations-api/errors-and-tips">
+  Common HTTP errors, troubleshooting, FAQ, and where to get more help.
+</Card>
