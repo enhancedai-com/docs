@@ -1,0 +1,212 @@
+---
+title: "Create an agent"
+description: "POST /integrations/agents — create a new agent in a folder of your choice, in a team space or in your private area, with optional inline folder creation."
+---
+
+This endpoint creates a **new agent** in a folder of your choice — or in a brand-new folder you describe by name, in a team space *or* in your private area.
+
+| Method | Path |
+|--------|------|
+| `POST` | `/integrations/agents` |
+
+## When to use this
+
+- You're building 50 small agents and don't want to click through the UI 50 times.
+- You have a script that generates agent definitions automatically.
+- A teammate's tool needs to provision agents on your behalf.
+- You want to drop a quick agent into your private notes without setting up a space first.
+
+## The four ways to point at a folder
+
+You always pick **where** the agent goes by combining (a) where the folder lives — team space or private — with (b) how you reference the folder — by ID or by name. That gives four combinations:
+
+| Scenario | Send `spaceId`? | Send `folderId` or `folderName`? | Behavior |
+|----------|-----------------|----------------------------------|----------|
+| Existing folder in a team space | yes | `folderId` | Use that folder. Classic v1.1 path. |
+| Existing folder in your private area <Tag>v1.2</Tag> | **no** | `folderId` | Use that private folder. |
+| New or existing folder in a team space, by name <Tag>v1.2</Tag> | yes | `folderName` | Find-or-create the folder in that space. |
+| New or existing folder in your private area, by name <Tag>v1.2</Tag> | **no** | `folderName` | Find-or-create the folder in your private area. |
+
+<Info>
+If you send **both** `folderId` and `folderName`, `folderId` wins and `folderName` is ignored.
+</Info>
+
+## Drop a flow into a private folder
+
+<Tag>v1.2</Tag>
+
+A private folder is exactly the one you saw with `"space": null` in the [list folders](/main-api/specific-features/integrations-api/list-folders) response. To put an agent there, **just omit `spaceId` from the request body**. Don't send `null`, don't send an empty string — leave the field out entirely:
+
+```json
+{
+  "name": "My Personal Bot",
+  "type": "agent",
+  "folderId": "9f2b3c4a-1111-2222-3333-444455556666"
+}
+```
+
+The agent will land in that private folder and show up under your personal area in the UI.
+
+## Create a folder in the same step
+
+<Tag>v1.2</Tag>
+
+Don't have a destination folder yet? Send `folderName` instead of `folderId`. The API looks for an existing folder of yours with that name in scope; if none exists, it creates one and uses it:
+
+```json
+{
+  "name": "Daily Digest Agent",
+  "type": "agent",
+  "spaceId": "space-uuid-123",
+  "folderName": "Newsletters"
+}
+```
+
+- If a folder named "Newsletters" already exists in the **Acme Corp** space, it is reused (no duplicate).
+- If not, a new "Newsletters" folder is created inside that space, and the agent is dropped into it.
+- Drop `spaceId` to do the same in your private area.
+
+This is **idempotent**: calling it 10 times with the same `folderName` and `spaceId` creates the folder once and adds 10 agents to it.
+
+<Warning>
+**Reserved names blocked.** `"Shared"` and `"Default"` cannot be used as `folderName` — the API returns **422 Unprocessable Entity**. These names are reserved by FluxPrompt for system-managed folders.
+</Warning>
+
+## Build the request
+
+<Steps>
+  <Step title="Open a new tab in Postman">
+    Click **+ New Tab** or press `Ctrl/Cmd + T`.
+  </Step>
+  <Step title="Set the method and URL">
+    Set the method to **POST** and use:
+
+    ```text
+    {{baseUrl}}/integrations/agents
+    ```
+  </Step>
+  <Step title="Add the headers">
+    On the **Headers** tab:
+
+    | Key | Value |
+    |-----|-------|
+    | `api-key` | `{{apiKey}}` |
+    | `Content-Type` | `application/json` |
+  </Step>
+  <Step title="Add the body">
+    On the **Body** tab, choose **raw**, then select **JSON** in the right-hand dropdown. Paste one of the example bodies below.
+  </Step>
+  <Step title="Send">
+    Click **Send**.
+  </Step>
+</Steps>
+
+## Request body fields
+
+<ParamField body="name" type="string" required>
+  The name shown in the FluxPrompt UI.
+</ParamField>
+
+<ParamField body="type" type="string" required>
+  Either `"agent"` or `"chat"`.
+
+  - `"agent"` creates a default text-generator template.
+  - `"chat"` creates a Basic Chatbot template.
+</ParamField>
+
+<ParamField body="spaceId" type="string (uuid)">
+  The space this flow lives in. **Omit to target your private area.** <Tag>v1.2: now optional</Tag>
+</ParamField>
+
+<ParamField body="folderId" type="string (uuid)">
+  An existing folder. Required *unless* you supply `folderName`. Wins over `folderName` if both are sent.
+</ParamField>
+
+<ParamField body="folderName" type="string">
+  Folder name. Find-or-create within scope. Required *unless* you supply `folderId`. Cannot be `"Shared"` or `"Default"`. <Tag>v1.2</Tag>
+</ParamField>
+
+<ParamField body="content" type="object">
+  If you already have a custom flow JSON, paste it here as `{ nodes: [...], edges: [...] }`. If omitted, a default template is used.
+</ParamField>
+
+<Warning>
+You must send **at least one** of `folderId` / `folderName`. Sending neither returns **400 Bad Request**.
+</Warning>
+
+## Example bodies
+
+<Tabs>
+  <Tab title="A) Existing folder in a space">
+    Classic v1.1 style:
+
+    ```json
+    {
+      "name": "My First Programmatic Agent",
+      "type": "agent",
+      "spaceId": "space-uuid-123",
+      "folderId": "1a2b3c4d-aaaa-bbbb-cccc-ddddeeeeffff"
+    }
+    ```
+  </Tab>
+  <Tab title="B) Existing private folder">
+    <Tag>v1.2</Tag>
+
+    ```json
+    {
+      "name": "Personal Note-Taker",
+      "type": "agent",
+      "folderId": "9f2b3c4a-1111-2222-3333-444455556666"
+    }
+    ```
+  </Tab>
+  <Tab title="C) Inline folder, in a space">
+    <Tag>v1.2</Tag> — find-or-create the folder:
+
+    ```json
+    {
+      "name": "Newsletter Drafter",
+      "type": "chat",
+      "spaceId": "space-uuid-123",
+      "folderName": "Newsletters"
+    }
+    ```
+  </Tab>
+  <Tab title="D) Inline folder, private">
+    <Tag>v1.2</Tag> — find-or-create in your private area:
+
+    ```json
+    {
+      "name": "Quick Summary Bot",
+      "type": "agent",
+      "folderName": "Inbox"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Example response
+
+```json
+{
+  "status": "success",
+  "flowId": "newly-created-agent-uuid"
+}
+```
+
+The agent is now visible in the FluxPrompt UI — open it and you will see a default "AI Text Generator" template (for `type: "agent"`) or a Basic Chatbot template (for `type: "chat"`).
+
+## Choosing between `agent` and `chat`
+
+| Type | Best for |
+|------|----------|
+| **`agent`** | One-shot agents. You send inputs, you get an answer. "Summarize this document", "extract data from this email", etc. |
+| **`chat`** | Conversational agents with memory. "Support bot", "helpdesk assistant". |
+
+Pick whichever matches the experience you want. You can change everything later in the UI.
+
+## Next step
+
+<Card title="Get an agent's full JSON" icon="file-json" href="/main-api/specific-features/integrations-api/get-agent">
+  Inspect or back up the agent you just created.
+</Card>

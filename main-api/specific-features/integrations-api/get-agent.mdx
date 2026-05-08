@@ -1,0 +1,133 @@
+---
+title: "Get an agent's full JSON"
+description: "GET /integrations/agents/:id — fetch the agent's complete JSON, including nodes and edges, ready to inspect, diff, back up, or round-trip with PATCH."
+---
+
+<Tag>v1.3</Tag>
+
+Sometimes you want to **inspect** an agent — see exactly which nodes and edges it contains, back it up, or load it into a diff tool before changing anything. This endpoint returns the agent's complete JSON.
+
+| Method | Path |
+|--------|------|
+| `GET` | `/integrations/agents/:id` |
+
+## When to use this
+
+- You want a snapshot of an agent before editing it from a script.
+- You're migrating an agent's logic into a new agent and need its `nodes`/`edges` as the starting point.
+- You're auditing what an agent actually does, outside of the visual editor.
+- You want to use `GET → modify → PATCH` as a round-trip workflow.
+
+## Build the request
+
+<Steps>
+  <Step title="Open a new tab in Postman">
+    Click **+ New Tab** or press `Ctrl/Cmd + T`.
+  </Step>
+  <Step title="Set the method and URL">
+    Set the method to **GET** and paste:
+
+    ```text
+    {{baseUrl}}/integrations/agents/<flowId>
+    ```
+
+    Replace `<flowId>` with the agent's `id` (from the [list agents](/main-api/specific-features/integrations-api/list-agents) response).
+  </Step>
+  <Step title="Add the API key header">
+    On the **Headers** tab:
+
+    | Key | Value |
+    |-----|-------|
+    | `api-key` | `{{apiKey}}` |
+  </Step>
+  <Step title="Send">
+    Click **Send**.
+  </Step>
+</Steps>
+
+## Path parameters
+
+<ParamField path="id" type="string (uuid)" required>
+  The agent's UUID. Same value as `flowId` in the Flow Global Node UI and as `id` in the [list agents](/main-api/specific-features/integrations-api/list-agents) response.
+</ParamField>
+
+## Example response
+
+```json
+{
+  "id": "flow-uuid-1",
+  "name": "Marketing Helper",
+  "type": "agent",
+  "spaceId": "space-uuid-123",
+  "folderId": "1a2b3c4d-aaaa-bbbb-cccc-ddddeeeeffff",
+  "content": {
+    "nodes": [
+      {
+        "id": "globalStarter_xxx",
+        "type": "globalStarter",
+        "data": { "label": "Start" },
+        "position": { "x": 0, "y": 0 },
+        "width": 100,
+        "height": 100
+      }
+    ],
+    "edges": []
+  }
+}
+```
+
+## Response fields
+
+<ResponseField name="id" type="string (uuid)">
+  The agent's UUID.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The current display name.
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  Either `"agent"` or `"chat"`. `"chat"` is detected when the flow has a chatbot input node configured.
+</ResponseField>
+
+<ResponseField name="spaceId" type="string (uuid) | null">
+  Which space the agent lives in. **`null` for private folders.**
+</ResponseField>
+
+<ResponseField name="folderId" type="string (uuid)">
+  The folder UUID.
+</ResponseField>
+
+<ResponseField name="content" type="object">
+  The full agent JSON — same shape used in the `POST /integrations/agents` body.
+
+  <Expandable title="content">
+    <ResponseField name="nodes" type="object[]">
+      Full nodes array. Each node has `id`, `type`, `data`, `position`, `width`, and `height`.
+    </ResponseField>
+    <ResponseField name="edges" type="object[]">
+      Full edges array — connections between nodes.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Round-trip friendly
+
+<Info>
+The response shape mirrors the `POST /integrations/agents` body and is exactly what `PATCH /integrations/agents/:id` accepts under `content`. So you can `GET → tweak → PATCH` without re-mapping fields.
+</Info>
+
+## Errors
+
+| Status | Cause |
+|--------|-------|
+| `401 Unauthorized` | Bad or missing API key. |
+| `404 Not Found` | The `flowId` doesn't exist or you don't have access to it. |
+
+For the full error reference, see [errors and tips](/main-api/specific-features/integrations-api/errors-and-tips).
+
+## Next step
+
+<Card title="Update an agent" icon="pencil" href="/main-api/specific-features/integrations-api/update-agent">
+  Rename an agent, replace its content, or both — round-tripping with this endpoint.
+</Card>
