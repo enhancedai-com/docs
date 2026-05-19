@@ -1,0 +1,135 @@
+---
+title: "List folders"
+description: "GET /integrations/folders — list every folder you can write to, including private folders, with optional name filtering."
+---
+
+Before you can create a flow, you need to know **which folder** to put it in — or pick a name for a new one. This endpoint shows every folder you can write to, including your private folders.
+
+| Method | Path |
+|--------|------|
+| `GET` | `/integrations/folders` |
+
+## Build the request
+
+<Steps>
+  <Step title="Open a new tab in Postman">
+    Click **+ New Tab** or press `Ctrl/Cmd + T`.
+  </Step>
+  <Step title="Set the method and URL">
+    Set the method to **GET** and paste this URL:
+
+    ```text
+    {{baseUrl}}/integrations/folders
+    ```
+  </Step>
+  <Step title="Add the API key header">
+    Click the **Headers** tab and add a row:
+
+    | Key | Value |
+    |-----|-------|
+    | `api-key` | `{{apiKey}}` |
+  </Step>
+  <Step title="Send">
+    Click the blue **Send** button.
+  </Step>
+</Steps>
+
+## Query parameters
+
+<ParamField query="name" type="string">
+  Case-insensitive substring match against the folder name. Empty or whitespace-only values are ignored — you get the full list. <Tag>v1.2</Tag>
+</ParamField>
+
+<ParamField query="search" type="string" deprecated>
+  Deprecated alias for `name`. Still accepted for backwards compatibility. If both are sent, `name` wins.
+</ParamField>
+
+## Example response
+
+A green `200 OK` status, and a JSON body like this:
+
+```json
+{
+  "folders": [
+    {
+      "id": "9f2b3c4a-1111-2222-3333-444455556666",
+      "name": "My Personal Notes",
+      "parentId": null,
+      "space": null,
+      "user": {
+        "id": "abc-123",
+        "name": "Guilherme"
+      }
+    },
+    {
+      "id": "1a2b3c4d-aaaa-bbbb-cccc-ddddeeeeffff",
+      "name": "Marketing Folder",
+      "parentId": null,
+      "space": {
+        "id": "space-uuid-123",
+        "name": "Acme Corp"
+      },
+      "user": {
+        "id": "abc-123",
+        "name": "Guilherme"
+      }
+    }
+  ]
+}
+```
+
+## Response fields
+
+<ResponseField name="folders" type="object[]">
+  The list of folders you can write to.
+
+  <Expandable title="folder">
+    <ResponseField name="id" type="string (uuid)">
+      The folder UUID. Paste this as `folderId` when creating an agent.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      The folder's display name.
+    </ResponseField>
+    <ResponseField name="parentId" type="string (uuid) | null">
+      The folder above this one, or `null` for top-level folders.
+    </ResponseField>
+    <ResponseField name="space" type="object | null">
+      `null` means the folder is **private** (lives in your personal area). When present, it contains the team space's `id` and `name`. The `space.id` is the **same UUID** the FluxPrompt UI uses for that space.
+    </ResponseField>
+    <ResponseField name="user" type="object">
+      The owner of this folder, with `id` and `name`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Filter by name
+
+<Tag>v1.2</Tag>
+
+Got hundreds of folders? Add `?name=<text>` to filter by name (case-insensitive substring match):
+
+```text
+{{baseUrl}}/integrations/folders?name=marketing
+```
+
+This returns only folders whose name contains "marketing".
+
+<Tip>
+In Postman, click the **Params** tab next to **Headers**, add a row with key `name` and value `marketing`, and Postman composes the URL for you.
+</Tip>
+
+## How to read this response
+
+- **`space: null`** means **personal folder** (lives in your private area, not in any team space). Use this folder by **omitting** `spaceId` when creating a flow.
+- **`space: { id, name }`** means the folder is **inside a team space**. The `space.id` shown here is the same UUID the FluxPrompt UI uses for that space — paste it directly as `spaceId`.
+- **`parentId: null`** means it's a top-level folder.
+
+<Tip>
+Click an `id` value in Postman, right-click, then **Copy**. You'll need it for the next endpoint.
+</Tip>
+
+## Next step
+
+<Card title="List agents" icon="bot" href="/main-api/specific-features/integrations-api/list-agents">
+  Discover all your agents and their ready-to-use API and webhook URLs.
+</Card>

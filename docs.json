@@ -56,6 +56,18 @@
                   "main-api/specific-features/stripe-integration-setup",
                   "main-api/specific-features/stripe-user-guide",
                   "main-api/specific-features/zapier-user-guide",
+                  {
+                    "group": "Integrations API",
+                    "pages": [
+                      "main-api/specific-features/integrations-api/overview",
+                      "main-api/specific-features/integrations-api/list-folders",
+                      "main-api/specific-features/integrations-api/list-agents",
+                      "main-api/specific-features/integrations-api/create-agent",
+                      "main-api/specific-features/integrations-api/get-agent",
+                      "main-api/specific-features/integrations-api/update-agent",
+                      "main-api/specific-features/integrations-api/errors-and-tips"
+                    ]
+                  },
                   "main-api/specific-features/local-development",
                   "main-api/specific-features/output-controller-stall-incident"
                 ]

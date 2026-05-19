@@ -1,0 +1,181 @@
+---
+title: "Integrations API overview"
+description: "Step-by-step guide to FluxPrompt's Integrations API: list folders and agents, create flows, and round-trip the agent JSON without writing code."
+---
+
+The Integrations API is a small set of HTTP endpoints that let you create flows, list folders and agents, fetch and update an agent's full JSON, and discover the URLs of your agents and chatbots from outside the FluxPrompt UI.
+
+This guide is written for users with **no programming experience**. The only tool you need is [Postman](https://www.postman.com/downloads/), which is free.
+
+## What you will learn
+
+<CardGroup cols={2}>
+  <Card title="What an API is, in plain language" icon="book-open">
+    Endpoints, requests, responses, and API keys explained without jargon.
+  </Card>
+  <Card title="How to install Postman" icon="download">
+    Configure Postman once and reuse the requests forever as a Collection.
+  </Card>
+  <Card title="How to call each endpoint" icon="terminal">
+    List folders, list agents, create agents, and round-trip the agent JSON.
+  </Card>
+  <Card title="How to read responses" icon="message-square">
+    Understand each field, common errors, and what to do when something fails.
+  </Card>
+</CardGroup>
+
+## What's new in v1.3
+
+<Info>
+Version 1.3 adds a complete read-and-update workflow for agents, plus quality-of-life improvements based on rolling user feedback.
+</Info>
+
+- **Read an agent's full JSON** — `GET /integrations/agents/:id` returns the agent's nodes and edges, ready to inspect, diff, or back up.
+- **Update an agent programmatically** — `PATCH /integrations/agents/:id` changes the name and/or replaces the full nodes+edges content. Round-trips with `GET`.
+- **Drop a flow into your private folder** — `spaceId` is now optional. Omit it to target your personal area (the same folders shown with `space: null` in the list).
+- **Create folders inline** — send `folderName` instead of `folderId` to find-or-create the folder in one shot. No second request needed.
+- **Find folders and agents by name** — both list endpoints accept `?name=<text>` for case-insensitive substring filtering. The old `?search=` parameter still works as a deprecated alias.
+- **Same IDs as the UI** — the `spaceId` you pass is exactly the space UUID FluxPrompt shows in the front end. No translation, no separate ID.
+
+## Glossary
+
+Three terms you will see everywhere in this guide:
+
+| Term | Plain meaning |
+|------|---------------|
+| **Endpoint** | A single web address you can call to ask the system to do something, like `GET /integrations/folders`. |
+| **API key** | A long secret string that proves it is really you calling the API. Like a password, but for software. |
+| **Request / Response** | A *request* is what you send. A *response* is what the server sends back. |
+| **Space** | A team area inside FluxPrompt. Folders and flows can live inside a space, or outside any space (private). |
+| **Private folder** | A folder that lives in your personal area, not in any team space. Shows up as `space: null` in API responses. |
+| **Agent JSON** | The full structure of an agent: name, type, location, plus the `nodes` and `edges` arrays that define its behavior. |
+
+## Before you start
+
+You will need:
+
+- A **FluxPrompt account**. You don't even need a folder yet — you can create one inline through the API.
+- An **API key** (covered below).
+- The **Postman desktop app** installed. The web version works too.
+
+## Step 1 — Find your API key
+
+Your API key is what proves you are really you. There are two kinds:
+
+| Type | Where it lives | When to use |
+|------|----------------|-------------|
+| **User API key** | On your user profile | When you want full access to everything you can see in FluxPrompt. |
+| **Space API key** | On a specific space | When you want a key that only sees that one space, e.g. for a third-party integration. |
+
+### Copy your User API key
+
+<Steps>
+  <Step title="Log in to FluxPrompt">
+    Open the app and sign in with your account.
+  </Step>
+  <Step title="Open your profile">
+    Click your **profile picture** in the top-right corner.
+  </Step>
+  <Step title="Open API settings">
+    Navigate to **Settings → API**.
+  </Step>
+  <Step title="Copy the key">
+    Click **Copy** next to your key.
+  </Step>
+</Steps>
+
+<Warning>
+Anyone who has your API key can act as you. Treat it like a password — never paste it on a public website, never commit it to a Git repository, and never share it in screenshots.
+</Warning>
+
+## Step 2 — Set up Postman
+
+Postman is a free desktop app that lets you call APIs by clicking buttons instead of writing code.
+
+### Install Postman
+
+<Steps>
+  <Step title="Download the installer">
+    Go to [postman.com/downloads](https://www.postman.com/downloads/) and click the download button for your operating system.
+  </Step>
+  <Step title="Run the installer">
+    Open Postman when the install finishes.
+  </Step>
+  <Step title="Sign in or skip">
+    You can sign up with an email or skip and use Postman as a guest.
+  </Step>
+</Steps>
+
+### Save your API key as a variable
+
+To avoid pasting your key into every request, store it as an environment variable.
+
+<Steps>
+  <Step title="Open the environments panel">
+    In the left sidebar, click **Environments** (the eye-shaped icon).
+  </Step>
+  <Step title="Create the environment">
+    Click **+ Create Environment** and name it `FluxPrompt`.
+  </Step>
+  <Step title="Add the variables">
+    Add two rows:
+
+    | Variable | Type | Initial value |
+    |----------|------|---------------|
+    | `apiKey` | secret | (paste your API key) |
+    | `baseUrl` | default | `https://api.fluxprompt.ai` |
+  </Step>
+  <Step title="Save and select">
+    Click **Save**. In the top-right corner, click the dropdown that says "No environment" and select **FluxPrompt**.
+  </Step>
+</Steps>
+
+Now whenever you write `{{apiKey}}` or `{{baseUrl}}` inside Postman, it gets replaced with the real values automatically.
+
+<Tip>
+Use `https://api.fluxprompt.ai` for production. If your team uses a staging or development environment, ask which URL to use instead — most likely `https://api-staging.fluxprompt.ai` or `https://api-dev.fluxprompt.ai`.
+</Tip>
+
+## Endpoint reference
+
+Once Postman is configured, jump into the endpoint pages below in order. Each one builds on the previous step.
+
+<CardGroup cols={2}>
+  <Card title="List folders" icon="folder" href="/main-api/specific-features/integrations-api/list-folders">
+    `GET /integrations/folders` — see every folder you can write to, including private ones.
+  </Card>
+  <Card title="List agents" icon="bot" href="/main-api/specific-features/integrations-api/list-agents">
+    `GET /integrations/agents` — discover all your agents and their ready-to-use API and webhook URLs.
+  </Card>
+  <Card title="Create an agent" icon="plus" href="/main-api/specific-features/integrations-api/create-agent">
+    `POST /integrations/agents` — create a flow programmatically, with optional inline folder creation.
+  </Card>
+  <Card title="Get an agent" icon="file-json" href="/main-api/specific-features/integrations-api/get-agent">
+    `GET /integrations/agents/:id` — fetch the full agent JSON for backup, audit, or round-trip editing.
+  </Card>
+  <Card title="Update an agent" icon="pencil" href="/main-api/specific-features/integrations-api/update-agent">
+    `PATCH /integrations/agents/:id` — rename an agent or replace its full nodes+edges content.
+  </Card>
+  <Card title="Errors and tips" icon="life-buoy" href="/main-api/specific-features/integrations-api/errors-and-tips">
+    Common HTTP errors, troubleshooting, FAQ, and where to get more help.
+  </Card>
+</CardGroup>
+
+## Quick URL reference
+
+You'll use these constantly:
+
+| What | Method | URL |
+|------|--------|-----|
+| List folders | `GET` | `{{baseUrl}}/integrations/folders` |
+| List folders by name | `GET` | `{{baseUrl}}/integrations/folders?name=<text>` |
+| List agents (with their endpoints) | `GET` | `{{baseUrl}}/integrations/agents` |
+| Search agents by name | `GET` | `{{baseUrl}}/integrations/agents?name=<text>` |
+| Search agents by name (deprecated) | `GET` | `{{baseUrl}}/integrations/agents?search=<text>` |
+| Create an agent | `POST` | `{{baseUrl}}/integrations/agents` |
+| Get an agent's full JSON | `GET` | `{{baseUrl}}/integrations/agents/<id>` |
+| Update an agent | `PATCH` | `{{baseUrl}}/integrations/agents/<id>` |
+
+<Note>
+Document version: **1.3**. Adds `GET /integrations/agents/:id` and `PATCH /integrations/agents/:id` for round-tripping the agent JSON, and carries forward v1.2 features (optional `spaceId`, `folderName` find-or-create, `?name=` filter on list endpoints, `?search=` kept as deprecated alias).
+</Note>

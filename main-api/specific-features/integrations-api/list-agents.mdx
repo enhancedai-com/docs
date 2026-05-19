@@ -1,0 +1,154 @@
+---
+title: "List agents"
+description: "GET /integrations/agents — list every agent and chatbot you have access to, including their ready-to-use API, webhook, and chatbot socket URLs."
+---
+
+This endpoint shows every agent you have access to, with the **ready-to-use URLs** for calling them as APIs or webhooks. Without it, you would need to open FluxPrompt, find each agent, copy its `flowId` from the **Flow Global Node** settings, and paste it into your tool. With it, you get every URL in one shot.
+
+| Method | Path |
+|--------|------|
+| `GET` | `/integrations/agents` |
+
+## Build the request
+
+<Steps>
+  <Step title="Open a new tab in Postman">
+    Click **+ New Tab** or press `Ctrl/Cmd + T`.
+  </Step>
+  <Step title="Set the method and URL">
+    Set the method to **GET** and paste:
+
+    ```text
+    {{baseUrl}}/integrations/agents
+    ```
+  </Step>
+  <Step title="Add the API key header">
+    On the **Headers** tab:
+
+    | Key | Value |
+    |-----|-------|
+    | `api-key` | `{{apiKey}}` |
+  </Step>
+  <Step title="Send">
+    Click **Send**.
+  </Step>
+</Steps>
+
+## Query parameters
+
+<ParamField query="name" type="string">
+  Case-insensitive substring match against the agent name. For example, `?name=bot` matches "Support Bot", "ChatBot 2025", and "BotAgent". <Tag>v1.2</Tag>
+</ParamField>
+
+<ParamField query="search" type="string" deprecated>
+  Deprecated alias for `name`. Existing integrations using `?search=` keep working, but new code should use `?name=`. If both are sent, `name` wins.
+</ParamField>
+
+<Info>
+**Migrating from v1.1?** The old `?search=` query is still accepted as a deprecated alias. If you have it wired up in Zapier or a script, your integration keeps working — but new code should use `?name=`.
+</Info>
+
+## Example response
+
+```json
+{
+  "agents": [
+    {
+      "id": "flow-uuid-1",
+      "name": "Marketing Helper",
+      "isChatbot": false,
+      "isWebhook": false,
+      "space": { "id": "space-uuid-123", "name": "Acme Corp" },
+      "endpoints": {
+        "api":     "https://api.fluxprompt.ai/flux/api-v2?flowId=flow-uuid-1",
+        "webhook": "https://api.fluxprompt.ai/flux/api-v2-webhook?flowId=flow-uuid-1"
+      }
+    },
+    {
+      "id": "flow-uuid-2",
+      "name": "Support Bot",
+      "isChatbot": true,
+      "isWebhook": false,
+      "space": null,
+      "endpoints": {
+        "api":            "https://api.fluxprompt.ai/flux/api-v2?flowId=flow-uuid-2",
+        "webhook":        "https://api.fluxprompt.ai/flux/api-v2-webhook?flowId=flow-uuid-2",
+        "chatbotSocket":  "https://api.fluxprompt.ai/flux/chatbot-api-socket?flowId=flow-uuid-2"
+      }
+    }
+  ]
+}
+```
+
+## Response fields
+
+<ResponseField name="agents" type="object[]">
+  Every agent you have access to.
+
+  <Expandable title="agent">
+    <ResponseField name="id" type="string (uuid)">
+      The agent's unique ID. This is the same `flowId` shown in the Flow Global Node UI.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      The agent's display name.
+    </ResponseField>
+    <ResponseField name="isChatbot" type="boolean">
+      `true` when the agent was built as a chatbot.
+    </ResponseField>
+    <ResponseField name="isWebhook" type="boolean">
+      `true` when the agent was flagged as a webhook.
+    </ResponseField>
+    <ResponseField name="space" type="object | null">
+      The team space the agent lives in, or `null` if it is personal.
+    </ResponseField>
+    <ResponseField name="endpoints" type="object">
+      Ready-to-use URLs for calling the agent.
+
+      <Expandable title="endpoints">
+        <ResponseField name="api" type="string">
+          URL to **execute the agent synchronously** — you wait for the answer.
+        </ResponseField>
+        <ResponseField name="webhook" type="string">
+          URL to **execute asynchronously** — the system answers later by calling a URL you provide.
+        </ResponseField>
+        <ResponseField name="chatbotSocket" type="string">
+          URL to talk to the agent as a **chatbot**. Only present when `isChatbot` is `true`.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Filter by name
+
+<Tag>v1.2</Tag>
+
+If you have many agents and want to find one by name, append `?name=<text>` to the URL:
+
+```text
+{{baseUrl}}/integrations/agents?name=marketing
+```
+
+This returns only agents whose name **contains** the text you typed (case-insensitive).
+
+<Tip>
+Instead of editing the URL, click the **Params** tab next to **Headers** in Postman, and add a row:
+
+| Key | Value |
+|-----|-------|
+| `name` | `marketing` |
+</Tip>
+
+## What you can do with the URLs
+
+You can copy any URL from `endpoints` and use it to actually run the agent from your tool, your spreadsheet, Zapier, n8n, etc.
+
+<Note>
+Calling these execution URLs is documented separately in the Flow Global Node settings of each flow (look for the **Copy API Schema** button). The schema explains the request body for that specific flow.
+</Note>
+
+## Next step
+
+<Card title="Create an agent" icon="plus" href="/main-api/specific-features/integrations-api/create-agent">
+  Provision a new flow programmatically — with optional inline folder creation.
+</Card>
