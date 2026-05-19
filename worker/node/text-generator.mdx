@@ -49,7 +49,7 @@ The text generator module is split into focused pure functions, each in its own 
 | `build-messages.ts` | Messages array from filtered memory entries |
 | `build-provider-options.ts` | Provider-specific options (temperature, topP, reasoning, tokens) |
 | `build-web-search-tools.ts` | Web search tools per provider |
-| `build-logs.ts` | Structured log extraction from SDK step result |
+| `build-logs.ts` | Structured log type definition (logs are built inline during stream consumption) |
 | `extract-multimodal-content.ts` | URL detection in prompt, content part classification |
 | `process-memory-filter.ts` | Memory filtering by entry count or word count |
 | `text-generator.types.ts` | TypeScript interfaces and enums |
@@ -99,8 +99,8 @@ Each `*Data` array field takes priority, with the corresponding string field app
 | `text` | Model output string |
 | `logs` | JSON string with structured execution data (see logs structure below) |
 | `executionStatus` | Set to `COMPLETED` on success |
-| `nodeUsedTokens` | Accumulated total token count (previous value + input + output tokens) |
-| `previewResponses` | Previous outputs plus the new output appended |
+| `nodeUsedTokens` | Accumulated total token count (previous value + input + output tokens from this run) |
+| `previewResponses` | Previous outputs plus the new output appended (last 3 kept) |
 | `userSessionsChat` | When `memory` is true, the current session's `memories` gain new user/assistant entries |
 
 ## Logs structure
@@ -121,26 +121,26 @@ Logs are saved as a JSON string containing:
 }
 ```
 
-Fields are extracted from the Vercel AI SDK `StepResult` object (first step).
+Fields are captured during stream consumption from the following event types: `text-delta`, `reasoning-delta`, `source`, `tool-call`, `tool-result`, and `finish`.
 
 ## Web search
 
 When `node.webSearch` is true, provider-specific tools are attached:
 
-| `AiSystem` | Tool |
-| ---------- | ---- |
-| OpenAI | `openai.tools.webSearch` |
-| Anthropic | `anthropic.tools.webSearch_20250305` |
-| Gemini | `google.tools.googleSearch` |
+| `AiSystem` | Tool key | SDK call |
+| ---------- | -------- | -------- |
+| OpenAI | `web_search` | `openai.tools.webSearch({})` |
+| Anthropic | `web_search` | `anthropic.tools.webSearch_20250305({})` |
+| Gemini | `enterprise_web_search` | `google.tools.googleSearch({})` |
 
-Other providers return no tools when web search is requested.
+Other providers (Perplexity, xAI, Groq) return no tools when web search is requested.
 
 ## Multimodal
 
 When `multimodalEnabled` is true, URLs in the prompt are extracted via regex, classified by extension, and passed as Vercel AI SDK content parts:
 
-- **Images** (jpg, jpeg, png, gif, webp) → `type: "image"` with direct URL
-- **Other files** (pdf, audio, video, etc.) → `type: "file"` with URL
+- **Images** (jpg, jpeg, png, gif, webp) → `{ type: "image", image: "<url>" }`
+- **Other files** (pdf, audio, video, etc.) → `{ type: "file", data: "<url>", mediaType: "application/octet-stream" }`
 
 Maximum **3 files** per execution. No base64 conversion or file size validation is performed; the SDK and provider handle content natively. URLs are removed from the prompt to avoid duplication in the system prompt.
 
@@ -171,9 +171,36 @@ Filtered memories are converted to `ModelMessage[]` with their original roles. A
 - **xAI** — `aiTokens`, `aiTemperature`.
 - **Groq** — `groqMaxTokens`, temperature/topP (with Gemini fallbacks), `seed`, `groqStop` as stop sequences.
 
-**Reasoning logic:** When `modelInfo.supportsReasoning` is true and either `node.reasoning` is true or `modelInfo.reasoningAlwaysOn` is true, temperature/topP/topK are omitted and max output tokens default to the model maximum.
+**Reasoning logic:** When `modelInfo.supportsReasoning` is true and either `node.reasoning` is true or `modelInfo.reasoningAlwaysOn` is true, temperature/topP/topK are omitted and max output tokens default to the model maximum. The model output may include `reasoningText` separately from `text`; the final output selects `text` first, falling back to `reasoningText`.
 
 **Auto token:** When `autoToken` is true, max output tokens are set to `modelInfo.maxOutputToken` regardless of the configured value.
+
+### Anthropic model normalization
+
+Display names are mapped to actual API model IDs via `ANTHROPIC_MODEL_MAP`:
+
+| Display name | API model ID |
+| ------------ | ------------ |
+| `claude-4-5-sonnet-latest` | `claude-sonnet-4-5-20250929` |
+| `claude-4-5-opus` | `claude-opus-4-5-20251101` |
+| `claude-4-5-sonnet` | `claude-sonnet-4-5-20250929` |
+| `claude-4-5-haiku` | `claude-haiku-4-5-20251001` |
+| `claude-4-sonnet` | `claude-sonnet-4-20250514` |
+| `claude-4-opus` | `claude-opus-4-20250514` |
+| `claude-3-sonnet` | `claude-3-sonnet-20240229` |
+| `claude-3-opus` | `claude-3-opus-20240229` |
+| `claude-3-haiku` | `claude-3-haiku-20240307` |
+
+### Provider-to-model field mapping
+
+| `AiSystem` | Model field |
+| ---------- | ----------- |
+| `openai` | `aiModel` |
+| `groq` | `groqModel` |
+| `gemini` | `geminiModel` |
+| `anthropicai` | `anthropicModel` |
+| `perplexityai` | `perplexityType` |
+| `xai` | `aiModel` |
 
 Unsupported or missing providers throw during model selection.
 

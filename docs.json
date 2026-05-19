@@ -76,7 +76,8 @@
                   "worker/node/math-function",
                   "worker/node/api-caller",
                   "worker/node/counter",
-                  "worker/node/sql-querier"
+                  "worker/node/sql-querier",
+                  "worker/node/display-box"
                 ]
               },
               {

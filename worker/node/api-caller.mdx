@@ -1,12 +1,12 @@
 ---
 title: "API caller"
 sidebarTitle: "API caller"
-description: "Temporal activity for the API caller node: HTTP requests with query params, JSON or form bodies, custom headers, Basic auth, and TLS options."
+description: "Temporal activity for the API caller node: HTTP requests with polling, output filtering, query params, JSON or form bodies, custom headers, Basic auth, and TLS options."
 ---
 
 ## Overview
 
-The **API caller** node performs a single HTTP request configured on the node row. The Worker resolves the URL and credentials (preferring **edge-linked** values when present), merges query parameters into the URL, builds headers and body from `contentType` and related fields, executes the request with [undici](https://undici.nodejs.org/)’s `Agent` (optional TLS verification control), then stores the **response body as text** and returns it from the activity.
+The **API caller** node performs HTTP requests configured on the node row, with optional **polling** and **output filtering**. The Worker resolves the URL and credentials (preferring **edge-linked** values when present), merges query parameters into the URL, builds headers and body from `contentType` and related fields, executes the request with [undici](https://undici.nodejs.org/)'s `Agent` (optional TLS verification control), then optionally polls for a desired condition and filters the response before storing and returning the result.
 
 [`apiCallerActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`ApiCallerService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/api-caller/api-caller.service.ts).
 
@@ -28,11 +28,11 @@ async apiCallerActivity({
 
 ```typescript
 {
-  result: string; // raw response body as text
+  result: string; // filtered or raw response body as text
 }
 ```
 
-The same string is written to `flows_nodes.data.text` on success (see [Persisted node `data`](#persisted-node-data)).
+The returned string is the **filtered** output when an output filter is configured and the response schema matches; otherwise it is the raw response body.
 
 ## Resolving URL and secrets (edge vs static)
 
@@ -42,12 +42,11 @@ Some fields can come either from **static** properties on `data` or from the **f
 | ------- | ------------ | --------------------------------------------- |
 | Request URL | `url` | `urlData[0].text` |
 | Custom headers (JSON) | `jsonAuth` | `jsonAuthData[0].text` |
+| Request body (JSON) | `jsonRequestBody` | `jsonRequestBodyData[0].text` |
 | Basic auth username | `username` | `usernameData[0].text` |
 | Basic auth password | `password` | `passwordData[0].text` |
 
 Resolution rule: if the `*Data` array exists and has **length &gt; 0**, use **`[0].text`**; otherwise use the static field. After resolution, **`url` is required** — if still missing, the service throws: `No URL provided: urlData and url are both missing or empty`.
-
-The service copies resolved values back onto a merged `ApiCallerNodeData` object (`resolvedNodeData`) so downstream logic always reads `url`, `jsonAuth`, `username`, and `password` from the effective values.
 
 ## Node `data` fields
 
@@ -59,14 +58,14 @@ Types reference: [`ApiCallerNodeData`](https://github.com/enhancedai-com/Flux-Pr
 | ----- | ---- |
 | `method` | HTTP method: `GET`, `POST`, `PUT`, `DELETE`, or `PATCH`. |
 | `url` | Base URL string (used if `urlData` is absent or empty). |
-| `urlData` | Optional `EdgeDataItem[]`; first item’s `text` overrides `url` when present. |
+| `urlData` | Optional `EdgeDataItem[]`; first item's `text` overrides `url` when present. |
 | `queryParams` | Optional `{ key, value }[]`. Each pair is appended to the URL search string (`key` required; `value` may be `undefined` and is skipped with the key). |
 
 ### Headers and auth
 
 | Field | Role |
 | ----- | ---- |
-| `jsonAuth` | String containing **JSON** of header key/value pairs (e.g. `{"Authorization":"Bearer …"}`). Parsed with `JSON.parse` and merged into the request headers. If parsing fails, merge is **skipped** (no throw). |
+| `jsonAuth` | String containing **JSON** of header key/value pairs (e.g. `{"Authorization":"Bearer …"}`). Parsed with `JSON.parse` and merged into the request headers. If parsing fails, throws `Invalid JSON in authentication headers`. |
 | `jsonAuthData` | Optional; first `text` overrides `jsonAuth` when non-empty. |
 | `username` | If set, triggers **HTTP Basic** auth: `Authorization: Basic base64(username:password)`. Password defaults to empty string when omitted. |
 | `password` | Used with Basic auth when `username` is set. |
@@ -83,6 +82,7 @@ If both `jsonAuth` (custom headers) and Basic auth apply, Basic sets `Authorizat
 | Field | Role |
 | ----- | ---- |
 | `jsonRequestBody` | String. Interpretation depends on `contentType` (and effective content type — see below). |
+| `jsonRequestBodyData` | Optional edge override; first `text` overrides `jsonRequestBody` when non-empty. |
 | `formDataParams` | `{ key, value }[]` for `application/x-www-form-urlencoded` bodies. |
 
 **Effective content type** for body building is `nodeData.contentType ?? headers['Content-Type']` (headers already include `jsonAuth` and possibly `Content-Type` from `contentType`).
@@ -92,46 +92,109 @@ Behavior of `buildRequestBody`:
 - **`application/x-www-form-urlencoded`**
   - If `formDataParams` has entries: build `URLSearchParams` from key/value pairs (skip entries with missing `key` or `undefined` value).
   - Else if `jsonRequestBody` is set: parse it as JSON into an object, then append each key with `String(value)` into `URLSearchParams`.
-- **`application/json`**
+- **Other content types (including `application/json`)**
   - If `jsonRequestBody` is set: parse with a tolerant path — first strict `JSON.parse`; on failure, a regex tries to add quotes around unquoted object keys, then parse again. If both fail, throws `Invalid JSON in request body`.
 
 If no body applies, the request is sent **without** a body (`undefined`).
-
-The fetch call passes `body` as a string: either the form-encoded string, or `JSON.stringify` of the parsed object for JSON.
 
 ### TLS
 
 | Field | Role |
 | ----- | ---- |
-| `validateCertificate` | Boolean; default **`true`** if omitted. When `false`, the undici `Agent` uses `connect.rejectUnauthorized: false` (allows self-signed or mismatched certificates). **Use with care.** |
+| `validateCertificate` | Boolean; default **`true`** if omitted. When `false`, the undici `Agent` uses `connect.rejectUnauthorized: false` (allows self-signed or mismatched certificates). |
+
+### Polling
+
+| Field | Role |
+| ----- | ---- |
+| `pollingEnabled` | Boolean. When `true`, enables the polling pipeline after the initial request. |
+| `pollingInterval` | Seconds between retry attempts. Default: **5**. |
+| `pollingRetryDuration` | Total timeout in seconds for all polling attempts. Default: **60**. |
+| `pollingConditionField` | JSON field path (dot-separated, e.g. `status.state`) to check on each response. When set with `pollingConditionMatch`, uses **condition-based** polling. |
+| `pollingConditionMatch` | Regex pattern matched against the extracted field value. Polling continues **while** the field matches; stops when the field no longer matches or is absent. |
+| `pollingCallCount` | Written by the Worker: total number of HTTP requests made (1 initial + polling attempts). |
+
+The polling strategy is chosen automatically:
+
+- **Status-based**: When `pollingConditionField` or `pollingConditionMatch` are empty. Retries until the HTTP status is 2xx or the timeout expires.
+- **Condition-based**: When both fields are set. Retries while the extracted JSON field matches the regex pattern; stops when it no longer matches.
+
+Temporal [`Context.current().heartbeat()`](https://docs.temporal.io/develop/typescript/activity-heartbeats) is called before each polling retry to keep the activity alive during long-running polls.
+
+### Output filtering
+
+| Field | Role |
+| ----- | ---- |
+| `outputFilter` | Optional `OutputFilterConfig` with `selectedPaths`, `mode`, and `schemaHash`. |
+| `filteredText` | Stores the output after filtering (separate from raw `text`). |
+
+`OutputFilterConfig`:
+
+```typescript
+{
+  selectedPaths: string[];       // JSON paths to extract
+  mode: 'structured' | 'raw';   // output format
+  schemaHash: string;            // base64 hash of response structure
+}
+```
+
+**Schema validation**: Before applying the filter, the Worker computes a hash of the current response structure and compares it to `schemaHash`. If they differ (response structure changed), the filter is cleared and the raw response is returned instead.
+
+**Filter modes**:
+
+- **Structured** — Returns a JSON object preserving only the selected paths with their nested structure.
+- **Raw** — Returns the selected leaf values as newline-separated plain text.
+
+Both modes support array-root responses by iterating each item and applying filters per element.
 
 ## End-to-end flow
 
 1. Load `flows_nodes` by `nodeId` and cast `data` to `ApiCallerNodeData`.
-2. Resolve URL and auth-related fields (edge vs static).
+2. Resolve URL, auth, and body fields (edge vs static).
 3. Construct `URL`, apply `queryParams` via `searchParams.set`.
 4. Build `RequestInit`: method, headers, body, and `dispatcher` with TLS options.
-5. `fetch(url, options)`.
-6. If `!response.ok`, read `response.text()` for the error payload, log `nodeId`, status, and body, then throw `HTTP <status>: <body>`.
-7. On success, read full response as **text** (`response.text()`).
-8. `UPDATE flows_nodes`: merge `resolvedNodeData` with `text` (response body) and `executionStatus: 'COMPLETED'`.
-9. Return `{ result: responseText }`.
+5. Execute the initial `fetch(url, options)`.
+6. **If polling is enabled**, delegate to the polling pipeline (status-based or condition-based). On timeout, persist error and throw.
+7. **If polling is disabled** and the status is outside 2xx, persist error and throw `HTTP <status>: <body>`.
+8. Apply output filter if configured (with schema hash validation).
+9. `UPDATE flows_nodes`: merge data with `text` (raw response), `filteredText` (filtered output if applicable), `executionStatus: 'COMPLETED'`, and clear error fields.
+10. Return `{ result: outputText }`.
 
 ## Persisted node `data`
 
-On success, the stored JSON includes the merged caller configuration plus:
+### On success
 
 | Field | Role |
 | ----- | ---- |
-| `text` | Response body as a **string** (not parsed as JSON by the Worker). |
+| `text` | Raw response body as a **string**. |
+| `filteredText` | Filtered output string when output filter is applied and schema matches. |
+| `outputFilter` | Preserved or cleared (set to `null` if schema changed). |
+| `pollingCallCount` | Total HTTP requests made (initial + retries). |
 | `executionStatus` | `'COMPLETED'`. |
+| `errorMessage` | `null`. |
+| `errorStatusCode` | `null`. |
+
+### On failure
+
+| Field | Role |
+| ----- | ---- |
+| `text` | Error message string. |
+| `errorMessage` | Error description. |
+| `errorStatusCode` | HTTP status code (or `null` for non-HTTP errors like polling timeout). |
+| `pollingCallCount` | Total HTTP requests made before failure. |
+| `executionStatus` | `'FAILED'`. |
 
 ## Errors
 
-- Missing node → `Node not found`.
-- Missing URL after resolution → see above.
-- HTTP status outside 2xx → thrown error with status and body text.
-- Invalid JSON body (JSON content type path) → `Invalid JSON in request body`.
+| Cause | Error |
+| ----- | ----- |
+| Missing node | `Node not found` |
+| Missing URL after resolution | `No URL provided: urlData and url are both missing or empty` |
+| Invalid JSON in auth headers | `Invalid JSON in authentication headers` |
+| Invalid JSON body (JSON content type) | `Invalid JSON in request body` |
+| Invalid JSON body (form-urlencoded fallback) | `Invalid JSON in request body for form-urlencoded` |
+| HTTP status outside 2xx (no polling) | `HTTP <status>: <body>` (also persisted as error) |
+| Polling timeout | `Polling timed out without matching condition` (also persisted as error) |
 
 ## Related documentation
 

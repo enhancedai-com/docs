@@ -1,0 +1,133 @@
+---
+title: "Display box"
+sidebarTitle: "Display box"
+description: "Temporal activity for the display box node: aggregates text inputs and optionally generates output files (TXT, PDF, DOCX) via the main API."
+---
+
+## Overview
+
+The **display box** node aggregates text from one or more inputs and optionally generates a downloadable file. The Worker resolves text from edge-linked data or a static field, calls the main API to generate a file when `saveOutput` is enabled, and persists the result on the node row.
+
+[`displayBoxActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`DisplayBoxService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/display-box/display-box.service.ts).
+
+## When it runs
+
+`displayBoxActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **display box** (`NodeType.DISPLAY_BOX`, stored value `outputController`).
+
+## Activity signature
+
+```typescript
+async displayBoxActivity({
+  nodeId: string,
+  sessionId: string,
+  userId: string,
+  flowId: string,
+}): Promise<DisplayBoxResponse>
+```
+
+`DisplayBoxResponse`:
+
+```typescript
+{
+  text: string;
+  fileLink?: { src: string; name: string };
+}
+```
+
+## Resolving text
+
+Text is resolved via the `resolveText` helper:
+
+1. If `textData` is a non-empty array, join all items' `text` fields with newlines.
+2. Otherwise, use the static `text` field.
+3. If both are empty, return an empty string.
+
+`textData` (edge-driven) always takes precedence over the static `text` field.
+
+## Node `data` fields
+
+Types reference: [`DisplayBoxNodeData`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/display-box/display-box.types.ts).
+
+### Text input
+
+| Field | Role |
+| ----- | ---- |
+| `text` | Static text content (fallback when `textData` is absent or empty). |
+| `textData` | Optional `{ id: string; text: string; label?: string }[]` fed by edge inputs. Items are joined with newlines. |
+
+### File generation
+
+| Field | Role |
+| ----- | ---- |
+| `saveOutput` | Boolean. When `true`, triggers file generation via the main API. |
+| `fileExtension` | File format suffix (e.g. `.pdf`, `.docx`, `.txt`). Leading dot is stripped; defaults to `txt`. |
+| `customFileName` | Optional user-defined filename for the generated file. |
+| `useDocRaptor` | Boolean. When `true`, uses DocRaptor for PDF generation with advanced styling. |
+| `fileLink` | Stored file metadata `{ src, name }` after generation. Preserved from previous runs if no new file is generated. |
+
+## End-to-end flow
+
+1. **Load node** — `SELECT` from `flows_nodes` by `nodeId`; read `data` and `flowId`.
+2. **Resolve text** — Concatenate `textData[]` with newlines, or fall back to `text`.
+3. **Generate file** (conditional) — If `saveOutput` is `true`, call `POST {URL_MAIN_API}/worker/generate-file` with the resolved text, file extension, and options. The request has a **10-minute timeout**.
+4. **Persist** — `UPDATE flows_nodes` with merged `data`, setting `text`, `fileLink`, `executionStatus: 'COMPLETED'`, and clearing error fields.
+5. **Return** — `{ text, fileLink }`.
+
+## File generation API call
+
+When `saveOutput` is enabled, the Worker calls the main API:
+
+```
+POST {URL_MAIN_API}/worker/generate-file
+```
+
+Request body:
+
+```json
+{
+  "nodeId": "...",
+  "fileType": "pdf",
+  "text": "resolved content",
+  "customFileName": "optional-name",
+  "useDocRaptor": false,
+  "userId": "...",
+  "flowId": "..."
+}
+```
+
+The response returns `{ fileLink: { src, name } }` which is persisted on the node.
+
+**Timeout:** 10 minutes (`AbortSignal.timeout`). Authentication uses the `internal-api-key` header with `INTERNAL_API_KEY` from environment.
+
+## Persisted node `data`
+
+On success, the stored JSON includes all original node data plus:
+
+| Field | Value |
+| ----- | ----- |
+| `text` | Resolved text content. |
+| `fileLink` | File metadata from the API, or preserved from previous run. |
+| `errorMessage` | `null`. |
+| `errorStatusCode` | `null`. |
+| `executionStatus` | `'COMPLETED'`. |
+
+## Environment variables
+
+| Variable | Purpose |
+| -------- | ------- |
+| `URL_MAIN_API` | Base URL for the main API (used for the `generate-file` endpoint). |
+| `INTERNAL_API_KEY` | API key for internal service-to-service authentication. |
+
+## Errors
+
+| Cause | Error |
+| ----- | ----- |
+| Node not found in `flows_nodes` | `Node not found` |
+| File generation API returns non-2xx | Thrown with status code and response body (logged with context) |
+| File generation timeout (>10 min) | Abort signal timeout error |
+
+## Related documentation
+
+- [`processSingleNode` workflow](/worker/workflows/process-single-node)
+- [Worker overview](/worker/overview)
+- [Worker development](/worker/development)
