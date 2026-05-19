@@ -35,7 +35,7 @@ async scriptingActivity({
 ## End-to-end flow
 
 1. Load `flows_nodes` by `nodeId` and read `data` (language, script source, variables).
-2. Choose the Lambda function from `data.language` and env vars (see below).
+2. Choose the Lambda function from `data.language` (`code-executor-python` or `code-executor-js`).
 3. Build the script string: prefer merged `scriptData[]` rows (`text` joined by newlines); if empty, use `data.script`.
 4. Invoke Lambda with `{ script, variables }`.
 5. On success, merge `result` and `console` into `data` and `UPDATE flows_nodes`.
@@ -76,29 +76,38 @@ Both executors:
 
 Execution happens in AWS Lambda, not inside the Worker process.
 
-### Python (`py-scripting-node`)
+### Python (`code-executor-python`)
 
-- **Timeout:** 30 seconds (subprocess).
+- **Package type:** Container image (ECR: `109622968129.dkr.ecr.us-east-1.amazonaws.com/code-executor`).
+- **Base image:** `public.ecr.aws/lambda/python:3.12`.
+- **Pre-installed libraries:** `numpy` 2.2.6, `pandas` 2.2.3, `scipy` 1.15.3, `pendulum` 3.1.0, `matplotlib` 3.10.3, `pypdf` 6.8.0. Available to user scripts without runtime installation.
+- **Configuration:** 512 MB memory, 30 s timeout.
 - **API:** `console.log`, `console.error`, `console.warn`; **`setResult(value)`** sets the structured output `result`.
 - **Output:** The wrapper prints a JSON line with `{ result, console }`. If the process exits non-zero, the Lambda returns an `error` string (stderr).
 - Placeholders `{{varName}}` are applied after the variable map is built.
+- **Source:** `infra/lambda-execution/` (Dockerfile + `lambda_handler.py`).
+- **CI/CD:** `.github/workflows/deploy-lambda-executor.yml` — triggers on changes to `infra/lambda-execution/**` on `main` or via `workflow_dispatch`. Builds the Docker image, pushes to ECR, and updates the Lambda.
 
-### JavaScript (`js-scripting-node`)
+### JavaScript (`code-executor-js`)
 
+- **Package type:** Zip (Node.js runtime).
 - **Timeout:** 30 seconds (`vm.runInContext`).
 - **API:** `console.log`, `console.error`, `console.warn`; **`setResult(value)`** sets `result`.
 - **Output:** `result` is `scriptResult` if `setResult` was used; otherwise the **last expression** value from `vm.runInContext` when it is not `undefined`; otherwise `null`.
 - On uncaught errors, the handler returns `error` (timeout message or `err.message`) and may still return partial `console` logs.
 
-## Environment variables (Worker)
+## Lambda function names
 
-| Variable | Purpose |
-| -------- | -------- |
-| `LAMBDA_JS_SCRIPTING_NODE` | Name of the JS Lambda (for `language === JavaScript`). |
-| `LAMBDA_PY_SCRIPTING_NODE` | Name of the Python Lambda (for `language === Python`). |
-| `AWS_REGION` | AWS region for `LambdaClient` (default in code: `us-east-1`). |
+The Worker resolves the Lambda name directly from the language — no environment variables needed:
 
-If `language` does not match a configured Lambda, `ScriptingService` throws.
+| Language | Lambda function | Package type |
+| -------- | --------------- | ------------ |
+| `Python` | `code-executor-python` | Container image (ECR) |
+| `JavaScript` | `code-executor-js` | Zip (Node.js) |
+
+If `language` does not match either value, `ScriptingService` throws.
+
+The `AWS_REGION` used by `LambdaClient` defaults to `us-east-1` in code.
 
 ## Local development
 
@@ -107,11 +116,7 @@ When `NODE_ENV === 'local'`, [`ScriptingModule`](https://github.com/enhancedai-c
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 
-Set these (and region / function names) so local Worker runs can invoke the same Lambdas your AWS account deploys.
-
-<Note>
-Console links to edit Lambda code require an AWS login and are environment-specific. Function names in your account should match `LAMBDA_*_SCRIPTING_NODE`.
-</Note>
+Set these (and region) so local Worker runs can invoke the same Lambdas your AWS account deploys.
 
 ## Related documentation
 
