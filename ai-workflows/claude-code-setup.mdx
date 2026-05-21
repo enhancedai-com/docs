@@ -1,0 +1,588 @@
+---
+title: "Claude Code setup"
+description: "Complete guide to installing Claude Code, configuring the Superpowers plugin and Context7 MCP, and understanding all skills, rules, and agents across Enhanced projects."
+---
+
+## What is Claude Code
+
+Claude Code is Anthropic's official CLI tool for AI-assisted software engineering. It runs directly in your terminal and gives Claude full context of your codebase — reading files, searching code, running commands, editing files, and managing git workflows.
+
+At Enhanced, Claude Code is the primary AI development tool across all projects (backend, frontend, worker, and docs). Each project has its own set of **rules**, **skills**, and **agents** that teach Claude how to work within that specific codebase.
+
+This guide walks you through the full setup from scratch, including the **Superpowers** plugin (for structured development workflows) and the **Context7** MCP server (for up-to-date library documentation).
+
+## Install Claude Code CLI
+
+<Steps>
+  <Step title="Check prerequisites">
+    You need **Node.js v18 or higher** installed. Verify with:
+
+    ```bash
+    node --version
+    ```
+
+    If you don't have Node.js, download it from [nodejs.org](https://nodejs.org/).
+  </Step>
+  <Step title="Install the CLI globally">
+    ```bash
+    npm install -g @anthropic-ai/claude-code
+    ```
+  </Step>
+  <Step title="Authenticate">
+    Run Claude Code for the first time to authenticate:
+
+    ```bash
+    claude
+    ```
+
+    This opens a browser window where you log in with your Anthropic account. After authentication, Claude Code stores your credentials locally.
+  </Step>
+  <Step title="Verify the installation">
+    Run a simple command to confirm everything works:
+
+    ```bash
+    claude --version
+    ```
+
+    You should see the installed version printed.
+  </Step>
+  <Step title="Open a project">
+    Navigate to any Enhanced project directory and start Claude Code:
+
+    ```bash
+    cd /path/to/Flux-Prompt
+    claude
+    ```
+
+    Claude Code automatically detects the project structure, reads `CLAUDE.md` files, and loads any configured rules and skills.
+  </Step>
+</Steps>
+
+<Tip>
+  You can also use Claude Code as a desktop app (Mac/Windows), web app (claude.ai/code), or through IDE extensions for VS Code and JetBrains.
+</Tip>
+
+## Install the Superpowers plugin
+
+Superpowers is a Claude Code plugin that adds structured development workflows — brainstorming, planning, TDD, debugging, code review, and more. It enforces discipline so you follow a consistent process for every task.
+
+<Steps>
+  <Step title="Install the plugin">
+    Inside Claude Code, run:
+
+    ```
+    /install-plugin https://github.com/anthropics/claude-code-superpowers
+    ```
+
+    This downloads and registers the plugin. Claude Code loads it automatically on every session.
+  </Step>
+  <Step title="Verify installation">
+    Start a new Claude Code session. You should see the Superpowers skills available when Claude processes your requests. You can also check installed plugins with:
+
+    ```
+    /plugins
+    ```
+  </Step>
+</Steps>
+
+### Superpowers skills
+
+The Superpowers plugin provides the following skills. Claude Code invokes them automatically when the situation matches, or you can request them explicitly.
+
+#### Brainstorming
+
+**When to use:** Before any creative work — creating features, building components, adding functionality, or modifying behavior.
+
+**What it does:** Explores your intent, requirements, and design before any code is written. It asks clarifying questions one at a time, proposes 2–3 approaches with trade-offs, presents a design for your approval, and saves a spec document. Nothing gets implemented until you approve the design.
+
+**How it works:**
+1. Explores project context (files, docs, recent commits)
+2. Asks clarifying questions — one at a time, preferring multiple choice
+3. Proposes approaches with trade-offs and a recommendation
+4. Presents the design section by section for your approval
+5. Saves the spec to `docs/superpowers/specs/`
+6. Transitions to the writing-plans skill
+
+#### Writing plans
+
+**When to use:** When you have a spec or requirements for a multi-step task, before writing any code.
+
+**What it does:** Creates a detailed, step-by-step implementation plan with exact file paths, complete code for every step, test commands with expected output, and commit points. Plans assume the engineer has zero context about the codebase.
+
+**Key principles:**
+- Each step is one action (2–5 minutes)
+- TDD flow: write failing test → verify it fails → implement → verify it passes → commit
+- No placeholders — every step has actual code
+- Plans are saved to `docs/superpowers/plans/`
+
+#### Executing plans
+
+**When to use:** When you have a written implementation plan to execute.
+
+**What it does:** Executes plan tasks in sequence with review checkpoints. After each task, it verifies the work before moving on.
+
+#### Subagent-driven development
+
+**When to use:** When executing implementation plans with independent tasks in the current session.
+
+**What it does:** Dispatches a fresh subagent per task, reviews between tasks, and enables fast iteration. Each subagent works in isolation and returns results for review.
+
+#### Test-driven development (TDD)
+
+**When to use:** When implementing any feature or bugfix, before writing implementation code.
+
+**What it does:** Enforces the red-green-refactor cycle:
+1. Write a failing test
+2. Run it to confirm it fails
+3. Write the minimal code to make it pass
+4. Run tests to confirm they pass
+5. Refactor if needed
+
+#### Systematic debugging
+
+**When to use:** When encountering any bug, test failure, or unexpected behavior, before proposing fixes.
+
+**What it does:** Guides you through a structured debugging process — reproducing the issue, forming hypotheses, testing each one, and applying the fix only after understanding the root cause. Prevents "shotgun debugging" where you try random fixes.
+
+#### Dispatching parallel agents
+
+**When to use:** When facing 2 or more independent tasks that can be worked on without shared state or sequential dependencies.
+
+**What it does:** Launches multiple subagents in parallel, each working on an independent task. Results are collected and reviewed together.
+
+#### Verification before completion
+
+**When to use:** Before claiming work is complete, fixed, or passing — before committing or creating PRs.
+
+**What it does:** Requires running verification commands and confirming output before making any success claims. Evidence before assertions — always.
+
+#### Requesting code review
+
+**When to use:** When completing tasks, implementing major features, or before merging.
+
+**What it does:** Dispatches a code review agent to verify the work meets requirements, follows coding standards, and has no issues.
+
+#### Receiving code review
+
+**When to use:** When receiving code review feedback, before implementing suggestions.
+
+**What it does:** Requires technical rigor when processing feedback — verifying suggestions are correct before implementing them, rather than blindly agreeing with every comment.
+
+#### Finishing a development branch
+
+**When to use:** When implementation is complete, all tests pass, and you need to decide how to integrate the work.
+
+**What it does:** Guides completion of development work by presenting structured options for merge, PR, or cleanup.
+
+#### Using git worktrees
+
+**When to use:** When starting feature work that needs isolation from the current workspace.
+
+**What it does:** Creates isolated git worktrees with smart directory selection and safety verification, so feature work does not interfere with your current branch.
+
+#### Writing skills
+
+**When to use:** When creating new skills, editing existing skills, or verifying skills work before deployment.
+
+**What it does:** Guides the process of authoring Claude Code skills with proper structure, metadata, and testing.
+
+## Configure MCP — Context7
+
+MCP (Model Context Protocol) is a standard that lets Claude Code connect to external data sources. **Context7** is an MCP server that fetches up-to-date documentation for libraries and frameworks, so Claude Code uses current docs instead of relying on training data.
+
+<Steps>
+  <Step title="Open Claude Code settings">
+    The MCP configuration lives in your Claude Code settings file. Open it:
+
+    ```bash
+    claude mcp add context7 -- npx -y @upstash/context7-mcp@latest
+    ```
+
+    This registers the Context7 MCP server. Claude Code starts it automatically when needed.
+  </Step>
+  <Step title="Verify the server is running">
+    Start a new Claude Code session and ask Claude to look up documentation for a library. For example:
+
+    ```
+    Use Context7 to find the latest React Flow documentation for custom nodes
+    ```
+
+    If configured correctly, Claude Code fetches live documentation from Context7 instead of using training data.
+  </Step>
+</Steps>
+
+<Note>
+  Context7 is the only MCP server currently configured for the Enhanced projects. It is especially useful when working with libraries that update frequently, such as React Flow, Temporal, or MUI.
+</Note>
+
+### When to use Context7
+
+- When you need documentation for a specific library version
+- When Claude Code's training data might be outdated for a dependency
+- When debugging an issue that might be related to a recent library change
+- When exploring a new library's API
+
+## Project configuration
+
+Each Enhanced project has its own `.claude/rules/` directory (and optionally `.agents/skills/`) that teach Claude Code how to work within that codebase. Rules are loaded automatically when you open the project. Skills are invoked when relevant.
+
+### Docs (`docs/`)
+
+The documentation project uses Mintlify to generate the help site at [help.enhanced.ai](https://help.enhanced.ai).
+
+#### Skill: Mintlify
+
+**Location:** `docs/.claude/skills/mintlify.md`
+
+**What it does:** Teaches Claude Code how to create and maintain Mintlify documentation pages. It covers the full workflow — from understanding the site structure in `docs.json` to writing MDX content with proper components.
+
+**Key areas:**
+- **Site configuration** — `docs.json` defines navigation, theme, colors, and API specs
+- **Page structure** — Every `.mdx` file needs `title` in frontmatter, `description` for SEO
+- **Components** — When to use `<Accordion>`, `<Tabs>`, `<Steps>`, `<CodeGroup>`, `<Card>`, `<ParamField>`, and callouts (`<Note>`, `<Tip>`, `<Warning>`)
+- **Navigation patterns** — Groups, tabs, anchors, dropdowns, products, versions
+- **File conventions** — Kebab-case filenames, root-relative paths without extensions for links
+- **Writing standards** — Second-person voice, active voice, sentence case headings, no marketing language
+- **CLI commands** — `mint dev` (local preview), `mint validate`, `mint broken-links`, `mint a11y`
+
+**Example workflow:**
+1. Read `docs.json` to understand site structure
+2. Search existing docs for related content
+3. Read 2–3 similar pages to match style
+4. Write content with proper Mintlify components
+5. Add the new page to `docs.json` navigation
+6. Run `mint validate` and `mint broken-links`
+
+#### Agent: mintlify-docs-writer
+
+**Location:** `docs/.claude/agents/mintlify-docs-writer.md`
+
+**What it does:** A specialized agent that creates documentation pages following Mintlify standards. When launched, it follows a structured workflow:
+
+1. **Asks for the target folder** — Where the documentation should be placed (for example, `docs/worker/activities/`)
+2. **Asks for the content** — What the documentation should cover
+3. **Requests context files** — Source code, types, schemas, or specs to reference
+4. **Analyzes and plans** — Identifies gaps, asks clarifying questions, plans the structure
+5. **Writes the documentation** — Creates MDX with proper frontmatter, components, and code examples
+6. **Updates `docs.json`** — Registers the new page in the correct navigation group
+
+**Folder-to-group mapping:**
+
+| Folder | Navigation group |
+| --- | --- |
+| `getting-started/` | "Getting started" in Guides tab |
+| `ai-workflows/` | "Ai Workflows" in Guides tab |
+| `main-api/` | "Main API" in Guides tab |
+| `worker/node/` | "Node" subgroup under Worker |
+| `worker/workflows/` | "Workflows" subgroup under Worker |
+| `worker/activities/` | "Activities" subgroup under Worker |
+| `client/` | "Client" in Guides tab |
+| `client/specific-features/` | "Specific features" under Client |
+
+<Warning>
+  Documentation content is always written in English regardless of the language you communicate in. The `docs.json` file is the only navigation config — never use the deprecated `mint.json`.
+</Warning>
+
+### Backend (`Flux-Prompt/`)
+
+The backend is a NestJS API with TypeScript, PostgreSQL, and integrations with multiple AI providers.
+
+#### Rules
+
+##### `code-standards.md`
+
+**Location:** `Flux-Prompt/.claude/rules/code-standards.md`
+
+**What it enforces:** Shared coding standards applied across all Enhanced projects.
+
+| Area | Rule |
+| --- | --- |
+| Language | All code in English (variable names, functions, comments) |
+| Naming | `camelCase` for methods/variables, `PascalCase` for classes/interfaces, `kebab-case` for files |
+| Constants | Named constants instead of magic numbers |
+| Functions | Names start with a verb, max 3 parameters (use objects otherwise), max 50 lines |
+| Side effects | Functions do either mutation or query, never both |
+| Conditionals | Max 2 nesting levels, prefer early returns |
+| Flag parameters | Never use — extract into separate functions |
+| Classes | Max 300 lines, split by responsibility |
+| Formatting | No blank lines inside functions, no comments when code is self-explanatory |
+| Variables | `const` by default, `let` only when value changes, never `var` |
+
+##### `logging.md`
+
+**Location:** `Flux-Prompt/.claude/rules/logging.md`
+
+**What it enforces:** Consistent logging practices across all Enhanced projects.
+
+| Area | Rule |
+| --- | --- |
+| Levels | `console.log` for debug/info, `console.error` for errors |
+| Storage | Never write to files — stdout/stderr only |
+| Sensitive data | Never log names, emails, credit cards, or PII |
+| Messages | Clear and concise, not verbose or vague |
+| Context | Always include structured context objects (userId, orderId, etc.) |
+| Exceptions | Never silence — always log and re-throw or handle |
+| Structure | Use objects, not string interpolation |
+
+##### `back.md`
+
+**Location:** `Flux-Prompt/.claude/rules/back.md`
+
+**What it enforces:** NestJS-specific backend standards.
+
+| Area | Rule |
+| --- | --- |
+| Framework | NestJS as main framework |
+| Modules | Organized by domain, each encapsulating a specific area |
+| Controllers | Only receive requests and delegate — no business logic |
+| REST | Plural English resource names, kebab-case for compound resources |
+| Resource depth | Max 3 resources in a URL path |
+| Mutations | POST with verbs for actions (`/users/:id/change-password`) |
+| Data format | JSON for all request/response payloads |
+| HTTP status | 200 OK, 400 Bad Request (validation), 401 Unauthorized, 403 Forbidden, 404 Not Found, 422 Unprocessable (business logic), 500 Internal Error |
+| Guards | For authentication/authorization |
+| Middleware | For cross-cutting concerns (logging, etc.) |
+| HTTP client | Axios with configured instances and interceptors |
+| TypeScript | All code in `.ts`, strong typing, never use `any` |
+| Imports | ES modules (`import`/`export`), never `require`/`module.exports` |
+| Properties | Always `private` or `readonly`, never `public` |
+| Arrays | Prefer `find`/`filter`/`map`/`reduce` over loops |
+| Async | Always `async/await`, never callbacks |
+| Package manager | npm |
+
+#### Skill: NestJS best practices
+
+**Location:** `Flux-Prompt/.agents/skills/nestjs-best-practices/`
+
+**What it does:** A comprehensive collection of 40+ best practice rules organized into 10 categories. Each rule explains the problem, the solution, and provides code examples.
+
+**Architecture (6 rules):**
+- **Avoid circular dependencies** — Use `forwardRef()` or restructure modules to break cycles
+- **Organize by feature modules** — Group related controllers, services, and entities by domain
+- **Proper module sharing** — Export services from modules and import where needed
+- **Single responsibility for services** — Each service handles one domain area
+- **Use event-driven architecture** — `EventEmitter2` for decoupled communication between modules
+- **Use repository pattern** — Separate data access logic from business logic
+
+**Dependency injection (6 rules):**
+- **Avoid service locator anti-pattern** — Always use constructor injection, never `ModuleRef.get()`
+- **Interface segregation** — Small, focused interfaces instead of large ones
+- **Liskov substitution** — Subtypes must be substitutable for their base types
+- **Prefer constructor injection** — Over property injection or method injection
+- **Understand provider scopes** — DEFAULT (singleton), REQUEST, TRANSIENT
+- **Use injection tokens for interfaces** — TypeScript interfaces are erased at runtime
+
+**Error handling (3 rules):**
+- **Handle async errors properly** — Catch and transform errors in async operations
+- **Throw HTTP exceptions from services** — Use NestJS built-in exception classes
+- **Use exception filters** — Centralized error handling with `@Catch()`
+
+**Security (5 rules):**
+- **Implement secure JWT** — Token validation, expiry, refresh tokens
+- **Implement rate limiting** — Throttle requests to prevent abuse
+- **Sanitize output to prevent XSS** — Clean user-generated content before returning
+- **Use guards for auth** — `@UseGuards()` for authentication and authorization
+- **Validate all input with DTOs and pipes** — `class-validator` + `ValidationPipe`
+
+**Performance (4 rules):**
+- **Use async lifecycle hooks correctly** — `OnModuleInit`, `OnModuleDestroy`
+- **Use lazy loading for large modules** — `LazyModuleLoader` for rarely-used features
+- **Optimize database queries** — Pagination, select specific columns, avoid N+1
+- **Use caching strategically** — `@nestjs/cache-manager` for frequently-read data
+
+**Testing (3 rules):**
+- **Use Supertest for E2E** — Full request/response testing
+- **Mock external services** — Isolate tests from third-party dependencies
+- **Use testing module for unit tests** — `Test.createTestingModule()` for DI
+
+**Database and ORM (3 rules):**
+- **Avoid N+1 query problems** — Use `relations` or `QueryBuilder` joins
+- **Use database migrations** — TypeORM migrations for schema changes
+- **Use transactions for multi-step operations** — `QueryRunner` or `@Transaction()`
+
+**API design (4 rules):**
+- **Use DTOs and serialization** — `class-transformer` for response shaping
+- **Use interceptors for cross-cutting concerns** — Logging, caching, transformation
+- **Use pipes for input transformation** — Parse, validate, transform incoming data
+- **Use API versioning** — URI versioning (`/v1/`, `/v2/`) for breaking changes
+
+**Microservices (3 rules):**
+- **Implement health checks** — `@nestjs/terminus` for readiness/liveness probes
+- **Use message and event patterns correctly** — `@MessagePattern` vs `@EventPattern`
+- **Use message queues for background jobs** — Bull + Redis for async processing
+
+**DevOps and deployment (3 rules):**
+- **Implement graceful shutdown** — `enableShutdownHooks()` + `OnModuleDestroy`
+- **Use ConfigModule for environment** — Validated env vars with Zod or Joi
+- **Use structured logging** — Consistent log format for observability
+
+### Frontend (`Flux-Prompt-Frontend/`)
+
+The frontend is a React 18 application with TypeScript, Material-UI, Zustand, React Query, and React Flow for the workflow canvas.
+
+#### Rules
+
+##### `code-standards.md`
+
+**Location:** `Flux-Prompt-Frontend/.claude/rules/code-standards.md`
+
+Same coding standards as the backend — English code, naming conventions, constants, function guidelines, formatting rules. See the [backend code-standards section](#code-standardsmd) above.
+
+##### `logging.md`
+
+**Location:** `Flux-Prompt-Frontend/.claude/rules/logging.md`
+
+Same logging standards as the backend — log levels, no file storage, no sensitive data, structured objects. See the [backend logging section](#loggingmd) above.
+
+##### `react.md`
+
+**Location:** `Flux-Prompt-Frontend/.claude/rules/react.md`
+
+**What it enforces:** React-specific standards for the frontend codebase.
+
+| Area | Rule |
+| --- | --- |
+| Components | Functional components only, never classes |
+| TypeScript | All components in `.tsx`, typed props with interfaces |
+| State | Keep state as close as possible to where it is used |
+| Props | Pass explicitly — avoid `{...props}` spread |
+| Component size | Max 300 lines, split into smaller components |
+| Context API | Use for cross-component communication |
+| Styling | MUI components + `sx` prop — no Tailwind, no styled-components |
+| Granularity | Avoid over-engineering with too many tiny components |
+| `useMemo` | Only when list is large, result goes to `React.memo` child, or is a hook dependency |
+| Custom hooks | Named with `use` prefix (`useAuth`, `useLocalStorage`) |
+| Libraries | Consider MUI, MUI X, React Hook Form, React Query before building custom |
+| Testing | Automated tests for all components with `@testing-library/react` |
+
+#### Skill: ReactFlow fundamentals
+
+**Location:** `Flux-Prompt-Frontend/.agents/skills/reactflow-fundamentals/SKILL.md`
+
+**What it does:** Teaches Claude Code how to build node-based UIs with React Flow — the core library behind the Enhanced workflow canvas. The canvas has 44 custom node types and 3 custom edge types.
+
+**Key areas covered:**
+- **Setup** — Installation (`@xyflow/react`), basic `<ReactFlow>` component with `useNodesState` and `useEdgesState`
+- **Node types** — Built-in (input, default, output) and custom nodes with configuration options
+- **Edge types** — Default (bezier), straight, step, smoothstep — with labels, markers, and animation
+- **Handles** — Custom connection points with `<Handle>` component, multiple handles per node
+- **Plugin components** — `<Background>` (dots, lines, cross), `<Controls>`, `<MiniMap>`, `<Panel>`
+- **Event handling** — Node clicks, double clicks, drag events, edge clicks, selection changes
+- **Viewport control** — `useReactFlow()` hook for zoom, fit view, set center
+- **Node operations** — `addNodes`, `setNodes`, `deleteElements`, `getNodes`
+- **Save and restore** — `toObject()` to serialize, `setNodes`/`setEdges`/`setViewport` to restore
+
+**When to use:** Building workflow builders, node editors, data pipeline visualizations, conversation flows, or any interactive graph-based UI.
+
+### Worker (`flux-prompt-worker/`)
+
+The worker is a NestJS microservice that runs as a Temporal Worker — no HTTP server, only queue processing for node and agent execution.
+
+#### Rules
+
+##### `code-standards.md`
+
+**Location:** `flux-prompt-worker/.claude/rules/code-standards.md`
+
+Same coding standards as the backend and frontend. See the [backend code-standards section](#code-standardsmd) above.
+
+##### `logging.md`
+
+**Location:** `flux-prompt-worker/.claude/rules/logging.md`
+
+Same logging standards. See the [backend logging section](#loggingmd) above.
+
+##### `temporal.md`
+
+**Location:** `flux-prompt-worker/.claude/rules/temporal.md`
+
+**What it enforces:** Comprehensive Temporal TypeScript guide for the worker microservice.
+
+| Area | Rule |
+| --- | --- |
+| Overview | Temporal is a durable execution platform — workflows survive crashes via Event History |
+| Dependencies | `@temporalio/client`, `@temporalio/worker`, `@temporalio/workflow` — all same version |
+| Project structure | `modules/temporal/` with `services/` (worker, connection, activities) and `workflows/` |
+| Bootstrap | `NestFactory.createApplicationContext` — no HTTP server |
+| Connection | `NativeConnection.connect()` in a dedicated `TemporalService` |
+| Worker setup | `Worker.create()` with task queue `enhanced-ai-queue`, registered workflows and activities |
+| Workflows | Must be deterministic — no `Date.now()`, `Math.random()`, no direct I/O |
+| `proxyActivities` | Shared `configs.ts` file for activity stubs — workflows never import activities directly |
+| Activities | Methods on `ActivitiesService` (NestJS Injectable) — handle all I/O, DB, AI work |
+| Idempotency | Activities may be retried — design them to be safe on repeated calls |
+| Timeouts | `startToCloseTimeout`, `scheduleToCloseTimeout`, `heartbeatTimeout` configured per activity |
+| Retry policy | `initialInterval`, `backoffCoefficient`, `maximumAttempts`, `nonRetryableErrorTypes` |
+| Heartbeat | Call `Context.current().heartbeat()` in long-running activities |
+| Signals | Fire-and-forget messages to running workflows (`defineSignal`) |
+| Queries | Synchronous reads of workflow state (`defineQuery`) |
+| Updates | Write + synchronous response with optional validation (`defineUpdate`) |
+| `continueAsNew` | Reset event history when approaching 50,000 events |
+| Testing | `TestWorkflowEnvironment` with mocked activities, time-skipping for timers |
+| Path aliases | `@/modules/...` for imports |
+
+**Key Temporal APIs:**
+
+| API | Purpose |
+| --- | --- |
+| `proxyActivities` | Call activities from workflows (never call directly) |
+| `sleep(duration)` | Durable timer that survives crashes |
+| `condition(fn, timeout?)` | Await a state condition |
+| `defineSignal` / `defineQuery` / `defineUpdate` | Declare signal, query, or update types |
+| `setHandler` | Register signal/query/update handlers |
+| `executeChild` / `startChild` | Start child workflows |
+| `continueAsNew` | Reset event history |
+| `patched` | Safe code versioning for replay compatibility |
+
+##### `worker.md`
+
+**Location:** `flux-prompt-worker/.claude/rules/worker.md`
+
+**What it enforces:** Worker-specific architecture and conventions.
+
+| Area | Rule |
+| --- | --- |
+| Purpose | Temporal Worker only — no HTTP routes, no controllers |
+| Bootstrap | `NestFactory.createApplicationContext` + `WorkerService.run()` |
+| Framework | NestJS integrated with `@temporalio/worker` SDK |
+| Modules | Cohesive domain modules — no controllers since there is no HTTP |
+| Task queue | `enhanced-ai-queue` — must match what the client uses |
+| Workflow determinism | No I/O, no randomness, no direct API calls inside workflows |
+| Activity binding | `this.activities.methodName.bind(this.activities)` in worker registration |
+| Environment | Zod validation via `ConfigModule.forRoot()` |
+| Error handling | Typed errors from activities, never swallow exceptions |
+| Package manager | npm with `start:dev`, `build`, `start:prod`, `format`, `lint:fix` scripts |
+
+## Daily usage tips
+
+### Useful commands
+
+| Command | What it does |
+| --- | --- |
+| `claude` | Start Claude Code in the current directory |
+| `claude --version` | Check installed version |
+| `claude mcp list` | List configured MCP servers |
+| `claude mcp add` | Add a new MCP server |
+| `/plugins` | List installed plugins |
+| `/help` | Get help with Claude Code features |
+| `/compact` | Compress conversation context |
+| `/fast` | Toggle fast output mode (same model, faster output) |
+
+### How Superpowers structures tasks
+
+For any non-trivial task, Superpowers follows this flow:
+
+1. **Brainstorming** — Understand the problem, explore approaches, design the solution
+2. **Writing plans** — Create a detailed implementation plan with exact steps
+3. **Executing** — Implement the plan task by task, with verification at each step
+4. **Code review** — Review the work against the original requirements
+5. **Finishing** — Merge, PR, or cleanup
+
+You can skip steps when the task is simple, but for anything involving multiple files or complex logic, the full flow prevents wasted work and rework.
+
+### Best practices
+
+- **Let Claude read first** — Before asking for changes, let Claude read the relevant files to understand the context
+- **Be specific** — "Add retry logic to the text-generator activity with 3 attempts and exponential backoff" is better than "improve error handling"
+- **Use Context7 for docs** — When working with external libraries, ask Claude to check Context7 for the latest documentation
+- **Trust the rules** — The project rules are loaded automatically. If Claude suggests something that violates a rule, the rules take precedence
+- **Commit often** — Superpowers encourages frequent commits after each task. This makes it easy to revert if something goes wrong

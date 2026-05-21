@@ -25,6 +25,7 @@
           {
             "group": "Ai Workflows",
             "pages": [
+              "ai-workflows/claude-code-setup",
               "ai-workflows/create-docs-agent"
             ]
           },
