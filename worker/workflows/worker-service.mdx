@@ -1,0 +1,151 @@
+---
+title: "Worker service"
+description: "How the Worker service connects to Temporal and routes workflows through environment-specific task queues"
+---
+
+## Overview
+
+The `WorkerService` is the entry point of the worker microservice. It creates a Temporal Worker instance, registers all workflows and activities, and starts polling a task queue for work.
+
+**Source:** `flux-prompt-worker/src/modules/temporal/worker.service.ts`
+
+## How it works
+
+When the application starts, the `WorkerService.run()` method:
+
+1. Reads the task queue name from the `TEMPORAL_TASK_QUEUE` environment variable
+2. Creates a Temporal Worker connected to the Temporal server
+3. Registers all workflow definitions and activity implementations
+4. Starts polling the task queue for workflow and activity tasks
+
+```typescript
+const taskQueue = process.env.TEMPORAL_TASK_QUEUE || "enhanced-ai-queue";
+
+const worker = await Worker.create({
+  connection: this.temporalService.connection,
+  namespace: "default",
+  taskQueue,
+  workflowsPath: require.resolve("./workflows"),
+  activities: {
+    textGeneratorActivity: ...,
+    scriptingActivity: ...,
+    notifyStatusActivity: ...,
+    // all other activities
+  },
+});
+
+await worker.run();
+```
+
+## Task queue configuration
+
+The task queue is the channel through which Temporal routes workflows to workers. The API and the worker **must use the same task queue name** for workflows to be picked up.
+
+<Warning>
+If the API sends workflows to a task queue that no worker is listening on, the workflows will remain queued indefinitely and never execute.
+</Warning>
+
+### Multi-environment setup
+
+When multiple environments (dev, staging, production) share the same Temporal server, each environment **must use a different task queue** to prevent cross-environment routing.
+
+Without separate task queues, Temporal distributes workflows to any available worker on the queue. A workflow triggered in staging could be picked up by the dev worker, which connects to the dev database and would fail to find the node data.
+
+```
+Temporal server
+├── enhanced-ai-queue-dev       → Worker DEV (database: dev)
+└── enhanced-ai-queue-staging   → Worker STAGING (database: staging)
+```
+
+### Configuration
+
+Set the `TEMPORAL_TASK_QUEUE` environment variable in **both** the API and the worker for each environment:
+
+| Environment | `TEMPORAL_TASK_QUEUE` value |
+|-------------|---------------------------|
+| Dev         | `enhanced-ai-queue-dev`     |
+| Staging     | `enhanced-ai-queue-staging` |
+| Production  | `enhanced-ai-queue-prod`    |
+
+<Note>
+If the variable is not set, it defaults to `enhanced-ai-queue`. This fallback exists to avoid breaking existing setups, but you should always set it explicitly in deployed environments.
+</Note>
+
+**API side** (`Flux-Prompt/src/temporal/temporal.controller.ts`):
+
+```typescript
+const handle = await this.temporalService.client.start('processSingleNode', {
+  taskQueue: process.env.TEMPORAL_TASK_QUEUE || 'enhanced-ai-queue',
+  args: [nodeId, user.id, sessionId, flowId],
+  workflowId: `node-process-${nodeId}-${Date.now()}`,
+});
+```
+
+**Worker side** (`flux-prompt-worker/src/modules/temporal/worker.service.ts`):
+
+```typescript
+const taskQueue = process.env.TEMPORAL_TASK_QUEUE || "enhanced-ai-queue";
+
+const worker = await Worker.create({
+  connection: this.temporalService.connection,
+  namespace: "default",
+  taskQueue,
+  // ...
+});
+```
+
+## Worker concurrency
+
+The worker limits concurrent execution to prevent resource exhaustion:
+
+| Setting | Value | Description |
+|---------|-------|-------------|
+| `maxConcurrentWorkflowTaskExecutions` | 10 | Maximum workflow tasks processed simultaneously |
+| `maxConcurrentActivityTaskExecutions` | 5 | Maximum activity tasks processed simultaneously |
+| `maxCachedWorkflows` | 20 | Maximum workflows kept in memory cache |
+
+## Registered activities
+
+The worker registers all activity implementations from `ActivitiesService`:
+
+| Activity | Description |
+|----------|-------------|
+| `notifyStatusActivity` | Sends execution status updates to the frontend |
+| `getInfoInDatabaseActivity` | Queries node data from the database |
+| `validateModelAccessActivity` | Validates user access to AI models |
+| `chargeTokensActivity` | Records token usage for billing |
+| `generateFileActivity` | Generates output files |
+| `generateExecutionLogsActivity` | Creates execution log entries |
+| `nodeExecutionErrorActivity` | Handles and persists node errors |
+| `textGeneratorActivity` | Executes the text generator node |
+| `scriptingActivity` | Executes the scripting node |
+| `audioTranscriberActivity` | Executes the audio transcriber node |
+| `mathFunctionActivity` | Executes the math function node |
+| `apiCallerActivity` | Executes the API caller node |
+| `counterActivity` | Executes the counter node |
+| `sqlQuerierActivity` | Executes the SQL querier node |
+| `displayBoxActivity` | Executes the display box node |
+
+## Troubleshooting
+
+### Workflows stuck in "Scheduled" state
+
+If workflows appear in the Temporal UI as scheduled but never execute:
+
+1. Verify the worker is running and connected to the Temporal server
+2. Check the worker logs for the `Worker starting on task queue:` message
+3. Confirm the task queue name matches between the API and worker
+4. Ensure `TEMPORAL_ADDRESS` points to the correct Temporal server
+
+### Workflows executing with wrong data
+
+If workflows execute but return incorrect results or "Node not found" errors:
+
+1. Verify each environment uses a unique `TEMPORAL_TASK_QUEUE` value
+2. Confirm the worker's database connection (`TYPEORM_*` variables) points to the correct database for that environment
+
+## Related documentation
+
+- [Worker overview](/worker/overview)
+- [processSingleNode workflow](/worker/workflows/process-single-node)
+- [processAgent workflow](/worker/workflows/process-agent)

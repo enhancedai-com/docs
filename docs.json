@@ -96,6 +96,7 @@
               {
                 "group": "Workflows",
                 "pages": [
+                  "worker/workflows/worker-service",
                   "worker/workflows/process-single-node",
                   "worker/workflows/process-agent"
                 ]

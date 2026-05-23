@@ -41,7 +41,7 @@ this.connection = await NativeConnection.connect({
 
 ### Task queue
 
-All workflows are processed through the `enhanced-ai-queue` task queue, which allows multiple workers to process tasks in parallel.
+All workflows are processed through an environment-specific task queue (configured via `TEMPORAL_TASK_QUEUE`), which allows multiple workers to process tasks in parallel. Each environment must use a unique task queue name to prevent cross-environment routing. See [Worker service](/worker/workflows/worker-service) for details.
 
 ## Workflows and activities
 
