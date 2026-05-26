@@ -39,23 +39,18 @@ Quando alguém diz "está no ar" ou "está em prod" — é a primeira URL. Quand
 
 ## O sistema, em 30 segundos
 
-```
-                ┌──────────────────────────┐
-                │  React frontend (front/) │
-                │  Visual workflow builder │
-                └────────────┬─────────────┘
-                             │ HTTP + WebSockets
-                ┌────────────▼─────────────┐
-                │  NestJS API (back/)      │
-                │  Auth, flows, integrations│
-                └────────────┬─────────────┘
-                             │
-            ┌────────────────┼───────────────┐
-            │                │               │
-    ┌───────▼──────┐  ┌──────▼──────┐  ┌─────▼──────┐
-    │  PostgreSQL  │  │  Temporal   │  │   Worker   │
-    │    + Redis   │  │ Orchestrator│  │ (executes) │
-    └──────────────┘  └─────────────┘  └────────────┘
+```mermaid
+flowchart TD
+    FE["React frontend (front/)<br/>Builder visual de workflow"]
+    API["NestJS API (back/)<br/>Auth, flows, integrações"]
+    DB[("PostgreSQL<br/>+ Redis")]
+    TEMP["Temporal<br/>Orquestrador"]
+    WORKER["Worker<br/>(executa)"]
+
+    FE -- "HTTP + WebSockets" --> API
+    API --> DB
+    API --> TEMP
+    API --> WORKER
 ```
 
 O usuário desenha um workflow na UI React. O frontend bate na API NestJS, que persiste no Postgres. Quando o workflow roda, o Temporal agenda cada node, o Worker executa (chamando os modelos de IA ou APIs necessárias), e os resultados voltam streamando pro usuário.
