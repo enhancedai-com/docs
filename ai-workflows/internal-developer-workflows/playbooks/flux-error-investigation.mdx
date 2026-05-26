@@ -1,0 +1,176 @@
+---
+title: "Flux error investigation"
+description: "Methodology for diagnosing customer-reported 'Flux flow is failing' issues using DB, Datadog, and CloudWatch in concert. Three sources, one investigation order."
+---
+
+## When to use this
+
+A customer or teammate reports one of:
+
+- "The Flux endpoint is returning an error"
+- "Audio is not transcribing"
+- "The flow returns garbage / a fallback / an apology"
+- "API responded 500 / 4xx for flow X"
+
+This playbook gives you the order to query the three data sources so you can rule in or out the cause in minutes.
+
+## The three sources
+
+| Source | Best for | Caveats |
+| --- | --- | --- |
+| **DB `flows_logs`** | Was the run recorded? What was `status` / `error_message`? | A `Successfully ran` row does NOT mean a useful run — it means no exception escaped |
+| **CloudWatch** `/ecs/api-task-definition-prod` | Stack traces, raw stdout, `[SpaceRunLog gate]`/`persisted` markers, identifying `processId`s that never completed | JSON is split line-per-`console.log` — hard to search structurally. Filter syntax rejects parens and apostrophes |
+| **Datadog** `service:EnhancedAILogging env:production` (US5) | The **request body** the customer sent (`@usage.bodySent.*`), who called (`@user.email`), what flow (`@flow.id`), structured AI/billing logs | App Key must be scoped to `logs_read_data` |
+
+## Standard investigation order
+
+### 1. Get the basics from the reporter
+
+Before you query anything, lock down:
+
+- **flowId** — pull from the failing URL (`?flowId=...`) or ask
+- **Approximate time of failure** in UTC (convert "agora" / "10 min atrás" right away)
+- **What they observed** — HTTP status + response body, or screenshot
+
+Don't proceed without these. Half the bugs are payload-shape mismatches and the body tells you in 5 seconds.
+
+### 2. DB — fastest signal
+
+```sql
+SELECT to_char(fl."createdAt" AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS') AS at_utc,
+       fl.status, fl.run_type, fl.error_status_code, fl.error_message
+FROM flows_logs fl
+WHERE fl."flowId" = '<uuid>'
+  AND fl."createdAt" >= NOW() - INTERVAL '6 hours'
+ORDER BY fl."createdAt" DESC
+LIMIT 25;
+```
+
+Run this through [`ec2-tunnel-prod`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod) (read-only).
+
+**Interpretation:**
+
+| Result | What it means | Next step |
+| --- | --- | --- |
+| `Error while running` + non-null `error_message` | You have the surface error | Drill into CloudWatch/Datadog only if more detail is needed |
+| `Successfully ran` but customer reports failure | **Soft failure** — flow completed without exception but the output was useless | Go to **Datadog** next, not CW |
+| No rows in the window | Either the run never reached wrap-up, or the reporter is looking at the wrong flow / time | Cross-check with CloudWatch gate logs |
+
+If `flows_logs` is empty but the user insists they tested, query the flow + owner to confirm they're on the right one (especially when sibling flows like `InTake - Analysis` vs `InTake - Transcription` exist).
+
+### 3. Datadog — what did the customer actually send
+
+The `bodySent` log is what separates "engine bug" from "customer payload bug":
+
+```bash
+curl -s -X POST "https://api.$DD_SITE/api/v2/logs/events/search" \
+  -H "DD-API-KEY: $DD_API_KEY" \
+  -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filter": {
+      "query": "service:EnhancedAILogging env:production @flow.id:<UUID>",
+      "from": "<ISO>",
+      "to": "<ISO>"
+    },
+    "sort": "timestamp",
+    "page": { "limit": 25 }
+  }'
+```
+
+Look for `message:"API V2"` entries. Key facets:
+
+| Facet | What it tells you |
+| --- | --- |
+| `@usage.bodySent` | The full request body the customer sent |
+| `@usage.requestInfo` | HTTP path, hostname, IP, userAgent |
+| `@user.email` | API key owner (the caller) |
+| `@flow.id` / `@flow.name` | Which flow was invoked |
+| `@userBilled.email` | Workspace owner being charged (often different from `@user.email`) |
+
+**Bonus signals to watch for in adjacent logs:**
+
+- `Bill is less than 50: <N>` (info) — flow reached the billing code, ran end-to-end
+- `audio_transcription_url_fetch_failed` (error) — Groq/OpenAI URL fetch failed; metadata includes `providerStatus`, `providerStatusText`, `providerCode`, `urlHost`, `durationMs`
+- `audio_transcription_url_empty_body` (error) — URL returned 200 OK with non-audio content; `responseContentType` tells you what
+- `audioReaderNode execution failed` — enriched with `flowId`, `billingFlowId`, `inputPreviewHost`, provider details
+
+### 4. CloudWatch — when you need the stack trace
+
+```powershell
+Get-Content "C:\Users\guilh\workspace\enhanced\.env" | Where-Object { $_ -match '^([A-Z_]+)=(.*)$' } | ForEach-Object {
+  Set-Item "env:$($matches[1])" $matches[2]
+}
+$env:PATH = "$env:PATH;C:\Program Files\Amazon\AWSCLIV2"
+
+aws logs filter-log-events `
+  --log-group-name "/ecs/api-task-definition-prod" `
+  --start-time <ms> --end-time <ms> `
+  --filter-pattern '"<single quoted substring, no parens, no apostrophes>"' `
+  --max-items 200 --output json
+```
+
+Use CloudWatch for:
+
+- Stack traces of unhandled exceptions
+- `[SpaceRunLog gate]` with a `processId` and **no** matching `[SpaceRunLog persisted]` — the run never finished (silent hang/timeout)
+- Tracing one specific `processId` across all the nodes that ran inside it
+
+A 5–10 min window around the failure timestamp is usually enough.
+
+<Warning>
+  CloudWatch filter syntax rejects parens `(` and apostrophes `'` even inside quoted strings. For an error like `Cannot read properties of undefined (reading 'X')`, search for `"Cannot read properties of undefined"` and grep the rest client-side.
+</Warning>
+
+## Diagnostic signals quick-ref
+
+| Signal | What it means | Next step |
+| --- | --- | --- |
+| `flows_logs.status='Successfully ran'`, customer reports failure | Soft failure — output was useless | Datadog `bodySent` |
+| `nodesCaptured: 1` (less than the flow's node count) | Flow exited early — usually missing/wrong input | Datadog `bodySent` — is the `variableInputs` shape right? |
+| Output JSON contains "fallback" / apology / cached string | AI node ran with bad input (URL passed as text when transcription was expected) | Compare `bodySent` to what the flow's `varInputNode` expects |
+| `error_message: "URL provided could not be reached..."` | Audio URL fetch failed | Datadog `error_type:audio_transcription_url_fetch_failed` |
+| `[SpaceRunLog gate]` present, `persisted` missing | Unhandled crash or hang | `flows_logs` should also have an `Error while running` row |
+| `userBilled.email` ≠ `user.email` | Normal — workspace owner ≠ flow author | No action; don't conflate them |
+
+## Worked example — Therabee "Whoops!" incident
+
+Customer reported the InTake flow returning JSON full of `"Whoops! audio didn't transcribe quite right..."` in every field.
+
+<Steps>
+  <Step title="DB">
+    `flows_logs` for that `flowId` showed only `Successfully ran` rows in the 48h window. So this was a **soft failure** — engine thinks the run worked.
+  </Step>
+  <Step title="CloudWatch">
+    `[SpaceRunLog persisted]` for the relevant `processId` showed `nodesCaptured: 1`. The flow has 5 nodes, so it exited almost immediately after the starter. No exception, no audio fetch attempted.
+  </Step>
+  <Step title="Datadog">
+    Searching `service:EnhancedAILogging env:production @flow.id:<UUID>` for a 10-min window around the test revealed `bodySent`:
+    ```json
+    {
+      "variableInputs": [{
+        "inputId": "varInputNode_..._...",
+        "inputText": "https://example.com/audio?token=..."
+      }]
+    }
+    ```
+    The customer passed an audio URL as plain text instead of as `links + isExtraction:true`.
+  </Step>
+  <Step title="Code read">
+    `flux.service.ts` (around `:980-1014`): when `isExtraction` is null and there are no `links`/`files`, the engine doesn't trigger extraction. The URL string is passed forward as the variable's value. Downstream, the AI node gets the URL as the "transcript" text, the multimodal-file-processor HEADs it, sees `Content-Type: audio/*`, classifies it as `isFile: false`, and discards it before sending to Claude — which can't transcribe natively and returns the fallback.
+  </Step>
+  <Step title="Diagnosis">
+    Customer is hitting the **consumer** flow when they want the **transcriber** flow. Three resolutions: change endpoint (recommended — the transcriber flow exists for this), change payload shape to `links + isExtraction:true`, or transcribe client-side.
+  </Step>
+</Steps>
+
+## Key lessons
+
+1. **`Successfully ran` is not a green light.** When DB says fine but the customer says broken, go straight to Datadog `bodySent`.
+2. **`nodesCaptured: 1` is the strongest single signal** that the engine short-circuited — almost always payload-shape or wrong-flow.
+3. **Diagnostic improvements are only useful if the code path is exercised.** Verify the failing path before designing the fix.
+
+## Related
+
+- [`db-investigator` agent](/ai-workflows/internal-developer-workflows/agents/db-investigator) — automates Steps 1–2 when the input is a teammate paste
+- [`ec2-tunnel-prod`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod) — read-only prod queries

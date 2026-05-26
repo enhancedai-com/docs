@@ -1,0 +1,97 @@
+---
+title: "db-migration"
+description: "Move data between FluxPrompt's prod, dev, and staging Postgres databases — full clones, selective flows, spaces, libraries, access grants. Encodes hard-won pitfalls."
+---
+
+## What it does
+
+End-to-end agent for moving data between FluxPrompt's three PostgreSQL environments. Identifies your intent, picks the right template from `templates/`, validates source/target connectivity, runs the migration with proper FK ordering and column-by-name COPY, and verifies the result.
+
+The skill lives at `.workflow/skills/db-migration/`. Source of truth is the `SKILL.md` file there.
+
+## When to use it
+
+| Goal | Reference |
+| --- | --- |
+| Copy entire DB | `references/full-db-clone.md` |
+| Migrate specific flows (with BFS for refs) | `references/selective-flow-migration.md` |
+| Migrate a whole space and all its content | `references/space-migration.md` |
+| Copy libraries only | `references/library-migration.md` |
+| Grant users access to spaces | `references/user-access-grants.md` |
+| Clean dangling edges | `references/dangling-edge-cleanup.md` |
+| Disable auto-execution in a sandbox | `references/disable-auto.md` |
+| Investigate / audit data quality | `references/audit.md` |
+
+## Standard workflow
+
+The skill enforces a 5-step flow on every migration. Skipping any step is how data gets stomped.
+
+<Steps>
+  <Step title="Plan">
+    Decide: **source** and **target** envs, **scope** (full DB / flows by ID / a space / libraries / access grant), backup state of the target, and risk acknowledgment when wiping anything.
+  </Step>
+  <Step title="Verify connectivity">
+    Connect to both source and target. Fingerprint the DB by reading `max_connections` — prod is `1716`, dev/staging is `81`. **Never trust `back/.env`** — read the live value to confirm you're talking to the right DB.
+  </Step>
+  <Step title="Generate SQL">
+    Adapt the closest template from `templates/`. Output goes to a file like `back/migration-<topic>.sql` so it's auditable and re-runnable before you apply it.
+  </Step>
+  <Step title="Apply">
+    Run `templates/apply.mjs` which streams the SQL statement-by-statement inside one transaction. ROLLBACK on any failure.
+  </Step>
+  <Step title="Verify">
+    Run `templates/audit.mjs`: row counts per migrated table, dangling edge count = 0, spot-check a few migrated flow IDs exist with their nodes/edges/libraries linked.
+  </Step>
+</Steps>
+
+## Hard rules
+
+These come directly from the skill's `SKILL.md` and are non-negotiable:
+
+1. **Identify the DB before doing anything destructive.** Read `max_connections` live — prod is `1716`, dev/staging is `81`. Cross-check with port and password. Never trust `back/.env`.
+2. **Read `kb/db-migrations/01-session-history.md`** before any new migration to avoid re-doing or stomping prior work.
+3. **Generate SQL to a file first**, then apply via the apply script. Never `client.query` 100 MB+ inline.
+4. **COPY with an explicit column list by name**, not by position. Column ORDER differs between envs.
+5. **Pre-delete from RESTRICT-FK tables** before deleting flows / folders / spaces.
+6. **Use type-aware SQL generation** when emitting INSERTs by hand — JSONB vs `text[]` ambiguity bites.
+7. **Never nullify `flows.library_id`** on copy. That was the bug from a previous session.
+8. **After any migration touching flows, verify "0 dangling edges"** using the audit query.
+
+## When to ask before acting
+
+- About to **wipe target spaces or table content** — always ask first; list affected tables and approximate row counts.
+- About to **modify source data** (e.g., to sanitize bytes) — always ask first.
+- Migration involves **crossing prod ↔ anything** — always ask first; prod is read-only by default.
+
+## File layout
+
+| File | Purpose |
+| --- | --- |
+| `SKILL.md` | Orientation, decision tree, rules |
+| `references/full-db-clone.md` | Full DB clone via `pg-copy-streams` |
+| `references/selective-flow-migration.md` | N specific flows + BFS over external refs |
+| `references/space-migration.md` | Entire space with latest version per flow |
+| `references/library-migration.md` | Libraries table only with company swap |
+| `references/user-access-grants.md` | Propagate users from one space to others |
+| `references/dangling-edge-cleanup.md` | Find + delete edges with missing endpoints |
+| `references/disable-auto.md` | DB-level auto-execution disable |
+| `references/audit.md` | Verification queries |
+| `templates/copy-db-stream.mjs` | Full DB clone script template |
+| `templates/migrate-flows.mjs` | Selective per-flow script template |
+| `templates/apply.mjs` | Statement-by-statement apply script |
+| `templates/audit.mjs` | Verification script |
+| `templates/sql-helpers.mjs` | `sqlVal`, `insertRow` with type awareness |
+
+## Related KB
+
+The skill depends on these knowledge-base files (read them before running a non-trivial migration):
+
+- `kb/db-migrations/00-connection-guide.md` — how to connect
+- `kb/db-migrations/01-session-history.md` — what was already migrated
+- `kb/db-migrations/02-pitfalls-and-fixes.md` — the 8 traps + fixes
+- `kb/db-migrations/03-known-data-quirks.md` — anomalies that exist in prod and propagate
+
+## Related skills
+
+- [`ec2-tunnel`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel) — provides source/target connectivity for non-prod
+- [`ec2-tunnel-prod`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod) — read-only source when the source is prod

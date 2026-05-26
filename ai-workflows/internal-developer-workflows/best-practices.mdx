@@ -1,0 +1,152 @@
+---
+title: "Best practices"
+description: "Distilled lessons from daily Claude Code use on FluxPrompt — when to use plan mode, parallel subagents, auto-memory, and how to structure prompts that actually work."
+---
+
+## What this page is
+
+The internal tooling on the rest of this section is the **what**. This page is the **how** — patterns and habits that make Claude Code consistently productive rather than occasionally impressive. Read it once when you join, refer back when something feels off.
+
+## 1. Use plan mode for anything non-trivial
+
+Plan mode (`Shift+Tab` to toggle, or `/plan`) makes Claude propose an approach **before** touching files. Use it whenever:
+
+- The change touches more than one file
+- You're not sure which files are involved
+- The task description is vague or has hidden constraints
+- You'd be embarrassed if the AI re-architected something without asking
+
+The pattern: **Explore → Plan → Execute**.
+
+1. **Explore** — Claude reads relevant files, often via parallel Explore subagents
+2. **Plan** — Claude proposes the structure of the change; you review and adjust
+3. **Execute** — Claude implements once the plan is approved
+
+For a one-liner fix, skip plan mode. For "refactor how we handle X", always use it.
+
+<Tip>
+  When the agent asks you to confirm an approach, take the 30 seconds to actually read what it proposes. Catching a wrong assumption at the plan stage costs nothing; catching it after 200 lines of changes is painful.
+</Tip>
+
+## 2. Use parallel subagents when work is independent
+
+Claude can invoke multiple agents in a single message. **Use this whenever the work is independent.**
+
+**Good candidates for parallel:**
+
+- Exploring three different parts of the codebase
+- Reading multiple unrelated source files
+- Running independent queries (DB, CloudWatch, Datadog) for the same incident
+- Generating multiple files that don't reference each other
+
+**Do NOT parallelize:**
+
+- Steps that depend on each other's output
+- A plan agent followed by an execute agent (the second needs the first's result)
+- Writes to the same file or area
+
+The rule: if step B reads anything step A produces, they're sequential. Otherwise, send them in one message.
+
+## 3. Let the model auto-pick the right subagent
+
+The workspace ships with these custom subagents (full reference in [Agents](/ai-workflows/internal-developer-workflows/agents/db-investigator)):
+
+| Agent | Use when |
+| --- | --- |
+| `db-investigator` | Teammate reports missing data |
+| `db-setup` | New teammate bootstrapping their environment |
+| `pr-creator` | Creating a PR from a ClickUp task |
+| `mintlify-docs-writer` | Writing docs in this repo |
+
+Claude often recognizes when to invoke them on its own from natural-language prompts. If it doesn't, just name the agent: *"use the db-investigator agent — ..."*.
+
+## 4. Trust auto-memory, but verify before recommending
+
+Claude Code can persist context across conversations (auto-memory). Useful for:
+
+- "Last time we set up X, we hit Y" → next session, Claude remembers
+- Team-wide conventions Claude learned from previous sessions
+- Stable infrastructure facts (deploy topology, log group names, branch convention)
+
+**What to remember:** stable user/project/feedback signals. Surprising things. Things that took a session to figure out.
+
+**What NOT to remember:** ephemeral state, in-progress task details, anything `git log` or the current code can answer.
+
+<Warning>
+  Memory is a snapshot from when it was written. Before recommending action based on a memory ("the function `foo` does X"), grep to verify the function still exists and does what was remembered. Stale memory is worse than no memory.
+</Warning>
+
+## 5. Structure your prompts
+
+A good prompt for a non-trivial task has three pieces:
+
+1. **What** you want done (one sentence)
+2. **Why** it matters / what constraints apply (one or two sentences)
+3. **Relevant files or context** if you know them (paths, line numbers, prior decisions)
+
+Example:
+
+> ❌ "fix the slow query in flows"
+>
+> ✅ "the `findFlowWithNodes` query in `back/src/flows/flows.service.ts` is taking 8s in prod when a flow has >500 nodes. it's loading the full nodes relation eagerly. add pagination or a lazy load — but keep the existing API shape, callers depend on it"
+
+The second version saves you a round-trip of clarifying questions and gives Claude enough context to make judgement calls.
+
+## 6. Honest scope reduction beats heroic execution
+
+If you ask Claude to implement plan item #3, and while doing it the premise turns out to be wrong (the function it would call doesn't exist anymore, the assumption it would rely on is false), the right move is to **surface it and descope** — not to invent a workaround or pad the work to honor the plan as written.
+
+The team prefers a clear "I couldn't do #3, here's why" over a clever implementation that papers over a broken premise.
+
+## 7. Don't bypass safety checks
+
+When `ec2-tunnel-prod` refuses a query, don't add a `force` flag. When a pre-commit hook fails, don't `--no-verify`. When CI is red, don't push anyway.
+
+These guards are there because someone got burned before. Investigate the underlying issue. If the guard is genuinely wrong for your situation, change it deliberately (in a PR, with an explanation) — never as a one-time shortcut.
+
+## 8. Avoid backwards-compatibility theater
+
+When you remove code, remove it. Don't:
+
+- Leave `// removed: foo()` comments
+- Rename unused variables to `_oldFoo`
+- Re-export types nothing imports
+- Keep "transition" branches that no caller takes
+
+The team's convention: if you're certain something is unused, **delete it completely**. The git history is the record.
+
+## 9. Write almost no comments
+
+Default to zero comments. Add one only when the **why** is non-obvious:
+
+- A hidden constraint
+- A subtle invariant
+- A workaround for a specific bug
+- Behavior that would surprise a careful reader
+
+Don't comment **what** the code does — well-named identifiers already do that. Don't reference current tasks (`// added for task 868x...`) — those belong in PR descriptions and rot quickly.
+
+## 10. For UI changes, test in a browser before claiming done
+
+Type checking and test suites verify code correctness, not feature correctness. For frontend or full-stack work:
+
+1. Start the dev server
+2. Use the feature in a browser
+3. Test the golden path and edge cases
+4. Look for regressions in related features
+
+If you can't run the UI yourself, say so explicitly rather than claiming success.
+
+## How these connect
+
+These aren't independent rules — they reinforce each other:
+
+- **Plan mode** (#1) makes **scope reduction** (#6) cheap because misunderstandings surface before code is written
+- **Parallel subagents** (#2) only work if **prompts are structured** (#5) — vague prompts produce duplicate work
+- **Auto-memory** (#4) makes **structured prompts** (#5) shorter over time because shared context accumulates
+- **Honest scope reduction** (#6) and **no safety bypasses** (#7) are the same principle: don't trade clarity for momentum
+
+## Related
+
+- [Internal developer workflows overview](/ai-workflows/internal-developer-workflows/overview) — the broader context for these patterns
+- [Onboarding](/ai-workflows/internal-developer-workflows/onboarding) — bootstrap the tooling so the patterns above can pay off

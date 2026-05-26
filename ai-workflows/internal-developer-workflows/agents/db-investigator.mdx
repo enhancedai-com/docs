@@ -1,0 +1,111 @@
+---
+title: "db-investigator"
+description: "Diagnose 'data is missing from the database' reports from teammates. Read-only. Queries the real DB, identifies the root cause, and produces a copy-paste-ready reply message."
+---
+
+## What it does
+
+When a teammate sends a Slack/Gmail Chat message saying "X is missing from the DB" or "I think the database is broken", this agent investigates the claim against the actual database, identifies what's really happening, and writes a reply you can paste straight back to them.
+
+The most common outcome is: **the data is in the DB; the teammate is wrong about it being missing.** The agent's job is to confirm that fast, identify why they saw an empty result, and write the reply.
+
+The agent is defined at `.claude/agents/db-investigator.md`. It's read-only — it cannot mutate the database under any circumstance.
+
+## When to invoke it
+
+Use it when a teammate report has any of:
+
+- One or more UUIDs (flow IDs, user IDs, etc.) that are "missing"
+- One or more domain IDs (`scripting_<ts>_<rand>`, edge IDs, etc.)
+- A query they ran and the empty result they got
+- A table they expected to see data in (e.g., `flows_nodes`)
+
+Default environment is **staging** unless the teammate or you explicitly say otherwise.
+
+## What it does, step by step
+
+<Steps>
+  <Step title="Parse the input">
+    Extracts every UUID and domain ID from the teammate's paste. Flags UUIDs that aren't exactly 32 hex chars (suspected truncation). Decodes timestamps embedded in domain IDs to UTC + BRT.
+  </Step>
+  <Step title="Run checks in parallel">
+    Batches five queries in one round-trip:
+    1. **Migration sanity** — was the relevant recent migration applied?
+    2. **Schema sanity** — does the column they expect actually exist?
+    3. **Entity exists** — look up the parent (flow, user) by exact match AND prefix (catches UUID truncation)
+    4. **The actual rows** — search by every extracted ID
+    5. **Write activity sanity** — is the table receiving writes at all? (only if 4 came back empty)
+  </Step>
+  <Step title="Interpret">
+    Maps the results to one of the known scenarios (see below) and states confidence + how it ruled out the others.
+  </Step>
+  <Step title="(Optional) Check CloudWatch">
+    If the save genuinely failed, queries the ECS log group for stack traces in the relevant time window.
+  </Step>
+  <Step title="Write the reply">
+    Composes a message in the same tone the teammate used (usually casual lowercase Brazilian Portuguese, no emojis). One-line verdict, concrete evidence with BRT timestamps, what the teammate should do next. Copies it to the clipboard.
+  </Step>
+</Steps>
+
+## Common scenarios it identifies
+
+| Scenario | Signal | Reply hint |
+| --- | --- | --- |
+| **UUID truncation** | Input UUID has fewer than 32 hex chars; prefix-LIKE returns a row | "vc copiou pela metade — faltou o `<X>` no final" |
+| **Wrong DB connection** | Data is there but the teammate's query returns empty | "roda `SELECT current_database(), inet_server_addr();` — provavelmente tá em dev" |
+| **Missing migration** | Migration row absent or expected column missing | "migration `<name>` não rodou em `<env>`. precisa subir um deploy ou rodar `pnpm typeorm migration:run`" |
+| **Timing — flow created after query** | DB `createdAt` is after the teammate's query time | "o flow só foi criado às `<HH:mm BRT>`, depois da query — por isso voltou vazio" |
+| **Save genuinely failed** | Table has writes in the last 24h but this specific row is absent | Investigate further via CloudWatch |
+| **Versioning path** | Row has `flow_version_history_id` not NULL when teammate expects NULL (or vice versa) | "o flow tem `version_control_enabled=true`, então os nodes ficam atrelados a um `flow_version_history_id`" |
+
+## Hard rules
+
+- **Never runs a non-SELECT** in any environment, even dev or staging.
+- **For prod, uses `ec2-tunnel-prod` only** — never bypasses the read-only validator.
+- **Never logs** `SSH_PASSPHRASE`, `PGPASSWORD_*`, or `.env` values.
+- **Always converts UTC → BRT** when quoting timestamps back to a Brazilian teammate; states the conversion the first time explicitly.
+- **UUIDs are 8-4-4-4-12 hex (32 chars total).** Any deviation is the first suspect.
+- **Default env = `staging`.** Only touches dev or prod when explicitly asked.
+- **Doesn't paraphrase the DB.** Quotes `createdAt`, `id`, etc. verbatim from query results.
+
+## When it asks vs. proceeds
+
+**Asks when:**
+- No IDs in the paste — nothing specific to query
+- Multiple plausible target tables and the report doesn't pin one
+- The investigation suggests a destructive action might be needed
+- Data genuinely seems missing AND the table has no recent writes (could be a broader incident)
+
+**Proceeds without asking when:**
+- At least one parseable ID + a clear table name
+- The teammate or you specified the env
+- The queries are read-only
+
+## Out of scope
+
+- Writing data, deleting rows, mutating schema, running migrations
+- Anything in prod that isn't a SELECT via `ec2-tunnel-prod`
+- Frontend bugs (only the DB side)
+- Sending the reply — it produces the message and copies it to the clipboard; you send it
+
+If asked to do any of those, the agent declines and hands back to the main conversation.
+
+## How to invoke
+
+In Claude Code, you can say:
+
+```
+use the db-investigator agent — <teammate paste here>
+```
+
+Or with the Agent tool directly:
+
+```
+Agent(subagent_type="db-investigator", prompt="<the teammate's report>")
+```
+
+## Related
+
+- [`ec2-tunnel`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel) — the underlying dev/staging access
+- [`ec2-tunnel-prod`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod) — used automatically when the env is prod
+- [Flux error investigation playbook](/ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation) — when the DB side is fine and you need to widen to Datadog + CloudWatch

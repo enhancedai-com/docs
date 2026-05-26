@@ -1,0 +1,68 @@
+---
+title: "DB investigation quickstart"
+description: "Short recipe for when a teammate reports 'data is missing from the database'. Shortcut to the db-investigator agent with the right inputs."
+---
+
+## When to use this
+
+A teammate just sent you a Slack/Gmail Chat message that boils down to:
+
+- "The flow X is not in the DB"
+- "I queried `flows_nodes` and got nothing for `<uuid>`"
+- "I think the database is broken"
+
+You want to confirm or refute this in two minutes.
+
+<Tip>
+  Almost every "data is missing" report turns out to be a UUID typo, a wrong DB connection, a timing mismatch, or a missing migration — **not** a real bug. This recipe gets you to the verdict fast.
+</Tip>
+
+## The recipe
+
+<Steps>
+  <Step title="Forward the message to db-investigator">
+    Open Claude Code in the workspace and invoke the [`db-investigator` agent](/ai-workflows/internal-developer-workflows/agents/db-investigator):
+
+    ```
+    use the db-investigator agent — <paste the teammate's full message>
+    ```
+
+    The agent reads UUIDs and domain IDs out of the paste, picks an environment (defaults to `staging`), and runs the standard checks.
+  </Step>
+  <Step title="Tell it which environment if it's not staging">
+    If the teammate said "in dev" or "in prod", include that in your prompt. Otherwise the agent defaults to staging.
+  </Step>
+  <Step title="Wait for the verdict">
+    The agent runs five queries in parallel (migration sanity, schema sanity, parent entity lookup, the actual rows, write-activity sanity if empty) and reports which scenario matches.
+  </Step>
+  <Step title="Review and send the reply">
+    The agent writes a reply in the same tone the teammate used (typically casual Brazilian Portuguese, lowercase, no emojis), with one-line verdict + concrete evidence + what they should do next, and copies it to your clipboard.
+  </Step>
+</Steps>
+
+## What the agent typically finds
+
+| Scenario | How to recognize | Reply gist |
+| --- | --- | --- |
+| **UUID truncation** | Teammate copied a UUID and lost characters at the end | "vc copiou pela metade — faltou o `<X>` no final" |
+| **Wrong DB** | Data is there but the teammate is connected to a different env | "roda `SELECT current_database(), inet_server_addr();` — provavelmente tá em dev" |
+| **Missing migration** | Recent migration didn't run on the env they checked | "migration `<name>` não rodou em `<env>` — precisa subir um deploy" |
+| **Timing** | The flow was created **after** the teammate ran their query | "o flow só foi criado às `<HH:mm BRT>`, depois da query" |
+| **Versioning path** | Teammate filters `IS NULL` but the row uses version history | "o flow tem `version_control_enabled=true` — filtra por `flow_version_history_id`" |
+| **Genuine save failure** | Table has writes generally but this specific row is absent | Escalate — likely a real bug; see [Flux error investigation](/ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation) |
+
+## When to escalate
+
+If the agent's investigation lands on "genuine save failure" (the table is receiving writes, the migrations are right, the IDs are right, but the row is absent), this stops being a quickstart. Hand it to the [Flux error investigation playbook](/ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation) to widen the search to Datadog and CloudWatch.
+
+## Hard rules
+
+- **Never run a write** to "fix" the missing row. Surface it and let the user decide. The agent enforces this.
+- **For prod, always use `ec2-tunnel-prod`.** The agent picks this automatically when the env is prod.
+- **Don't paraphrase the DB** in your reply. Quote `createdAt`, `id`, etc. verbatim from the agent's output.
+
+## Related
+
+- [`db-investigator` agent](/ai-workflows/internal-developer-workflows/agents/db-investigator) — full reference
+- [Flux error investigation](/ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation) — what to do when the DB side is fine
+- [`ec2-tunnel-prod`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod) — read-only prod queries

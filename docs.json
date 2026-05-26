@@ -26,7 +26,42 @@
             "group": "Ai Workflows",
             "pages": [
               "ai-workflows/claude-code-setup",
-              "ai-workflows/create-docs-agent"
+              "ai-workflows/create-docs-agent",
+              {
+                "group": "Internal developer workflows",
+                "pages": [
+                  "ai-workflows/internal-developer-workflows/overview",
+                  "ai-workflows/internal-developer-workflows/onboarding",
+                  {
+                    "group": "Skills",
+                    "pages": [
+                      "ai-workflows/internal-developer-workflows/skills/ec2-tunnel",
+                      "ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod",
+                      "ai-workflows/internal-developer-workflows/skills/db-migration",
+                      "ai-workflows/internal-developer-workflows/skills/tlc-spec-driven"
+                    ]
+                  },
+                  {
+                    "group": "Agents",
+                    "pages": [
+                      "ai-workflows/internal-developer-workflows/agents/db-investigator",
+                      "ai-workflows/internal-developer-workflows/agents/db-setup",
+                      "ai-workflows/internal-developer-workflows/agents/pr-creator",
+                      "ai-workflows/internal-developer-workflows/agents/mintlify-docs-writer"
+                    ]
+                  },
+                  {
+                    "group": "Playbooks",
+                    "pages": [
+                      "ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation",
+                      "ai-workflows/internal-developer-workflows/playbooks/memory-leak-diagnosis",
+                      "ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow",
+                      "ai-workflows/internal-developer-workflows/playbooks/db-investigation-quickstart"
+                    ]
+                  },
+                  "ai-workflows/internal-developer-workflows/best-practices"
+                ]
+              }
             ]
           },
           {

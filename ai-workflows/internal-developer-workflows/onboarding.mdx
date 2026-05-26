@@ -1,0 +1,189 @@
+---
+title: "Onboarding"
+description: "Go from a fresh clone to running queries against staging end-to-end. Manual walkthrough plus the db-setup agent that automates it."
+---
+
+## Goal
+
+By the end of this page, you will be able to run a SELECT against the staging database directly from your machine, through the AWS bastion, with Claude Code as the driver.
+
+The fastest path is to let the [`db-setup` agent](/ai-workflows/internal-developer-workflows/agents/db-setup) walk you through it interactively. The manual steps below are documented so you understand what the agent is doing and can recover if anything is off.
+
+<Tip>
+  Skip the manual section the first time and just invoke `db-setup` in Claude Code. Come back here only if it fails or if you want to understand the machinery.
+</Tip>
+
+## Option A — Guided setup with `db-setup`
+
+In any Claude Code conversation in the workspace:
+
+<Steps>
+  <Step title="Invoke the agent">
+    Tell Claude `use the db-setup agent` (or invoke it directly with the Agent tool). The agent is idempotent — safe to run multiple times.
+  </Step>
+  <Step title="Answer its questions">
+    It will ask for your email/label for the SSH key, prompt for each `.env` value one at a time, and run a smoke test once everything is in place.
+  </Step>
+  <Step title="Send the handoff message">
+    The agent prints a message containing your public key to send to the admin (Guilherme). After he authorizes it on the bastion, the agent runs the smoke test.
+  </Step>
+</Steps>
+
+That's the whole flow. The agent handles SSH key generation, `.env` population, dependency installs, and verifies connectivity.
+
+## Option B — Manual setup
+
+Use this if you want to understand what the agent does, or if you need to recover from a partial setup.
+
+### 1. Prerequisites
+
+Run these checks. All but AWS CLI are mandatory.
+
+```powershell
+node --version          # 18 or higher
+pnpm --version
+git --version
+& "C:\Program Files\Amazon\AWSCLIV2\aws.exe" --version  # optional, for CloudWatch
+```
+
+| Tool | Required | Install |
+| --- | --- | --- |
+| Node 18+ | yes | [nodejs.org](https://nodejs.org/) (LTS) |
+| pnpm | yes | `npm install -g pnpm` |
+| git | yes | [git-scm.com](https://git-scm.com/) |
+| AWS CLI v2 | optional | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
+| gh CLI | optional | [cli.github.com](https://cli.github.com/) (for `pr-creator`) |
+
+### 2. Generate an SSH key
+
+Check whether you already have one:
+
+```powershell
+Test-Path "$HOME\.ssh\id_rsa"
+Test-Path "$HOME\.ssh\id_rsa.pub"
+```
+
+If both exist, **do not regenerate** — overwriting invalidates every authorization you already have. Use the existing key.
+
+If you need a new key, generate it interactively in your terminal so you can set the passphrase:
+
+```bash
+ssh-keygen -t rsa -b 4096 -C "you@example.com" -f ~/.ssh/id_rsa
+```
+
+<Warning>
+  Set a real passphrase. Empty-passphrase keys are refused by the bastion authorization process.
+</Warning>
+
+Print your **public** key — that's the line you will share with the admin:
+
+```powershell
+Get-Content "$HOME\.ssh\id_rsa.pub"
+```
+
+<Warning>
+  Never share the **private** key (`id_rsa` without `.pub`). Nobody on the team — including the admin — needs it.
+</Warning>
+
+### 3. Populate `.workflow/.env`
+
+Copy the example file:
+
+```powershell
+Copy-Item .\.workflow\.env.example .\.workflow\.env
+```
+
+The file has the following variables. Get values from the admin (1Password, DM, or onboarding handoff). Never paste these into a chat or commit them.
+
+| Variable | What it is |
+| --- | --- |
+| `SSH_PASSPHRASE` | Your SSH key passphrase from step 2 (non-prod bastion) |
+| `SSH_PASSPHRASE_PROD` | Your SSH key passphrase for the prod bastion (usually the same key) |
+| `PGPASSWORD_DEV` | Dev Postgres password (team-shared secret) |
+| `PGPASSWORD_STAGING` | Staging Postgres password |
+| `PGPASSWORD_PROD` | Prod Postgres password |
+| `DB_HOST_DEV` | Dev RDS endpoint |
+| `DB_HOST_STAGING` | Staging RDS endpoint |
+| `DB_HOST_PROD` | Prod RDS endpoint |
+| `SSH_HOST_NONPROD` | Non-prod bastion hostname or IP |
+| `SSH_HOST_PROD` | Prod bastion hostname or IP |
+
+<Tip>
+  On Windows + PowerShell 5.1, write `.env` with `-Encoding utf8` to avoid the UTF-16 BOM. The dotenv loader only handles UTF-8.
+</Tip>
+
+### 4. Install skill dependencies
+
+Each skill has its own `templates/package.json`. Install dependencies for the two skills you'll use immediately:
+
+```powershell
+foreach ($skill in @("ec2-tunnel", "ec2-tunnel-prod")) {
+  $p = ".\.workflow\skills\$skill\templates"
+  if (Test-Path "$p\package.json") {
+    Push-Location $p
+    pnpm install --silent
+    Pop-Location
+  }
+}
+```
+
+### 5. Hand off your public key
+
+Send a message to the admin (Guilherme) containing the contents of `~/.ssh/id_rsa.pub`. Suggested template:
+
+```
+Hey, I'm new on the team and I generated my SSH key to access the bastion.
+Here is the public key:
+
+<paste id_rsa.pub contents>
+
+Let me know once it's authorized so I can run the smoke test.
+```
+
+The admin will use the `ec2-tunnel` skill's `add-key.mjs` to authorize your key on the bastion. **You do not run that script** — authorization is the admin's action.
+
+### 6. Smoke test
+
+Once the admin confirms your key is authorized, load `.env` into your shell and run a trivial SELECT against **dev** (least sensitive environment):
+
+```powershell
+Get-Content ".\.workflow\.env" | Where-Object { $_ -match '^([A-Z_]+)=(.*)$' } | ForEach-Object {
+  Set-Item "env:$($matches[1])" $matches[2]
+}
+$env:ENV = "dev"
+$env:QUERY = "SELECT current_database(), current_user, now() AS server_time;"
+node .\.workflow\skills\ec2-tunnel\templates\tunnel-and-query.mjs
+```
+
+Expected output: `current_database`, `current_user = postgres`, and a current timestamp.
+
+If it works, repeat with `$env:ENV = "staging"` to confirm the second set of credentials.
+
+### Common failure modes
+
+| Error | Cause | Fix |
+| --- | --- | --- |
+| `All configured authentication methods failed` | Public key not authorized yet, or wrong passphrase in `.env` | Confirm with admin that `add-key.mjs` ran; re-check `SSH_PASSPHRASE` |
+| `connect ETIMEDOUT <bastion-ip>:22` | Bastion firewall or your network blocks port 22 | Check VPN; try from a different network |
+| `password authentication failed for user "postgres"` | Wrong `PGPASSWORD_<env>` | Re-fetch from admin |
+| `getaddrinfo ENOTFOUND <db host>` | DB hostname typo or empty in `.env` | Re-check `DB_HOST_<env>` |
+| `Warning: no .workflow/.env found` | Script invoked from the wrong directory | Run from the workspace root |
+
+## After setup
+
+You now have read access to dev and staging, and (with `ec2-tunnel-prod`) read-only access to prod. Next steps:
+
+<Columns cols={2}>
+  <Card title="Use db-investigator" icon="magnifying-glass" href="/ai-workflows/internal-developer-workflows/agents/db-investigator">
+    The most common entry point — diagnose teammate reports about "missing data".
+  </Card>
+  <Card title="Run ad-hoc queries" icon="terminal" href="/ai-workflows/internal-developer-workflows/skills/ec2-tunnel">
+    Skill reference with examples for one-off and long-running tunnels.
+  </Card>
+  <Card title="Create a PR" icon="code-pull-request" href="/ai-workflows/internal-developer-workflows/agents/pr-creator">
+    Hand a ClickUp task code to the `pr-creator` agent — it does the rest.
+  </Card>
+  <Card title="Read the playbooks" icon="book-open" href="/ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation">
+    Pre-built investigation recipes for the most common incident classes.
+  </Card>
+</Columns>

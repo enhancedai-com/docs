@@ -1,0 +1,105 @@
+---
+title: "mintlify-docs-writer"
+description: "Authors Mintlify documentation pages following the project's conventions. Asks for context, writes MDX with the right components, and updates docs.json navigation."
+---
+
+## What it does
+
+Creates well-structured Mintlify pages (`.mdx` files with proper frontmatter, components, and prose), and registers them in `docs.json` navigation. The pages on this entire section, for example, were drafted with this agent's patterns in mind.
+
+The agent is defined at `docs/.claude/agents/mintlify-docs-writer.md`.
+
+<Note>
+  Unlike the other agents, this one lives at `docs/.claude/agents/` (not the workspace root) — it only matters when you're working in the docs repo.
+</Note>
+
+## When to invoke it
+
+- Documenting a new feature, endpoint, activity, or module
+- Writing a tutorial or how-to guide
+- Rewriting an existing page that has drifted from current Mintlify conventions
+
+## Workflow
+
+<Steps>
+  <Step title="Asks for the target folder">
+    Where should the pages live? `docs/api/`, `docs/guides/`, `docs/ai-workflows/`, etc. The agent never assumes.
+  </Step>
+  <Step title="Asks what the docs should cover">
+    Topic, feature, audience, the questions readers should be able to answer after reading.
+  </Step>
+  <Step title="Requests context files">
+    Source code, types, schemas, README excerpts, existing docs that provide background. The more the agent reads, the more accurate the result. Attach files with `@` in Claude Code.
+  </Step>
+  <Step title="Analyzes and plans">
+    Identifies gaps, asks clarifying questions, plans the structure (overview → details → examples → references).
+  </Step>
+  <Step title="Writes the documentation">
+    Writes in English regardless of conversation language. Uses MDX components (Cards, Tabs, Accordions, CodeGroups, Steps, callouts) where they fit. Includes realistic code examples with language tags.
+  </Step>
+  <Step title="Updates docs.json">
+    Adds the new page entry to the correct group/tab in `docs.json`. Preserves existing structure — adds only, doesn't reorganize.
+  </Step>
+</Steps>
+
+## Folder → group mapping
+
+The agent uses this reference to place new pages in the right navigation group:
+
+| Folder | Group in `docs.json` |
+| --- | --- |
+| `getting-started/` | "Getting started" in "Guides" |
+| `ai-workflows/` | "Ai Workflows" in "Guides" |
+| `main-api/` | "Main API" in "Guides" |
+| `worker/node/` | "Node" subgroup under "Worker" |
+| `worker/workflows/` | "Workflows" subgroup under "Worker" |
+| `worker/activities/` | "Activities" subgroup under "Worker" |
+| `client/` | "Client" in "Guides" |
+| `client/specific-features/` | "Specific features" subgroup under "Client" |
+| `api-reference/` | groups in "🚧 API reference" tab |
+
+If the folder doesn't match any of the above, the agent inspects `docs.json` and asks you where to place the page.
+
+## Writing standards it follows
+
+- **Always in English** regardless of conversation language
+- **Active voice**, concise sentences, scannable structure
+- **Proper heading hierarchy** (`##` for sections, `###` for subsections — pages start with frontmatter `title`, not `#`)
+- **Sentence case headings** ("Getting started", not "Getting Started")
+- **Practical examples and code snippets** with language tags
+- **Callouts** (`<Note>`, `<Tip>`, `<Warning>`) for important information
+- **Consistent terminology** within and across pages
+
+## Self-verification checklist
+
+Before delivering, the agent confirms:
+
+- The Mintlify skill file at `docs/.claude/skills/mintlify.md` was read
+- Content is entirely in English
+- Correct folder path used
+- Frontmatter (title, description) included
+- MDX components used correctly
+- Content covers the topic thoroughly
+- `docs.json` updated, with the new page path matching the file path (without `.mdx`)
+
+## How to invoke
+
+```
+use the mintlify-docs-writer agent to document <feature>
+```
+
+Or directly:
+
+```
+Agent(subagent_type="mintlify-docs-writer", prompt="document the new authentication API; place under docs/main-api/specific-features/")
+```
+
+## Important notes
+
+- The agent **may communicate in Portuguese** if you do, but the **documentation it writes is always in English**.
+- Always confirms folder path and content scope before writing.
+- Updates its own memory across conversations with patterns, components, and terminology it learns about the project.
+
+## Related
+
+- [`create-docs-agent`](/ai-workflows/create-docs-agent) — the older sibling, geared toward Cursor; this agent is the Claude Code equivalent

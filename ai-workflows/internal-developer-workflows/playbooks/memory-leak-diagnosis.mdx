@@ -1,0 +1,149 @@
+---
+title: "Memory leak diagnosis"
+description: "Methodology for diagnosing slow memory leaks in the back/ NestJS process: in-process instrumentation, the codebase's suspect list, and exit-code disambiguation."
+---
+
+## When to use this
+
+The `back/` process is exhibiting a **slow memory climb** (rss/heap monotonically rising, not spiking) — eventually OOM-killing the container. Symptoms include:
+
+- "Dev is crashing every X minutes"
+- "We OOM after a few hours"
+- "We just have N users, why is memory so high?"
+
+This playbook is the hunt list to apply, in order. Skip ahead at your peril — the diagnostic curve from Step 1 is what determines whether subsequent steps make sense.
+
+## Step 1 — Get high-fidelity numbers
+
+ECS Container Insights aggregates at 5-min intervals. The `Maximum` value still smooths over the ~1 s spike that triggers V8 to abort. **Always prefer in-process instrumentation** for leak diagnosis.
+
+Add this to `back/src/main.ts` bootstrap:
+
+```ts
+import * as v8 from 'v8';
+
+setInterval(() => {
+  const mem = process.memoryUsage();
+  const heap = v8.getHeapStatistics();
+  const toMB = (n: number) => Math.round(n / 1024 / 1024);
+  console.log(
+    `[MemDiag] rss=${toMB(mem.rss)}MB heapTotal=${toMB(mem.heapTotal)}MB ` +
+    `heapUsed=${toMB(mem.heapUsed)}MB external=${toMB(mem.external)}MB ` +
+    `arrayBuffers=${toMB(mem.arrayBuffers)}MB heapLimit=${toMB(heap.heap_size_limit)}MB ` +
+    `usedFraction=${(heap.used_heap_size / heap.heap_size_limit).toFixed(3)} ` +
+    `mallocedMem=${toMB(heap.malloced_memory)}MB`,
+  );
+}, 30_000).unref();
+```
+
+CloudWatch can graph the `[MemDiag]` lines. Interpretation:
+
+| Pattern | Likely culprit |
+| --- | --- |
+| `heapUsed` climbs, `external` / `arrayBuffers` flat | JS object retention (closures, caches, listener arrays) |
+| `external` / `arrayBuffers` climb | Buffer/string data (compression buffers, HTTP queues, response serialization) |
+| `rss − heapTotal` climbs | Native heap (addon libraries: pinecone, ffmpeg, chromium, etc.) |
+
+## Step 2 — Codebase suspect list
+
+These are patterns the team has verified exist in `back/` and that could leak. Walk them in order — most common first.
+
+<AccordionGroup>
+  <Accordion title="1. space_run_logs.service.ts — scheduleUpsert closures">
+    `setTimeout` closure captures the full `RunLogDocument`. Fires on each node completion during flow execution. Cancelled timers leave behind closures whose docs linger until GC.
+
+    Path (approximate): `back/src/app-api/space_run_logs/space_run_logs.service.ts`
+  </Accordion>
+
+  <Accordion title="2. mcp_oauth.service.ts — module-level Maps">
+    Module-level `pkceStateStore`, `discoveryCache`, `registrationCache`. Only `pkceStateStore` has lazy TTL cleanup; the others either evict at read time or have no eviction at all.
+
+    Path (approximate): `back/src/app-api/mcp_call/mcp_oauth.service.ts`
+  </Accordion>
+
+  <Accordion title="3. gateway.ts — EventEmitter.defaultMaxListeners = Infinity">
+    Disables Node's listener-leak warning globally. If anything attaches listeners without removing them (Socket.io connection handlers being a prime example), the leak accumulates **without any console warning**.
+
+    Path (approximate): `back/src/app-api/gateway/gateway.ts`
+  </Accordion>
+
+  <Accordion title="4. winston.logger.ts — Datadog HTTP transport">
+    `winston.transports.Http` to Datadog buffers logs in memory if the endpoint is slow. Each log entry includes `usage.bodySent` — the full customer request body. Slow Datadog → growing queue → leak that scales with log volume.
+
+    Path (approximate): `back/src/logging/winston.logger.ts`
+  </Accordion>
+
+  <Accordion title="5. zapier-webhook-store.service.ts — service singleton Maps">
+    `store` / `versionedStore` Maps in a service singleton. Grow if webhooks arrive faster than poll consumers drain them.
+
+    Path (approximate): `back/src/app-api/integrations/zapier-webhook-store.service.ts`
+  </Accordion>
+
+  <Accordion title="6. main.ts — compression() middleware">
+    Default compression middleware buffers chunks before flushing. Large response payloads (50 MB JSON flow opens) become significant transient buffers; under concurrency, multiple stack up.
+  </Accordion>
+
+  <Accordion title="7. TypeORM EntityManager.transaction callbacks">
+    If a large `nodes`/`edges` array is passed to `upsertNodes`, the manager keeps references until commit. With concurrent saves on a complex flow, multiple 50 MB arrays stack.
+  </Accordion>
+
+  <Accordion title="8. Bull queue processors holding completed job data">
+    `back/src/jobs/apiV2Job/apiV2Job.processor.ts` and siblings. Inspect any `@Process` handler for closure capture of large data outside its scope.
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  These line numbers and paths may have shifted since the memory snapshot was captured. Verify against the current `back/` before asserting.
+</Note>
+
+## Step 3 — Hunt commands
+
+Fast scan for module-level mutable state:
+
+```bash
+grep -rn "^const \w\+ = new \(Map\|Set\|WeakMap\)" back/src/
+grep -rn "private readonly \w\+ = new \(Map\|Set\)" back/src/
+grep -rn "EventEmitter.defaultMaxListeners" back/src/
+```
+
+Fast scan for closure capture of large args inside long-lived callbacks:
+
+```bash
+grep -rn "setTimeout\|setInterval" back/src/ | grep -v "node_modules"
+```
+
+## Step 4 — Don't trust "we don't have many users"
+
+A leak that fires "per flow execution" or "per cron tick" can fill 6+ GB in 30 min even with **two** active developers, because:
+
+- Each flow execution may emit dozens of node-completion events
+- Each event captures the entire run document (often tens of MB on a complex flow)
+- Even if Map entries are replaced (single live entry per processId), the cancelled-timer closure tail holds the previous doc until GC, which under CPU pressure can be delayed
+
+Low user count rules out **linear-with-requests** growth, not **geometric-with-internal-events** growth.
+
+## Step 5 — Exit-code disambiguation
+
+The exit code tells you what kind of OOM you have, and that tells you what to fix.
+
+| Exit code | What it means | Diagnostic value |
+| --- | --- | --- |
+| **134** | V8's own heap budget hit. Look for `FATAL ERROR: Reached heap limit. Allocation failed - JavaScript heap out of memory` in CloudWatch | **Good** — gives a clear cause and stack trace |
+| **137** | Linux cgroup OOM killer (`SIGKILL`). Container exceeded its memory limit. The process gets no chance to log; CloudWatch shows `"Killed"` alone | **Bad** — silent kill. Means V8 heap was set higher than the container budget, or native memory grew past the slack |
+
+**Rule:** always keep `--max-old-space-size` ≤ ~85% of container memory. Otherwise leaks manifest as silent kills, which is the worst kind to debug.
+
+## How to apply
+
+When the report comes in:
+
+1. Confirm the symptom is **slow climb**, not a spike or one-off. Spikes have different causes.
+2. Deploy MemDiag if not already there. Let it run for the time it takes the leak to manifest.
+3. Read the curve — which counter grew?
+4. Walk Step 2 suspects whose pattern matches the counter.
+5. Don't propose blind fixes without the diagnostic curve. The team prefers **evidence-driven changes over speculative ones**.
+
+## Related
+
+- [CI/CD + deploy topology](/ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow) — how to resize a task definition once you've identified the fix
+- [`ec2-tunnel-prod`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod) — to inspect what was actually running on prod when the OOM happened (if the leak correlates to specific traffic patterns)

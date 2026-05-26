@@ -1,0 +1,128 @@
+---
+title: "pr-creator"
+description: "Create Pull Requests in back/ and front/ from a ClickUp task ID. Handles branch discovery, title formatting per the Engineering Handbook, body template, base=production, and the deploy announcement message."
+---
+
+## What it does
+
+Hand it a ClickUp task ID or URL. The agent finds the matching branch in both `back/` and `front/`, reports the last commit, formats a title and body per the Engineering Handbook, and creates the PR(s) via `gh`. It stops before merging.
+
+As a bonus, when you finish a deploy session, it composes the team-facing deploy announcement message and copies it to the clipboard.
+
+The agent is defined at `.claude/agents/pr-creator.md`.
+
+## When to invoke it
+
+You have a ClickUp task code (e.g., `868jk7x3j`) or full URL, and at least one of `back/` or `front/` has a branch named `<change_type>/<task_code>` (where `change_type` ∈ `fix`, `feat`, `refactor`).
+
+## What it does, step by step
+
+<Steps>
+  <Step title="Find the branch in both repos">
+    Runs `git fetch --prune` and greps remote branches for the task code in both `back/` and `front/`. If multiple branches match, reports all and asks you to pick — never guesses silently.
+  </Step>
+  <Step title="Show the last commit">
+    For each found branch, prints a table line: `repo | branch | short_hash | author | date | subject`.
+  </Step>
+  <Step title="Build the PR title">
+    Format: `[TYPE] Imperative task name` where `TYPE` is `FEAT`, `FIX`, or `REFACTOR`. The name is derived from the commits in the branch (since divergence from base), not copied from a single commit message verbatim. Target: under 72 chars, no trailing period.
+  </Step>
+  <Step title="Build the PR body">
+    Uses the exact three-section template from the Engineering Handbook:
+    - **Description** — 2–5 sentences synthesizing what changed, why, and how
+    - **Preview** — placeholder for the author to fill (the agent can't take screenshots)
+    - **References** — the ClickUp URL
+  </Step>
+  <Step title="Create the PR">
+    `gh pr create --base production --head <branch>`. If both repos have the branch, creates both PRs in parallel.
+  </Step>
+  <Step title="Report PR URLs">
+    One line per PR. Stops.
+  </Step>
+</Steps>
+
+## PR body template
+
+```markdown
+## Description
+
+<2–5 sentence synthesis of what changed, why, and how. Pull from the
+commit messages and diff summary. Mention the area touched.>
+
+## Preview
+
+_To be added by the author before review._
+
+## References
+
+https://app.clickup.com/t/<task_code>
+```
+
+## Deploy announcement (optional)
+
+When you say "compose the message" / "draft the announcement" / "team message" after the session's deploy is done, the agent generates a Gmail Chat–friendly plain-text message covering every ClickUp task deployed in the session, and copies it to your clipboard.
+
+**Format:**
+
+```
+Hey team, I just deployed the following to production:
+
+- <Task name 1> — https://app.clickup.com/t/<task_code_1>
+- <Task name 2> — https://app.clickup.com/t/<task_code_2>
+
+Please give me a shout if anything looks off after the rollout. Thanks!
+```
+
+**Rules:**
+
+- 100% English, no emojis, no markdown — Gmail Chat renders plain text
+- One bullet per task, even if it had PRs in both repos
+- Em dash (`—`) between task name and URL, not a hyphen or colon
+- Closing line is verbatim unless you customize
+
+## Hard rules
+
+- **Never merges** a PR it created.
+- **Never pushes** to production or any branch directly.
+- **Never amends or force-pushes** the source branch.
+- **Default base = `production`** — only changes if you explicitly say so.
+- **Always includes the ClickUp link** under References.
+- If `gh` auth is missing, surfaces it and stops (does not work around).
+
+## When it asks vs. proceeds
+
+**Asks when:**
+- Multiple branches match the task code
+- Commit history is sparse or vague and a good title can't be derived
+- Both repos have the branch but the diffs look unrelated
+
+**Proceeds when:**
+- Exactly one branch in one or both repos matches
+- A clear title is derivable
+- You've already confirmed earlier in the session
+
+## How to invoke
+
+Paste the ClickUp link or task code:
+
+```
+use the pr-creator agent — https://app.clickup.com/t/868jk7x3j
+```
+
+Or directly:
+
+```
+Agent(subagent_type="pr-creator", prompt="868jk7x3j")
+```
+
+## Out of scope
+
+- Creating branches
+- Pushing commits
+- Merging PRs
+- Approving/reviewing PRs
+- Cherry-picking or rebasing
+
+## Related
+
+- [PR and deploy flow playbook](/ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow) — the end-to-end flow this agent slots into

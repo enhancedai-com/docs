@@ -1,0 +1,171 @@
+---
+title: "PR and deploy flow"
+description: "End-to-end: from a ClickUp task to a production deploy. Branch convention, PR creation via pr-creator, CI/CD topology, the prod deploy command, and the team announcement message."
+---
+
+## When to use this
+
+You finished work on a ClickUp task and need to ship it. This is the team's standard end-to-end flow.
+
+## The five stages
+
+```
+┌───────────┐   ┌─────┐   ┌────────┐   ┌────────┐   ┌──────────────┐
+│ ClickUp   │ → │ PR  │ → │ Review │ → │ Deploy │ → │ Announcement │
+└───────────┘   └─────┘   └────────┘   └────────┘   └──────────────┘
+```
+
+## Branch convention
+
+| Repo | Dev branch | Staging branch | Production branch |
+| --- | --- | --- | --- |
+| Flux-Prompt (`back/`) | `master` | `staging` | `production` |
+| Flux-Prompt-Frontend (`front/`) | `main` | `staging` | `production` |
+
+Feature branches follow `<change_type>/<task_code>` where `change_type` ∈ `fix`, `feat`, `refactor`. Example: `feat/868jk7x3j`.
+
+All PRs target `production`. Promotion to dev/staging happens via `git merge origin/production` into the target branch and push.
+
+## Stage 1 — Create the PR
+
+Use the [`pr-creator` agent](/ai-workflows/internal-developer-workflows/agents/pr-creator) with the ClickUp task code:
+
+```
+use the pr-creator agent — https://app.clickup.com/t/868jk7x3j
+```
+
+The agent finds the matching branch in both `back/` and `front/`, formats the title (`[FEAT] Imperative name`), fills the body template (Description / Preview / References), and runs `gh pr create --base production`.
+
+## Stage 2 — Review
+
+Standard team review. The agent leaves `Preview` as a placeholder for you to fill with screenshots/logs before requesting review.
+
+## Stage 3 — Deploy
+
+### CI/CD triggers (`back/`)
+
+| Workflow | Trigger | Behavior |
+| --- | --- | --- |
+| `cicd_dev.yml` | `push` to `master` | Auto-deploy to ECS dev |
+| `cicd_staging.yml` | `push` to `staging` or `workflow_dispatch` | Auto on push, manual on demand |
+| `cicd_prod.yml` | `workflow_dispatch` **only** | Manual command — never auto-deploys |
+
+Front repo has the equivalent S3 deploys: `Deploy to S3 Dev` (push to `main`), `Deploy to S3 Staging` (push to `staging`), `Deploy to S3 Prod` (`workflow_dispatch`).
+
+### Production deploy command
+
+```bash
+gh workflow run cicd_prod.yml --ref production
+```
+
+The workflow builds an image tagged with `${{ github.sha }}` of `production`, pushes to ECR, renders the task definition, and deploys to `api-service-prod`.
+
+### Watch the rollout
+
+```bash
+aws ecs describe-services \
+  --cluster enhancedai-prod \
+  --services api-service-prod \
+  --region us-east-1 \
+  --query 'services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,deployments:deployments[].rolloutState}'
+```
+
+### See what commit is live
+
+```bash
+aws ecs describe-task-definition \
+  --task-definition api-task-definition-prod \
+  --query 'taskDefinition.containerDefinitions[0].image' \
+  --region us-east-1
+```
+
+The SHA tag in the image URI equals the git commit.
+
+## ECS topology (back/, us-east-1)
+
+| Env | Cluster | Service | Task def family | ECR repo |
+| --- | --- | --- | --- | --- |
+| Dev | `enhancedai-dev` | `api-service-dev` | `api-task-definition-dev` | `enhancedai-ecr-dev` |
+| Staging | `enhancedai-staging` | `api-service-staging` | `api-task-definition-staging` | `enhancedai-ecr-staging` |
+| Prod | `enhancedai-prod` | `api-service-prod` | `api-task-definition-prod` | `enhancedai-ecr-prod` |
+
+CloudWatch log groups: `/ecs/api-task-definition-{dev,staging,prod}` (us-east-1).
+
+Container env is mostly empty — secrets come from AWS Secrets Manager. Adding a runtime knob means adding to `containerDefinitions[0].environment` in the task definition and registering a new revision.
+
+## Resizing a task definition
+
+When a task needs more CPU/memory (e.g., after diagnosing a [memory leak](/ai-workflows/internal-developer-workflows/playbooks/memory-leak-diagnosis)):
+
+<Steps>
+  <Step title="Pull current task def JSON">
+    ```bash
+    aws ecs describe-task-definition \
+      --task-definition api-task-definition-prod \
+      --query 'taskDefinition' --region us-east-1 > taskdef.json
+    ```
+  </Step>
+  <Step title="Strip read-only fields">
+    Remove: `taskDefinitionArn`, `revision`, `status`, `requiresAttributes`, `compatibilities`, `registeredAt`, `registeredBy`, `deregisteredAt`.
+  </Step>
+  <Step title="Edit cpu and memory">
+    Update the top-level `cpu` and `memory` values. Preserve `requiresCompatibilities` exactly — dev/staging include `MANAGED_INSTANCES` alongside `FARGATE`; prod is `FARGATE` only.
+  </Step>
+  <Step title="Write the file without a BOM">
+    On Windows PowerShell, `Out-File -Encoding utf8` writes UTF-16 LE with BOM, which AWS CLI rejects. Use:
+    ```powershell
+    [System.IO.File]::WriteAllText(
+      "$pwd\taskdef.json",
+      $json,
+      (New-Object System.Text.UTF8Encoding $false)
+    )
+    ```
+  </Step>
+  <Step title="Register the new revision">
+    ```bash
+    aws ecs register-task-definition --cli-input-json file://taskdef.json --region us-east-1
+    ```
+  </Step>
+  <Step title="Update the service">
+    ```bash
+    aws ecs update-service \
+      --cluster enhancedai-prod \
+      --service api-service-prod \
+      --task-definition api-task-definition-prod:<new-rev> \
+      --force-new-deployment \
+      --region us-east-1
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Setting `--max-old-space-size` larger than the container memory budget causes silent SIGKILL (exit 137, no V8 trace). Always keep V8 heap ≤ ~85% of container memory.
+</Warning>
+
+## Stage 4 — Deploy announcement
+
+After the rollout completes, ask the [`pr-creator` agent](/ai-workflows/internal-developer-workflows/agents/pr-creator) to compose the team message. The agent collects every ClickUp task deployed in the session and produces:
+
+```
+Hey team, I just deployed the following to production:
+
+- <Task name 1> — https://app.clickup.com/t/<task_code_1>
+- <Task name 2> — https://app.clickup.com/t/<task_code_2>
+
+Please give me a shout if anything looks off after the rollout. Thanks!
+```
+
+Format rules:
+
+- Plain text (no markdown bold/italic — Gmail Chat renders plain text)
+- No emojis
+- One bullet per ClickUp task, even if it had PRs in both repos
+- Em dash (`—`) between task name and URL
+
+The agent copies the message to your clipboard. Paste into the team channel.
+
+## Related
+
+- [`pr-creator` agent](/ai-workflows/internal-developer-workflows/agents/pr-creator) — automates PR creation and the announcement
+- [Memory leak diagnosis](/ai-workflows/internal-developer-workflows/playbooks/memory-leak-diagnosis) — when the deploy fix is a resize
+- [Flux error investigation](/ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation) — when a deploy needs to be diagnosed post-rollout

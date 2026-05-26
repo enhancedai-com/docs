@@ -1,0 +1,117 @@
+---
+title: "ec2-tunnel-prod"
+description: "Strictly read-only access to the production PostgreSQL. Triple-layer safety: Node-side query validator, session-level read-only flag, explicit read-only transaction wrapper."
+---
+
+## What it does
+
+Provides SELECT-only access to FluxPrompt's production PostgreSQL through the prod bastion. Every other operation — INSERT, UPDATE, DELETE, DDL, GRANT, COPY-TO-FILE, MERGE, EXPLAIN ANALYZE of DML — is refused before the query reaches the database.
+
+The skill lives at `.workflow/skills/ec2-tunnel-prod/`. Source of truth for its behavior is the `SKILL.md` file there.
+
+<Warning>
+  This skill exists **only for read access**. If you need to write to prod, that goes through migrations and an audited PR — never through this skill. There is no override flag, and asking for "just this once" will be refused.
+</Warning>
+
+## Why a separate skill
+
+Prod data is the source of truth for the business. Any accidental write — even a SET, a CREATE TEMPORARY TABLE, or an EXPLAIN ANALYZE of an UPDATE — is a critical incident. Splitting prod access from dev/staging access means:
+
+- The validator is **always on** for prod and cannot be disabled.
+- Engineers can't accidentally point a `tunnel-and-query.mjs` script at prod with a write statement.
+- The skill description itself signals "this is a different operating mode" — Claude won't conflate the two.
+
+## Triple-layer defense
+
+Every query passes through three independent checks. All three must pass for the query to execute:
+
+<Steps>
+  <Step title="Statement-type validation (Node side)">
+    The query is parsed minimally (strip comments, find the first significant keyword, ensure single statement). Only `SELECT`, `WITH ... SELECT`, `EXPLAIN`, `SHOW`, `VALUES`, `TABLE` are accepted. Anything else is refused before bytes leave Node.
+  </Step>
+  <Step title="Session-level read-only (Postgres side)">
+    Immediately after connecting, the script runs `SET default_transaction_read_only = on`. Any DDL or DML attempted afterward fails with `cannot execute X in a read-only transaction`.
+  </Step>
+  <Step title="Explicit read-only transaction wrapper">
+    Even if the second layer were somehow bypassed, every query is wrapped in `BEGIN TRANSACTION READ ONLY ... COMMIT`. A third write check by Postgres itself.
+  </Step>
+</Steps>
+
+## Required environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `SSH_PASSPHRASE_PROD` | Prod bastion key passphrase (often same as non-prod) |
+| `PGPASSWORD_PROD` | Prod Postgres password |
+| `DB_HOST_PROD` | Prod RDS endpoint |
+| `SSH_HOST_PROD` | Prod bastion hostname/IP |
+
+## Standard workflows
+
+### Single SELECT
+
+```powershell
+Get-Content ".\.workflow\.env" | Where-Object { $_ -match '^([A-Z_]+)=(.*)$' } | ForEach-Object {
+  Set-Item "env:$($matches[1])" $matches[2]
+}
+$env:QUERY = "SELECT count(*) FROM flows WHERE \"deletedAt\" IS NULL"
+node .\.workflow\skills\ec2-tunnel-prod\templates\read-query.mjs
+```
+
+### Multiple SELECTs in succession
+
+Open a long-running read-only tunnel and connect with any client:
+
+```powershell
+node .\.workflow\skills\ec2-tunnel-prod\templates\start-tunnel-ro.mjs
+# In another shell:
+$env:PGPASSWORD = "<PGPASSWORD_PROD value>"
+psql -h localhost -p 5435 -U postgres
+```
+
+Even through this tunnel, the script issues `SET default_transaction_read_only = on` for every new connection. Tools attached to this listener cannot write either.
+
+### Copy data out of prod
+
+If you need to bring prod data into dev (snapshots, migration source data, etc.), **don't use this skill** — it returns rows to your terminal, not to a SQL file. Use the [`db-migration`](/ai-workflows/internal-developer-workflows/skills/db-migration) skill instead.
+
+## What gets refused
+
+| User request | Action |
+| --- | --- |
+| `SELECT * FROM flows WHERE x` | Run it (read) |
+| `EXPLAIN <select>` | Run it (read) |
+| `EXPLAIN ANALYZE <insert/update/delete>` | **Refuse** — `EXPLAIN ANALYZE` of DML actually executes the statement |
+| `UPDATE one row in prod, just this once` | **Refuse** — redirect to migration PR process |
+| `CREATE TEMPORARY TABLE for my query` | **Refuse** — use `WITH ... SELECT` instead |
+| `DELETE this stale row` | **Refuse** — redirect to migration PR process |
+| `SELECT * FROM pg_read_binary_file(...)` | **Refuse** — leaks data outside the DB |
+| Standard list/find queries | Run it (read) |
+| Large dump for analysis | Run it (read, allowed) |
+
+## Hard rules
+
+- **Never run a write query.** If asked, refuse and direct the requester to the migration/PR process. Do not "just this once".
+- **Never bypass the validator.** No `force` flag, even for "harmless" `CREATE TEMPORARY TABLE` or non-essential `SET`.
+- **Never disable any of the three layers**, even temporarily.
+- **Be wary of `EXPLAIN ANALYZE` of DML** — the validator rejects these explicitly.
+- **Don't use superuser disk-reading functions** like `pg_read_binary_file` or `pg_read_server_files`.
+- **Don't use this skill for migrations or backfills**, even read-only "preparation" queries that lead to a write.
+
+## File layout
+
+| File | Purpose |
+| --- | --- |
+| `SKILL.md` | Orientation, policy, refusal table |
+| `references/read-only-policy.md` | Full validator rule set and rationale |
+| `references/connecting-to-prod.md` | Bastion and RDS details |
+| `templates/ssh-helpers-prod.mjs` | Prod bastion connection helper |
+| `templates/read-only-validator.mjs` | Query validator (shared) |
+| `templates/read-query.mjs` | One-shot read query |
+| `templates/start-tunnel-ro.mjs` | Long-running RO tunnel |
+| `templates/list-keys.mjs` | Inspect prod bastion authorized_keys |
+
+## Related
+
+- [`ec2-tunnel`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel) — same idea for dev/staging (no read-only restriction)
+- [`db-investigator`](/ai-workflows/internal-developer-workflows/agents/db-investigator) — automatically uses this skill when the env is prod

@@ -1,0 +1,123 @@
+---
+title: "db-setup"
+description: "Onboard a new teammate end-to-end to the .workflow/ tooling. Prereqs check, SSH key generation, .env population, dependency install, smoke test. Idempotent — safe to re-run."
+---
+
+## What it does
+
+Walks a new teammate from "I just got a clone of the workspace" to "I can run `db-investigator` against staging end-to-end". Detects which steps are already done and skips them, so it's safe to invoke multiple times.
+
+The agent is defined at `.claude/agents/db-setup.md`. It operates on **the teammate's** machine, in their workspace.
+
+<Tip>
+  This is the recommended path for any new team member. The agent does everything in [Onboarding](/ai-workflows/internal-developer-workflows/onboarding) for you, asking only for values it can't derive.
+</Tip>
+
+## Two phases
+
+```
+Phase A — Before the admin authorizes the public key
+  1. Prereqs check         Node 18+, pnpm, git, optionally AWS CLI
+  2. SSH key               Generate if missing; print the pubkey
+  3. .env                  Copy from .env.example, ask for each value
+  4. Skill deps            pnpm install inside skills/*/templates/
+  5. Print handoff         "send this pubkey to <admin>"
+
+Phase B — After the admin authorizes the pubkey
+  6. Smoke test            SELECT against dev, then staging
+  7. Done                  "what's next" message
+```
+
+The agent detects what's already done by reading the filesystem and `.env`. If a step is complete, it skips.
+
+## Phase A — pre-authorization
+
+### Prereqs check
+
+Reports a small table of installed tools and what to do if anything is missing:
+
+| Tool | Required | Action if missing |
+| --- | --- | --- |
+| Node 18+ | yes | Install from [nodejs.org](https://nodejs.org/) (LTS) |
+| pnpm | yes | `npm install -g pnpm` |
+| git | yes | [git-scm.com](https://git-scm.com/) |
+| AWS CLI v2 | optional | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
+
+### SSH key
+
+Checks if `~/.ssh/id_rsa` exists. If yes, uses it (asks before overwriting). If no, asks the teammate to generate one interactively (so they can set the passphrase). Always prints the **public** key so they can hand it to the admin.
+
+<Warning>
+  The agent will never accept, ask for, or display a **private** key. The setup doesn't need it.
+</Warning>
+
+### `.env` population
+
+Copies `.workflow/.env.example` to `.workflow/.env` if missing, then walks through each variable one at a time (using `AskUserQuestion` so secrets don't all get pasted into a single response). Confirms by key name only — never echoes values back to the chat.
+
+Writes the file with `-Encoding utf8` (not the default UTF-16 BOM that PowerShell 5.1 produces, which the dotenv loader can't read).
+
+### Skill deps
+
+Runs `pnpm install --silent` inside `templates/` for each skill that has a `package.json`.
+
+### Handoff
+
+Prints a copy-paste-ready message containing the teammate's public key, addressed to the admin. The agent stops here and waits.
+
+## Phase B — post-authorization
+
+Once the admin confirms the key is authorized:
+
+### Smoke test
+
+Runs a SELECT against **dev** (least sensitive env) to verify SSH + DB connectivity end-to-end:
+
+```sql
+SELECT current_database(), current_user, now() AS server_time;
+```
+
+Expected: `current_database`, `current_user = postgres`, current timestamp. If it works, the agent repeats once against staging. If the dev test fails, it does **not** continue to staging — it triages dev first.
+
+### Common failure modes
+
+| Error | Cause | Fix |
+| --- | --- | --- |
+| `All configured authentication methods failed` | Pubkey not authorized yet, or wrong passphrase in `.env` | Confirm admin ran `add-key.mjs`; re-check `SSH_PASSPHRASE` |
+| `connect ETIMEDOUT <ip>:22` | Network blocks port 22 | Check VPN; try a different network |
+| `password authentication failed for user "postgres"` | Wrong `PGPASSWORD_<env>` | Re-fetch from admin |
+| `getaddrinfo ENOTFOUND <host>` | DB hostname typo or empty | Re-check `DB_HOST_<env>` |
+
+## Hard rules
+
+- **Never accept a private key.** Public key only.
+- **Never print or log `.env` contents** after writing. Confirm by key name only.
+- **Never put secrets on the shell command line** where they'd hit shell history.
+- **Never regenerate an existing SSH key** without explicit confirmation — invalidates every authorization.
+- **Never run `add-key.mjs`.** Authorizing the new pubkey is the admin's action; the new teammate hands off and stops.
+- **Default smoke test is against dev**, not staging or prod. Even though `ec2-tunnel` doesn't enforce read-only for non-prod, the smoke test is a SELECT.
+- **For prod, always use `ec2-tunnel-prod`** — the agent mentions this once in the "what's next" message.
+
+## How to invoke
+
+```
+use the db-setup agent
+```
+
+Or directly:
+
+```
+Agent(subagent_type="db-setup", prompt="bootstrap my environment for the .workflow tooling")
+```
+
+## Out of scope
+
+- Authorizing pubkeys on the bastion (admin's `add-key.mjs` run)
+- Provisioning RDS users or rotating shared DB passwords
+- Installing Node, pnpm, AWS CLI, or git (points to installers)
+- Anything outside `.workflow/` tooling
+
+## Related
+
+- [Onboarding](/ai-workflows/internal-developer-workflows/onboarding) — the manual walkthrough this agent automates
+- [`ec2-tunnel`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel) — the skill the smoke test exercises

@@ -1,0 +1,124 @@
+---
+title: "ec2-tunnel"
+description: "Programmatic SSH bastion access for dev and staging — manage authorized keys and run queries against Postgres without setting up port forwards manually."
+---
+
+## What it does
+
+Two responsibilities, packaged as one skill:
+
+1. **Key management** on the bastion's `authorized_keys` — list, add, and remove SSH keys for teammates.
+2. **Tunneled database access** — open an SSH connection, forward a local port to RDS, run a query, close. All in one Node process.
+
+The skill lives at `.workflow/skills/ec2-tunnel/`. Source of truth for its behavior is the `SKILL.md` file in that folder.
+
+<Warning>
+  This skill targets **dev and staging only**. For production, use the [`ec2-tunnel-prod`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod) skill — it enforces read-only at three layers and is non-bypassable.
+</Warning>
+
+## When to use it
+
+- Run a one-off SELECT against dev or staging to verify something
+- Add a new teammate's SSH key after they finish [onboarding](/ai-workflows/internal-developer-workflows/onboarding) (admin only)
+- Remove a key (e.g., teammate leaves, lost laptop)
+- List who is currently authorized
+- Open a long-running tunnel and connect with `psql` / DBeaver / TablePlus
+
+## Required environment variables
+
+All loaded from `.workflow/.env`:
+
+| Variable | Purpose |
+| --- | --- |
+| `SSH_PASSPHRASE` | Your bastion key passphrase |
+| `PGPASSWORD_DEV` / `PGPASSWORD_STAGING` | Postgres password for the target env |
+| `DB_HOST_DEV` / `DB_HOST_STAGING` | RDS endpoint for the target env |
+| `SSH_HOST_NONPROD` | Non-prod bastion hostname/IP |
+
+## Standard workflows
+
+### Run a single query
+
+```powershell
+Get-Content ".\.workflow\.env" | Where-Object { $_ -match '^([A-Z_]+)=(.*)$' } | ForEach-Object {
+  Set-Item "env:$($matches[1])" $matches[2]
+}
+$env:ENV = "staging"
+$env:QUERY = "SELECT count(*) FROM flows WHERE \"deletedAt\" IS NULL"
+node .\.workflow\skills\ec2-tunnel\templates\tunnel-and-query.mjs
+```
+
+The script opens the SSH connection, forwards to RDS, runs the query, prints rows, then exits. No leftover state.
+
+### Open a long-running tunnel
+
+For multiple queries or to use a GUI client:
+
+```powershell
+node .\.workflow\skills\ec2-tunnel\templates\start-tunnel.mjs
+# In another shell:
+$env:PGPASSWORD = "<dev or staging password>"
+psql -h localhost -p 5433 -U postgres
+```
+
+Default local port is `5433` (avoids conflict with a local Postgres on `5432`). Stop the tunnel with `Ctrl+C`.
+
+### Manage SSH keys
+
+<Steps>
+  <Step title="List currently authorized keys">
+    Show who is on the bastion. Run when in doubt before adding/removing.
+    ```powershell
+    node .\.workflow\skills\ec2-tunnel\templates\list-keys.mjs
+    ```
+  </Step>
+  <Step title="Add a teammate's key">
+    Get the **public** key from the teammate (the file ending in `.pub`). Edit `add-key.mjs` and paste it into `NEW_KEY`, then run:
+    ```powershell
+    node .\.workflow\skills\ec2-tunnel\templates\add-key.mjs
+    ```
+    The script backs up `authorized_keys` first, appends idempotently (no duplicates), and verifies file permissions.
+  </Step>
+  <Step title="Remove a key">
+    Edit `remove-key.mjs` with the comment or fingerprint of the key to remove, then run it. The script aborts if the line-count delta is not exactly `-1`.
+  </Step>
+</Steps>
+
+## Hard rules
+
+These come directly from the skill's `SKILL.md` and are enforced or guarded by the templates:
+
+- **Never accept a private key** from anyone. Ask for the `.pub` file.
+- **Always back up `authorized_keys`** before modification — the templates do this automatically.
+- **Validate line-count delta** when removing — if it's not exactly `N-1`, abort.
+- **Set correct perms** after modification: `chmod 600 ~/.ssh/authorized_keys`, `chmod 700 ~/.ssh`. `sshd` silently ignores files with wrong perms.
+- **Never log** `SSH_PASSPHRASE` or `PGPASSWORD_*` in scripts or session output.
+- **Never commit** real DB endpoints or bastion IPs. They live in `.workflow/.env` only.
+
+## SQL gotchas in this codebase
+
+When writing queries against FluxPrompt tables, keep these in mind:
+
+- **TypeORM camelCase columns** like `createdAt`, `updatedAt`, `deletedAt` must be **double-quoted** in raw SQL: `"createdAt"`.
+- **Timestamps are stored as `timestamp without time zone`** but values are UTC. Convert to BRT (subtract 3 hours) when quoting to a Brazilian teammate.
+- **UUIDs are `uuid` type.** Cast with `id::text` if you want to `LIKE '<prefix>%'`.
+
+## File layout
+
+| File | Purpose |
+| --- | --- |
+| `SKILL.md` | Orientation and rules |
+| `references/manage-keys.md` | Detailed key management procedures |
+| `references/db-tunnel.md` | Programmatic SSH tunnel patterns |
+| `templates/list-keys.mjs` | Show current keys, perms, file health |
+| `templates/add-key.mjs` | Idempotent append + backup + verify |
+| `templates/remove-key.mjs` | Backup + grep -v + line-count sanity |
+| `templates/tunnel-and-query.mjs` | Open SSH, run one query, exit |
+| `templates/start-tunnel.mjs` | Long-running local listener |
+| `templates/ssh-helpers.mjs` | Shared SSH connect + exec wrapper |
+
+## Related
+
+- [`ec2-tunnel-prod`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod) — the read-only prod variant
+- [`db-migration`](/ai-workflows/internal-developer-workflows/skills/db-migration) — uses this skill's tunnel for source/target connectivity
+- [`db-investigator`](/ai-workflows/internal-developer-workflows/agents/db-investigator) — agent that wraps this skill for incident triage
