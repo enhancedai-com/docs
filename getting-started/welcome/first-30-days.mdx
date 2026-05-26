@@ -1,0 +1,87 @@
+---
+title: "First 30 days"
+description: "Concrete milestones at days 7, 14, and 30. Use this to know what 'on track' looks like — and to flag if you're not."
+---
+
+## Why this page exists
+
+Vague onboarding plans ("settle in, get comfortable, ask questions") sound nice but make it hard to know if you're behind. The industry's been converging on milestone-based onboarding for a reason: clear checkpoints let new hires self-assess and let buddies/managers help **before** problems compound.
+
+These milestones are deliberately conservative. Hitting them means you're doing fine. Beating them means great. Missing one isn't a problem — it's a flag to talk to your buddy and re-plan.
+
+## Day 7 — Shipped
+
+By the end of week 1:
+
+<AccordionGroup>
+  <Accordion title="Your environment runs end-to-end">
+    Backend + frontend + local Postgres + local Redis, all happy. You can log in at `localhost:3000` and the API responds. See [Machine setup](/getting-started/welcome/environment-setup).
+  </Accordion>
+  <Accordion title="Claude Code is set up the way the team uses it">
+    Claude Code installed, authenticated, Superpowers and Context7 plugins working, `.workflow/` skills available, `db-setup` agent ran and your SSH access is authorized on the bastion. See [Claude Code setup](/getting-started/welcome/claude-code).
+  </Accordion>
+  <Accordion title="One PR merged to dev or staging">
+    Real change. Real code review. Real CI deploy. See [Your first week — Day 5](/getting-started/welcome/first-week#day-5-ship).
+  </Accordion>
+  <Accordion title="You know the names of every teammate">
+    And the rough shape of what each one owns. See [The team](/getting-started/welcome/team).
+  </Accordion>
+  <Accordion title="You've read the deep docs at least once">
+    [Main API](/main-api/overview), [Worker](/worker/overview), [Client](/client/overview). Skim is fine — but you should know where to come back to.
+  </Accordion>
+</AccordionGroup>
+
+## Day 14 — Owning
+
+By the end of week 2:
+
+<AccordionGroup>
+  <Accordion title="You own a small feature end-to-end">
+    Not "implemented while pair-programming" — picked it up, designed it, shipped it, watched it land in staging. Could be small (one node config, one UI tweak) but yours.
+  </Accordion>
+  <Accordion title="You've reviewed someone else's PR">
+    Even if your comments are mostly questions. Reading other people's code is how the system shape sinks in. See [How we work — Code review](/getting-started/welcome/culture).
+  </Accordion>
+  <Accordion title="You ran an investigation with .workflow/ skills">
+    Used `ec2-tunnel` to query staging directly, or invoked `db-investigator` for a teammate's question. The tooling becomes muscle memory only by using it. See [Internal developer workflows](/ai-workflows/internal-developer-workflows/overview).
+  </Accordion>
+  <Accordion title="You know what 'in prod' looks like">
+    Watched a prod deploy. Read CloudWatch logs once. Browsed Datadog once. Even passively. See [PR and deploy flow](/ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow).
+  </Accordion>
+</AccordionGroup>
+
+## Day 30 — Independent
+
+By the end of month 1:
+
+<AccordionGroup>
+  <Accordion title="You're picking up tickets without help">
+    Your buddy isn't queuing them anymore. You read the backlog, claim what fits, and ship.
+  </Accordion>
+  <Accordion title="You've documented something">
+    Published one Mintlify page. Doesn't have to be a big feature — it could be a corner of the system you understood and someone else didn't. See [How we document](/getting-started/welcome/mintlify-quickstart).
+  </Accordion>
+  <Accordion title="You diagnosed a real issue">
+    Customer report or teammate report — and you took it through DB → CloudWatch → Datadog yourself. See [Flux error investigation](/ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation).
+  </Accordion>
+  <Accordion title="You've contributed to a non-trivial PR review">
+    Substantive comments that changed the design or caught a real bug, not just "looks good".
+  </Accordion>
+  <Accordion title="You know who to ping for what">
+    The "who owns what" table on [The team](/getting-started/welcome/team) feels obvious now. You don't need to look it up.
+  </Accordion>
+</AccordionGroup>
+
+## How to use this page
+
+- **Check in weekly with your buddy.** Five minutes is enough. "Day 7 — I've got items 1, 2, 4, 5. Item 3 is in review."
+- **If you're behind on something, say so.** Not as a confession — as data. The plan adjusts.
+- **If you're ahead, say so too.** Buddies misread quiet new hires as struggling.
+
+## Beyond 30 days
+
+Day 60 and Day 90 aren't documented here yet because they're more about the projects you're owning than about ramp-up. Your manager will set them with you in your first 1:1 after day 30.
+
+## Where to go next
+
+Most of the linked docs above are part of this Welcome guide or the [Internal developer workflows](/ai-workflows/internal-developer-workflows/overview) section. Read [How we work](/getting-started/welcome/culture) next if you haven't — it's the cultural glue that holds these milestones together.

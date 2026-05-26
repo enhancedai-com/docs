@@ -17,6 +17,21 @@
             "group": "Getting started",
             "pages": [
               "index",
+              {
+                "group": "Welcome",
+                "pages": [
+                  "getting-started/welcome/index",
+                  "getting-started/welcome/team",
+                  "getting-started/welcome/the-product",
+                  "getting-started/welcome/first-week",
+                  "getting-started/welcome/environment-setup",
+                  "getting-started/welcome/claude-code",
+                  "getting-started/welcome/mintlify-quickstart",
+                  "getting-started/welcome/first-30-days",
+                  "getting-started/welcome/culture",
+                  "getting-started/welcome/fun-stuff"
+                ]
+              },
               "getting-started/overview",
               "getting-started/git-workflow",
               "getting-started/delivery-workflow"

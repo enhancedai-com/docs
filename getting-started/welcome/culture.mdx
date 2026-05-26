@@ -1,0 +1,126 @@
+---
+title: "How we work"
+description: "Code review, PRs, async vs. calls, asking for help, language norms. The cultural glue that holds the team together."
+---
+
+> *If you ever think we made mistakes, it's because we were checking whether everyone is doing code review properly.*
+
+The line above is from the very first version of our onboarding deck. It stayed because it's a joke that contains a real principle: **code review is non-negotiable, even when — especially when — the change looks small**.
+
+This page is the rest of that principle, applied to the rest of how we work.
+
+## Code review
+
+The defaults:
+
+- **Every change goes through PR review.** No direct pushes to `production`, `staging`, `master`, or `main`. Pre-commit and CI hooks enforce most of it; the rest is on you.
+- **Two reviewers minimum.** Trivial changes can pass with one if the second reviewer is on vacation or unreachable, but the bar is "I genuinely don't think a second pair of eyes would catch anything", not "I'm in a hurry".
+- **Reviewer comments are answered, not ignored.** Reply to every thread, even if just "agreed, will fix" or "I'd argue against this because X". A PR with unresolved comments doesn't merge.
+
+### What a good PR review looks like
+
+- **Reads the diff for behavior, not just style.** "Does this do what the description says it does?" is the first question. "Is the naming consistent with the rest of the file?" is the second.
+- **Asks before suggesting.** "Why did you go this way?" beats "you should do it this way" — the author might have a reason you don't see.
+- **Catches the thing that would break in three months.** Type assertions that hide a refactor. A new module-level mutable Map. A `setTimeout` closure capturing a big object. The kind of thing that doesn't break today but compounds.
+- **Doesn't bikeshed.** If the comment is a preference and not a correctness issue, label it `nit:` and leave it. The author can ignore `nit:` comments.
+
+### What we explicitly **don't** do
+
+- **No CODEOWNERS gatekeeping.** Anyone on the team can review anyone's PR. The areas-of-ownership table in [The team](/getting-started/welcome/team#who-owns-what) is a routing hint, not a permissions system.
+- **No "LGTM" without reading.** Even on small PRs. If the diff is small, the review is small — but it happens.
+- **No squash-rewriting commit messages we'd want to lose.** Use `[TYPE] Imperative name` in the PR title; the squashed commit will follow.
+
+## PR conventions
+
+We use a structured PR title and body per the [Engineering Handbook](/ai-workflows/internal-developer-workflows/agents/pr-creator). Short version:
+
+- Branch name: `<change_type>/<task_code>` (e.g., `feat/868jk7x3j`)
+- PR title: `[TYPE] Imperative task name` (e.g., `[FEAT] Add Notion dynamic field picker`)
+- PR body: three sections — **Description**, **Preview** (screenshots / logs), **References** (ClickUp link)
+- Base branch: **`production`** for both `back/` and `front/`
+
+The `pr-creator` agent in Claude Code does this for you from a ClickUp task. Use it.
+
+## Deploys
+
+- **Dev:** auto-deploys from `master` (back/) or `main` (front/) on every push.
+- **Staging:** auto-deploys from `staging`. Promote with `git merge origin/production && git push origin staging`.
+- **Prod:** manual workflow dispatch — `gh workflow run cicd_prod.yml --ref production`.
+
+Full topology and the resize-task-def recipe in [PR and deploy flow](/ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow).
+
+After a prod deploy, post a short announcement in Gmail Chat. The `pr-creator` agent composes this and copies it to your clipboard.
+
+## Async vs. calls
+
+The default is async. Slack/Gmail Chat over calls, almost always.
+
+**When to call instead:**
+
+- The thread has gone three rounds and still hasn't converged
+- It's an incident in progress
+- Someone is stuck and a 5-minute screen share unblocks them
+- The conversation is emotionally loaded (1:1, feedback, sensitive)
+
+**When async is the right call:**
+
+- Anything that benefits from being searchable later
+- Anything where multiple people might have input
+- Anything where someone reading it next week would learn something
+
+Default to writing it down. If it turns out to be the wrong format, escalate to a call. The reverse — moving a call into writing afterwards — almost never happens, and the context evaporates.
+
+## Asking for help
+
+Two failure modes we work against:
+
+1. **Staying stuck silently.** Costs the most. The signal of a healthy team is people asking when they need to, not gritting through.
+2. **Asking before trying.** Annoying for the responder and skips the learning. The compromise: try the obvious thing first, then ask.
+
+The line we use internally — say it out loud or paste it into chat:
+
+> "I've spent 30 minutes on X and I'm not seeing the path forward. Can you take 5 minutes?"
+
+That's enough. No "sorry to bother", no preamble. We optimize for unblocking fast.
+
+## Languages
+
+- **Code, identifiers, commit messages, PRs, this docs site:** English. Always.
+- **Team chat (Gmail Chat, Slack):** Portuguese or English, whichever feels natural. Most of the team is Brazilian; you'll see both.
+- **Customer-facing messages:** match the customer's language. Most often English.
+
+The reason for English in code is that the team works async across timezones, and English is the lowest-friction default for everyone (including future hires who might not speak Portuguese). It's not a preference — it's an operational decision.
+
+## What "shipping" means here
+
+The bar is: a thing is shipped when **a real user could use it in production without you intervening**. That means:
+
+- It works in prod (not "works on my machine", not "works in dev")
+- It's documented if it changes a user-facing behavior or an API contract
+- The team knows it's there (deploy announcement, PR description, doc page — at least one)
+- Errors have proper logging — failures show up in CloudWatch and Datadog, not as silent timeouts
+
+"Code merged" is a milestone, not the finish line. "Deployed and announced" is the finish line.
+
+## Tooling expectations
+
+Two non-negotiable tools:
+
+- **Claude Code** — primary AI agent (set up via [this page](/getting-started/welcome/claude-code))
+- **Cursor** — primary IDE (`<TODO: link to internal Cursor setup if one exists>`)
+
+The rest is taste. Use whatever editor, terminal, browser, and music you want. The team has converged on the two tools above because the workflows around them — `.workflow/` skills, custom agents, plan mode — pay back the convergence.
+
+## What we don't do
+
+A short list of "explicitly out" patterns, so you know where the edges are:
+
+- **No `--no-verify`** on git hooks. Hook failures are a signal; investigate, don't bypass.
+- **No "just this once" writes to prod.** Migrations go through PRs. The `ec2-tunnel-prod` skill is SELECT-only by design.
+- **No undocumented heroics.** If you fixed a fire at 2 AM, write it up in the morning so the next person doesn't relive it.
+- **No "transition" code that nobody removes.** Delete the old path when the new one ships. Git history is the record.
+
+## Next
+
+- [Inside jokes](/getting-started/welcome/fun-stuff) — last stop on this guide
+- [First 30 days](/getting-started/welcome/first-30-days) — if you haven't seen the milestones yet

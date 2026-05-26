@@ -1,0 +1,88 @@
+---
+title: "Inside jokes and traditions"
+description: "Memes, rituals, and the recurring bits that make this team feel like a team. Read so you can riff along."
+---
+
+## Why this page exists
+
+Every team has inside jokes. They're a real thing — they signal belonging, they make hard days easier, and they're the stuff a new hire is most likely to feel locked out of. We're putting ours in writing so you don't have to spend three months figuring out why someone keeps saying `<inside joke>` in the team channel.
+
+If you read this and don't laugh, that's fine. You will after you've been here a month. If you read this and **do** laugh — congratulations, you're already one of us.
+
+<Note>
+  **Maintainers of this page:** keep it small and current. A joke that hasn't been told in a year doesn't need to be archived here. Delete fearlessly. Add `<TODO>` placeholders for the bits a new hire would want to know but the page doesn't cover yet.
+</Note>
+
+## Recurring bits
+
+### "13 seconds for WSL to fail"
+
+From the original onboarding deck. Refers to the average time between starting backend setup on Windows and discovering some bit of WSL didn't initialize correctly. Has since broadened to mean "the gap between confidence and reality".
+
+Modern usage: "I'm 13 seconds away from realizing why this isn't working."
+
+### "Paciência" as a requirement
+
+The old onboarding deck listed "Patience" alongside Node and Docker as an environment requirement. It stayed because it's accurate. Now it's a load-bearing tradition — every environment setup page mentions it.
+
+### "If we made mistakes, it was to check code review"
+
+The quote from the old deck, now codified in [How we work](/getting-started/welcome/culture). Trotted out any time someone catches a bug a previous PR introduced.
+
+### `<TODO: name of the current running gag>`
+
+`<TODO: explain it in two sentences. When did it start, what's the joke, when's the right moment to use it.>`
+
+## Rituals
+
+### Deploy announcements
+
+After every prod deploy, the deployer posts a message in Gmail Chat. The format is enforced by the `pr-creator` agent (see [pr-creator](/ai-workflows/internal-developer-workflows/agents/pr-creator#deploy-announcement-optional)):
+
+```
+Hey team, I just deployed the following to production:
+
+- <Task name 1> — https://app.clickup.com/t/<task_code_1>
+- <Task name 2> — https://app.clickup.com/t/<task_code_2>
+
+Please give me a shout if anything looks off after the rollout. Thanks!
+```
+
+Em dashes, plain text, one bullet per ClickUp task. We're particular about this.
+
+### Branch naming
+
+`<change_type>/<task_code>`. `feat/`, `fix/`, `refactor/`. Anything else gets gently roasted in code review.
+
+### "Sfink-flavored bug investigations"
+
+When a customer report leads to a multi-step DB → Datadog → CloudWatch dive that ends with "actually the customer is calling the wrong flow", that's a Sfink-flavored investigation. The full methodology lives in [Flux error investigation](/ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation). Named after Guilherme's nickname not because he's the only one who does them, but because he wrote the playbook.
+
+### `<TODO: other team rituals>`
+
+`<TODO: standup format, weekly demos, retro cadence, anything else>`
+
+## Names and nicknames
+
+The team uses nicknames a lot. Some are obvious (`Gio` for Giovanni). Some are not (`Sfink` for Guilherme). Don't be afraid to ask why someone's called what they're called — origin stories are usually a treat.
+
+Current nickname map: see [The team](/getting-started/welcome/team).
+
+## Tone in chat
+
+A few patterns you'll notice:
+
+- **Lowercase chat by default.** Capital letters mean someone is emphasizing something. Don't read sentence-case as cold — read it as "I'm being careful with this one".
+- **Emoji reactions over text replies** for ack ("👍" or "✅" instead of "ok got it"). Saves everyone a notification.
+- **No `@everyone` unless it's actually an incident.** Pings for visibility, not for attention.
+- **Memes are fine.** Memes that pile on a person aren't. The line is intent.
+
+## What this page isn't
+
+This page is **not** a documentation of every Slack thread that made someone laugh in 2024. The bar to be on this page is: a new hire would feel left out if they didn't know it. Everything else can stay in the chat history where it belongs.
+
+## Thanks for being here
+
+That's the end of the Welcome guide. The original deck's last slide was a "Thanks yous" — we kept the sentiment. You're going to ship a lot of good stuff. Looking forward to working with you.
+
+Now — [pick a ticket](/getting-started/welcome/first-week#day-3-get-your-hands-dirty) and let's go.

@@ -1,0 +1,118 @@
+---
+title: "Your first week"
+description: "Day-by-day plan for your first five days at FluxPrompt. Ends with a real PR merged to production."
+---
+
+## The goal
+
+By Friday of your first week, you should have **a pull request mergeado and deployed to staging**. Not a tutorial. Not a hello-world. A real change to the real codebase, no matter how small.
+
+Industry data backs this up — shipping something real in week one is the single biggest predictor of whether a new engineer feels confident by month two. So we plan around it.
+
+<Tip>
+  If you're behind on this schedule, that's fine. Tell your buddy and re-plan. The goal is to ship — not to hit Friday at all costs.
+</Tip>
+
+## Day 1 — Land
+
+The live onboarding session happens today. Your buddy or another teammate walks you through:
+
+<Steps>
+  <Step title="Welcome and team intro">
+    The first three pages of this guide: [Welcome](/getting-started/welcome), [The team](/getting-started/welcome/team), [What we build](/getting-started/welcome/the-product). Come with questions.
+  </Step>
+  <Step title="Accesses and accounts">
+    Slack/Gmail Chat, ClickUp, GitHub (added to enhancedai-com org), AWS console read access, Datadog read access, Mintlify dashboard. Your buddy makes sure each one works **today**, not "later this week".
+  </Step>
+  <Step title="Read this guide end-to-end">
+    Even the [inside jokes](/getting-started/welcome/fun-stuff) page. Skim it. You're not memorizing — you're building a map so when something comes up tomorrow you remember where to look.
+  </Step>
+</Steps>
+
+You don't write code on day 1. You set yourself up to write a lot of it on day 2.
+
+## Day 2 — Boot the machine
+
+Today is environment setup. Block the morning. Coffee.
+
+<Steps>
+  <Step title="Clone the workspace">
+    The workspace contains `back/`, `front/`, `docs/`, and the team-shared `.workflow/` directory. Your buddy points you to the right repos and shows you how it's laid out locally.
+  </Step>
+  <Step title="Run the backend">
+    Follow [Machine setup](/getting-started/welcome/environment-setup). Goal: `pnpm dev:api` runs and you can hit `http://localhost:3001/health` (or similar) without a stack trace.
+  </Step>
+  <Step title="Run the frontend">
+    `pnpm dev` from `front/` and you can log into [http://localhost:3000](http://localhost:3000) against your local backend.
+  </Step>
+  <Step title="Install Claude Code">
+    Follow [Claude Code setup](/getting-started/welcome/claude-code). By the end of the day you should be able to ask Claude Code something inside the `back/` repo and have it read files for you.
+  </Step>
+</Steps>
+
+If something fails today, **call your buddy on a quick screen-share**. Day 2 frustration compounds. Day 2 unblocked is half the battle.
+
+## Day 3 — Get your hands dirty
+
+Today is exploration without pressure.
+
+<Steps>
+  <Step title="Run the db-setup agent">
+    Open Claude Code and invoke the `db-setup` agent. It bootstraps your `.workflow/.env` and verifies you can query staging through the SSH tunnel. See [Onboarding](/ai-workflows/internal-developer-workflows/onboarding).
+  </Step>
+  <Step title="Open a real flow on staging">
+    Log into [staging.fluxprompt.ai](https://staging.fluxprompt.ai/) with a test account. Open someone else's flow. Try running it. Try editing a node. Get a feel for the product as a user.
+  </Step>
+  <Step title="Pick your first ticket">
+    Your buddy already has a low-risk ticket assigned to you. Read the ClickUp task. Find the relevant files. Ask the dumbest questions you have today, not tomorrow.
+  </Step>
+</Steps>
+
+## Day 4 — Build
+
+Implement the ticket. Use Claude Code with [plan mode](/ai-workflows/internal-developer-workflows/best-practices) on for anything that touches more than one file. Read the [coding rules](https://github.com/enhancedai-com) (each repo's CLAUDE.md) before your first PR — they save back-and-forth in review.
+
+If you get blocked, **the line you say out loud to your buddy is short**:
+
+> "I've spent 30 minutes on X and I'm not seeing the path forward. Can you take 5 minutes?"
+
+That's it. No apologies, no preamble. We optimize for unblocking fast.
+
+## Day 5 — Ship
+
+<Steps>
+  <Step title="Open the PR">
+    Use the `pr-creator` agent — feed it your ClickUp task URL. It formats the title, body, and links per the [Engineering Handbook](/ai-workflows/internal-developer-workflows/agents/pr-creator).
+  </Step>
+  <Step title="Get reviewed">
+    Two reviewers minimum. They'll comment. You'll address. Repeat until approved.
+  </Step>
+  <Step title="Merge and watch it deploy">
+    The CI pipeline for `master`/`main` auto-deploys to dev. Staging is a manual promotion. Watch the rollout in AWS so you understand what's actually happening when "deploy" is a word someone says.
+  </Step>
+  <Step title="Update your status">
+    Tell the team. Doesn't have to be ceremonial — "first PR merged, here's what it does, thanks to X for reviewing" lands well.
+  </Step>
+</Steps>
+
+## The realistic timeline
+
+The old onboarding deck had a joke timeline that aged like milk. Here's a 2026 update:
+
+| Step | Time (honest) |
+| --- | --- |
+| Get all your accesses working | half a day |
+| Backend running end-to-end | 2-4 hours (more on Windows) |
+| Frontend running with backend | 1 hour |
+| First "this is broken on my machine but works on yours" | inevitable |
+| Time until you discover you forgot `pnpm infra:up` | 13 seconds |
+| Time saved by reading the docs first | the whole week |
+
+The "patience" item on the old deck stays. Setup days are setup days.
+
+## Where to go next
+
+- [Machine setup](/getting-started/welcome/environment-setup) — if you're still on Day 2
+- [Claude Code setup](/getting-started/welcome/claude-code) — if you're past setup and want the tooling working the way the team uses it
+- [First 30 days](/getting-started/welcome/first-30-days) — looking ahead past week 1
+- [How we work](/getting-started/welcome/culture) — read this before your first code review

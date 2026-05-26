@@ -1,0 +1,133 @@
+---
+title: "Machine setup"
+description: "Boot the FluxPrompt backend, frontend, Postgres, and Redis on your machine without crying. Updated for the 2026 stack."
+---
+
+## Goal
+
+By the end of this page:
+
+- `pnpm dev:api` runs the backend on port 3001
+- `pnpm dev` runs the frontend on port 3000
+- The frontend talks to the backend and you can log in
+
+If you're using Windows and you've never set up a NodeJS + Docker + Postgres stack on this machine before, block the morning. If you're on macOS or Linux, an hour is realistic.
+
+## Requirements
+
+Install in this order. None of these are optional.
+
+<Steps>
+  <Step title="Node.js (LTS)">
+    Install the current LTS version from [nodejs.org](https://nodejs.org/). Verify:
+
+    ```bash
+    node --version
+    ```
+
+    You want `v20.x` or higher.
+  </Step>
+  <Step title="pnpm">
+    The team uses `pnpm`, not `npm` or `yarn`.
+
+    ```bash
+    npm install -g pnpm
+    pnpm --version
+    ```
+  </Step>
+  <Step title="git">
+    [git-scm.com](https://git-scm.com/) if you don't already have it.
+  </Step>
+  <Step title="Docker">
+    [Docker Desktop](https://www.docker.com/products/docker-desktop/). On Windows, Docker runs inside WSL — install WSL first if you don't have it (`wsl --install`).
+  </Step>
+  <Step title="Patience">
+    Still required. Some things will not work on the first try. This is not a failure of the docs — it's the nature of multi-service stacks. Pause, read the error, ask your buddy. Don't power through.
+  </Step>
+</Steps>
+
+## Clone the workspace
+
+The workspace contains two **separate git repositories** plus the docs and shared tooling:
+
+```
+enhanced/
+├─ back/        Flux-Prompt           NestJS backend
+├─ front/       Flux-Prompt-Frontend  React frontend
+├─ docs/                              Mintlify documentation
+└─ .workflow/                         Team-shared Claude Code tooling
+```
+
+Your buddy points you to the exact clone commands and where they want it on disk.
+
+## Backend — `back/`
+
+```bash
+cd back
+pnpm install
+pnpm infra:up   # starts Postgres + Redis via docker-compose-local.yaml
+pnpm dev:api    # starts the API
+```
+
+If `pnpm dev:api` complains about not connecting to the database, you forgot `pnpm infra:up`. That happens to everyone — average time to discover it is about 13 seconds.
+
+### Environment file
+
+Copy `.env.example` to `.env` and fill in the values. Your buddy has the secrets.
+
+<Warning>
+  On Windows specifically, set `TYPEORM_HOST=127.0.0.1` and `REDIS_HOST=127.0.0.1`. The default `localhost` resolves to IPv6 on Windows and the Postgres container only listens on IPv4. This is the single biggest "but it works on my machine" trap.
+</Warning>
+
+### Guided setup
+
+If you want a guided walkthrough instead of figuring it out:
+
+```bash
+pnpm dev:wizard
+```
+
+It checks your environment, prompts for the bits you're missing, and validates that everything starts.
+
+## Frontend — `front/`
+
+```bash
+cd front
+pnpm install
+pnpm dev   # starts Vite dev server on port 3000
+```
+
+Open [http://localhost:3000](http://localhost:3000). Log in with a dev account (ask your buddy for one or create one via your local backend).
+
+## What "running" means
+
+You have it right when:
+
+- The backend logs show `Application is running on: http://[::1]:3001` (or similar)
+- `pnpm infra:up` exited cleanly and `docker ps` shows two containers (postgres, redis)
+- The frontend hot-reloads when you save a file in `front/src/`
+- You can log in at `localhost:3000` and the network tab shows requests to `localhost:3001`
+
+## Common failures
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `ECONNREFUSED 127.0.0.1:5432` on backend start | Postgres container not running | `pnpm infra:up` |
+| `getaddrinfo ENOTFOUND postgres` on Windows | Wrong host in `.env` | Set `TYPEORM_HOST=127.0.0.1` |
+| Backend starts but migrations fail | Old database from a previous attempt | `pnpm infra:down` then `pnpm infra:up` to reset |
+| `pnpm install` errors out on `node-gyp` | Missing C++ build tools | macOS: `xcode-select --install`. Windows: install Visual Studio Build Tools |
+| Frontend builds but can't reach the API | CORS or backend not up | Make sure backend is on 3001 first; frontend's `.env` should point there |
+
+If your problem isn't on this table, **add it before you forget**. Future you (and the next new hire) will thank you.
+
+## Deep dives
+
+Each repo has its own `CLAUDE.md` with the full architecture, commands, and conventions:
+
+- [Main API](/main-api/overview) — backend modules, entities, request lifecycle
+- [Client](/client/overview) — frontend structure, ReactFlow nodes, Zustand stores
+- [Worker](/worker/overview) — Temporal orchestration
+
+## Next
+
+The backend and frontend run. You're 80% set up. The last 20% is the tooling we use **on top** of the code: [Claude Code setup](/getting-started/welcome/claude-code).
