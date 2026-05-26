@@ -1,0 +1,92 @@
+---
+title: "Piadas e tradições"
+description: "Memes, rituais e o que faz este time parecer time. Leia pra mandar piada junto."
+---
+
+## Por que esta página existe
+
+Todo time tem piada interna. Elas são coisa real — sinalizam pertencimento, fazem dia ruim ficar mais leve, e são justamente o que um novo membro mais sente que está de fora. A gente coloca as nossas por escrito pra você não passar três meses tentando entender por que alguém fica falando `<piada interna>` no canal do time.
+
+Se você ler isso e não rir, tudo bem. Vai rir depois de um mês. Se ler e **rir** — parabéns, já é um de nós.
+
+<Note>
+  **Para quem mantém esta página:** mantenha curta e atual. Piada que não foi contada em um ano não precisa ficar arquivada aqui. Apague sem dó. Adicione placeholders `<TODO>` para o que um novo membro ia querer saber e a página ainda não cobre.
+</Note>
+
+## Bordões recorrentes
+
+### "13 segundos pra WSL falhar"
+
+Do deck de onboarding original. Se refere ao tempo médio entre começar setup do backend no Windows e descobrir que algum pedaço do WSL não inicializou direito. Depois se generalizou pra significar "a distância entre confiança e realidade".
+
+Uso moderno: "Estou a 13 segundos de descobrir por que isso não está funcionando."
+
+### "Paciência" como requisito
+
+O deck antigo listava "Paciência" do lado de Node e Docker como requisito de ambiente. Ficou porque é verdade. Hoje virou tradição que sustenta a página — toda página de setup menciona.
+
+### "Se a gente errou, foi pra ver o code review"
+
+A frase do deck antigo, agora codificada em [Como a gente trabalha](/getting-started/welcome/pt-br/culture). Sai a cada vez que alguém pega um bug que um PR anterior introduziu.
+
+## Rituais
+
+### Deploy announcements
+
+Depois de todo deploy de prod, quem deployou posta uma mensagem no Gmail Chat. O formato é forçado pelo agent `pr-creator` (veja [pr-creator](/ai-workflows/internal-developer-workflows/agents/pr-creator#deploy-announcement-optional) — em inglês):
+
+```
+Hey team, I just deployed the following to production:
+
+- <Task name 1> — https://app.clickup.com/t/<task_code_1>
+- <Task name 2> — https://app.clickup.com/t/<task_code_2>
+
+Please give me a shout if anything looks off after the rollout. Thanks!
+```
+
+Travessões (em-dash), texto puro, um bullet por task do ClickUp. A gente é chato com isso.
+
+### Naming de branch
+
+`<change_type>/<task_code>`. `feat/`, `fix/`, `refactor/`. Qualquer outra coisa leva uma zoeira leve no code review.
+
+### "Investigações com cara de Sfink"
+
+Quando um report de cliente leva a um mergulho multi-passo DB → Datadog → CloudWatch que termina em "na verdade o cliente está chamando o flow errado", é uma investigação "com cara de Sfink". A metodologia completa mora em [Flux error investigation](/ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation) (em inglês). Batizada com o apelido do Guilherme não porque é o único que faz, mas porque ele escreveu o playbook.
+
+### Cadência
+
+Reuniões recorrentes do time — bloqueie no calendário desde o primeiro dia:
+
+| Quando | O que |
+| --- | --- |
+| Todo dia útil às 10:30 BRT | Daily standup — check-in curto, o que está fazendo, o que está te travando |
+| Segunda, quarta e sexta às 13:30 BRT | Reunião com o cliente — sync com o cliente; agenda geralmente compartilhada no dia anterior |
+| Terça-feira à tarde, quinzenal | Retro — o que foi bem, o que não foi, o que vamos tentar diferente |
+
+Fuso de São Paulo (BRT, UTC−3). Maior parte do time está no Brasil; se você está em outro lugar, faça a conta uma vez e bote no calendário no seu fuso local.
+
+## Nomes e apelidos
+
+O time usa apelido bastante. Alguns são óbvios (`Gio` pra Giovanni). Outros não (`Sfink` pra Guilherme). Não tenha vergonha de perguntar por que cada um se chama do jeito que se chama — as histórias de origem costumam ser boas.
+
+Mapa atual de apelidos: veja [O time](/getting-started/welcome/pt-br/team).
+
+## Tom no chat
+
+Padrões que você vai notar:
+
+- **Caixa baixa por default.** Letra maiúscula significa que alguém está enfatizando. Não leia sentence-case como frieza — leia como "tô tomando cuidado nessa aqui".
+- **Reação de emoji em vez de texto** pra ack ("👍" ou "✅" no lugar de "ok recebi"). Poupa notificação pra todo mundo.
+- **Sem `@everyone` exceto incidente real.** Ping pra visibilidade, não pra atenção.
+- **Meme tá liberado.** Meme em cima de uma pessoa não tá. A linha é intenção.
+
+## O que esta página não é
+
+Esta página **não** é o registro de todas as threads do Slack que fizeram alguém rir em 2024. A barra pra entrar aqui é: um novo membro ia se sentir de fora se não soubesse. O resto pode ficar no histórico do chat onde pertence.
+
+## Valeu por estar aqui
+
+Esse é o fim do guia Welcome. O último slide do deck original era um "Thanks yous" — a gente manteve o espírito. Você vai entregar muita coisa boa. Animado pra trabalhar com você.
+
+Agora — [pega um ticket](/getting-started/welcome/pt-br/first-week#dia-3-botar-a-mao-na-massa) e vamos.

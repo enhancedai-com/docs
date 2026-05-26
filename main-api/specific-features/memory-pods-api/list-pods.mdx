@@ -1,0 +1,115 @@
+---
+title: "List or get memory pods"
+description: "GET /flux/memory-pods/get — list every pod in scope or fetch a single pod by id or name."
+---
+
+Retrieve memory pods the caller can access. Use the same endpoint to list every visible pod, fetch one by id, or search by name.
+
+| Method | Path |
+| --- | --- |
+| `GET` | `/flux/memory-pods/get` |
+
+## Request
+
+### Headers
+
+```http
+api-key: <your-api-key>
+```
+
+### Query parameters
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `id` | UUID | no | If provided, returns just that pod (or an empty array if it isn't in scope). |
+| `podName` | string | no | Case-insensitive substring filter applied to the pod name. |
+
+Both parameters are optional. With neither, the endpoint returns every pod visible to the api-key.
+
+### Examples
+
+<CodeGroup>
+
+```bash List all pods in scope
+curl "https://app.fluxprompt.ai/flux/memory-pods/get" \
+  -H "api-key: <your-api-key>"
+```
+
+```bash Fetch by id
+curl "https://app.fluxprompt.ai/flux/memory-pods/get?id=8c5b1b1c-3a4f-4b2e-9c5d-1a2b3c4d5e6f" \
+  -H "api-key: <your-api-key>"
+```
+
+```bash Search by name
+curl "https://app.fluxprompt.ai/flux/memory-pods/get?podName=Case%2012345" \
+  -H "api-key: <your-api-key>"
+```
+
+</CodeGroup>
+
+## Response
+
+The `pods` field is always an array. Each entry is a full `NamespaceResponseDto`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "OK",
+    "pods": [
+      {
+        "id": "8c5b1b1c-3a4f-4b2e-9c5d-1a2b3c4d5e6f",
+        "name": "Case 12345 — Patient X",
+        "embeddingModelName": "text-embedding-3-small",
+        "files": [
+          {
+            "id": "1f8a5d3e-9b22-4cd0-8e91-2b3a4c5d6e7f",
+            "fileName": "lab-results-2026-04-12.pdf",
+            "chunkingMethod": "by1000Characters",
+            "metadatas": [],
+            "dimensions": [],
+            "status": "Finished"
+          }
+        ],
+        "dimensions": [],
+        "searchUsingDimensions": false,
+        "folderId": null,
+        "rank": null,
+        "description": "Pod for medical case 12345.",
+        "metadata": { "caseId": "12345", "patientId": "X" }
+      }
+    ]
+  }
+}
+```
+
+### File status values
+
+The `files[].status` reflects ingestion progress:
+
+| Status | Meaning |
+| --- | --- |
+| `Pending` | Accepted, not yet queued |
+| `Enqueued` | In the processing queue |
+| `Processing` | Currently being chunked and embedded |
+| `Finished` | Ready for retrieval |
+| `Error` | Ingestion failed; inspect the file and retry |
+| `Migrated` | Backfilled from the legacy `namespace.files` column. Treat as `Finished` for retrieval. |
+
+## Scope
+
+Results are filtered to pods the api-key can see. Resolution order:
+
+1. `apiKeySpaceId` from a space-level api-key — limits the list to that space.
+2. Otherwise the caller's personal + `companyUser` scope.
+
+Querying by `id` still respects scope; a pod outside the caller's visibility returns an empty array, not a 403.
+
+## Errors
+
+| HTTP | Cause | What to do |
+| --- | --- | --- |
+| `400` | `id` is provided but not a valid UUID. | Send a well-formed UUID or omit the parameter. |
+| `401` | Missing or invalid `api-key` header. | Check the header name and value. |
+
+See [Errors and tips](/main-api/specific-features/memory-pods-api/errors-and-tips).

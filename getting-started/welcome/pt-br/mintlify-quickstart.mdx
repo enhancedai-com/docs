@@ -1,0 +1,139 @@
+---
+title: "Como a gente documenta"
+description: "Escrever doc é parte do trabalho no FluxPrompt. Aqui está como adicionar uma página neste site sem atrito."
+---
+
+## Por que a gente documenta
+
+Este site não é marketing — é uma ferramenta de trabalho. Toda página existe porque alguém precisou da resposta dela antes. Dois motivos pra continuar adicionando:
+
+1. **Você-do-futuro esquece as coisas.** O code path que você escreveu em março vai te surpreender em novembro. Você-do-futuro vai googlar pela doc que você não escreveu.
+2. **O time escala escrevendo as coisas.** Um novo membro (você, esta semana) deve conseguir entrar sem fazer a mesma pergunta que alguém já respondeu. Se você responder a mesma pergunta duas vezes, documenta.
+
+Você não precisa ser um "bom escritor". Precisa escrever **o que você queria ter encontrado quando procurou**.
+
+## O site de docs em resumo
+
+- Hospedado no **Mintlify**. Páginas são arquivos `.mdx` no repo `docs/`.
+- Navegação configurada em `docs/docs.json` — páginas não listadas lá não aparecem na sidebar.
+- Deploys são **manuais** pelo dashboard do Mintlify. Push para `main` não publica sozinho.
+
+## Preview local
+
+Você precisa do CLI do Mintlify (`mint`) instalado globalmente uma vez na máquina. Escolha um:
+
+```bash
+npm i -g mint
+# ou
+pnpm add -g mint
+```
+
+Node 20.17.0 ou superior.
+
+Depois, dentro de `docs/`:
+
+```bash
+mint dev
+```
+
+Abre em [http://localhost:3000](http://localhost:3000). Salve um arquivo `.mdx` e a página dá hot-reload.
+
+## Escrevendo uma nova página
+
+<Steps>
+  <Step title="Escolha a pasta certa">
+    A pasta mapeia pro grupo de navegação. Exemplos:
+    - `docs/main-api/specific-features/` → "Main API → Specific features"
+    - `docs/worker/node/` → "Worker → Node"
+    - `docs/ai-workflows/` → "Ai Workflows"
+    - `docs/getting-started/welcome/` → "Welcome" (onde esta página mora)
+
+    Se não souber onde colocar, pergunte no canal do time ou use o agent `mintlify-docs-writer` (abaixo) — ele vai te perguntar.
+  </Step>
+  <Step title="Adicione o frontmatter">
+    Toda página começa com:
+
+    ```mdx
+    ---
+    title: "Seu título (sentence case)"
+    description: "Resumo de uma frase usado por busca e previews."
+    ---
+    ```
+  </Step>
+  <Step title="Escreva o corpo">
+    Use os componentes Mintlify que já existem neste site: `<Steps>`, `<Card>`/`<Columns>`, `<Tabs>`, `<CodeGroup>`, `<Note>`/`<Tip>`/`<Warning>`, `<Accordion>`.
+
+    Estilo: inglês, segunda pessoa, voz ativa, headings em sentence case. Olhe qualquer página existente para o padrão.
+  </Step>
+  <Step title="Registre em docs.json">
+    Abra `docs/docs.json`. Encontre o grupo certo. Adicione o path da sua página (sem a extensão `.mdx`) no array `pages`. Exemplo:
+
+    ```json
+    {
+      "group": "Specific features",
+      "pages": [
+        "main-api/specific-features/pagina-existente",
+        "main-api/specific-features/sua-pagina-nova"
+      ]
+    }
+    ```
+
+    Uma página não listada em `docs.json` não aparece na sidebar.
+  </Step>
+  <Step title="Preview e validação">
+    ```bash
+    mint dev          # preview interativo
+    mint validate     # modo estrito — falha em warnings ou erros
+    mint broken-links # checa links internos/externos
+    ```
+  </Step>
+  <Step title="Commit e push">
+    Fluxo git padrão no repo `docs/`. O site **não** faz auto-deploy a partir da `main` — é por design.
+  </Step>
+  <Step title="Dispare o deploy">
+    Vá no [Mintlify dashboard](https://dashboard.mintlify.com/enhancedai-ee242787/enhancedai-ee242787) e clique em Deploy. Leva cerca de um minuto.
+  </Step>
+</Steps>
+
+<Warning>
+  `mint.json` é deprecated. A config é `docs.json`. Se encontrar um `mint.json` por aí, não é o arquivo que controla navegação.
+</Warning>
+
+## Quando atualizar vs. criar
+
+| Você encontrou... | Faça isso |
+| --- | --- |
+| Uma página errada ou desatualizada | Edite. Não escreva uma nova página do lado. |
+| Uma página certa mas incompleta | Adicione nela. |
+| Um tópico sem página ainda | Crie uma. |
+| Três páginas dizendo a mesma coisa | Consolide. Faça uma virar a fonte, redirecione as outras. |
+
+Não tenha apego a doc que não bate mais com o sistema. Doc desatualizada é pior do que doc faltando.
+
+## Deixe um agent escrever a página
+
+Pra páginas não-triviais, invoque o agent `mintlify-docs-writer` no Claude Code. Diga pra ele:
+
+- Onde a página deve viver (folder path)
+- O que a página deve cobrir (tópico, audiência, resultado)
+- Arquivos-fonte que ele deve ler (cole paths ou anexe com `@`)
+
+O agent pergunta o que falta, escreve a página no estilo do projeto, e atualiza o `docs.json` por você. Veja [a referência do agent](/ai-workflows/internal-developer-workflows/agents/mintlify-docs-writer) (em inglês).
+
+Pra ajustes curtos (consertar typo, ajustar parágrafo) — edite o arquivo direto. Não invoque um agent pra mudança de uma linha.
+
+## Estilo da casa
+
+Convenções que vale conhecer:
+
+- **Inglês em todo o site**, mesmo em páginas voltadas pro time interno. Code labels seguem as [Coding rules](https://github.com/enhancedai-com/Flux-Prompt/blob/production/CLAUDE.md). Exceção: a seção Welcome também tem versão PT-BR.
+- **Sentence case nos headings** — "Getting started", não "Getting Started".
+- **Exemplos realistas** — use valores que parecem reais, não `foo`/`bar`. Mas **nunca cole segredos reais** (senhas, IPs de bastion, dado real de cliente). Use placeholders.
+- **Linke à vontade.** Se você referencia um conceito documentado em outra página, linke. O site inteiro é um documento só.
+- **Callouts têm significado:** `<Note>` pra contexto, `<Tip>` pra "vai me agradecer depois", `<Warning>` pra "isso vai quebrar coisa se você pular".
+
+## Próximo
+
+- [Setup do Claude Code](/getting-started/welcome/pt-br/claude-code) — se ainda não fez
+- [Como a gente trabalha](/getting-started/welcome/pt-br/culture) — incluindo como doc encaixa nos PRs
+- [Internal developer workflows](/ai-workflows/internal-developer-workflows/overview) (em inglês) — exemplos de páginas densas de referência

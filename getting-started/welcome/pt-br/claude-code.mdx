@@ -1,0 +1,92 @@
+---
+title: "Setup do Claude Code"
+description: "Roteiro curto para adotar o Claude Code do jeito que o time usa — da instalação ao seu primeiro prompt de verdade."
+---
+
+## Por que esta página é curta
+
+Já existe um guia completo de Claude Code: [Claude Code setup](/ai-workflows/claude-code-setup) (em inglês). Essa página é a fonte da verdade pra instalação, o plugin Superpowers, o MCP server Context7, e as rules/skills específicas dos projetos.
+
+Esta página aqui é o **roteiro** — em que ordem seguir, o que ler depois de cada passo, e como saber que você adotou o workflow que o time efetivamente usa (não só instalou a ferramenta).
+
+## Por que isso importa
+
+Até 2026, mais de 90% dos times de engenharia usam pelo menos um assistente de código de IA. Os times que tiram mais valor não são os que adotaram primeiro — são os que têm **um workflow compartilhado**. A gente convergiu pro **Claude Code** como ferramenta de IA principal em todos os repos: um agent autônomo de CLI que lê arquivos, roda comandos, edita código e entrega mudanças ponta a ponta.
+
+As páginas abaixo te levam ao workflow compartilhado. Reserve **meio dia** pra primeira passada.
+
+## O roteiro
+
+<Steps>
+  <Step title="Instale e autentique">
+    Siga [Claude Code setup](/ai-workflows/claude-code-setup) até "Verify the installation". Você deve conseguir rodar `claude --version` e iniciar o `claude` em qualquer diretório.
+  </Step>
+  <Step title="Configure os plugins">
+    Mesma página, seções de Superpowers e Context7. O Superpowers te dá os comandos estruturados do time; o Context7 mantém o Claude ancorado na API atual das libs em vez do dado de treinamento.
+  </Step>
+  <Step title="Rode o agent db-setup">
+    Agora pule para a seção interna: [Onboarding](/ai-workflows/internal-developer-workflows/onboarding). O agent `db-setup` faz o bootstrap do seu `.workflow/.env`, gera uma chave SSH se você não tem, imprime a pública pro admin autorizar, e roda um smoke test contra staging.
+
+    Esse é o momento em que você sai de "Claude Code instalado" pra "Claude Code conseguindo consultar os bancos do time".
+  </Step>
+  <Step title="Conheça os agents customizados">
+    Dê uma passada na [seção de agents](/ai-workflows/internal-developer-workflows/agents/db-investigator). Os quatro agents que a gente usa no dia a dia:
+    - `db-investigator` — quando um colega diz "está faltando dado"
+    - `db-setup` — o que você acabou de rodar
+    - `pr-creator` — transforma uma task do ClickUp num PR
+    - `mintlify-docs-writer` — escreve docs neste site
+
+    Você não precisa decorar. Saiba só que existem pra acessar quando a situação bater.
+  </Step>
+  <Step title="Leia as best practices do time">
+    [Best practices](/ai-workflows/internal-developer-workflows/best-practices) é curta e de alto retorno. Plan mode, sub-agents em paralelo, auto-memory, estrutura de prompt — esses são os padrões que o time convergiu.
+
+    Leia uma vez agora. Releia depois da sua primeira semana usando o Claude Code com calo.
+  </Step>
+  <Step title="Faça seu primeiro prompt real">
+    Abra o Claude Code em `back/`. Escolha um pedaço pequeno de código que você não conhece (um arquivo de service desconhecido). Pergunte:
+
+    ```
+    /plan I want to understand how <X> works. Read the file, the
+    related entity, and any tests, then explain to me what it does
+    and where the surprising bits are.
+    ```
+
+    Leia o plano que ele produzir. Aprove. Leia a resposta. Você acabou de usar plan mode + exploração multi-arquivo — os dois padrões que compõem a maior parte do trabalho diário.
+  </Step>
+</Steps>
+
+## Não pule estas referências
+
+Quando o básico estiver funcionando, estas páginas são as referências profundas que você vai consultar (em inglês):
+
+<Columns cols={2}>
+  <Card title=".workflow/ skills" icon="screwdriver-wrench" href="/ai-workflows/internal-developer-workflows/skills/ec2-tunnel">
+    Tunnels SSH programáticos, queries read-only em prod, migrações de dados entre envs.
+  </Card>
+  <Card title="Agents customizados" icon="user-gear" href="/ai-workflows/internal-developer-workflows/agents/db-investigator">
+    `db-investigator`, `db-setup`, `pr-creator`, `mintlify-docs-writer`.
+  </Card>
+  <Card title="Playbooks" icon="book-open" href="/ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation">
+    Receitas passo a passo para as investigações mais comuns (erros de Flux, memory leaks, deploys).
+  </Card>
+  <Card title="Best practices" icon="lightbulb" href="/ai-workflows/internal-developer-workflows/best-practices">
+    Plan mode, sub-agents em paralelo, auto-memory, estrutura de prompt.
+  </Card>
+</Columns>
+
+## Você terminou esta página quando
+
+- Seu terminal `claude --version` retorna uma versão
+- Os plugins (Superpowers, Context7) aparecem ao rodar `claude /plugins` ou equivalente
+- O agent `db-setup` rodou e o admin autorizou sua chave SSH
+- Você fez um prompt real com `/plan` e recebeu uma resposta útil
+- Você marcou nos favoritos (ou pelo menos passou os olhos) nas quatro páginas de referência acima
+
+Se todos os cinco bateram: você tem o mesmo setup do resto do time. Bem-vindo ao workflow.
+
+## Próximo
+
+- [Como a gente documenta](/getting-started/welcome/pt-br/mintlify-quickstart) — escrever doc é parte do trabalho
+- [Como a gente trabalha](/getting-started/welcome/pt-br/culture) — code review, convenções de PR, padrões async
+- [Primeiros 30 dias](/getting-started/welcome/pt-br/first-30-days) — o que mirar a seguir

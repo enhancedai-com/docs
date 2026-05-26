@@ -1,0 +1,150 @@
+---
+title: "Errors and tips"
+description: "Common failure modes, the response envelope, and integration patterns that save you debugging later."
+---
+
+This page collects what you need to know to operate the Memory Pods API reliably — what error shapes look like, common scope pitfalls, and patterns that prevent the most common support tickets.
+
+## Response envelope
+
+All endpoints return the same envelope shape on both success and failure. Success:
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Memory pod created",
+    "pods": { /* NamespaceResponseDto or array or null */ }
+  }
+}
+```
+
+Failure:
+
+```json
+{
+  "success": false,
+  "error": "error",
+  "data": {
+    "message": "Namespace not found"
+  }
+}
+```
+
+The HTTP status code matches the error class. Look at both — the status tells you the category, and `data.message` tells you the cause.
+
+## Common errors
+
+### 400 — Bad request
+
+The endpoint received a request it couldn't act on. Common causes:
+
+- A required field is missing (`name` on create, `fileNames` on delete, etc.).
+- A UUID parameter is malformed.
+- A pod referenced by id isn't visible to the api-key's scope.
+- `embeddingModelName` is not one of the allowed values on create.
+- `oldFileName` doesn't match any current file on replace.
+
+Each endpoint page lists the specific 400 cases it can raise.
+
+### 401 — Unauthorized
+
+Missing or invalid `api-key` header. Three common slips:
+
+- The header name is literally `api-key`. Not `x-api-key`. Not `Authorization`.
+- No prefix — don't send `Bearer ...` or `ApiKey ...`. Just the value.
+- The key was revoked or rotated on FluxPrompt's side. Generate a new one in the UI.
+
+### 404
+
+The Memory Pods API does not currently use 404 for missing pods — instead, callers get a `400` with `"Namespace not found"` (or similar) for unknown pod ids. Treat `400 Namespace not found` the way you'd treat a 404.
+
+## API key types
+
+There are two kinds of api-key with different behavior. Pick deliberately.
+
+### User-level api-keys
+
+- Generated against a specific user.
+- Requests run **as that user**.
+- Created pods (without `body.spaceId`) land in the user's personal area or `companyUser` scope.
+- `apiKeySpaceId` is **not** attached.
+
+### Space-level api-keys
+
+- Generated against a company space.
+- Requests are authenticated as the **company owner** of that space.
+- `apiKeySpaceId` is automatically attached to the request context.
+- Created pods (without `body.spaceId`) inherit `apiKeySpaceId` and land in that space.
+
+<Warning>
+  **Don't mix key types against the same pod programmatically.** A pod created via a user-level key lives in the user's personal scope; a space-level key for a different scope can't see it. If you need both surfaces, fetch the pod's `id` once and pass it explicitly.
+</Warning>
+
+## Scope pitfalls
+
+The scope resolution rule is the same on every endpoint:
+
+```
+1. body.spaceId   (explicit override; must be visible to the api-key)
+2. apiKeySpaceId  (from a space-level api-key)
+3. caller's personal / companyUser scope
+```
+
+Symptoms of scope mismatches:
+
+| Symptom | Likely cause |
+| --- | --- |
+| Created a pod, then `GET` returns nothing | Used different api-key types for the two calls. |
+| `GET` returns the pod but `add-document` says "Namespace not found" | The pod is technically in scope for listing but the file ingestion pipeline resolved a different space. Make sure `body.spaceId` matches the pod's actual space. |
+| Same pod name "already taken" but you can't see it | A peer (different user under the same company, or a space you don't have access to) owns that name. Use a unique name with a discriminator like an external id. |
+
+## Embedding model gotchas
+
+The pod's `embeddingModelName` is **fixed at creation time**. Use the right model from the start:
+
+- `text-embedding-3-small` (1536-dim) — default, lower cost, good for most knowledge bases.
+- `voyage-3-large` (4096-dim) — higher retrieval quality on technical or specialized text.
+
+To change models, create a new pod and re-ingest all files. There is no `PATCH /memory-pods` to flip the model in place.
+
+## Integration patterns
+
+### Correlate pods with external records
+
+Use `metadata` on create to store the foreign key that ties the pod back to your side:
+
+```json
+{
+  "name": "Case 12345 — Patient X",
+  "metadata": { "caseId": "12345", "patientId": "X" }
+}
+```
+
+You can search by name to find a pod, then verify `metadata.caseId` matches — or store the returned `id` on your side and look it up directly.
+
+### Poll for ingestion completion
+
+`POST add-document` and `PUT replace-document` queue files for processing. The file `status` progresses `Enqueued` → `Processing` → `Finished` (or `Error`). For workflows that immediately query the pod, poll `GET /memory-pods/get` until every file reaches `Finished`. A reasonable polling interval is 2–5 seconds with a 5-minute cap.
+
+### Idempotent uploads
+
+If your client retries on transient errors, dedupe on the server side first. The API does not currently reject duplicate file names — uploading the same name twice creates two `namespace_file` rows. Always check the pod's current `files` list before re-uploading the same content.
+
+### One pod per tenant
+
+For multi-tenant apps, the cleanest topology is one space per tenant + one space-level api-key per space + one pod per tenant. With that setup:
+
+- No `body.spaceId` ever needs to be sent (it's inherited).
+- A leaked api-key only exposes that one tenant.
+- The same code paths work for all tenants.
+
+## When to escalate
+
+If you're stuck after checking the above:
+
+1. Confirm with `GET /memory-pods/get` (no params) that the api-key sees the pod at all.
+2. Compare the api-key type (user vs space) with where the pod was originally created.
+3. If the embedding model seems wrong (retrieval is poor, dimensions don't match what you expect), confirm it on the `GET` response — you can't change it, only create a new pod.
+
+For everything else, contact FluxPrompt support with the api-key prefix (first 6 chars only — never share the full key), the pod `id`, and the request body that's failing.

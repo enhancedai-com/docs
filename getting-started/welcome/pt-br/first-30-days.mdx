@@ -1,0 +1,87 @@
+---
+title: "Primeiros 30 dias"
+description: "Marcos concretos nos dias 7, 14 e 30. Use isto pra saber o que 'no caminho' significa — e pra sinalizar quando você não está."
+---
+
+## Por que esta página existe
+
+Planos vagos de onboarding ("se ambienta, fica confortável, faz perguntas") soam legal mas dificultam saber se você está atrasado. A indústria vem convergindo pra onboarding baseado em marcos por um motivo: checkpoints claros deixam o novo membro se auto-avaliar e deixam buddies/gerentes ajudarem **antes** dos problemas escalarem.
+
+Esses marcos são deliberadamente conservadores. Bater eles significa que você está bem. Superar significa ótimo. Não bater um não é problema — é sinal pra conversar com seu buddy e replanejar.
+
+## Dia 7 — Entregou
+
+No fim da semana 1:
+
+<AccordionGroup>
+  <Accordion title="Seu ambiente roda ponta a ponta">
+    Backend + frontend + Postgres local + Redis local, tudo feliz. Você consegue logar em `localhost:3000` e a API responde. Veja [Setup da máquina](/getting-started/welcome/pt-br/environment-setup).
+  </Accordion>
+  <Accordion title="Claude Code configurado do jeito que o time usa">
+    Claude Code instalado, autenticado, plugins Superpowers e Context7 funcionando, skills do `.workflow/` disponíveis, agent `db-setup` rodou e seu acesso SSH foi autorizado no bastion. Veja [Setup do Claude Code](/getting-started/welcome/pt-br/claude-code).
+  </Accordion>
+  <Accordion title="Um PR mergeado em dev ou staging">
+    Mudança real. Code review real. CI deploy real. Veja [Sua primeira semana — Dia 5](/getting-started/welcome/pt-br/first-week#dia-5-entregar).
+  </Accordion>
+  <Accordion title="Você sabe o nome de cada membro do time">
+    E a forma aproximada do que cada um cuida. Veja [O time](/getting-started/welcome/pt-br/team).
+  </Accordion>
+  <Accordion title="Você leu a doc profunda pelo menos uma vez">
+    [Main API](/main-api/overview), [Worker](/worker/overview), [Client](/client/overview). Passar o olho está bom — mas você deve saber onde voltar (em inglês).
+  </Accordion>
+</AccordionGroup>
+
+## Dia 14 — Dono
+
+No fim da semana 2:
+
+<AccordionGroup>
+  <Accordion title="Você é dono de uma feature pequena ponta a ponta">
+    Não "implementei em pair programming" — pegou, desenhou, entregou, viu cair em staging. Pode ser pequeno (uma config de node, um ajuste de UI) mas é seu.
+  </Accordion>
+  <Accordion title="Você revisou o PR de outra pessoa">
+    Mesmo que seus comentários sejam quase só perguntas. Ler código dos outros é como o formato do sistema entra na cabeça. Veja [Como a gente trabalha — Code review](/getting-started/welcome/pt-br/culture).
+  </Accordion>
+  <Accordion title="Você rodou uma investigação com as skills .workflow/">
+    Usou `ec2-tunnel` pra consultar staging direto, ou invocou `db-investigator` para uma pergunta de um colega. O tooling vira memória muscular só com uso. Veja [Internal developer workflows](/ai-workflows/internal-developer-workflows/overview) (em inglês).
+  </Accordion>
+  <Accordion title="Você sabe como é 'estar em prod'">
+    Acompanhou um deploy de produção. Leu CloudWatch logs uma vez. Navegou no Datadog uma vez. Mesmo passivo. Veja [PR and deploy flow](/ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow) (em inglês).
+  </Accordion>
+</AccordionGroup>
+
+## Dia 30 — Independente
+
+No fim do primeiro mês:
+
+<AccordionGroup>
+  <Accordion title="Você está pegando tickets sem ajuda">
+    Seu buddy não está mais enfileirando pra você. Você lê o backlog, pega o que cabe, entrega.
+  </Accordion>
+  <Accordion title="Você documentou alguma coisa">
+    Publicou uma página Mintlify. Não precisa ser uma feature grande — pode ser um canto do sistema que você entendeu e outra pessoa não tinha. Veja [Como a gente documenta](/getting-started/welcome/pt-br/mintlify-quickstart).
+  </Accordion>
+  <Accordion title="Você diagnosticou um problema real">
+    Report de cliente ou de colega — e você levou DB → CloudWatch → Datadog por conta. Veja [Flux error investigation](/ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation) (em inglês).
+  </Accordion>
+  <Accordion title="Você contribuiu em um review de PR não-trivial">
+    Comentários substantivos que mudaram o design ou pegaram um bug real, não só "looks good".
+  </Accordion>
+  <Accordion title="Você sabe quem pingar pra o quê">
+    A tabela "quem cuida do quê" em [O time](/getting-started/welcome/pt-br/team) parece óbvia agora. Você não precisa abrir.
+  </Accordion>
+</AccordionGroup>
+
+## Como usar esta página
+
+- **Check-in semanal com seu buddy.** Cinco minutos basta. "Dia 7 — bati 1, 2, 4, 5. Item 3 está em review."
+- **Se está atrasado em algo, fala.** Não como confissão — como dado. O plano se ajusta.
+- **Se está adiantado, fala também.** Buddies leem novato silencioso como "está sofrendo".
+
+## Além de 30 dias
+
+Dia 60 e Dia 90 não estão documentados aqui porque são mais sobre os projetos que você está dono do que sobre rampagem. Seu gestor define com você no primeiro 1:1 depois do dia 30.
+
+## Onde ir a seguir
+
+A maior parte das docs linkadas acima é parte deste guia Welcome ou da seção [Internal developer workflows](/ai-workflows/internal-developer-workflows/overview) (em inglês). Leia [Como a gente trabalha](/getting-started/welcome/pt-br/culture) a seguir se ainda não leu — é a cola cultural que sustenta esses marcos.

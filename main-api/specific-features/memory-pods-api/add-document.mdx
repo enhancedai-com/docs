@@ -1,0 +1,146 @@
+---
+title: "Add a document"
+description: "POST /flux/memory-pods/:podId/add-document — upload files into a pod via multipart/form-data or reference them by URL."
+---
+
+Add one or more documents to an existing memory pod. The endpoint accepts both raw file uploads (`multipart/form-data`) and URL references (JSON). Files are queued for processing and chunked/embedded asynchronously with the pod's configured model.
+
+| Method | Path |
+| --- | --- |
+| `POST` | `/flux/memory-pods/:podId/add-document` |
+
+## Request
+
+### Headers
+
+```http
+api-key: <your-api-key>
+content-type: multipart/form-data    # for file uploads
+content-type: application/json       # for URL references
+```
+
+### Path parameter
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `podId` | UUID | yes | The pod to ingest into. The pod must be visible to the api-key's scope. |
+
+### Body — multipart/form-data
+
+Send each file under the `files` field. You can attach multiple files in a single request:
+
+```http
+POST /flux/memory-pods/8c5b1b1c-.../add-document HTTP/1.1
+api-key: <your-api-key>
+content-type: multipart/form-data; boundary=...
+
+(file part: files=@lab-results.pdf)
+(file part: files=@discharge-summary.pdf)
+```
+
+### Body — application/json
+
+Send file URLs FluxPrompt will fetch:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `files` | array of `FileUrlDto` | yes | Each entry has `url` (required) and `filename` (optional). |
+| `filesUrls` | array of strings | no | **Deprecated.** Plain URL strings. Use `files` instead. |
+
+```json
+{
+  "files": [
+    {
+      "url": "https://example.com/lab-results-2026-04-12.pdf",
+      "filename": "lab-results.pdf"
+    },
+    {
+      "url": "https://example.com/discharge.pdf"
+    }
+  ]
+}
+```
+
+If `filename` is omitted, the file name is derived from the URL.
+
+### Examples
+
+<CodeGroup>
+
+```bash cURL — JSON URLs
+curl -X POST "https://app.fluxprompt.ai/flux/memory-pods/8c5b1b1c-3a4f-4b2e-9c5d-1a2b3c4d5e6f/add-document" \
+  -H "api-key: <your-api-key>" \
+  -H "content-type: application/json" \
+  -d '{
+    "files": [
+      {
+        "url": "https://example.com/lab-results-2026-04-12.pdf",
+        "filename": "lab-results.pdf"
+      }
+    ]
+  }'
+```
+
+```bash cURL — multipart upload
+curl -X POST "https://app.fluxprompt.ai/flux/memory-pods/8c5b1b1c-3a4f-4b2e-9c5d-1a2b3c4d5e6f/add-document" \
+  -H "api-key: <your-api-key>" \
+  -F "files=@lab-results.pdf" \
+  -F "files=@discharge-summary.pdf"
+```
+
+</CodeGroup>
+
+## Response
+
+The endpoint returns the pod's refreshed state with the newly-queued files included:
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Files queued for processing",
+    "pods": {
+      "id": "8c5b1b1c-3a4f-4b2e-9c5d-1a2b3c4d5e6f",
+      "name": "Case 12345 — Patient X",
+      "embeddingModelName": "text-embedding-3-small",
+      "files": [
+        {
+          "id": "1f8a5d3e-9b22-4cd0-8e91-2b3a4c5d6e7f",
+          "fileName": "lab-results.pdf",
+          "chunkingMethod": "by1000Characters",
+          "metadatas": [],
+          "dimensions": [],
+          "status": "Enqueued"
+        }
+      ],
+      "dimensions": [],
+      "searchUsingDimensions": false,
+      "folderId": null,
+      "rank": null,
+      "description": "Pod for medical case 12345.",
+      "metadata": { "caseId": "12345", "patientId": "X" }
+    }
+  }
+}
+```
+
+<Note>
+  Ingestion is asynchronous. The response shows files with `status: "Enqueued"` or `"Processing"`. Poll [`GET /flux/memory-pods/get`](/main-api/specific-features/memory-pods-api/list-pods) until each file reaches `"Finished"` before relying on it for retrieval.
+</Note>
+
+## Behavior
+
+- Requests go through the unified ingestion pipeline (`vectorService.addFile`), which uses the pod's actual `embeddingModelName` and the correct Pinecone index. The legacy hardcoded `1536-dense` / OpenAI / `by1000Characters` path was removed in commit `fec41d9e`.
+- File metadata (chunking method, dimensions) is derived from the pod configuration, not the request.
+- Mixing `files` (JSON) and uploaded files in the same multipart request is supported; both lists are merged.
+
+## Errors
+
+| HTTP | Cause | What to do |
+| --- | --- | --- |
+| `400` | `podId` is not a valid UUID. | Send a UUID from a previous `GET` or `POST /memory-pods` response. |
+| `400` | No file or file URL provided (`files` empty and no multipart parts). | Send at least one file. |
+| `400` | Pod not found in the caller's scope. | Verify the api-key type and the pod's scope. |
+| `401` | Missing or invalid `api-key` header. | Check the header. |
+
+See [Errors and tips](/main-api/specific-features/memory-pods-api/errors-and-tips).

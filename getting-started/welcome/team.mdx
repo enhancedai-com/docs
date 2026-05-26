@@ -13,56 +13,55 @@ For each person you'll find: name + nickname, where they work from, the part of 
 
 ## The team
 
-<Columns cols={2}>
-  <Card title="Guilherme Ponsoni Ferreira" icon="user">
+Click each one to meet the person behind the teaser. **For live presentations:** open one at a time and let the reveal land.
+
+<AccordionGroup>
+  <Accordion title="Blames a torn ligament for the football career that never happened" icon="user">
+    **Guilherme Ponsoni Ferreira**
+
     **Nicknames:** Sfink, Glade, Guiradi
 
     **Where:** Ribeirão Preto, SP
 
     **Ask me about:** Claude Code workflow, the `.workflow/` tooling, database investigations, deploy infra, the docs site.
 
-    **Trivia:** Has a kid named Bernardo who is older than several of our customers' use cases.
-  </Card>
-  <Card title="Luis Filipe K. A." icon="user">
-    **Nickname:** Greg
+    **Trivia:** Ex-DJ. Dad of Bernardo (7). Botafogo de Ribeirão Preto diehard. Claims a torn knee ligament at 20 ended his football career — nobody has ever produced evidence such a career existed.
+  </Accordion>
+  <Accordion title="1.92 m of Scrum Master, running thyroid-free" icon="user">
+    **Giovanni Alvarenga Silva**
 
-    **Where:** Ourinhos, SP
-
-    **Ask me about:** `<TODO: current focus area>`
-
-    **Trivia:** Twins. Augusto and Filipe. He still claims to sleep.
-  </Card>
-  <Card title="Giovanni Alvarenga Silva" icon="user">
     **Nicknames:** Gio, Gi
 
     **Where:** Sorocaba, SP
 
-    **Ask me about:** `<TODO: current focus area>`
+    **Ask me about:** Scrum Master duties — sprint planning, ceremonies, removing blockers, anything process-related. If you're confused about how the team's cadence works, Gio is the first stop.
 
-    **Trivia:** `<TODO: a one-liner>`
-  </Card>
-  <Card title="Klinger Matheus V. da Silva" icon="user">
+    **Trivia:** 1.92 m, amateur ping-pong athlete, ex-DJ, and proudly thyroid-free — somehow still has more energy than the rest of the team combined.
+  </Accordion>
+  <Accordion title="Was 'Gato Sec. XXI'. Forgot the name of the third sash." icon="user">
+    **Klinger Matheus V. da Silva**
+
     **Nicknames:** K-ger04, Kringão, Clark K.
 
     **Where:** Alumínio, SP
 
-    **Ask me about:** `<TODO: current focus area>`
+    **Ask me about:** Frontend / Client — React, ReactFlow nodes, the workflow canvas, autosave, UI components. He owns the frontend side day-to-day.
 
-    **Trivia:** GTA, RDR2, TLOU, GOW, Black Myth Wukong, Valorant. Has opinions.
-  </Card>
-  <Card title="Yago Vela Ferreira" icon="user">
+    **Trivia:** Former child model — paraded a few times with three sashes on the résumé: "New look of São Paulo", "Gato Sec. XXI", and a third one lost to history because he doesn't remember what it said. GTA, RDR2, TLOU, GOW, Black Myth Wukong, Valorant. Has opinions on all of it.
+  </Accordion>
+  <Accordion title="Backend, frontend, worker — never picked a side" icon="user">
+    **Yago Vela Ferreira**
+
     **Nickname:** Yago :)
 
     **Where:** Curitiba, PR
 
-    **Ask me about:** `<TODO: current focus area>`
+    **Ask me about:** Full-stack — Backend (NestJS / Main API), Frontend (React / Client), and Worker (Temporal). He moves across the whole codebase, so if you're not sure who to ping for a feature that spans layers, Yago is a safe bet.
 
     **Trivia:** `<TODO: a one-liner>`
-  </Card>
-  <Card title="`<TODO: add new members>`" icon="user-plus">
-    Latest joiners go here. Keep the format consistent — nickname, location, what to ask them about, one trivia line.
-  </Card>
-</Columns>
+  </Accordion>
+  {/* When a new teammate joins, add an Accordion here with the same structure: cryptic teaser as the title, then full name + nickname(s) + location + "Ask me about" + trivia in the body. */}
+</AccordionGroup>
 
 ## Who owns what
 
@@ -70,13 +69,13 @@ A rough map. People here usually wear multiple hats — this is just where the f
 
 | Area | First ping |
 | --- | --- |
-| Main API (`back/`) | `<TODO>` |
-| Frontend (`front/`) | `<TODO>` |
-| Worker (Temporal) | `<TODO>` |
-| Third-party integrations (Notion, Slack, Stripe, Zapier) | `<TODO>` |
+| Main API (`back/`) | Guilherme |
+| Frontend (`front/`) | Klinger |
+| Worker (Temporal) | Yago |
+| Third-party integrations (Notion, Slack, Stripe, Zapier) | Guilherme |
 | Infra / deploy / AWS | Guilherme |
-| Docs site (`docs/`) | `<TODO>` |
-| Customer support / incidents | `<TODO>` |
+| Docs site (`docs/`) | Yago |
+| Customer support / incidents | Guilherme |
 
 If the area you need isn't here, ask in the team channel — someone will route you.
 
@@ -84,7 +83,8 @@ If the area you need isn't here, ask in the team channel — someone will route 
 
 People who used to be on the team and shaped what we have today. Worth knowing who they were because their code is still everywhere.
 
-`<TODO: list of former teammates with one line each>`
+- **Luis Filipe K. A.** ("Greg") — from Ourinhos, SP. Dad of twins (Augusto and Filipe) and somehow still claimed to sleep. His code shows up in plenty of corners of the system. **Important:** Greg left behind a set of documents and videos on Google Drive that explain large parts of the platform end-to-end. Ask Guilherme for access on day one — they are still one of the best resources to understand the system.
+- `<TODO: add any other former teammates worth mentioning>`
 
 ## Next
 

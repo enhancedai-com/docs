@@ -1,0 +1,92 @@
+---
+title: "Delete a document"
+description: "DELETE /flux/memory-pods/:podId/delete-document — remove one or more files from a pod, including their embeddings."
+---
+
+Delete documents from a memory pod by name. The endpoint removes both the `namespace_file` row and the associated Pinecone vectors via the unified pipeline.
+
+| Method | Path |
+| --- | --- |
+| `DELETE` | `/flux/memory-pods/:podId/delete-document` |
+
+## Request
+
+### Headers
+
+```http
+api-key: <your-api-key>
+content-type: application/json
+```
+
+### Path parameter
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `podId` | UUID | yes | The pod to delete from. Must be visible to the api-key's scope. |
+
+### Body
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `fileNames` | array of strings | yes | Exact `fileName` values to remove. Each entry must match a current file in the pod; unknown names are silently skipped. |
+
+```json
+{
+  "fileNames": ["lab-results.pdf", "discharge-summary.pdf"]
+}
+```
+
+### Example
+
+```bash
+curl -X DELETE "https://app.fluxprompt.ai/flux/memory-pods/8c5b1b1c-3a4f-4b2e-9c5d-1a2b3c4d5e6f/delete-document" \
+  -H "api-key: <your-api-key>" \
+  -H "content-type: application/json" \
+  -d '{ "fileNames": ["lab-results.pdf"] }'
+```
+
+## Response
+
+Returns the refreshed pod (with the deleted files no longer present), or `null` if the pod no longer exists:
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Files deleted",
+    "pods": {
+      "id": "8c5b1b1c-3a4f-4b2e-9c5d-1a2b3c4d5e6f",
+      "name": "Case 12345 — Patient X",
+      "embeddingModelName": "text-embedding-3-small",
+      "files": [],
+      "dimensions": [],
+      "searchUsingDimensions": false,
+      "folderId": null,
+      "rank": null,
+      "description": "Pod for medical case 12345.",
+      "metadata": { "caseId": "12345", "patientId": "X" }
+    }
+  }
+}
+```
+
+## Behavior
+
+- Names you send that don't match any current file are skipped without an error. The server logs them and continues with the rest.
+- For each matched name, the unified pipeline deletes both the `namespace_file` row and the file's vectors from Pinecone.
+- The response reflects state **after** the deletion completes — there's no asynchronous queue to wait on.
+
+<Tip>
+  Get the exact `fileName` values from [`GET /flux/memory-pods/get`](/main-api/specific-features/memory-pods-api/list-pods) — those are case-sensitive and must match exactly.
+</Tip>
+
+## Errors
+
+| HTTP | Cause | What to do |
+| --- | --- | --- |
+| `400` | `podId` is not a valid UUID. | Send a UUID from a previous response. |
+| `400` | `fileNames` missing or not an array. | Send `fileNames` as an array of strings. |
+| `400` | Pod not found in the caller's scope. | Verify the api-key type and the pod's scope. |
+| `401` | Missing or invalid `api-key` header. | Check the header. |
+
+See [Errors and tips](/main-api/specific-features/memory-pods-api/errors-and-tips).

@@ -9,179 +9,217 @@
   },
   "favicon": "/favicon.svg",
   "navigation": {
-    "tabs": [
+    "languages": [
       {
-        "tab": "Guides",
-        "groups": [
+        "language": "en",
+        "default": true,
+        "tabs": [
           {
-            "group": "Getting started",
-            "pages": [
-              "index",
+            "tab": "Guides",
+            "groups": [
               {
-                "group": "Welcome",
+                "group": "Getting started",
                 "pages": [
-                  "getting-started/welcome/index",
-                  "getting-started/welcome/team",
-                  "getting-started/welcome/the-product",
-                  "getting-started/welcome/first-week",
-                  "getting-started/welcome/environment-setup",
-                  "getting-started/welcome/claude-code",
-                  "getting-started/welcome/mintlify-quickstart",
-                  "getting-started/welcome/first-30-days",
-                  "getting-started/welcome/culture",
-                  "getting-started/welcome/fun-stuff"
+                  "index",
+                  {
+                    "group": "Welcome",
+                    "pages": [
+                      "getting-started/welcome/index",
+                      "getting-started/welcome/team",
+                      "getting-started/welcome/the-product",
+                      "getting-started/welcome/first-week",
+                      "getting-started/welcome/environment-setup",
+                      "getting-started/welcome/claude-code",
+                      "getting-started/welcome/mintlify-quickstart",
+                      "getting-started/welcome/first-30-days",
+                      "getting-started/welcome/culture",
+                      "getting-started/welcome/fun-stuff"
+                    ]
+                  },
+                  "getting-started/overview",
+                  "getting-started/git-workflow",
+                  "getting-started/delivery-workflow"
                 ]
               },
-              "getting-started/overview",
-              "getting-started/git-workflow",
-              "getting-started/delivery-workflow"
-            ]
-          },
-          {
-            "group": "Ai Workflows",
-            "pages": [
-              "ai-workflows/claude-code-setup",
-              "ai-workflows/create-docs-agent",
               {
-                "group": "Internal developer workflows",
+                "group": "Ai Workflows",
                 "pages": [
-                  "ai-workflows/internal-developer-workflows/overview",
-                  "ai-workflows/internal-developer-workflows/onboarding",
+                  "ai-workflows/claude-code-setup",
+                  "ai-workflows/create-docs-agent",
                   {
-                    "group": "Skills",
+                    "group": "Internal developer workflows",
                     "pages": [
-                      "ai-workflows/internal-developer-workflows/skills/ec2-tunnel",
-                      "ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod",
-                      "ai-workflows/internal-developer-workflows/skills/db-migration",
-                      "ai-workflows/internal-developer-workflows/skills/tlc-spec-driven"
+                      "ai-workflows/internal-developer-workflows/overview",
+                      "ai-workflows/internal-developer-workflows/onboarding",
+                      {
+                        "group": "Skills",
+                        "pages": [
+                          "ai-workflows/internal-developer-workflows/skills/ec2-tunnel",
+                          "ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod",
+                          "ai-workflows/internal-developer-workflows/skills/db-migration",
+                          "ai-workflows/internal-developer-workflows/skills/tlc-spec-driven"
+                        ]
+                      },
+                      {
+                        "group": "Agents",
+                        "pages": [
+                          "ai-workflows/internal-developer-workflows/agents/db-investigator",
+                          "ai-workflows/internal-developer-workflows/agents/db-setup",
+                          "ai-workflows/internal-developer-workflows/agents/pr-creator",
+                          "ai-workflows/internal-developer-workflows/agents/mintlify-docs-writer"
+                        ]
+                      },
+                      {
+                        "group": "Playbooks",
+                        "pages": [
+                          "ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation",
+                          "ai-workflows/internal-developer-workflows/playbooks/memory-leak-diagnosis",
+                          "ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow",
+                          "ai-workflows/internal-developer-workflows/playbooks/db-investigation-quickstart"
+                        ]
+                      },
+                      "ai-workflows/internal-developer-workflows/best-practices"
+                    ]
+                  }
+                ]
+              },
+              {
+                "group": "Main API",
+                "pages": [
+                  "main-api/overview",
+                  "main-api/development",
+                  {
+                    "group": "Version control",
+                    "pages": [
+                      "main-api/version-control",
+                      "main-api/version-control-api"
                     ]
                   },
                   {
-                    "group": "Agents",
+                    "group": "Specific features",
                     "pages": [
-                      "ai-workflows/internal-developer-workflows/agents/db-investigator",
-                      "ai-workflows/internal-developer-workflows/agents/db-setup",
-                      "ai-workflows/internal-developer-workflows/agents/pr-creator",
-                      "ai-workflows/internal-developer-workflows/agents/mintlify-docs-writer"
+                      "main-api/specific-features/flow-data-architecture",
+                      "main-api/specific-features/objects-system",
+                      "main-api/specific-features/check-multiple-targets",
+                      "main-api/specific-features/edge-propagation-backend",
+                      "main-api/specific-features/add-new-model",
+                      "main-api/specific-features/add-multimodal-model",
+                      "main-api/specific-features/third-party-integrations-architecture",
+                      "main-api/specific-features/memory-pods-architecture",
+                      "main-api/specific-features/notion-integration-setup",
+                      "main-api/specific-features/notion-user-guide",
+                      "main-api/specific-features/slack-integration-setup",
+                      "main-api/specific-features/stripe-integration-setup",
+                      "main-api/specific-features/stripe-user-guide",
+                      "main-api/specific-features/zapier-user-guide",
+                      {
+                        "group": "Integrations API",
+                        "pages": [
+                          "main-api/specific-features/integrations-api/overview",
+                          "main-api/specific-features/integrations-api/list-folders",
+                          "main-api/specific-features/integrations-api/list-agents",
+                          "main-api/specific-features/integrations-api/create-agent",
+                          "main-api/specific-features/integrations-api/get-agent",
+                          "main-api/specific-features/integrations-api/update-agent",
+                          "main-api/specific-features/integrations-api/errors-and-tips"
+                        ]
+                      },
+                      {
+                        "group": "Memory Pods API",
+                        "pages": [
+                          "main-api/specific-features/memory-pods-api/overview",
+                          "main-api/specific-features/memory-pods-api/create-pod",
+                          "main-api/specific-features/memory-pods-api/list-pods",
+                          "main-api/specific-features/memory-pods-api/add-document",
+                          "main-api/specific-features/memory-pods-api/delete-document",
+                          "main-api/specific-features/memory-pods-api/replace-document",
+                          "main-api/specific-features/memory-pods-api/errors-and-tips"
+                        ]
+                      },
+                      "main-api/specific-features/local-development",
+                      "main-api/specific-features/output-controller-stall-incident"
+                    ]
+                  }
+                ]
+              },
+              {
+                "group": "Worker",
+                "pages": [
+                  "worker/overview",
+                  "worker/development",
+                  {
+                    "group": "Node",
+                    "pages": [
+                      "worker/node/scripting",
+                      "worker/node/text-generator",
+                      "worker/node/audio-transcriber",
+                      "worker/node/math-function",
+                      "worker/node/api-caller",
+                      "worker/node/counter",
+                      "worker/node/sql-querier",
+                      "worker/node/display-box",
+                      "worker/node/large-memory-dynamic-pod"
                     ]
                   },
                   {
-                    "group": "Playbooks",
+                    "group": "Workflows",
                     "pages": [
-                      "ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation",
-                      "ai-workflows/internal-developer-workflows/playbooks/memory-leak-diagnosis",
-                      "ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow",
-                      "ai-workflows/internal-developer-workflows/playbooks/db-investigation-quickstart"
+                      "worker/workflows/worker-service",
+                      "worker/workflows/process-single-node",
+                      "worker/workflows/process-agent"
                     ]
                   },
-                  "ai-workflows/internal-developer-workflows/best-practices"
+                  {
+                    "group": "Activities",
+                    "pages": [
+                      "worker/activities/notify-status",
+                      "worker/activities/get-info-database",
+                      "worker/activities/validate-model-access",
+                      "worker/activities/charge-tokens",
+                      "worker/activities/generate-file",
+                      "worker/activities/generate-execution-logs",
+                      "worker/activities/node-execution-error"
+                    ]
+                  }
+                ]
+              },
+              {
+                "group": "Client",
+                "pages": [
+                  "client/overview",
+                  "client/development",
+                  "client/version-control",
+                  {
+                    "group": "Specific features",
+                    "pages": [
+                      "client/specific-features/edge-propagation",
+                      "client/specific-features/autosave-system",
+                      "client/specific-features/flow-canvas-autosave",
+                      "client/specific-features/input-size-tracking",
+                      "client/specific-features/add-multimodal-model",
+                      "client/specific-features/third-party-integration-node",
+                      "client/specific-features/mcp-node",
+                      "client/specific-features/mcp-user-guide"
+                    ]
+                  }
                 ]
               }
             ]
           },
           {
-            "group": "Main API",
-            "pages": [
-              "main-api/overview",
-              "main-api/development",
+            "tab": "🚧 API reference",
+            "groups": [
               {
-                "group": "Version control",
-                "pages": [
-                  "main-api/version-control",
-                  "main-api/version-control-api"
-                ]
+                "group": "API documentation",
+                "pages": ["api-reference/introduction"]
               },
               {
-                "group": "Specific features",
+                "group": "Endpoint examples",
                 "pages": [
-                  "main-api/specific-features/flow-data-architecture",
-                  "main-api/specific-features/objects-system",
-                  "main-api/specific-features/check-multiple-targets",
-                  "main-api/specific-features/edge-propagation-backend",
-                  "main-api/specific-features/add-new-model",
-                  "main-api/specific-features/add-multimodal-model",
-                  "main-api/specific-features/third-party-integrations-architecture",
-                  "main-api/specific-features/notion-integration-setup",
-                  "main-api/specific-features/notion-user-guide",
-                  "main-api/specific-features/slack-integration-setup",
-                  "main-api/specific-features/stripe-integration-setup",
-                  "main-api/specific-features/stripe-user-guide",
-                  "main-api/specific-features/zapier-user-guide",
-                  {
-                    "group": "Integrations API",
-                    "pages": [
-                      "main-api/specific-features/integrations-api/overview",
-                      "main-api/specific-features/integrations-api/list-folders",
-                      "main-api/specific-features/integrations-api/list-agents",
-                      "main-api/specific-features/integrations-api/create-agent",
-                      "main-api/specific-features/integrations-api/get-agent",
-                      "main-api/specific-features/integrations-api/update-agent",
-                      "main-api/specific-features/integrations-api/errors-and-tips"
-                    ]
-                  },
-                  "main-api/specific-features/local-development",
-                  "main-api/specific-features/output-controller-stall-incident"
-                ]
-              }
-            ]
-          },
-          {
-            "group": "Worker",
-            "pages": [
-              "worker/overview",
-              "worker/development",
-              {
-                "group": "Node",
-                "pages": [
-                  "worker/node/scripting",
-                  "worker/node/text-generator",
-                  "worker/node/audio-transcriber",
-                  "worker/node/math-function",
-                  "worker/node/api-caller",
-                  "worker/node/counter",
-                  "worker/node/sql-querier",
-                  "worker/node/display-box"
-                ]
-              },
-              {
-                "group": "Workflows",
-                "pages": [
-                  "worker/workflows/worker-service",
-                  "worker/workflows/process-single-node",
-                  "worker/workflows/process-agent"
-                ]
-              },
-              {
-                "group": "Activities",
-                "pages": [
-                  "worker/activities/notify-status",
-                  "worker/activities/get-info-database",
-                  "worker/activities/validate-model-access",
-                  "worker/activities/charge-tokens",
-                  "worker/activities/generate-file",
-                  "worker/activities/generate-execution-logs",
-                  "worker/activities/node-execution-error"
-                ]
-              }
-            ]
-          },
-          {
-            "group": "Client",
-            "pages": [
-              "client/overview",
-              "client/development",
-              "client/version-control",
-              {
-                "group": "Specific features",
-                "pages": [
-                  "client/specific-features/edge-propagation",
-                  "client/specific-features/autosave-system",
-                  "client/specific-features/flow-canvas-autosave",
-                  "client/specific-features/input-size-tracking",
-                  "client/specific-features/add-multimodal-model",
-                  "client/specific-features/third-party-integration-node",
-                  "client/specific-features/mcp-node",
-                  "client/specific-features/mcp-user-guide"
+                  "api-reference/endpoint/get",
+                  "api-reference/endpoint/create",
+                  "api-reference/endpoint/delete",
+                  "api-reference/endpoint/webhook"
                 ]
               }
             ]
@@ -189,19 +227,216 @@
         ]
       },
       {
-        "tab": "🚧 API reference",
-        "groups": [
+        "language": "pt-BR",
+        "tabs": [
           {
-            "group": "API documentation",
-            "pages": ["api-reference/introduction"]
+            "tab": "Guides",
+            "groups": [
+              {
+                "group": "Getting started",
+                "pages": [
+                  "index",
+                  {
+                    "group": "Bem-vindo",
+                    "pages": [
+                      "getting-started/welcome/pt-br/overview",
+                      "getting-started/welcome/pt-br/team",
+                      "getting-started/welcome/pt-br/the-product",
+                      "getting-started/welcome/pt-br/first-week",
+                      "getting-started/welcome/pt-br/environment-setup",
+                      "getting-started/welcome/pt-br/claude-code",
+                      "getting-started/welcome/pt-br/mintlify-quickstart",
+                      "getting-started/welcome/pt-br/first-30-days",
+                      "getting-started/welcome/pt-br/culture",
+                      "getting-started/welcome/pt-br/fun-stuff"
+                    ]
+                  },
+                  "getting-started/overview",
+                  "getting-started/git-workflow",
+                  "getting-started/delivery-workflow"
+                ]
+              },
+              {
+                "group": "Ai Workflows",
+                "pages": [
+                  "ai-workflows/claude-code-setup",
+                  "ai-workflows/create-docs-agent",
+                  {
+                    "group": "Internal developer workflows",
+                    "pages": [
+                      "ai-workflows/internal-developer-workflows/overview",
+                      "ai-workflows/internal-developer-workflows/onboarding",
+                      {
+                        "group": "Skills",
+                        "pages": [
+                          "ai-workflows/internal-developer-workflows/skills/ec2-tunnel",
+                          "ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod",
+                          "ai-workflows/internal-developer-workflows/skills/db-migration",
+                          "ai-workflows/internal-developer-workflows/skills/tlc-spec-driven"
+                        ]
+                      },
+                      {
+                        "group": "Agents",
+                        "pages": [
+                          "ai-workflows/internal-developer-workflows/agents/db-investigator",
+                          "ai-workflows/internal-developer-workflows/agents/db-setup",
+                          "ai-workflows/internal-developer-workflows/agents/pr-creator",
+                          "ai-workflows/internal-developer-workflows/agents/mintlify-docs-writer"
+                        ]
+                      },
+                      {
+                        "group": "Playbooks",
+                        "pages": [
+                          "ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation",
+                          "ai-workflows/internal-developer-workflows/playbooks/memory-leak-diagnosis",
+                          "ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow",
+                          "ai-workflows/internal-developer-workflows/playbooks/db-investigation-quickstart"
+                        ]
+                      },
+                      "ai-workflows/internal-developer-workflows/best-practices"
+                    ]
+                  }
+                ]
+              },
+              {
+                "group": "Main API",
+                "pages": [
+                  "main-api/overview",
+                  "main-api/development",
+                  {
+                    "group": "Version control",
+                    "pages": [
+                      "main-api/version-control",
+                      "main-api/version-control-api"
+                    ]
+                  },
+                  {
+                    "group": "Specific features",
+                    "pages": [
+                      "main-api/specific-features/flow-data-architecture",
+                      "main-api/specific-features/objects-system",
+                      "main-api/specific-features/check-multiple-targets",
+                      "main-api/specific-features/edge-propagation-backend",
+                      "main-api/specific-features/add-new-model",
+                      "main-api/specific-features/add-multimodal-model",
+                      "main-api/specific-features/third-party-integrations-architecture",
+                      "main-api/specific-features/memory-pods-architecture",
+                      "main-api/specific-features/notion-integration-setup",
+                      "main-api/specific-features/notion-user-guide",
+                      "main-api/specific-features/slack-integration-setup",
+                      "main-api/specific-features/stripe-integration-setup",
+                      "main-api/specific-features/stripe-user-guide",
+                      "main-api/specific-features/zapier-user-guide",
+                      {
+                        "group": "Integrations API",
+                        "pages": [
+                          "main-api/specific-features/integrations-api/overview",
+                          "main-api/specific-features/integrations-api/list-folders",
+                          "main-api/specific-features/integrations-api/list-agents",
+                          "main-api/specific-features/integrations-api/create-agent",
+                          "main-api/specific-features/integrations-api/get-agent",
+                          "main-api/specific-features/integrations-api/update-agent",
+                          "main-api/specific-features/integrations-api/errors-and-tips"
+                        ]
+                      },
+                      {
+                        "group": "Memory Pods API",
+                        "pages": [
+                          "main-api/specific-features/memory-pods-api/overview",
+                          "main-api/specific-features/memory-pods-api/create-pod",
+                          "main-api/specific-features/memory-pods-api/list-pods",
+                          "main-api/specific-features/memory-pods-api/add-document",
+                          "main-api/specific-features/memory-pods-api/delete-document",
+                          "main-api/specific-features/memory-pods-api/replace-document",
+                          "main-api/specific-features/memory-pods-api/errors-and-tips"
+                        ]
+                      },
+                      "main-api/specific-features/local-development",
+                      "main-api/specific-features/output-controller-stall-incident"
+                    ]
+                  }
+                ]
+              },
+              {
+                "group": "Worker",
+                "pages": [
+                  "worker/overview",
+                  "worker/development",
+                  {
+                    "group": "Node",
+                    "pages": [
+                      "worker/node/scripting",
+                      "worker/node/text-generator",
+                      "worker/node/audio-transcriber",
+                      "worker/node/math-function",
+                      "worker/node/api-caller",
+                      "worker/node/counter",
+                      "worker/node/sql-querier",
+                      "worker/node/display-box",
+                      "worker/node/large-memory-dynamic-pod"
+                    ]
+                  },
+                  {
+                    "group": "Workflows",
+                    "pages": [
+                      "worker/workflows/worker-service",
+                      "worker/workflows/process-single-node",
+                      "worker/workflows/process-agent"
+                    ]
+                  },
+                  {
+                    "group": "Activities",
+                    "pages": [
+                      "worker/activities/notify-status",
+                      "worker/activities/get-info-database",
+                      "worker/activities/validate-model-access",
+                      "worker/activities/charge-tokens",
+                      "worker/activities/generate-file",
+                      "worker/activities/generate-execution-logs",
+                      "worker/activities/node-execution-error"
+                    ]
+                  }
+                ]
+              },
+              {
+                "group": "Client",
+                "pages": [
+                  "client/overview",
+                  "client/development",
+                  "client/version-control",
+                  {
+                    "group": "Specific features",
+                    "pages": [
+                      "client/specific-features/edge-propagation",
+                      "client/specific-features/autosave-system",
+                      "client/specific-features/flow-canvas-autosave",
+                      "client/specific-features/input-size-tracking",
+                      "client/specific-features/add-multimodal-model",
+                      "client/specific-features/third-party-integration-node",
+                      "client/specific-features/mcp-node",
+                      "client/specific-features/mcp-user-guide"
+                    ]
+                  }
+                ]
+              }
+            ]
           },
           {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+            "tab": "🚧 API reference",
+            "groups": [
+              {
+                "group": "API documentation",
+                "pages": ["api-reference/introduction"]
+              },
+              {
+                "group": "Endpoint examples",
+                "pages": [
+                  "api-reference/endpoint/get",
+                  "api-reference/endpoint/create",
+                  "api-reference/endpoint/delete",
+                  "api-reference/endpoint/webhook"
+                ]
+              }
             ]
           }
         ]

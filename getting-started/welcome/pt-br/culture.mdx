@@ -1,0 +1,123 @@
+---
+title: "Como a gente trabalha"
+description: "Code review, PRs, async vs. call, como pedir ajuda, normas de idioma. A cola cultural que segura o time."
+---
+
+> *Se a gente errou, foi pra ver se todo mundo está fazendo code review direito.*
+
+A frase acima é da primeira versão do nosso deck de onboarding. Ficou porque é uma piada que carrega um princípio real: **code review não é negociável, mesmo quando — especialmente quando — a mudança parece pequena**.
+
+Esta página é o resto desse princípio, aplicado ao resto de como a gente trabalha.
+
+## Code review
+
+Os defaults:
+
+- **Toda mudança passa por PR review.** Sem push direto pra `production`, `staging`, `master` ou `main`. Pre-commit e hooks de CI garantem a maior parte; o resto é com você.
+- **Dois reviewers no mínimo.** Mudanças triviais podem passar com um se o segundo está de férias ou indisponível, mas a régua é "sinceramente acho que um segundo par de olhos não pegaria nada", não "estou com pressa".
+- **Comentário de reviewer é respondido, não ignorado.** Responda toda thread, mesmo que só com "concordo, vou arrumar" ou "vou contra-argumentar por X". PR com thread aberta não merga.
+
+### Como é um bom review de PR
+
+- **Lê o diff por comportamento, não só estilo.** "Isso faz o que a descrição diz que faz?" é a primeira pergunta. "O naming está consistente com o resto do arquivo?" é a segunda.
+- **Pergunta antes de sugerir.** "Por que você foi por aqui?" supera "você devia fazer assim" — o autor pode ter um motivo que você não vê.
+- **Pega o que ia quebrar em três meses.** Type assertions que escondem um refactor. Um Map mutável novo no escopo de módulo. Closure de `setTimeout` capturando um objeto grande. O tipo de coisa que não quebra hoje mas vai compondo.
+- **Não fica em bikeshed.** Se o comentário é preferência e não correção, prefixe `nit:` e deixa. O autor pode ignorar `nit:`.
+
+### O que a gente explicitamente **não** faz
+
+- **Sem CODEOWNERS gatekeeping.** Qualquer pessoa do time pode revisar PR de qualquer pessoa. A tabela "quem cuida do quê" em [O time](/getting-started/welcome/pt-br/team#quem-cuida-do-que) é dica de roteamento, não sistema de permissão.
+- **Sem "LGTM" sem ler.** Mesmo em PRs pequenos. Se o diff é pequeno, o review é pequeno — mas existe.
+- **Sem squash reescrevendo commit messages que a gente quer manter.** Use `[TYPE] Imperative name` no título do PR; o commit squashado vai seguir.
+
+## Convenções de PR
+
+Usamos título e body de PR estruturados conforme o [Engineering Handbook](/ai-workflows/internal-developer-workflows/agents/pr-creator) (em inglês). Versão curta:
+
+- Nome da branch: `<change_type>/<task_code>` (ex.: `feat/868jk7x3j`)
+- Título do PR: `[TYPE] Imperative task name` (ex.: `[FEAT] Add Notion dynamic field picker`)
+- Body do PR: três seções — **Description**, **Preview** (screenshots / logs), **References** (link do ClickUp)
+- Branch base: **`production`** pra `back/` e `front/`
+
+O agent `pr-creator` no Claude Code faz isso pra você a partir de uma task do ClickUp. Usa.
+
+## Deploys
+
+- **Dev:** auto-deploy a partir de `master` (back/) ou `main` (front/) a cada push.
+- **Staging:** auto-deploy a partir de `staging`. Promova com `git merge origin/production && git push origin staging`.
+- **Prod:** workflow dispatch manual — `gh workflow run cicd_prod.yml --ref production`.
+
+Topologia completa e a receita de resize-task-def em [PR and deploy flow](/ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow) (em inglês).
+
+Depois de um deploy de prod, poste uma mensagem curta no Gmail Chat. O agent `pr-creator` compõe e copia pro clipboard pra você.
+
+## Async vs. call
+
+O default é async. Slack/Gmail Chat ao invés de call, quase sempre.
+
+**Quando chamar uma call:**
+
+- A thread foi pra três rodadas e não convergiu
+- É um incidente em andamento
+- Alguém travado e um screen share de 5 min desbloqueia
+- A conversa é emocionalmente carregada (1:1, feedback, sensível)
+
+**Quando async é o caminho:**
+
+- Qualquer coisa que se beneficie de ficar pesquisável depois
+- Qualquer coisa em que mais de uma pessoa possa contribuir
+- Qualquer coisa em que alguém lendo na semana que vem aprenderia
+
+Default pra escrever. Se rolar de ser formato errado, escala pra call. O contrário — passar uma call pra escrito depois — quase nunca acontece, e o contexto evapora.
+
+## Pedindo ajuda
+
+Dois modos de falha contra os quais a gente trabalha:
+
+1. **Ficar travado em silêncio.** Custa mais caro. Sinal de time saudável é gente pedindo quando precisa, não cerrando os dentes.
+2. **Perguntar antes de tentar.** Chato pro respondedor e pula o aprendizado. O meio-termo: tenta o óbvio primeiro, depois pergunta.
+
+A frase que a gente usa internamente — fala em voz alta ou cola no chat:
+
+> "Já fiquei 30 minutos em X e não estou vendo a saída. Você consegue dar 5 minutos?"
+
+Suficiente. Sem "desculpa incomodar", sem preâmbulo. A gente otimiza pra desbloquear rápido.
+
+## Idiomas
+
+- **Código, identificadores, commit messages, PRs, este site de docs (fora a seção Welcome):** inglês. Sempre.
+- **Chat do time (Gmail Chat, Slack):** português ou inglês, o que ficar natural. A maior parte do time é brasileira; vai ver os dois.
+- **Mensagens com cliente:** mesmo idioma do cliente. Geralmente inglês.
+
+O motivo do inglês no código é que o time trabalha async em fusos diferentes, e inglês é o default de menor atrito pra todo mundo (incluindo futuras contratações que talvez não falem português). Não é preferência — é decisão operacional.
+
+## O que "entregar" significa
+
+A régua é: uma coisa está entregue quando **um usuário real consegue usar em produção sem você intervir**. Isso quer dizer:
+
+- Funciona em prod (não "funciona na minha máquina", não "funciona em dev")
+- Está documentado se mudou comportamento visível pro usuário ou contrato de API
+- O time sabe que existe (deploy announcement, PR description, página de doc — pelo menos um)
+- Erros têm log apropriado — falhas aparecem em CloudWatch e Datadog, não como timeout silencioso
+
+"Código mergeado" é marco, não a linha de chegada. "Deployado e anunciado" é a linha de chegada.
+
+## Expectativas de tooling
+
+Uma ferramenta não-negociável: **Claude Code** — o agent de IA principal do time em todos os repos. Configure via [esta página](/getting-started/welcome/pt-br/claude-code).
+
+O resto é gosto. Use o editor, terminal, browser e música que quiser. O time convergiu no Claude Code porque os workflows em volta dele — skills do `.workflow/`, agents customizados, plan mode — pagam a convergência.
+
+## O que a gente não faz
+
+Uma lista curta de padrões "explicitamente fora", pra você saber onde estão as bordas:
+
+- **Sem `--no-verify`** em git hooks. Falha de hook é sinal; investigue, não burle.
+- **Sem "só dessa vez" pra escrita em prod.** Migrações passam por PR. A skill `ec2-tunnel-prod` é SELECT-only por design.
+- **Sem heroísmo não documentado.** Se você apagou um incêndio às 2 da manhã, escreve de manhã pra próxima pessoa não viver a mesma.
+- **Sem código de "transição" que ninguém remove.** Apague o caminho antigo quando o novo subir. Git history é o registro.
+
+## Próximo
+
+- [Piadas internas](/getting-started/welcome/pt-br/fun-stuff) — última parada deste guia
+- [Primeiros 30 dias](/getting-started/welcome/pt-br/first-30-days) — se ainda não viu os marcos

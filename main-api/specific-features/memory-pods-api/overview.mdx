@@ -1,0 +1,147 @@
+---
+title: "Memory Pods API overview"
+description: "Programmatic lifecycle for FluxPrompt memory pods — create, ingest documents, list, delete, and replace through five HTTP endpoints behind an api-key."
+---
+
+The Memory Pods API lets external applications manage FluxPrompt memory pods without going through the UI. A typical integration creates a pod in response to an event in the parent application (a new case, a new client, a new project), ingests one or more documents into it, and later queries it from a flow.
+
+## When to use it
+
+- **Legal / medical case management** — a pod per case, populated as documents arrive.
+- **Client onboarding** — a pod per customer, seeded with their contract, terms, and product configuration.
+- **Support evidence** — a pod per ticket, populated with attached files for the agent to reference.
+- **Knowledge bases** — a pod per topic that your CMS keeps in sync.
+
+If your integration only needs to **read** from a memory pod inside a flow, you don't need this API. Use the Large Memory node directly and pass the pod id at runtime — see [Large Memory: dynamic pod id](/worker/node/large-memory-dynamic-pod).
+
+## The five endpoints
+
+<Columns cols={2}>
+  <Card title="Create a pod" icon="plus" href="/main-api/specific-features/memory-pods-api/create-pod">
+    `POST /flux/memory-pods` — provision a new pod and get back its UUID.
+  </Card>
+  <Card title="List or get pods" icon="list" href="/main-api/specific-features/memory-pods-api/list-pods">
+    `GET /flux/memory-pods/get` — list every pod in scope, or fetch one by id or name.
+  </Card>
+  <Card title="Add a document" icon="upload" href="/main-api/specific-features/memory-pods-api/add-document">
+    `POST /flux/memory-pods/:podId/add-document` — upload files (multipart) or reference them by URL.
+  </Card>
+  <Card title="Delete a document" icon="trash" href="/main-api/specific-features/memory-pods-api/delete-document">
+    `DELETE /flux/memory-pods/:podId/delete-document` — remove one or more files from the pod.
+  </Card>
+  <Card title="Replace a document" icon="arrows-rotate" href="/main-api/specific-features/memory-pods-api/replace-document">
+    `PUT /flux/memory-pods/:podId/replace-document` — atomically swap an existing file for a new URL.
+  </Card>
+  <Card title="Errors and tips" icon="circle-info" href="/main-api/specific-features/memory-pods-api/errors-and-tips">
+    Common failure modes, scope pitfalls, and integration patterns.
+  </Card>
+</Columns>
+
+## Base URL
+
+The API is mounted under `/flux/memory-pods/*` on the same host as the rest of FluxPrompt:
+
+| Environment | Base URL |
+| --- | --- |
+| Production | `https://app.fluxprompt.ai/flux/memory-pods` |
+| Staging | `https://staging.fluxprompt.ai/flux/memory-pods` |
+
+## Authentication
+
+Every request requires an `api-key` header. There is **no** `x-` prefix and no `Bearer` scheme:
+
+```http
+api-key: <your-api-key>
+```
+
+The key can be a **user-level** or a **space-level** key, and each one binds requests to a different scope.
+
+### User-level api-keys
+
+Generated against a specific user. Requests run as that user. Pods created without an explicit `spaceId` land in the user's personal scope (or under their `companyUser` membership). The `apiKeySpaceId` is not attached.
+
+### Space-level api-keys
+
+Generated against a company space. Requests are authenticated as the **company owner**, with `apiKeySpaceId` automatically attached to the request context. Pods created without an explicit `spaceId` inherit `apiKeySpaceId` and land in that space.
+
+<Tip>
+  Pick the key type that matches your integration topology. If you have one app provisioning pods for one team, a space-level key is cleaner. If pods are tied to individual users on your side, use user-level keys.
+</Tip>
+
+<Warning>
+  Don't mix key types against the same pod. The auth user identity changes between user and space keys, which changes the scope the pod is visible from.
+</Warning>
+
+## Scope resolution
+
+For every operation, the API resolves scope in this order:
+
+```
+1. body.spaceId (explicit)
+2. apiKeySpaceId (from a space-level api-key)
+3. caller's personal / companyUser scope
+```
+
+The same rule applies whether you are creating, listing, ingesting, deleting, or replacing.
+
+## Embedding models
+
+A pod's embedding model is fixed at creation time and determines which Pinecone index holds its vectors. Two models are currently supported:
+
+| `embeddingModelName` | Dimensions | When to pick |
+| --- | --- | --- |
+| `text-embedding-3-small` (default) | 1536 | General-purpose, lower cost, great for most knowledge bases |
+| `voyage-3-large` | 4096 | Higher retrieval quality on technical or specialized corpora |
+
+<Warning>
+  Choose carefully — you cannot change a pod's embedding model after creation. To switch, create a new pod and re-ingest.
+</Warning>
+
+## Typical integration flow
+
+<Steps>
+  <Step title="Provision a pod when your event fires">
+    Call [`POST /flux/memory-pods`](/main-api/specific-features/memory-pods-api/create-pod) with a meaningful name and (optionally) `metadata` carrying your external id (`caseId`, `clientId`, etc.). Persist the returned `id` on your side.
+  </Step>
+  <Step title="Ingest documents as they arrive">
+    Call [`POST /flux/memory-pods/:podId/add-document`](/main-api/specific-features/memory-pods-api/add-document). You can send raw files (multipart) or just URLs (JSON). Files are queued for processing — the response returns immediately with the pod's current state.
+  </Step>
+  <Step title="Trigger a flow with the pod id">
+    Pass the stored `podId` as a variable input to a flow whose Large Memory node has `podIdData` wired to that input. The flow reads from the right pod automatically. See [Large Memory: dynamic pod id](/worker/node/large-memory-dynamic-pod).
+  </Step>
+  <Step title="Keep the pod in sync">
+    Use [`PUT replace-document`](/main-api/specific-features/memory-pods-api/replace-document) for updates, [`DELETE delete-document`](/main-api/specific-features/memory-pods-api/delete-document) for removals.
+  </Step>
+</Steps>
+
+## Response envelope
+
+All endpoints return the standard FluxPrompt response envelope. Successful responses follow:
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Memory pod created",
+    "pods": {
+      "id": "...",
+      "name": "...",
+      "embeddingModelName": "text-embedding-3-small",
+      "files": [],
+      "dimensions": [],
+      "searchUsingDimensions": false,
+      "folderId": null,
+      "rank": null,
+      "description": null,
+      "metadata": null
+    }
+  }
+}
+```
+
+The `pods` field is a single `NamespaceResponseDto` for create / delete / replace operations, an array of `NamespaceResponseDto` for the list endpoint, or `null` if the pod no longer exists after the operation. Each endpoint page documents the exact shape.
+
+## Companion docs
+
+- [Memory pods architecture](/main-api/specific-features/memory-pods-architecture) — internal architecture, history of the dual-storage bug, and migration story
+- [Large Memory: dynamic pod id](/worker/node/large-memory-dynamic-pod) — how a flow's Large Memory node consumes a pod id at runtime

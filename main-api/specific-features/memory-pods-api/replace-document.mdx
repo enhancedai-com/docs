@@ -1,0 +1,110 @@
+---
+title: "Replace a document"
+description: "PUT /flux/memory-pods/:podId/replace-document — swap an existing file for a new URL, optionally renaming it."
+---
+
+Replace a document in a memory pod with content fetched from a new URL. Internally the endpoint deletes the old file (including vectors) and re-ingests the new one through the unified pipeline.
+
+| Method | Path |
+| --- | --- |
+| `PUT` | `/flux/memory-pods/:podId/replace-document` |
+
+## Request
+
+### Headers
+
+```http
+api-key: <your-api-key>
+content-type: application/json
+```
+
+### Path parameter
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `podId` | UUID | yes | The pod that owns the file being replaced. Must be visible to the api-key's scope. |
+
+### Body
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `newFileUrl` | string | yes | URL FluxPrompt will fetch to ingest the new content. |
+| `oldFileName` | string | yes | Exact `fileName` of the file to replace. Case-sensitive. |
+| `newFileName` | string | no | Name the new file should have. Defaults to `oldFileName` if omitted. |
+
+```json
+{
+  "newFileUrl": "https://example.com/lab-results-v2.pdf",
+  "oldFileName": "lab-results.pdf",
+  "newFileName": "lab-results-v2.pdf"
+}
+```
+
+### Example
+
+```bash
+curl -X PUT "https://app.fluxprompt.ai/flux/memory-pods/8c5b1b1c-3a4f-4b2e-9c5d-1a2b3c4d5e6f/replace-document" \
+  -H "api-key: <your-api-key>" \
+  -H "content-type: application/json" \
+  -d '{
+    "newFileUrl": "https://example.com/lab-results-v2.pdf",
+    "oldFileName": "lab-results.pdf",
+    "newFileName": "lab-results-v2.pdf"
+  }'
+```
+
+## Response
+
+Returns the refreshed pod with the new file queued. The old file is gone from the `files` array:
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "File replaced",
+    "pods": {
+      "id": "8c5b1b1c-3a4f-4b2e-9c5d-1a2b3c4d5e6f",
+      "name": "Case 12345 — Patient X",
+      "embeddingModelName": "text-embedding-3-small",
+      "files": [
+        {
+          "id": "9d4e7f12-aabb-44cc-9988-1122334455dd",
+          "fileName": "lab-results-v2.pdf",
+          "chunkingMethod": "by1000Characters",
+          "metadatas": [],
+          "dimensions": [],
+          "status": "Enqueued"
+        }
+      ],
+      "dimensions": [],
+      "searchUsingDimensions": false,
+      "folderId": null,
+      "rank": null,
+      "description": "Pod for medical case 12345.",
+      "metadata": { "caseId": "12345", "patientId": "X" }
+    }
+  }
+}
+```
+
+<Note>
+  Like [`POST add-document`](/main-api/specific-features/memory-pods-api/add-document), ingestion of the new file is asynchronous. Poll [`GET /memory-pods/get`](/main-api/specific-features/memory-pods-api/list-pods) until the new file reaches `"Finished"`.
+</Note>
+
+## Behavior
+
+- The old file is deleted **before** the new one is queued. If your client times out between the two steps, the pod will be missing the file temporarily; re-issue the call to recover.
+- If `oldFileName` does not exist on the pod, the call fails with `400` before anything is deleted.
+- The new file goes through the unified pipeline — pod's real embedding model, correct Pinecone index, configured chunking.
+
+## Errors
+
+| HTTP | Cause | What to do |
+| --- | --- | --- |
+| `400` | `podId` is not a valid UUID. | Use a UUID from a previous response. |
+| `400` | `newFileUrl` missing or empty. | Provide a fetchable URL. |
+| `400` | `oldFileName` does not match any current file. | List the pod first to get exact file names. |
+| `400` | Pod not found in the caller's scope. | Verify the api-key type and the pod's scope. |
+| `401` | Missing or invalid `api-key` header. | Check the header. |
+
+See [Errors and tips](/main-api/specific-features/memory-pods-api/errors-and-tips).

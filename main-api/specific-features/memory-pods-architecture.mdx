@@ -1,0 +1,138 @@
+---
+title: "Memory pods architecture"
+description: "Internal architecture of memory pods — entity model, ingestion pipeline, the dual-storage bug that prompted the 2026-05-25 unification, auth, and scope resolution."
+---
+
+This page is the internal reference for how memory pods work end-to-end on the backend. It is aimed at engineers touching `back/src/app-api/vector/` and `back/src/app-api/flux/`, and at anyone debugging customer-reported issues about pod ingestion.
+
+If you are an external integrator looking for how to use the API, jump to the [Memory Pods API overview](/main-api/specific-features/memory-pods-api/overview).
+
+## What a memory pod is
+
+A memory pod is a `Namespace` row that groups uploaded documents, the embeddings extracted from them, and the metadata used at retrieval time. Each pod has:
+
+- `id` — UUID, the primary key external customers store on their side
+- `name` (`namespace.podName`) — unique within scope (user or space)
+- `embeddingModelName` — `text-embedding-3-small` (default) or `voyage-3-large`. Determines the Pinecone index that holds the pod's vectors and is **fixed at creation time**.
+- `searchUsingDimensions` — whether the pod uses dimension-based search
+- `description` and `metadata` — added in commit `35090584` to let external callers correlate the pod with an external record (`caseId`, `clientId`, etc.)
+- `folderId`, `rank` — organization in the platform UI
+
+The documents themselves live in the `namespace_file` table (one row per uploaded file), with vectors stored in Pinecone keyed by `namespace.id` + `namespace_file.id`.
+
+## Two API surfaces, one pod
+
+Two HTTP surfaces touch the same pods:
+
+| Surface | Path prefix | Auth | Audience |
+| --- | --- | --- | --- |
+| Internal | `/vector/*` | `JwtAuthGuard` | Frontend UI only |
+| Public | `/flux/memory-pods/*` | `ApiKeyGuard` | External customer integrations |
+
+Both surfaces converge on `vectorService.addFile` / `vectorService.deleteFile` since the May 25 unification. Before that, they did not — see below.
+
+## The dual-storage bug (history)
+
+Before commit `fec41d9e` (2026-05-25), the two surfaces each wrote to a different storage and never synced:
+
+- **`/vector/*` (frontend, JWT)** → wrote to the `namespace_file` table. Used the pod's actual `embeddingModel`, picked the right Pinecone index, drove the platform UI.
+- **`/flux/memory-pods/*` (public API, ApiKey)** → appended file URLs to a `text` simple-array column on `namespace` itself (`namespace.files`). **Hardcoded** Pinecone to `1536-dense`, **hardcoded** OpenAI embeddings + `by1000Characters` chunking. Never created `namespace_file` rows.
+
+The two storages sat on the same `namespace` row but were consumed by different readers. `GET /flux/memory-pods/get` read `namespace.files`; the platform UI read `namespace_file`. **Files uploaded via one surface were invisible to the other.**
+
+The bug surfaced in ClickUp task `868jgp151`: a customer reported that API uploads succeeded, the `GET` returned them, but the frontend pod display only showed files uploaded via the UI. A production audit confirmed the architectural divergence across many pods:
+
+| Pod (anonymized) | `namespace.files` count | `namespace_file` count |
+| --- | --- | --- |
+| Example (`daaccd0b…`) | 2 | 1 |
+| Sharp Printer Specs | 131 | 0 |
+| Brad-Jakob-Pod | 1 | 66 |
+
+The hardcoded Pinecone index also silently broke `voyage-3-large` pods — their 4096-dim vectors were being written to a 1536-dim index.
+
+## The unification (commit `fec41d9e`)
+
+The four existing public endpoints (`GET`, `POST add-document`, `DELETE delete-document`, `PUT replace-document`) now all delegate to `vectorService.addFile` / `vectorService.deleteFile`. Concrete changes:
+
+- `flux.controller.ts` — the duplicate `uploadFileToPinecone` / `getDataFromFileUrl` helpers and the local Pinecone client are gone. Each handler now collects file inputs and calls a small private orchestration helper (`ingestIntoMemoryPod` / `collectMemoryPodFileEntries`) that wraps `vectorService.addFile`.
+- `flux.service.ts` — `getNamespaces(user, id?)` was removed. It was a duplicate scope resolver that ignored `companyUser` membership. All reads go through `vectorService.getNamespaces`.
+- `namespace.entity.ts` — `files` column marked `@deprecated`, dropped in the migration below.
+- `apikey.strategy.ts` — when a caller authenticates with a space-level api-key, the resolved auth user gets `apiKeySpaceId` attached so downstream lookups inherit the space scope without having to guess.
+- `ProcessingStatus` enum — added `MIGRATED` value for rows backfilled from the legacy column.
+
+**Single source of truth:** the `namespace_file` table.
+
+## Migration story
+
+Two migrations together delivered the unified shape:
+
+### `BackfillNamespaceFilesAndDropColumn`
+
+1. Iterates every row in `namespace`. For each non-empty `files` value, splits the simple-array, deduplicates against existing `namespace_file.fileName`, and inserts a `namespace_file` row per legacy file with `status = 'Migrated'`.
+2. Drops the `namespace.files` column.
+
+After this migration, **every namespace exposes the same shape to both API surfaces**. The legacy `namespace-migration` module was removed in follow-up commit `608e382a` because nothing else read the legacy field.
+
+### `AddNamespaceDescriptionAndMetadata1776100000000`
+
+Adds the two new optional columns to `namespace`:
+
+- `description` — `varchar(500)`, nullable
+- `metadata` — `jsonb`, nullable
+
+Both are additive. The existing `addFile` ingestion path ignores them when absent; only `createPod` writes them.
+
+## Auth model
+
+API key authentication has two paths inside `ApiKeyStrategy`:
+
+<Steps>
+  <Step title="User-level api-keys">
+    First attempt: `users.apiKey` match. If found, the request runs as that user. `apiKeySpaceId` stays undefined.
+  </Step>
+  <Step title="Space-level api-keys">
+    Fallback: `company_spaces.apiKey` match. The strategy resolves the auth user to `companySpace.company.user` — that is, the **company OWNER, not the space itself**. The space id is then attached to the user object as `apiKeySpaceId` so downstream handlers can scope to that space without re-resolving.
+  </Step>
+</Steps>
+
+The header name is literally `api-key` (no `x-` prefix, no `Bearer` scheme). Sending the value as a regular HTTP header is enough.
+
+<Warning>
+  Mixing user-level and space-level api-keys against the same pod silently changes the auth user identity. Pods created with a user-level api-key live in the user's personal scope; pods created with a space-level api-key live in the space. Always be intentional about which key type you generate for an integration.
+</Warning>
+
+## Scope resolution
+
+All five `/flux/memory-pods/*` endpoints resolve scope in the same order:
+
+```
+explicit body.spaceId
+  → falls through to apiKeySpaceId (from the space-level api-key)
+  → falls through to the caller's personal / companyUser scope
+```
+
+- **`POST /memory-pods` (create):** the new pod is bound to whichever scope wins.
+- **`GET /memory-pods/get` (list/get):** scope filters the result set. With `id` set, the lookup is direct but still respects scope.
+- **`POST .../add-document`, `DELETE .../delete-document`, `PUT .../replace-document`:** the pod is fetched scoped to the caller; 404 if the caller can't see it.
+
+Internally these all go through `vectorService.getNamespaces({ id?, spaceId? })` and `vectorService.addFile({ id, nameSpace })`.
+
+## Where to read the code
+
+- `back/src/app-api/flux/flux.controller.ts` — the 5 public endpoints (search for `@Post('/memory-pods')`)
+- `back/src/app-api/flux/flux.controller.memory-pods.spec.ts` — behavioral tests covering each delegation path
+- `back/src/app-api/vector/vector.service.ts` — `createPod`, `addFile`, `deleteFile`, `getNamespaces`
+- `back/src/app-auth/strategies/apikey.strategy.ts` — auth user resolution
+- `back/src/entities/namespace.entity.ts` — current entity shape
+- `back/src/database/migrations/` — the two migrations referenced above
+
+## Companion docs
+
+<Columns cols={2}>
+  <Card title="Memory Pods API overview" icon="cloud" href="/main-api/specific-features/memory-pods-api/overview">
+    Customer-facing reference for the 5 public endpoints.
+  </Card>
+  <Card title="Large Memory: dynamic pod id" icon="diagram-project" href="/worker/node/large-memory-dynamic-pod">
+    How a workflow's Large Memory node accepts a pod id at runtime — the natural pairing with API-created pods.
+  </Card>
+</Columns>

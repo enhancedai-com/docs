@@ -1,0 +1,111 @@
+---
+title: "Create a memory pod"
+description: "POST /flux/memory-pods — provision a new memory pod with optional description, metadata, embedding model, and scope."
+---
+
+Create an empty memory pod that you'll later populate with documents. The endpoint returns the new pod's UUID for you to persist on your side.
+
+| Method | Path |
+| --- | --- |
+| `POST` | `/flux/memory-pods` |
+
+## Request
+
+### Headers
+
+```http
+api-key: <your-api-key>
+content-type: application/json
+```
+
+### Body
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `name` | string | yes | Pod name. Up to 255 characters. Must be unique within scope. |
+| `description` | string | no | Up to 500 characters. Human-readable explanation surfaced in the UI and `GET` responses. |
+| `metadata` | object | no | Free-form JSON. Use this to correlate the pod with an external record on your side (`caseId`, `clientId`, etc.). |
+| `embeddingModelName` | enum | no | `"text-embedding-3-small"` (default) or `"voyage-3-large"`. Fixed at creation time. |
+| `searchUsingDimensions` | boolean | no | Whether the pod uses dimension-based search. Defaults to `false`. |
+| `spaceId` | UUID | no | Force the pod into a specific space. If omitted, the pod inherits `apiKeySpaceId` from a space-level api-key, or falls back to the caller's personal/companyUser scope. |
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST "https://app.fluxprompt.ai/flux/memory-pods" \
+  -H "api-key: <your-api-key>" \
+  -H "content-type: application/json" \
+  -d '{
+    "name": "Case 12345 — Patient X",
+    "description": "Pod for medical case 12345.",
+    "metadata": { "caseId": "12345", "patientId": "X" },
+    "embeddingModelName": "text-embedding-3-small"
+  }'
+```
+
+```json JSON body
+{
+  "name": "Case 12345 — Patient X",
+  "description": "Pod for medical case 12345.",
+  "metadata": { "caseId": "12345", "patientId": "X" },
+  "embeddingModelName": "text-embedding-3-small"
+}
+```
+
+</CodeGroup>
+
+## Response
+
+On success, returns the full new pod inside the standard response envelope:
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Memory pod created",
+    "pods": {
+      "id": "8c5b1b1c-3a4f-4b2e-9c5d-1a2b3c4d5e6f",
+      "name": "Case 12345 — Patient X",
+      "embeddingModelName": "text-embedding-3-small",
+      "files": [],
+      "dimensions": [],
+      "searchUsingDimensions": false,
+      "folderId": null,
+      "rank": null,
+      "description": "Pod for medical case 12345.",
+      "metadata": { "caseId": "12345", "patientId": "X" }
+    }
+  }
+}
+```
+
+Persist `data.pods.id` — every subsequent ingest, list, delete, or replace call uses it.
+
+## Scope precedence
+
+The pod lands wherever the first of these resolves:
+
+1. `body.spaceId` if present and the caller can access that space.
+2. `apiKeySpaceId` attached to a space-level api-key.
+3. The caller's personal area or `companyUser` membership.
+
+<Tip>
+  For multi-tenant integrations, pair each tenant with a space-level api-key for that tenant's space. No `spaceId` is needed in the body, and the pod is automatically scoped correctly.
+</Tip>
+
+## Errors
+
+| HTTP | Cause | What to do |
+| --- | --- | --- |
+| `400` | Missing `name`, or `name` already used in the same scope. | Pick a unique name within the scope. The error message names the conflict. |
+| `400` | `embeddingModelName` is not one of `text-embedding-3-small` / `voyage-3-large`. | Use a supported value. |
+| `400` | `spaceId` is not a valid UUID or the caller cannot access that space. | Verify the space id; ensure the api-key has access. |
+| `401` | Missing or invalid `api-key` header. | Check the header name (literally `api-key`) and the value. |
+
+See [Errors and tips](/main-api/specific-features/memory-pods-api/errors-and-tips) for response shapes and integration patterns.
+
+## What happens next
+
+The pod is created empty. Use [`POST /flux/memory-pods/:podId/add-document`](/main-api/specific-features/memory-pods-api/add-document) to ingest files into it.

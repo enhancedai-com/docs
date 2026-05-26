@@ -1,0 +1,118 @@
+---
+title: "Sua primeira semana"
+description: "Plano dia a dia dos seus primeiros cinco dias no FluxPrompt. Termina com um PR real mergeado em produção."
+---
+
+## O objetivo
+
+Até sexta-feira da sua primeira semana, você deve ter **um pull request mergeado e deployado em staging**. Não é um tutorial. Não é um hello-world. Uma mudança real no codebase real, por menor que seja.
+
+Os dados da indústria sustentam isso — entregar algo real na semana 1 é o maior preditor de se um novo engenheiro vai se sentir confiante no segundo mês. Então a gente planeja em volta disso.
+
+<Tip>
+  Se você está atrasado em relação a esse cronograma, tudo bem. Avise seu buddy e replaneje. O objetivo é entregar — não bater a sexta a qualquer custo.
+</Tip>
+
+## Dia 1 — Aterrissar
+
+A sessão de onboarding ao vivo é hoje. Seu buddy ou outro membro do time vai conduzir você por:
+
+<Steps>
+  <Step title="Boas-vindas e apresentação do time">
+    As três primeiras páginas deste guia: [Visão geral](/getting-started/welcome/pt-br), [O time](/getting-started/welcome/pt-br/team), [O que a gente constrói](/getting-started/welcome/pt-br/the-product). Venha com perguntas.
+  </Step>
+  <Step title="Acessos e contas">
+    Slack/Gmail Chat, ClickUp, GitHub (incluído na org enhancedai-com), AWS console read access, Datadog read access, Mintlify dashboard, e **Google Drive com os docs e vídeos legados do Greg** — esse último é o melhor recurso isolado para entender como a plataforma funciona de ponta a ponta. Seu buddy garante que cada um funcione **hoje**, não "ao longo da semana".
+  </Step>
+  <Step title="Leia este guia inteiro">
+    Inclusive a página de [piadas internas](/getting-started/welcome/pt-br/fun-stuff). Pode passar batido. Você não está memorizando — está montando um mapa pra quando algo aparecer amanhã, você lembrar onde olhar.
+  </Step>
+</Steps>
+
+Você não escreve código no dia 1. Você se prepara pra escrever muito código no dia 2.
+
+## Dia 2 — Subir a máquina
+
+Hoje é setup do ambiente. Reserve a manhã. Café.
+
+<Steps>
+  <Step title="Clone o workspace">
+    O workspace contém `back/`, `front/`, `docs/` e o diretório compartilhado `.workflow/`. Seu buddy aponta os repos certos e mostra como o layout fica localmente.
+  </Step>
+  <Step title="Sobe o backend">
+    Siga [Setup da máquina](/getting-started/welcome/pt-br/environment-setup). Objetivo: `pnpm dev:api` roda e você consegue bater em `http://localhost:3001/health` (ou similar) sem stack trace.
+  </Step>
+  <Step title="Sobe o frontend">
+    `pnpm dev` em `front/` e você consegue logar em [http://localhost:3000](http://localhost:3000) contra seu backend local.
+  </Step>
+  <Step title="Instale o Claude Code">
+    Siga [Setup do Claude Code](/getting-started/welcome/pt-br/claude-code). No fim do dia, você deve conseguir pedir algo ao Claude Code dentro do repo `back/` e ele ler arquivos pra você.
+  </Step>
+</Steps>
+
+Se algo falhar hoje, **chame seu buddy num screen-share rápido**. Frustração no dia 2 compõe. Dia 2 desbloqueado é metade da batalha.
+
+## Dia 3 — Botar a mão na massa
+
+Hoje é exploração sem pressão.
+
+<Steps>
+  <Step title="Rode o agent db-setup">
+    Abra o Claude Code e invoque o agent `db-setup`. Ele faz bootstrap do seu `.workflow/.env` e verifica se você consegue consultar staging pelo SSH tunnel. Veja [Onboarding](/ai-workflows/internal-developer-workflows/onboarding) (em inglês).
+  </Step>
+  <Step title="Abra um flow real em staging">
+    Logue em [staging.fluxprompt.ai](https://staging.fluxprompt.ai/) com uma conta de teste. Abra um flow de outra pessoa. Tente rodar. Tente editar um node. Sinta o produto como usuário.
+  </Step>
+  <Step title="Pegue seu primeiro ticket">
+    Seu buddy já tem um ticket de baixo risco atribuído a você. Leia a task do ClickUp. Encontre os arquivos relevantes. Faça as perguntas mais bobas que tiver **hoje**, não amanhã.
+  </Step>
+</Steps>
+
+## Dia 4 — Implementar
+
+Implemente o ticket. Use o Claude Code com [plan mode](/ai-workflows/internal-developer-workflows/best-practices) (em inglês) ligado pra qualquer coisa que toque mais de um arquivo. Leia as [coding rules](https://github.com/enhancedai-com) (o CLAUDE.md de cada repo) antes do seu primeiro PR — economizam ida e volta no review.
+
+Se travar, **a frase que você fala em voz alta pro seu buddy é curta**:
+
+> "Já fiquei 30 minutos em X e não estou vendo a saída. Você consegue dar 5 minutos?"
+
+É isso. Sem pedido de desculpa, sem preâmbulo. A gente otimiza pra desbloquear rápido.
+
+## Dia 5 — Entregar
+
+<Steps>
+  <Step title="Abra o PR">
+    Use o agent `pr-creator` — passe a URL da sua task do ClickUp. Ele formata título, body e links conforme o [Engineering Handbook](/ai-workflows/internal-developer-workflows/agents/pr-creator) (em inglês).
+  </Step>
+  <Step title="Receba review">
+    Dois reviewers, no mínimo. Eles vão comentar. Você endereça. Repete até aprovar.
+  </Step>
+  <Step title="Mergeie e veja deployar">
+    O pipeline de CI pra `master`/`main` faz auto-deploy em dev. Staging é promoção manual. Acompanhe o rollout no AWS pra entender o que de fato acontece quando alguém diz a palavra "deploy".
+  </Step>
+  <Step title="Atualize o status">
+    Avise o time. Não precisa ser cerimonioso — "primeiro PR mergeado, faz X, valeu pelo review fulano" cai bem.
+  </Step>
+</Steps>
+
+## O cronograma realista
+
+O deck antigo de onboarding tinha um cronograma humorístico que envelheceu mal. Versão 2026:
+
+| Etapa | Tempo (honesto) |
+| --- | --- |
+| Conseguir todos seus acessos funcionando | meio dia |
+| Backend rodando ponta a ponta | 2-4 horas (mais no Windows) |
+| Frontend rodando com o backend | 1 hora |
+| Primeiro "está quebrado na minha máquina mas funciona na sua" | inevitável |
+| Tempo até descobrir que esqueceu de rodar `pnpm infra:up` | 13 segundos |
+| Tempo economizado lendo a doc primeiro | a semana inteira |
+
+O item "paciência" do deck antigo continua. Dias de setup são dias de setup.
+
+## Próximos passos
+
+- [Setup da máquina](/getting-started/welcome/pt-br/environment-setup) — se você ainda está no Dia 2
+- [Setup do Claude Code](/getting-started/welcome/pt-br/claude-code) — se já passou do setup e quer o tooling do jeito do time
+- [Primeiros 30 dias](/getting-started/welcome/pt-br/first-30-days) — olhando além da semana 1
+- [Como a gente trabalha](/getting-started/welcome/pt-br/culture) — leia antes do seu primeiro code review

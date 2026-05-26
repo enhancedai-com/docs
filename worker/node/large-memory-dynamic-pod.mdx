@@ -1,0 +1,135 @@
+---
+title: "Large Memory: dynamic pod id"
+description: "How the Large Memory node accepts a memory pod id at runtime via the podIdData input — the natural pairing for pods created through the Public API."
+---
+
+The Large Memory node (`commandContentNode`) reads from a FluxPrompt memory pod during flow execution. Until commit `663f20e5`, the node was hard-tied to a single pod selected manually in the UI (`node.data.nameSpace`). External applications that already know which pod belongs to the current case, project, or client now have a runtime alternative: pass the pod id into the flow as a variable, and the node picks it up.
+
+This page documents that integration point.
+
+## The problem this solves
+
+If you're running flows on behalf of multiple customers — one pod per customer, one pod per case, one pod per project — you don't want to maintain N copies of the same flow with different pods baked in. The pod id is data, not configuration.
+
+External apps that integrate with FluxPrompt typically:
+
+1. Create a pod via [`POST /flux/memory-pods`](/main-api/specific-features/memory-pods-api/create-pod) when their event fires.
+2. Persist the returned pod id on their side, keyed by their internal record.
+3. Trigger a flow and pass the pod id as a `variableInputs` entry.
+
+The flow's Large Memory node now reads that variable and queries the right pod for that run only.
+
+## The `podIdData` input
+
+The node has a `podIdData` input slot with the **same shape as `queryData`** — connect any upstream output that produces a UUID-shaped value (or a `{{var}}` placeholder that resolves to one).
+
+### Resolution rules
+
+`resolveDynamicPodId` is the helper that computes the final pod id at execution time:
+
+<Steps>
+  <Step title="Collect connected items">
+    The helper joins every item connected to `podIdData` and trims whitespace. Multiple items are concatenated in order.
+  </Step>
+  <Step title="Resolve placeholders">
+    Any `{{var}}` placeholders are substituted against `mutatedSchema` (the live variable map for the run).
+  </Step>
+  <Step title="Decide which pod wins">
+    - If the resolved value is a non-empty string, it's used as the pod id for this execution only.
+    - If the placeholder is **unresolved** (the variable doesn't exist), it's treated as "no value provided" — the node falls back to the manually selected pod (`node.data.nameSpace`).
+    - If `podIdData` has no upstream connection at all, the node uses the manually selected pod.
+  </Step>
+  <Step title="Verify the pod exists">
+    The handler calls `Namespace.findOne` with the resolved id. If no pod matches, it throws `BadRequestException` naming the pod id so debugging is easy.
+  </Step>
+</Steps>
+
+## End-to-end recipe
+
+The typical integration looks like this:
+
+<Steps>
+  <Step title="Provision the pod">
+    Your application creates a memory pod when its event fires:
+
+    ```bash
+    curl -X POST "https://app.fluxprompt.ai/flux/memory-pods" \
+      -H "api-key: <your-api-key>" \
+      -H "content-type: application/json" \
+      -d '{
+        "name": "Case 12345 — Patient X",
+        "metadata": { "caseId": "12345" }
+      }'
+    ```
+
+    Persist `data.pods.id` against your internal record.
+  </Step>
+  <Step title="Ingest documents">
+    As documents arrive, ingest them:
+
+    ```bash
+    curl -X POST "https://app.fluxprompt.ai/flux/memory-pods/<podId>/add-document" \
+      -H "api-key: <your-api-key>" \
+      -F "files=@lab-results.pdf"
+    ```
+
+    Poll [`GET /memory-pods/get`](/main-api/specific-features/memory-pods-api/list-pods) until files reach `"Finished"`.
+  </Step>
+  <Step title="Build the flow once">
+    In the FluxPrompt UI, create a flow with a Large Memory node. Leave the static pod selection empty or pick any default. Wire the `podIdData` input to a Variable Input node (or any upstream node whose output is a UUID).
+  </Step>
+  <Step title="Trigger the flow with the pod id">
+    When your app needs to query the case's knowledge, call the flow with the pod id in `variableInputs`:
+
+    ```bash
+    curl -X POST "https://app.fluxprompt.ai/flux/api-v2?flowId=<flowId>" \
+      -H "api-key: <your-api-key>" \
+      -H "content-type: application/json" \
+      -d '{
+        "variableInputs": [
+          { "inputId": "varInputNode_...", "inputText": "<podId>" }
+        ]
+      }'
+    ```
+
+    The Large Memory node reads `<podId>`, verifies it exists, and queries that pod for this execution only.
+  </Step>
+</Steps>
+
+## Error case
+
+If the resolved pod id does not exist (or the caller can't see it), the node throws:
+
+```
+BadRequestException: Memory pod with id <podId> not found
+```
+
+The id is included in the message so the upstream variable can be traced quickly.
+
+## What stays the same
+
+- The UI experience for picking a pod manually is unchanged. Flows without `podIdData` connections behave exactly as before.
+- The `queryData` input (the search query) is independent — connect it however you do today.
+- The node's underlying retrieval logic (chunking, similarity search, top-k) is unchanged.
+
+## Where to read the code
+
+- `back/src/app-api/flux/nodes/large-memory/handler.ts` — the node handler invoking the resolver
+- `back/src/app-api/flux/nodes/large-memory/resolve-dynamic-pod-id.ts` — the resolver
+- `back/src/app-api/flux/nodes/large-memory/resolve-dynamic-pod-id.spec.ts` — covers missing input, non-array input, literal values, schema resolution, unresolved placeholder fallback, multi-item joins, and non-UUID schema values
+
+Refs commit `663f20e5` and ClickUp task `868jm7ja9`.
+
+## Companion docs
+
+<Columns cols={2}>
+  <Card title="Create a memory pod" icon="plus" href="/main-api/specific-features/memory-pods-api/create-pod">
+    Provision the pod the node will read from.
+  </Card>
+  <Card title="Memory Pods API overview" icon="cloud" href="/main-api/specific-features/memory-pods-api/overview">
+    Full lifecycle: create, ingest, list, delete, replace.
+  </Card>
+  <Card title="Memory pods architecture" icon="diagram-project" href="/main-api/specific-features/memory-pods-architecture">
+    Internal architecture and the storage model behind pods.
+  </Card>
+</Columns>
