@@ -1,149 +1,359 @@
 ---
 title: "Memory leak diagnosis"
-description: "Methodology for diagnosing slow memory leaks in the back/ NestJS process: in-process instrumentation, the codebase's suspect list, and exit-code disambiguation."
+description: "When dev keeps crashing and you don't know why — the AWS + in-process toolkit that pinpoints the real cause. Told as the May 2026 case where we suspected a memory leak for six hours and it turned out to be a runaway cron."
 ---
 
-## When to use this
+## Read this first
 
-The `back/` process is exhibiting a **slow memory climb** (rss/heap monotonically rising, not spiking) — eventually OOM-killing the container. Symptoms include:
+When the `back/` process keeps dying on a regular cycle and CloudWatch is silent, the first instinct is "memory leak". Sometimes it is. **Often it isn't.** The hard part is telling the difference quickly.
 
-- "Dev is crashing every X minutes"
-- "We OOM after a few hours"
-- "We just have N users, why is memory so high?"
+This page is the methodology that worked, written around the May 2026 dev-crash case where:
 
-This playbook is the hunt list to apply, in order. Skip ahead at your peril — the diagnostic curve from Step 1 is what determines whether subsequent steps make sense.
+- Dev died every ~30 minutes for two days
+- Exit code was always **134**
+- CloudWatch logs showed no `FATAL ERROR`
+- Six hours of memory-leak hunting found nothing because the heap was healthy
+- The actual cause was a `@Cron(EVERY_30_MINUTES)` exhausting the TypeORM pool
+- The fix was a one-line decorator removal
 
-## Step 1 — Get high-fidelity numbers
+Below is the chain of evidence — AWS metrics, in-process instrumentation, DB analysis through the SSH tunnel — that got us there. The same chain works for any recurring crash you can't explain.
 
-ECS Container Insights aggregates at 5-min intervals. The `Maximum` value still smooths over the ~1 s spike that triggers V8 to abort. **Always prefer in-process instrumentation** for leak diagnosis.
+## The setup (May 2026)
 
-Add this to `back/src/main.ts` bootstrap:
+The `api-service-dev` ECS task started dying on a perfect 30-minute cycle. From the team channel:
+
+> "Dev is crashing every 30 min. I've bumped memory twice, still crashing. Anyone have a clue?"
+
+First two reactions were wrong in instructive ways:
+
+1. **"Must be a memory leak"** — bumped container memory 4 → 8 GB, raised heap from 3500 → 6500. Crashes continued on schedule. Cost-wasteful, no signal.
+2. **"Check the diff since the last deploy"** — clean. Nothing obvious touched memory paths.
+
+At that point we stopped guessing and started instrumenting.
+
+## What we pulled from AWS
+
+The AWS toolkit gives you four orthogonal angles on a dying task. Use them in this order — earlier ones rule out classes of cause cheaply.
+
+### 1. ECS task post-mortem
+
+The first question is always: **what does ECS say killed it?**
+
+```bash
+aws ecs list-tasks \
+  --cluster enhancedai-dev \
+  --desired-status STOPPED \
+  --region us-east-1 \
+  --max-items 10
+```
+
+Then describe each:
+
+```bash
+aws ecs describe-tasks \
+  --cluster enhancedai-dev \
+  --tasks <task-arn> \
+  --region us-east-1 \
+  --query 'tasks[0].{stoppedAt:stoppedAt,stoppedReason:stoppedReason,containers:containers[*].{exitCode:exitCode,reason:reason}}'
+```
+
+What we saw: `stoppedReason: "EssentialContainerExited"`, `exitCode: 134`, `reason: null`. No reason from ECS at all.
+
+<Warning>
+  `EssentialContainerExited` does **not** mean "exited cleanly". It just means the main process exited. Always check the `exitCode` alongside.
+</Warning>
+
+The exit code itself is the highest-signal fact. See [Exit-code disambiguation](#exit-code-disambiguation) below for what each one means.
+
+### 2. CloudWatch logs
+
+Search the task's log stream for the canonical V8 OOM line:
+
+```powershell
+Get-Content "C:\Users\guilh\workspace\enhanced\.env" | Where-Object { $_ -match '^([A-Z_]+)=(.*)$' } | ForEach-Object {
+  Set-Item "env:$($matches[1])" $matches[2]
+}
+$env:PATH = "$env:PATH;C:\Program Files\Amazon\AWSCLIV2"
+
+aws logs filter-log-events `
+  --log-group-name "/ecs/api-task-definition-dev" `
+  --start-time <ms> --end-time <ms> `
+  --filter-pattern '"FATAL ERROR"' `
+  --max-items 50 --region us-east-1
+```
+
+If V8 emitted `FATAL ERROR: Reached heap limit. Allocation failed - JavaScript heap out of memory`, you have a real OOM and a stack trace. Done.
+
+**In our case: zero matches.** Exit 134 with no V8 fatal line means **a native library called `abort()` directly** — JavaScript signal handlers never ran. That rules out "JS-side OOM" without further work.
+
+### 3. CloudWatch Container Insights
+
+The metric to look at is `MemoryUtilization` on the container.
+
+```bash
+aws cloudwatch get-metric-statistics \
+  --namespace ECS/ContainerInsights \
+  --metric-name MemoryUtilization \
+  --dimensions Name=ClusterName,Value=enhancedai-dev Name=ServiceName,Value=api-service-dev \
+  --start-time <ISO> --end-time <ISO> \
+  --period 60 --statistics Maximum Average \
+  --region us-east-1
+```
+
+<Warning>
+  Container Insights aggregates at 5-min intervals by default. The `Maximum` value still smooths over the ~1-second spike that can trigger V8 to abort. **Don't trust it alone** — it's a useful sanity check, not a diagnostic.
+</Warning>
+
+In our case, Container Insights showed average and max ~40-50% — nowhere near the limit. Second piece of evidence pointing away from memory.
+
+### 4. ECS task definition + service config
+
+Always confirm the actual deployed config — what's running can drift from what the repo says:
+
+```bash
+aws ecs describe-task-definition \
+  --task-definition api-task-definition-dev \
+  --query 'taskDefinition.containerDefinitions[0].{image:image,memory:memory,cpu:cpu,command:command,environment:environment}' \
+  --region us-east-1
+```
+
+This is also where you confirm the heap setting passed via `--max-old-space-size` against the container's `memory` value. **Heap above 85% of container memory** is a recipe for silent SIGKILLs (exit 137). The previous engineer had bumped both — heap was actually below container budget, so that wasn't the cause here either.
+
+### 5. CI/CD topology cheat sheet
+
+See [PR and deploy flow](/ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow) for the full ECS topology (cluster names, service names, log groups). You'll hit these AWS commands often once you start investigating; bookmark the page.
+
+## In-process instrumentation
+
+AWS told us "exit 134 with no fatal log" — that's about all it can say. To go further, you have to instrument the process itself.
+
+We added three loggers to `back/src/main.ts` bootstrap. All `unref()`-d so they never block shutdown:
 
 ```ts
 import * as v8 from 'v8';
+import * as fs from 'fs';
 
+// MemDiag — every 30s, heap + RSS + headroom
 setInterval(() => {
   const mem = process.memoryUsage();
   const heap = v8.getHeapStatistics();
   const toMB = (n: number) => Math.round(n / 1024 / 1024);
   console.log(
-    `[MemDiag] rss=${toMB(mem.rss)}MB heapTotal=${toMB(mem.heapTotal)}MB ` +
-    `heapUsed=${toMB(mem.heapUsed)}MB external=${toMB(mem.external)}MB ` +
-    `arrayBuffers=${toMB(mem.arrayBuffers)}MB heapLimit=${toMB(heap.heap_size_limit)}MB ` +
-    `usedFraction=${(heap.used_heap_size / heap.heap_size_limit).toFixed(3)} ` +
-    `mallocedMem=${toMB(heap.malloced_memory)}MB`,
+    `[MemDiag] rss=${toMB(mem.rss)}MB heapUsed=${toMB(mem.heapUsed)}MB ` +
+    `heapLimit=${toMB(heap.heap_size_limit)}MB ` +
+    `usedFraction=${(heap.used_heap_size / heap.heap_size_limit).toFixed(3)}`,
   );
 }, 30_000).unref();
+
+// LifecycleDiag — catches every signal-based termination
+const SIGS = ['SIGTERM','SIGINT','SIGHUP','SIGQUIT','SIGUSR1','SIGUSR2','SIGPIPE','SIGABRT'];
+for (const sig of SIGS) {
+  process.on(sig as NodeJS.Signals, () => {
+    console.error(`[LifecycleDiag] signal=${sig} uptimeSec=${process.uptime().toFixed(0)}`);
+  });
+}
+process.on('exit', (code) => console.error(`[LifecycleDiag] exit code=${code}`));
+process.on('warning', (w) => console.error(`[LifecycleDiag] warning name=${w.name} message=${w.message}`));
+
+// ReportDiag — every 60s, libuv handle count + open FDs
+setInterval(() => {
+  const handles = (process as any).report.getReport().libuv ?? [];
+  const fdCount = fs.readdirSync('/proc/self/fd').length;
+  console.error(`[ReportDiag] fds=${fdCount} libuvHandles=${handles.length}`);
+}, 60_000).unref();
 ```
 
-CloudWatch can graph the `[MemDiag]` lines. Interpretation:
+Each one rules out a different hypothesis.
 
-| Pattern | Likely culprit |
+## Reading the curves — the eureka moment
+
+After one cycle with the instrumentation live, CloudWatch showed:
+
+| Output | Reading | Conclusion |
+| --- | --- | --- |
+| `[MemDiag]` | `usedFraction=0.05`, `rss=460MB`, flat for the entire 30-min window before death | Heap healthy. **Not a memory leak.** |
+| `[LifecycleDiag]` | No `signal=...` lines ever fired before any of the 4 deaths | No SIGTERM, no SIGINT, no SIGKILL. **Not an external kill.** |
+| `[ReportDiag]` | `fds=44-46`, `libuvHandles=42-45`, flat across the cycle | No resource leak (sockets, timers, child processes). |
+
+All three said the same thing: this is **not memory**, **not external**, **not resource exhaustion**. Exit 134 with no V8 fatal line + no signal handler firing = **a native library called `abort()` directly**.
+
+That single conclusion saved us from chasing memory hypotheses for another day. We pivoted.
+
+## The timing correlation that broke the case
+
+Once memory was ruled out, we asked: **what fires every 30 minutes?**
+
+Collect death timestamps:
+
+```bash
+aws ecs list-tasks --cluster enhancedai-dev --desired-status STOPPED --region us-east-1
+# describe each
+aws ecs describe-tasks --cluster enhancedai-dev --tasks ... --region us-east-1 \
+  --query 'tasks[].stoppedAt'
+```
+
+Four deaths clustered at `:07-:08` and `:37-:38` of the hour. That's a **clock-aligned 30-minute cycle** — not a "after N hours of runtime" pattern.
+
+```bash
+grep -rn "@Cron\|@Interval" back/src/
+```
+
+`CronExpression.EVERY_30_MINUTES` translates to `0 */30 * * * *` — fires at clock `:00` and `:30`. Death lagged the firing by ~7-8 minutes (the cron took that long to exhaust resources). One cron matched on timing: `updateTEchnologies` in `company.controller.ts`.
+
+Strong suspect.
+
+## "Pretend you are the suspect" — DB analysis
+
+We didn't refactor the cron yet. We measured what it actually does against the live DB, using the [`ec2-tunnel`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel) skill:
+
+```powershell
+$env:ENV = "dev"
+$env:QUERY = @"
+SELECT
+  (SELECT COUNT(*) FROM company_technologies) AS total,
+  (SELECT COUNT(*) FROM company_technologies
+   WHERE EXISTS (
+     SELECT 1 FROM system_ai_models m WHERE m.id = company_technologies.system_ai_model_id AND m.active = true
+   )) AS expected,
+  (SELECT COUNT(*) FROM (
+     SELECT companyId, system_ai_model_id, COUNT(*) c
+     FROM company_technologies
+     GROUP BY 1,2 HAVING COUNT(*) > 1
+   ) x) AS dup_groups
+"@
+node .workflow/skills/ec2-tunnel/templates/tunnel-and-query.mjs
+```
+
+Result:
+
+| Column | Value |
 | --- | --- |
-| `heapUsed` climbs, `external` / `arrayBuffers` flat | JS object retention (closures, caches, listener arrays) |
-| `external` / `arrayBuffers` climb | Buffer/string data (compression buffers, HTTP queues, response serialization) |
-| `rss − heapTotal` climbs | Native heap (addon libraries: pinecone, ffmpeg, chromium, etc.) |
+| `total` | 37,899 |
+| `expected` | 19,303 |
+| `dup_groups` | 3,256 |
 
-## Step 2 — Codebase suspect list
+**96% excess rows, 3,256 duplicate groups.** The cron had been silently writing duplicates for months. Each firing was now: ~200 parallel SELECTs against a 37k-row unindexed table + thousands of parallel inserts, all racing against a **TypeORM default pool of 5 connections** (no `extra.max` set in `config.service.ts`).
 
-These are patterns the team has verified exist in `back/` and that could leak. Walk them in order — most common first.
+That's a write storm. Once the pool exhausted, queries piled up at `pg-pool.acquire()`, and some native code path inside the pg ecosystem called `abort()` ~7-8 min later. Hypothesis aligned with timing perfectly.
+
+## The fix and the result
+
+Two commits:
+
+```
+64534a9d  [FIX] Disable updateTEchnologies cron — root cause of dev exit-134 cycle
+ce36d537  [CHORE] Remove memory/lifecycle/report diagnostic loggers from main.ts
+```
+
+Specifically:
+
+- Removed `@Cron(CronExpression.EVERY_30_MINUTES, ...)` from `updateTEchnologies`. The function body was kept for audit but no longer fires. **It was dead code anyway** — a prior commit had already removed the `import { Cron }` line by accident, and migration `1773800000000-SyncCompanyTechnologiesWithActiveModels.ts` had populated the table once via SQL `CROSS JOIN`, making the runtime cron redundant.
+- Reverted container memory 8192 → 4096 MB and heap 6500 → 3000 MB. The bumps had been speculative.
+- Removed the diagnostic loggers from `main.ts` once root cause was confirmed.
+
+**Result:** the first task on the new config started at `04:26 BRT` and **survived past the next `04:30` cron mark** — the first task in two days to do so. Dev stable for the next 48+ hours.
+
+Hypothesis proven. Crash cycle ended.
+
+## What I'd repeat
+
+- **Instrument FIRST.** MemDiag + LifecycleDiag + ReportDiag together rule out three classes of cause in 30 minutes. Far cheaper than reading code.
+- **AWS first, code second.** ECS exit codes, CloudWatch fatal-line searches, and Container Insights tell you what kind of crash you're dealing with before you open a single source file.
+- **Timing correlation as evidence.** Wall-clock minute-of-hour patterns across multiple deaths are smoking-gun strong. Always collect ≥3 timestamps before forming a hypothesis.
+- **"Pretend you are the suspect" DB analysis.** Read the suspect cron's queries, then run them against the real DB via the SSH tunnel. The numbers either confirm or kill the hypothesis instantly.
+- **Bisect by disabling, not refactoring.** Commenting out a `@Cron` decorator and deploying is the cheapest possible test. If the crash stops, you know.
+
+## What I wouldn't repeat
+
+- **Spending 6 hours on the memory leak hypothesis before instrumenting.** The MemDiag logger answers "is heap actually climbing?" in 30 minutes. I should have deployed it on minute zero.
+- **Bumping container memory on a hunch.** It cost two task-def revisions and a revert. The number to trust is `usedFraction` from MemDiag, not Container Insights' coarse aggregate.
+- **Trusting `EssentialContainerExited` as "exited normally".** It just means the main process exited. The exit code is what matters.
+
+## Exit-code disambiguation
+
+Always start by mapping the exit code to a category. Three you'll see often:
+
+| Exit | Signal | Meaning | Where to look |
+| --- | --- | --- | --- |
+| **134** | SIGABRT (6) | Either V8 fatal (search logs for `FATAL ERROR`) **or** a native lib called `abort()` directly | If no fatal line → native abort. JS signal handlers never ran. |
+| **137** | SIGKILL (9) | Linux cgroup OOM killer. The process gets no chance to log. | Compare `--max-old-space-size` against container memory; check `MemoryUtilization` curve. |
+| **143** | SIGTERM (15) | Graceful shutdown — ECS, ALB health check, or a deploy. | ECS service events have the stop reason. |
+| **139** | SIGSEGV (11) | Native segfault. | Native addon (pinecone, sharp, ffmpeg, chromium). |
+
+<Warning>
+  When `--max-old-space-size` is set **higher** than container memory, leaks manifest as silent SIGKILL (exit 137) instead of the readable V8 fatal (exit 134). Always keep heap ≤ ~85% of container memory.
+</Warning>
+
+## If it actually IS a memory leak — where to look
+
+The case above wasn't a leak, but the `back/` codebase does have leak-prone patterns. Once `[MemDiag]` shows `usedFraction` actually climbing, walk these in order of historical likelihood. Verify the file paths against the current code — they shift over time.
 
 <AccordionGroup>
-  <Accordion title="1. space_run_logs.service.ts — scheduleUpsert closures">
+  <Accordion title="space_run_logs.service.ts — scheduleUpsert closures">
     `setTimeout` closure captures the full `RunLogDocument`. Fires on each node completion during flow execution. Cancelled timers leave behind closures whose docs linger until GC.
 
-    Path (approximate): `back/src/app-api/space_run_logs/space_run_logs.service.ts`
+    Path: `back/src/app-api/space_run_logs/space_run_logs.service.ts`
   </Accordion>
 
-  <Accordion title="2. mcp_oauth.service.ts — module-level Maps">
-    Module-level `pkceStateStore`, `discoveryCache`, `registrationCache`. Only `pkceStateStore` has lazy TTL cleanup; the others either evict at read time or have no eviction at all.
+  <Accordion title="mcp_oauth.service.ts — module-level Maps">
+    `pkceStateStore`, `discoveryCache`, `registrationCache`. Only `pkceStateStore` has lazy TTL cleanup; the others either evict at read time or have no eviction at all.
 
-    Path (approximate): `back/src/app-api/mcp_call/mcp_oauth.service.ts`
+    Path: `back/src/app-api/mcp_call/mcp_oauth.service.ts`
   </Accordion>
 
-  <Accordion title="3. gateway.ts — EventEmitter.defaultMaxListeners = Infinity">
-    Disables Node's listener-leak warning globally. If anything attaches listeners without removing them (Socket.io connection handlers being a prime example), the leak accumulates **without any console warning**.
+  <Accordion title="gateway.ts — EventEmitter.defaultMaxListeners = Infinity">
+    Disables Node's listener-leak warning globally. Socket.io connection-level handlers that aren't removed accumulate **without any warning** in the console.
 
-    Path (approximate): `back/src/app-api/gateway/gateway.ts`
+    Path: `back/src/app-api/gateway/gateway.ts`
   </Accordion>
 
-  <Accordion title="4. winston.logger.ts — Datadog HTTP transport">
-    `winston.transports.Http` to Datadog buffers logs in memory if the endpoint is slow. Each log entry includes `usage.bodySent` — the full customer request body. Slow Datadog → growing queue → leak that scales with log volume.
+  <Accordion title="winston.logger.ts — Datadog HTTP transport">
+    `winston.transports.Http` buffers logs in memory when Datadog is slow. Each entry includes the customer's full request body (`usage.bodySent`). Slow Datadog → growing queue → leak proportional to log volume.
 
-    Path (approximate): `back/src/logging/winston.logger.ts`
+    Path: `back/src/logging/winston.logger.ts`
   </Accordion>
 
-  <Accordion title="5. zapier-webhook-store.service.ts — service singleton Maps">
-    `store` / `versionedStore` Maps in a service singleton. Grow if webhooks arrive faster than poll consumers drain them.
+  <Accordion title="zapier-webhook-store.service.ts — service singleton Maps">
+    `store` / `versionedStore` Maps in the service singleton grow if webhooks arrive faster than poll consumers drain them.
 
-    Path (approximate): `back/src/app-api/integrations/zapier-webhook-store.service.ts`
+    Path: `back/src/app-api/integrations/zapier-webhook-store.service.ts`
   </Accordion>
 
-  <Accordion title="6. main.ts — compression() middleware">
-    Default compression middleware buffers chunks before flushing. Large response payloads (50 MB JSON flow opens) become significant transient buffers; under concurrency, multiple stack up.
+  <Accordion title="main.ts — compression() middleware">
+    Default compression buffers chunks before flushing. 50 MB flow-open responses become significant transient buffers; under concurrency, multiple stack.
   </Accordion>
 
-  <Accordion title="7. TypeORM EntityManager.transaction callbacks">
-    If a large `nodes`/`edges` array is passed to `upsertNodes`, the manager keeps references until commit. With concurrent saves on a complex flow, multiple 50 MB arrays stack.
+  <Accordion title="TypeORM EntityManager.transaction callbacks">
+    Large `nodes` / `edges` arrays passed to `upsertNodes` are held by the manager until commit. Concurrent saves on complex flows stack multiple copies.
   </Accordion>
 
-  <Accordion title="8. Bull queue processors holding completed job data">
-    `back/src/jobs/apiV2Job/apiV2Job.processor.ts` and siblings. Inspect any `@Process` handler for closure capture of large data outside its scope.
+  <Accordion title="Bull queue processors holding completed job data">
+    `apiV2Job.processor.ts` and siblings. Inspect any `@Process` handler for closure capture of large data outside its scope.
   </Accordion>
 </AccordionGroup>
 
-<Note>
-  These line numbers and paths may have shifted since the memory snapshot was captured. Verify against the current `back/` before asserting.
-</Note>
-
-## Step 3 — Hunt commands
-
-Fast scan for module-level mutable state:
+### Fast scan commands
 
 ```bash
+# Module-level mutable state
 grep -rn "^const \w\+ = new \(Map\|Set\|WeakMap\)" back/src/
 grep -rn "private readonly \w\+ = new \(Map\|Set\)" back/src/
 grep -rn "EventEmitter.defaultMaxListeners" back/src/
-```
 
-Fast scan for closure capture of large args inside long-lived callbacks:
-
-```bash
+# Closures holding large args inside long-lived callbacks
 grep -rn "setTimeout\|setInterval" back/src/ | grep -v "node_modules"
+
+# Unbounded Promise.all over DB calls (write-storm risk)
+grep -rn "Promise.all(" back/src/
 ```
 
-## Step 4 — Don't trust "we don't have many users"
+### "We don't have many users" is not a defense
 
-A leak that fires "per flow execution" or "per cron tick" can fill 6+ GB in 30 min even with **two** active developers, because:
-
-- Each flow execution may emit dozens of node-completion events
-- Each event captures the entire run document (often tens of MB on a complex flow)
-- Even if Map entries are replaced (single live entry per processId), the cancelled-timer closure tail holds the previous doc until GC, which under CPU pressure can be delayed
-
-Low user count rules out **linear-with-requests** growth, not **geometric-with-internal-events** growth.
-
-## Step 5 — Exit-code disambiguation
-
-The exit code tells you what kind of OOM you have, and that tells you what to fix.
-
-| Exit code | What it means | Diagnostic value |
-| --- | --- | --- |
-| **134** | V8's own heap budget hit. Look for `FATAL ERROR: Reached heap limit. Allocation failed - JavaScript heap out of memory` in CloudWatch | **Good** — gives a clear cause and stack trace |
-| **137** | Linux cgroup OOM killer (`SIGKILL`). Container exceeded its memory limit. The process gets no chance to log; CloudWatch shows `"Killed"` alone | **Bad** — silent kill. Means V8 heap was set higher than the container budget, or native memory grew past the slack |
-
-**Rule:** always keep `--max-old-space-size` ≤ ~85% of container memory. Otherwise leaks manifest as silent kills, which is the worst kind to debug.
-
-## How to apply
-
-When the report comes in:
-
-1. Confirm the symptom is **slow climb**, not a spike or one-off. Spikes have different causes.
-2. Deploy MemDiag if not already there. Let it run for the time it takes the leak to manifest.
-3. Read the curve — which counter grew?
-4. Walk Step 2 suspects whose pattern matches the counter.
-5. Don't propose blind fixes without the diagnostic curve. The team prefers **evidence-driven changes over speculative ones**.
+A leak that fires per flow execution or per cron tick can fill 6+ GB in 30 min with just two active developers, because each event captures the entire run document (tens of MB on a complex flow). Low user count rules out **linear-with-requests** growth, not **geometric-with-internal-events** growth.
 
 ## Related
 
-- [CI/CD + deploy topology](/ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow) — how to resize a task definition once you've identified the fix
-- [`ec2-tunnel-prod`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod) — to inspect what was actually running on prod when the OOM happened (if the leak correlates to specific traffic patterns)
+- [PR and deploy flow](/ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow) — ECS topology, log group names, the resize-task-def recipe
+- [`ec2-tunnel`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel) — the SSH tunnel skill used for the "pretend you are the suspect" DB analysis
+- [`ec2-tunnel-prod`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod) — read-only prod variant if the crash is in prod, not dev
+- [Flux error investigation](/ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation) — when the crash is downstream of a specific customer request rather than a recurring cycle
