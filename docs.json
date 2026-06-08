@@ -116,6 +116,7 @@
                           "main-api/specific-features/integrations/stripe",
                           "main-api/specific-features/integrations/zapier",
                           "main-api/specific-features/integrations/mcp",
+                          "main-api/specific-features/integrations/clickup",
                           "main-api/specific-features/integrations/google",
                           "main-api/specific-features/integrations/hubspot",
                           "main-api/specific-features/integrations/microsoft"
@@ -340,6 +341,7 @@
                           "main-api/specific-features/integrations/stripe",
                           "main-api/specific-features/integrations/zapier",
                           "main-api/specific-features/integrations/mcp",
+                          "main-api/specific-features/integrations/clickup",
                           "main-api/specific-features/integrations/google",
                           "main-api/specific-features/integrations/hubspot",
                           "main-api/specific-features/integrations/microsoft"

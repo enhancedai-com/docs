@@ -1,0 +1,154 @@
+---
+title: "ClickUp integration"
+description: "Read ClickUp tasks, lists, spaces, and comments, and create or update tasks from your flows."
+---
+
+## Overview
+
+The ClickUp integration connects a flow to your ClickUp workspace through the unified **Third Party Integration** node. You connect your ClickUp account once with OAuth, then read tasks and project structure or create and update tasks from a flow.
+
+| Feature | Mode | Description |
+|---|---|---|
+| List tasks | Pull | Read tasks in a list, with status, assignee, date, and ordering filters |
+| Get a task | Pull | Fetch a single task by id |
+| List spaces | Pull | List the spaces in a workspace |
+| List lists | Pull | List the lists in a space or folder |
+| Read comments | Pull | Read the comments on a task |
+| Create task | Push | Create a task in a list |
+| Update task | Push | Update an existing task |
+| Add comment | Push | Add a comment to a task |
+
+## How it works under the hood
+
+ClickUp is implemented as an adapter in the shared integrations framework (`back/src/app-api/integrations/adapters/clickup.adapter.ts`), with `connectionMode: 'oauth'`. It is registered in `IntegrationsService` under the provider id `clickup` and reached through the generic integration endpoints — no provider-specific routes.
+
+- **Auth flow** — `getInstallUrl` builds `https://app.clickup.com/api?client_id=...&redirect_uri=${FRONTEND_OAUTH_CALLBACK_BASE}/clickup&state=...`. `exchangeCode` calls `POST https://api.clickup.com/api/v2/oauth/token` with the client id/secret and the authorization code, then calls `GET /user` and `GET /team` to record the account id and authorized workspaces. ClickUp access tokens do not expire, so `refreshAccessToken` revalidates the existing token rather than rotating it. The token is stored in `user_integrations.accessToken` and sent as `Authorization: Bearer <token>`.
+- **External API** — ClickUp API v2 (`https://api.clickup.com/api/v2`) over axios, following the hierarchy Workspaces (`/team`) → Spaces (`/team/{id}/space`) → Folders (`/space/{id}/folder`) → Lists (`/folder/{id}/list`, plus folderless `/space/{id}/list`) → Tasks (`/list/{id}/task`).
+- **Pull** — dispatches on `pullObjectType`: `tasks` (`GET /list/{id}/task` with `statuses[]`, `assignees[]`, `include_closed`, `subtasks`, `order_by`, `date_created_gt/lt`), `task` (`GET /task/{id}`), `spaces` (`GET /team/{id}/space`), `lists` (`GET /folder/{id}/list` or `/space/{id}/list`), `comments` (`GET /task/{id}/comment`).
+- **Push** — dispatches on `pushAction`: `create_task` (`POST /list/{id}/task`), `update_task` (`PUT /task/{id}`), `create_comment` (`POST /task/{id}/comment`). Priority is sent as the ClickUp integer (1–4); due dates are converted to Unix milliseconds.
+- **Dynamic selects** — `getOptions` resolves the workspace → space → folder → list cascade, list statuses, and workspace members for assignees, using the sibling field values passed in the request context.
+
+<Note>
+Connecting requires a registered ClickUp OAuth app and the `CLICKUP_CLIENT_ID` / `CLICKUP_CLIENT_SECRET` environment variables, with `${FRONTEND_OAUTH_CALLBACK_BASE}/clickup` added as an allowed redirect URL in the ClickUp app.
+</Note>
+
+## Prerequisites and credentials
+
+ClickUp uses one-click OAuth — there are no API keys to paste. During the consent screen you authorize FluxPrompt and choose which ClickUp workspaces to share. The OAuth grant is scoped to the workspaces you select.
+
+## Connecting in FluxPrompt
+
+<Steps>
+  <Step title="Add the node">
+    Add a Third Party Integration node to your flow and select **ClickUp**.
+  </Step>
+  <Step title="Connect">
+    Click **Connect**. A ClickUp authorization window opens. Authorize FluxPrompt and pick the workspaces to share.
+  </Step>
+  <Step title="Pick what to read or write">
+    Choose a pull object type or a push action, then fill the fields. Workspace, space, and list selectors load dynamically from your account.
+  </Step>
+</Steps>
+
+## Pull reference
+
+### Tasks
+
+Reads tasks from a single list.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Workspace | select (dynamic) | Yes | The ClickUp workspace (team) |
+| Space | select (dynamic) | — | Space within the workspace |
+| Folder | select (dynamic) | — | Folder within the space (optional) |
+| List | select (dynamic) | Yes | The list to read tasks from |
+| Status | multiselect (dynamic) | — | Filter by one or more list statuses |
+| Assignees | multiselect (dynamic) | — | Filter by assigned members |
+| Include closed | toggle | — | Include closed tasks (default off) |
+| Include subtasks | toggle | — | Include subtasks (default off) |
+| Order by | select | — | `created`, `updated`, `due_date`, or `id` |
+| Created from / to | date | — | Filter by task creation date range |
+
+### Task (by id)
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Task ID | text | Yes | The ClickUp task id |
+| Include subtasks | toggle | — | Include subtasks in the response |
+
+### Spaces
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Workspace | select (dynamic) | Yes | The workspace to list spaces from |
+
+### Lists
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Workspace | select (dynamic) | Yes | The workspace |
+| Space | select (dynamic) | — | List the folderless lists in this space |
+| Folder | select (dynamic) | — | List the lists in this folder |
+
+### Comments
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Task ID | text | Yes | The task whose comments to read |
+
+## Push reference
+
+### Create task
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Workspace / Space / Folder / List | select (dynamic) | List required | Drill down to the destination list |
+| Task name | text | Yes | The task title |
+| Description | textarea | — | Task description |
+| Status | select (dynamic) | — | A status from the selected list; defaults to the list's first status |
+| Priority | select | — | Urgent, High, Normal, or Low |
+| Assignees | multiselect (dynamic) | — | Workspace members to assign |
+| Due date | datetime | — | Converted to a ClickUp due date |
+| Tags | text | — | Comma-separated tag names |
+| Parent task ID | text | — | Create the task as a subtask of this task |
+
+### Update task
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Task ID | text | Yes | The task to update |
+| New task name | text | — | New title |
+| Description | textarea | — | New description |
+| Status | text | — | New status name |
+| Priority | select | — | Urgent, High, Normal, or Low |
+| Due date | datetime | — | New due date |
+
+### Add comment
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Task ID | text | Yes | The task to comment on |
+| Comment | textarea | Yes | The comment text |
+| Notify all assignees | toggle | — | Notify everyone assigned to the task |
+
+## Troubleshooting
+
+<Accordion title="Connect fails or the authorize window errors">
+The ClickUp OAuth app must be configured for this environment: `CLICKUP_CLIENT_ID` and `CLICKUP_CLIENT_SECRET` must be set, and `${FRONTEND_OAUTH_CALLBACK_BASE}/clickup` must be registered as a redirect URL in the ClickUp app. If any is missing, connection cannot complete.
+</Accordion>
+
+<Accordion title="The workspace, space, or list dropdown is empty">
+The selectors load top-down: pick a workspace before a space, and a space (or folder) before a list. If a workspace is shared but its spaces do not appear, confirm that workspace was selected during the OAuth consent.
+</Accordion>
+
+<Accordion title="A pull returns no tasks">
+Tasks are read from a single list. Confirm the list is correct and widen the filters — closed tasks are excluded unless **Include closed** is on, and status or date filters may be excluding everything.
+</Accordion>
+
+<Accordion title="Create or update task fails">
+A list is required to create a task and a task id is required to update one. Status values must match a status that exists on the target list, and priority must be one of Urgent, High, Normal, or Low.
+</Accordion>
+
+<Accordion title="Status options do not load when updating a task">
+Update task is keyed by task id and has no list selector, so status is a free-text field there — type the exact status name. Create task resolves statuses dynamically from the chosen list.
+</Accordion>
