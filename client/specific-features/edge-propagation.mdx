@@ -39,16 +39,42 @@ The frontend edge propagation system transfers data between connected nodes in t
 
 ### Configuration
 
-**`allNodesTargetBasedOnType`** maps input handles to data property names:
+**`allNodesTargetBasedOnType`** maps input handles to data property names. The key is the
+node `type`, the inner keys are the **target handle ids**, and the values are the **property
+base name** the connected data is stored under (as `<value>Data`):
 
 ```typescript
 {
   commandTextNode: {
     promptIn: 'prompt',
     contentIn: 'content',
-  }
+  },
+  // commandContentNode is the Large Memory node
+  commandContentNode: {
+    textInput: 'textInput',
+    textQuery: 'query',    // handle "textQuery" -> data.queryData
+    content: 'content',
+    podId: 'podId',        // handle "podId" -> data.podIdData
+  },
 }
 ```
+
+<Warning>
+  Every connectable **target handle must have an entry here.** If a handle is missing, the
+  edge still draws on the canvas but `givingDataToNode` resolves `getType = ''`, the connect
+  writes to a garbage `Data` key, and the real `<field>Data` property is **never populated** —
+  so the node UI never reacts. This is exactly what happened when the `podId` handle was added
+  to Large Memory without registering it here: connecting a Data Input changed nothing on
+  screen. Adding `podId: 'podId'` fixed it.
+</Warning>
+
+<Note>
+  The handle id and the property base name do **not** have to match (`textQuery` → `query`),
+  but the **component must read the matching `<value>Data`**. Large Memory toggles its UI on
+  presence: `const hasDynamicPodId = data?.podIdData?.length > 0` decides whether to render the
+  connected-source `ConnectedTags` or the static `PodSelect` dropdown. If you map a handle but
+  read the wrong `<value>Data`, the data flows but the UI still won't switch.
+</Note>
 
 **`allValuesByType`** lists all updatable properties for each node type:
 
@@ -306,6 +332,44 @@ const fileName = data?.customFileName || '';
     - **Persistence** — refresh the page, verify edges and data persist
   </Step>
 </Steps>
+
+## Worked example: Large Memory dynamic pod id
+
+This traces a single edge from connect to UI, end to end, for the `podId` handle on the Large
+Memory node (`commandContentNode`).
+
+<Steps>
+  <Step title="The handle exists in the component">
+    `LargeMemory.tsx` renders an `InputHandle` with `handleId='podId'`. On its own this only
+    draws a dot — it carries no data wiring.
+  </Step>
+  <Step title="The handle is registered in the mapping">
+    `allNodesTargetBasedOnType.commandContentNode.podId = 'podId'` in
+    `src/util/dataStoredToType.ts`. This is the line that makes the edge carry data.
+  </Step>
+  <Step title="Connecting resolves the field name">
+    On connect, `givingDataToNode` (`src/util/autosave/utilis.ts`) reads
+    `allNodesTargetBasedOnType[targetType][targetHandle]` → `getType = 'podId'`, extracts the
+    source output via `getOutputByType`, and `connect` (`changeTypes.ts`) writes
+    `data.podIdData = [...existing, { id, text, label }]`.
+  </Step>
+  <Step title="The component reacts to the data">
+    `LargeMemory.tsx` computes `hasDynamicPodId = data?.podIdData?.length > 0` and swaps
+    `PodSelect` for `ConnectedTags`, listing the connected source(s). Disconnecting runs
+    `deleteEdgesData`, which strips the matching row and flips the UI back.
+  </Step>
+</Steps>
+
+The other Large Memory handles follow the same pattern: `textQuery → query → data.queryData`
+(prompt) and the content-upload handle, which Large Memory resolves locally via
+`filterContentEdges` + `buildConnectedContent` rather than the central mapping.
+
+<Tip>
+  Regression coverage lives in `front/tests/unit/util/autosave/edgePropagation.test.ts`
+  (`pnpm run test:edge-propagation`): it connects a text source to the `podId` handle and
+  asserts `podIdData` is populated. With the mapping entry removed the test fails with
+  `expected undefined to be defined` — the exact symptom users saw.
+</Tip>
 
 ## Scoped downstream propagation
 
