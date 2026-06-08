@@ -1,0 +1,86 @@
+---
+title: "Integrations overview"
+description: "How third-party integrations work in FluxPrompt and which providers are available."
+---
+
+## What integrations are
+
+Third-party integrations connect your flows to external services. You add a **Third Party Integration** node, pick a provider, and the node runs in one of two modes:
+
+- **Pull** — read data from the service into your flow (for example, query a Notion database or list Slack channels).
+- **Push** — send data from your flow to the service (for example, post a Slack message or create a Stripe invoice).
+
+Some providers support both modes; others support only one.
+
+## Available integrations
+
+<CardGroup cols={2}>
+  <Card title="WordPress" href="/main-api/specific-features/integrations/wordpress">
+    Read and publish posts, pages, and media. Credentials (Application Password).
+  </Card>
+  <Card title="Slack" href="/main-api/specific-features/integrations/slack">
+    Read channels, messages, users, and files; post messages, reactions, and uploads. OAuth.
+  </Card>
+  <Card title="Notion" href="/main-api/specific-features/integrations/notion">
+    Read and write pages and databases. OAuth.
+  </Card>
+  <Card title="Stripe" href="/main-api/specific-features/integrations/stripe">
+    Read customers, charges, and invoices; create customers, products, prices, and invoices. API key.
+  </Card>
+  <Card title="Zapier" href="/main-api/specific-features/integrations/zapier">
+    Trigger flows from Zapier and send data to Zapier webhooks. Webhook.
+  </Card>
+  <Card title="MCP" href="/main-api/specific-features/integrations/mcp">
+    Connect a Model Context Protocol server and list its tools. API key.
+  </Card>
+</CardGroup>
+
+### Capability matrix
+
+| Provider | Connection | Pull | Push |
+|---|---|---|---|
+| WordPress | Credentials (site URL + Application Password) | Yes | Yes |
+| Slack | OAuth | Yes | Yes |
+| Notion | OAuth | Yes | Yes |
+| Stripe | Secret API key | Yes | Yes |
+| Zapier | Webhook URL | Yes | Yes |
+| MCP | API key / token (per transport) | Yes (list tools) | No |
+
+<Note>
+The frontend config labels some providers as `oauth2` for grouping, but WordPress and Stripe actually connect with entered credentials (no OAuth flow), and Zapier is webhook-based. Each provider page documents the real connection method.
+</Note>
+
+## Connection lifecycle
+
+Every integration follows three phases:
+
+<Steps>
+  <Step title="Connect">
+    You save credentials once — an OAuth token, an API key, or a webhook URL — to link your account. Each user has at most one connection per provider.
+  </Step>
+  <Step title="Use in a flow">
+    You add a Third Party Integration node, select the connected provider, and choose a pull object type or a push action.
+  </Step>
+  <Step title="Share (optional)">
+    Teammates can use your connection through the flow without seeing your raw credentials. The node records who connected it and resolves their credentials at run time.
+  </Step>
+</Steps>
+
+### Connection states
+
+| State | Meaning |
+|---|---|
+| Connected by me | You authenticated the integration yourself. |
+| Connected by another user | A teammate connected and shared access through the flow. |
+| Not connected | No credentials exist; the node cannot run until someone connects. |
+
+## Credential storage
+
+Connections are stored in the `user_integrations` table, with a unique constraint on `(userId, provider)`. OAuth tokens and entered credentials are encrypted at rest with AES-256-GCM and decrypted only at request time inside the provider adapter. For the full adapter pattern, credential resolution, and how to add a new provider, see the [third-party integrations architecture](/main-api/specific-features/third-party-integrations-architecture).
+
+## Run modes in the node
+
+| Action | Behavior |
+|---|---|
+| Get Data | Runs only the integration node and returns its output. Use it to preview results while building a flow. |
+| Run flow | Runs the entire flow; the integration node executes in sequence with every other node. |

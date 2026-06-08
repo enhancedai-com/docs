@@ -1,0 +1,215 @@
+---
+title: "WordPress integration"
+description: "Read content from and publish content to a WordPress site directly inside a flow."
+---
+
+## Overview
+
+The WordPress integration connects a flow to a self-hosted or WordPress.org site through the WordPress REST API. You can read existing content such as posts, pages, and media, and you can publish new content or update what already exists.
+
+| Feature | Mode | Description |
+|---|---|---|
+| Read posts and pages | Pull | Fetch posts or pages with filters for status, category, tag, author, date, and search |
+| Read media | Pull | Fetch media library items, optionally filtered by media type |
+| Read taxonomies | Pull | Fetch categories or tags |
+| Read comments | Pull | Fetch comments with date and search filters |
+| Read users | Pull | Fetch site users |
+| Create or update a post | Push | Create a draft post or update an existing one |
+| Create or update a page | Push | Create a draft page or update an existing one |
+| Upload media | Push | Upload a file from a URL to the media library |
+
+## How it works under the hood
+
+The integration uses the connection mode `credentials`. Although the frontend configuration labels the auth method as `oauth2`, there is no OAuth flow. Self-hosted WordPress sites authenticate with an Application Password, which does not expire, so the OAuth-style code exchange and token refresh methods are not implemented and will throw if called.
+
+When you connect, FluxPrompt requires three values: the site URL, a WordPress username, and an Application Password. The site URL is normalized first (a trailing slash is removed, and `http` vs `https` is inferred), then the REST base is built as `{siteUrl}/wp-json/wp/v2`. The connection is validated with a request to `GET {base}/users/me` using HTTP Basic authentication, where the header is `base64(username:applicationPassword)`. The validation request has a 15-second timeout and maps common failures to specific errors (connection refused, host not found, timeout, `401`, and `404`).
+
+```text
+Authorization: Basic base64(username:applicationPassword)
+```
+
+On a successful connection, FluxPrompt stores an encrypted JSON object containing `siteUrl`, `username`, and `applicationPassword`. The provider account ID is the normalized site URL.
+
+<Note>
+Credentials are stored encrypted in `user_integrations.apiCredentialsEncrypted` using AES-256-GCM.
+</Note>
+
+All API calls go to the WordPress REST API v2 (`/wp-json/wp/v2`) over axios. The HTTPS agent is configured with `rejectUnauthorized: false`, so sites with self-signed certificates are accepted.
+
+**Pull** reads the selected object type (default `posts`) and maps the node payload to WordPress query parameters before calling `GET {base}/{objectType}`. The page size is `min(perPage || 10, 100)`, and `orderby`/`order` are validated per object type. Posts add category, tag, author, and status parameters; media add a media type or MIME type; terms add a parent; comments add post, parent, and status.
+
+**Push** requires a push action. Creating or updating a post or page wraps `title` and `content` in `{ raw }` objects, and new items default to `draft` status. If you supply a featured image URL, the file is downloaded, uploaded to `/media`, and then set as `featured_media`. Categories and tags are attached as arrays of numeric IDs (posts only). The `upload_media` action uploads a raw file buffer.
+
+<Tip>
+Dropdown options for status, categories, tags, and author are loaded dynamically from your site. Categories and tags come from `GET /categories` and `GET /tags` (up to 100 each), author from `GET /users?context=edit`, and status from `GET /statuses?context=edit`, with a static fallback of Published, Draft, Pending, Private, and Future.
+</Tip>
+
+<Note>
+There is no token refresh, and pagination is capped at `per_page=100` per request.
+</Note>
+
+## Prerequisites and credentials
+
+Before connecting, create an Application Password on your WordPress site and confirm the REST API is reachable.
+
+<Steps>
+<Step title="Sign in to WP Admin">
+Sign in to your WordPress site as the user whose content you want to read or publish.
+</Step>
+<Step title="Open your profile">
+Go to **Users → Profile** (or **Users → Your profile**).
+</Step>
+<Step title="Create an Application Password">
+Scroll to the **Application Passwords** section, enter a name (for example, `FluxPrompt`), and select **Add New Application Password**. Copy the generated password immediately, because it is shown only once.
+</Step>
+<Step title="Confirm the REST API is enabled">
+Make sure permalinks are not set to **Plain** under **Settings → Permalinks**, otherwise the REST API endpoints will not resolve.
+</Step>
+</Steps>
+
+| Field | Required | Description |
+|---|---|---|
+| Site URL | Yes | The full address of your site, for example `https://yourwebsite.com` |
+| Username | Yes | Your WordPress username |
+| Application Password | Yes | The Application Password generated in your WordPress user profile |
+
+## Connecting in FluxPrompt
+
+<Steps>
+<Step title="Add the integration node">
+Open the node picker in your flow, go to **Third Party Integration**, and select **WordPress**.
+</Step>
+<Step title="Start a new connection">
+Choose to add a new connection when prompted for credentials.
+</Step>
+<Step title="Enter your credentials">
+Fill in the **Site URL**, **Username**, and **Application Password** from the previous section, then save. FluxPrompt validates the connection against `GET /users/me` before storing it.
+</Step>
+</Steps>
+
+## Pull reference
+
+Select an object type to read. The default is **posts**. The `Per page` value is capped at 100, and order fields are validated per object type.
+
+### Posts and pages
+
+Posts and pages share the same fields.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| statusFilter | select (dynamic) | No | Filter by post status; options are loaded from your site |
+| categoryFilter | multiselect (dynamic) | No | Filter by category; options are loaded from your site |
+| tagFilter | multiselect (dynamic) | No | Filter by tag; options are loaded from your site |
+| authorFilter | select (dynamic) | No | Filter by author; options are loaded from your site |
+| dateFrom | date | No | Return items published on or after this date |
+| dateTo | date | No | Return items published on or before this date |
+| perPage | number | No | Number of items to return; default 10, maximum 100 |
+| search | text | No | Match against item content |
+| orderBy | select | No | Sort by Date, Modified, Title, Relevance, ID, or Slug |
+
+<Note>
+The category, tag, and author filters are applied on the backend for posts only. For pages, these filters are ignored.
+</Note>
+
+### Media
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| dateFrom | date | No | Return media uploaded on or after this date |
+| dateTo | date | No | Return media uploaded on or before this date |
+| mediaType | select | No | Filter by type: Image, Video, Audio, or Application |
+| perPage | number | No | Number of items to return; maximum 100 |
+| search | text | No | Match against media content |
+| orderBy | select | No | Sort by Date, Modified, Title, ID, or Slug |
+
+### Categories and tags
+
+Categories and tags share the same fields.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| perPage | number | No | Number of items to return; maximum 100 |
+| search | text | No | Match against the term name |
+| orderBy | select | No | Sort by Name, ID, Count, Slug, or Description |
+
+### Comments
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| dateFrom | date | No | Return comments created on or after this date |
+| dateTo | date | No | Return comments created on or before this date |
+| perPage | number | No | Number of items to return; maximum 100 |
+| search | text | No | Match against comment content |
+| orderBy | select | No | Sort by Date, ID, or Type |
+
+### Users
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| perPage | number | No | Number of items to return; maximum 100 |
+| search | text | No | Match against user content |
+| orderBy | select | No | Sort by Name, ID, Registered Date, Slug, or Email |
+
+## Push reference
+
+Select a push action. New posts and pages are created with `draft` status by default.
+
+### Create post and create page
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| title | text | No | Item title; maximum 200 characters |
+| content | textarea | No | Item body as HTML or Markdown |
+| status | select (dynamic) | No | Publication status; options are loaded from your site |
+| categories | multiselect (dynamic) | No | Categories to attach (create post only) |
+| tags | multiselect (dynamic) | No | Tags to attach (create post only) |
+| author | select (dynamic) | No | Author to assign |
+| slug | text | No | URL slug for the item |
+| featuredImageUrl | text | No | URL of an image to download, upload, and set as the featured image |
+
+### Update post and update page
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| postId | text | Yes | ID of the post or page to update |
+| title | text | No | Item title; maximum 200 characters |
+| content | textarea | No | Item body as HTML or Markdown |
+| status | select (dynamic) | No | Publication status; options are loaded from your site |
+| categories | multiselect (dynamic) | No | Categories to attach (update post only) |
+| tags | multiselect (dynamic) | No | Tags to attach (update post only) |
+| author | select (dynamic) | No | Author to assign |
+| slug | text | No | URL slug for the item |
+| featuredImageUrl | text | No | URL of an image to download, upload, and set as the featured image |
+
+### Upload media
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| fileUrl | text | No | URL of the file to upload to the media library |
+| altText | text | No | Alt text for the image |
+
+<Note>
+The backend upload reads `imageUrl` or `fileUrl`, or base64 content along with a filename and MIME type. The `altText` field is not consumed by the adapter.
+</Note>
+
+## Troubleshooting
+
+<Accordion title="Connection fails when I save credentials">
+The error depends on the underlying response. A `401` means the username or Application Password is wrong. A `404` means the REST API is disabled or the site URL is incorrect. A connection-refused or timeout error means the site is unreachable. Re-check each field and confirm the site responds at `{siteUrl}/wp-json/wp/v2`.
+</Accordion>
+
+<Accordion title="My site uses a self-signed certificate">
+Self-signed certificate sites are accepted. The integration's HTTPS agent is configured with `rejectUnauthorized: false`, so certificate validation does not block the connection.
+</Accordion>
+
+<Accordion title="Pull returns no results">
+Check the status filter, since drafts and other non-published items are excluded unless you select their status. Also confirm permalinks are not set to **Plain** under **Settings → Permalinks**, because the REST API will not resolve otherwise.
+</Accordion>
+
+<Accordion title="Category, tag, or author filters are ignored for pages">
+These filters are applied on the backend for posts only. Pages do not support category, tag, or author filtering, so those values have no effect when the object type is **pages**.
+</Accordion>
+
+<Accordion title="Featured image is not set">
+The featured image URL must point to a publicly downloadable file. FluxPrompt downloads the image, uploads it to the media library, and sets it as the featured media. If the URL requires authentication or is not reachable, the image cannot be attached.
+</Accordion>

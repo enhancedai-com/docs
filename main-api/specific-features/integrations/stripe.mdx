@@ -1,0 +1,246 @@
+---
+title: "Stripe integration"
+description: "Read Stripe data such as customers, charges, and invoices, and create Stripe objects like customers, products, prices, and invoices from your flows."
+---
+
+## Overview
+
+The Stripe integration lets you read from and write to a connected Stripe account inside a flow. Pull mode lists or searches Stripe objects and brings the data into your flow. Push mode creates and updates objects in Stripe, including customers, products, prices, and invoices.
+
+| Feature | Mode | Description |
+|---|---|---|
+| Customers | Pull | List or search customer records |
+| Charges | Pull | List charges |
+| Invoices | Pull | List invoices |
+| Subscriptions | Pull | List subscriptions |
+| Payment intents | Pull | List payment intents |
+| Payouts | Pull | List payouts |
+| Products | Pull | List products in the catalog |
+| Prices | Pull | List prices, optionally filtered by product |
+| Balance | Pull | Return the current account balance |
+| Disputes | Pull | List disputes |
+| Create customer | Push | Create a customer |
+| Update customer | Push | Update an existing customer |
+| Create product | Push | Create a product |
+| Create price | Push | Create a price for a product |
+| Create invoice | Push | Create a draft invoice for a customer |
+| Finalize invoice | Push | Finalize a draft invoice |
+| Send invoice | Push | Send a finalized invoice |
+
+## How it works under the hood
+
+Despite the integration declaring an `oauth2` auth method, Stripe connects with credentials, not an OAuth flow. The install URL returns only a frontend callback, and the code-exchange and token-refresh handlers both throw on purpose because Stripe secret keys do not expire. Connecting is handled entirely by the credentials path.
+
+When you connect, FluxPrompt reads two values: `stripeSecretPassword` (your secret key) and `stripeMode` (`live` or `test`, defaulting to `test`). It first asserts that the key prefix matches the mode: `sk_live_` for live and `sk_test_` for test. It then validates the key by instantiating the official Stripe Node SDK and calling `accounts.retrieve()`, falling back to `balance.retrieve()`. The Stripe account id becomes the connection's provider account id. The encrypted credentials store `stripeSecretPassword` and `stripeMode`, and `stripeMode` is also kept as connection metadata.
+
+The integration uses the official `stripe` Node SDK pinned to API version `2022-11-15`, and a new client is created per call.
+
+**Pull** validates the requested object type and dispatches to a per-type handler. Each handler supports `limit` (default 10, max 100), and a `dateFrom`/`dateTo` range that is converted to a Unix `created` range. Many object types accept a raw Stripe `searchQuery` that is passed through to the matching `*.search` endpoint, plus a `statusFilter` and a `customerId` or `productId` where relevant. Responses are normalized to compact field subsets, and an `amount_formatted` value accounts for zero-decimal currencies such as `jpy`, `vnd`, `clp`, and `krw`. Pagination signals `has_more` and `next_page` are surfaced on the response.
+
+**Push** validates the action and its required fields, then creates the object through the SDK. Invoices are created with `collection_method` set to `send_invoice` and `auto_advance` set to `false`. Price amounts entered in dollars are converted to cents. Metadata supplied as JSON in `metadataJson` is parsed and attached to the created object.
+
+Dropdown options are resolved dynamically. `statusFilter` is a static list per object type. `customerId`, `productId`, and `invoiceId` use remote search, retrieving by id or running a Stripe `list`/`search` as you type.
+
+The status filter for charges, payment intents, and disputes is applied client-side after the results return, so widening the `limit` can change which rows match. There is no token refresh. Credentials are stored in `user_integrations.apiCredentialsEncrypted`.
+
+## Prerequisites and credentials
+
+Stripe is an API-key integration. You connect by pasting a Stripe secret key and selecting the mode it belongs to.
+
+<Steps>
+<Step title="Open the Stripe Dashboard">
+Sign in at [dashboard.stripe.com](https://dashboard.stripe.com).
+</Step>
+<Step title="Go to Developers > API keys">
+Open [dashboard.stripe.com/apikeys](https://dashboard.stripe.com/apikeys). The page lists your publishable and secret keys.
+</Step>
+<Step title="Choose test or live mode">
+Use the test/live toggle in the dashboard to select the mode you want. Test keys start with `sk_test_` and live keys start with `sk_live_`.
+</Step>
+<Step title="Copy the secret key">
+Reveal and copy the full secret key. Copy the whole value, including the `sk_test_` or `sk_live_` prefix.
+</Step>
+</Steps>
+
+Connection fields:
+
+| Field | Label | Required | Options | Default | Placeholder |
+|---|---|---|---|---|---|
+| stripeSecretPassword | Secret key | Yes | -- | -- | `sk_test_...` or `sk_live_...` |
+| stripeMode | Mode | Yes | Test (`test`), Live (`live`) | `test` | -- |
+
+<Warning>
+The key prefix must match the selected mode: `sk_test_` with Test, `sk_live_` with Live. A mismatched key is rejected when you connect. Test data is invisible to a live key and live data is invisible to a test key.
+</Warning>
+
+## Connecting in FluxPrompt
+
+<Steps>
+<Step title="Add the Stripe node">
+Open the node picker in your flow and add the Stripe node.
+</Step>
+<Step title="Select Stripe">
+Choose Stripe as the integration. The connection form appears.
+</Step>
+<Step title="Enter the secret key and mode">
+Paste your secret key into **Secret key** and set **Mode** to Test or Live to match the key prefix.
+</Step>
+<Step title="Connect">
+Submit the form. FluxPrompt validates the key against your Stripe account and shows a connected state once it succeeds.
+</Step>
+</Steps>
+
+## Pull reference
+
+Pull retrieves data from Stripe. Select an object type and configure its fields. Every object type except **Balance** shares the same set of fields.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| dateFrom | Date | No | Start of the created range |
+| dateTo | Date | No | End of the created range |
+| statusFilter | Select (dynamic) | No | Filter by status; defaults to "Any". Available for charges, invoices, subscriptions, payment intents, payouts, disputes, products, and prices |
+| productId | Select (dynamic, remote search) | No | "Search products (optional)". Available for prices only |
+| customerId | Select (dynamic, remote search) | No | "Search customers (optional)" |
+| limit | Number | No | Default 20, max 100 |
+| searchQuery | Textarea | No | "Stripe Search query (when supported for this object)" |
+
+### Customers
+
+List or search customer records. Uses the shared pull fields.
+
+### Charges
+
+List charges. Uses the shared pull fields. The status filter is applied client-side after results return.
+
+### Invoices
+
+List invoices. Uses the shared pull fields.
+
+### Subscriptions
+
+List subscriptions. Uses the shared pull fields.
+
+### Payment intents
+
+List payment intents. Uses the shared pull fields. The status filter is applied client-side after results return.
+
+### Payouts
+
+List payouts. Uses the shared pull fields.
+
+### Products
+
+List products in your catalog. Uses the shared pull fields.
+
+### Prices
+
+List prices. Uses the shared pull fields, including the **productId** filter to narrow to a specific product.
+
+### Balance
+
+Return the current account balance. This object type takes no fields.
+
+### Disputes
+
+List disputes. Uses the shared pull fields. The status filter is applied client-side after results return.
+
+## Push reference
+
+Push creates or updates an object in Stripe. Select an action and configure its fields. Several actions accept a shared **metadataJson** field, a textarea labeled "Metadata (JSON object)" that takes a JSON object such as `{"order_id":"123"}`.
+
+### Create customer
+
+Create a customer.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| customerEmail | Text | Yes | "Email" |
+| customerName | Text | No | "Name" |
+| metadataJson | Textarea | No | Metadata (JSON object) |
+
+### Update customer
+
+Update an existing customer.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| customerId | Select (dynamic, remote search) | Yes | "Search customers" |
+| customerEmail | Text | No | "Email" |
+| customerName | Text | No | "Name" |
+| metadataJson | Textarea | No | Metadata (JSON object) |
+
+### Create product
+
+Create a product.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| productName | Text | Yes | Product name |
+| description | Textarea | No | Product description |
+| metadataJson | Textarea | No | Metadata (JSON object) |
+
+### Create price
+
+Create a price for an existing product.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| productId | Select (dynamic, remote search) | Yes | "Search products" |
+| amountDollars | Number | Yes | "Unit amount (dollars)"; converted to cents |
+| currency | Text | Yes | 3-letter currency code; default `usd` |
+| priceRecurringInterval | Select | No | One-time (`""`), Monthly (`month`), Yearly (`year`) |
+
+### Create invoice
+
+Create a draft invoice for a customer. The invoice is created with `collection_method` set to `send_invoice` and `auto_advance` set to `false`.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| customerId | Select (dynamic, remote search) | Yes | "Search customers" |
+| currency | Text | Yes | 3-letter currency code; default `usd` |
+| amountDollars | Number | No | "Amount (dollars)"; optional line item amount |
+| description | Textarea | No | Invoice description |
+| dueDate | Datetime | No | Due date; defaults to 30 days when omitted |
+| metadataJson | Textarea | No | Metadata (JSON object) |
+
+### Finalize invoice
+
+Finalize a draft invoice.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| invoiceId | Select (dynamic, remote search) | Yes | "Search invoices"; must be an existing `in_` invoice id |
+
+### Send invoice
+
+Send a finalized invoice.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| invoiceId | Select (dynamic, remote search) | Yes | "Search invoices"; must be an existing `in_` invoice id |
+
+<Info>
+Metadata values are attached to the created object. Provide `metadataJson` as a JSON object, for example `{"order_id":"123","source":"flow"}`.
+</Info>
+
+## Troubleshooting
+
+<Accordion title='Stripe returns "No such ..." or nothing is found'>
+The key mode does not match the data you are looking for. A test key only sees test objects and a live key only sees live objects. Confirm the **Mode** matches the key prefix (`sk_test_` with Test, `sk_live_` with Live) and that the object exists in that mode.
+</Accordion>
+
+<Accordion title="Connecting fails with an invalid API key">
+The key is mistyped or incomplete. Open Developers > API keys in the Stripe Dashboard, regenerate the secret key if needed, and paste the full `sk_` value including its prefix. The connection is validated against your account, so an invalid key is rejected at connect time.
+</Accordion>
+
+<Accordion title="A status filter returns no results">
+For charges, payment intents, and disputes the status filter is applied client-side after the rows are fetched. If the matching rows fall outside the current page, increase the **limit** so more rows are retrieved before filtering.
+</Accordion>
+
+<Accordion title="Create price is rejected">
+Create price requires an existing product. Select a product in **productId** and enter the unit amount in dollars; the value is converted to cents. Provide a valid 3-letter currency code.
+</Accordion>
+
+<Accordion title="Finalize or send invoice fails">
+Both actions need an existing invoice id (`in_`). Select the invoice in **invoiceId**, and confirm it is in a state that allows the action. Finalize a draft before sending it.
+</Accordion>

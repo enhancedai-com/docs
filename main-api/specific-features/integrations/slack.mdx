@@ -1,0 +1,231 @@
+---
+title: "Slack integration"
+description: "Read channels, messages, users, and files from Slack, and post messages, reactions, and uploads back to Slack from your flows."
+---
+
+## Overview
+
+The Slack integration lets you read from and write to a connected Slack workspace inside a flow. Pull mode retrieves channels, message history, users, and files. Push mode posts messages, schedules messages, adds reactions, edits or deletes messages, sets channel topics, and uploads files.
+
+| Feature | Mode | Description |
+|---|---|---|
+| Channel history (Messages) | Pull | Fetch recent messages from a channel |
+| Channels | Pull | List public and private channels |
+| Users | Pull | List workspace members |
+| Files | Pull | List files, optionally filtered by channel |
+| Post message | Push | Send a message to a channel or thread |
+| Schedule message | Push | Queue a message for a future time |
+| Add reaction | Push | React to a message with an emoji |
+| Update message | Push | Edit the text of an existing message |
+| Delete message | Push | Remove a message |
+| Set topic | Push | Set a channel's topic |
+| Upload file | Push | Upload a file to a channel |
+
+## How it works under the hood
+
+Slack uses true OAuth2. When you connect, FluxPrompt builds an authorization URL at `https://slack.com/oauth/v2/authorize` with the platform `client_id` (server-side `SLACK_CLIENT_ID`), a redirect URI of `{base}/slack`, the requested scopes, and a `state` value that encodes your user ID as base64url.
+
+After you approve the consent screen, Slack redirects back with a code that FluxPrompt exchanges for tokens:
+
+```http
+POST https://slack.com/api/oauth.v2.access
+Content-Type: application/x-www-form-urlencoded
+```
+
+The exchange stores an `access_token`, an optional `refresh_token`, and an `expiresAt` timestamp. The connection's account identifier is the Slack `team.id`, and FluxPrompt keeps `team_id`, `team_name`, and `user_id` as connection metadata. When tokens expire, FluxPrompt refreshes them automatically by calling the same endpoint with `grant_type=refresh_token`.
+
+All API calls go to the Slack Web API at `https://slack.com/api` using `Bearer` authentication. Each response is checked for `data.ok`; common Slack errors such as `not_in_channel`, `channel_not_found`, `invalid_auth`, `missing_scope`, and `time_in_past` are surfaced with clearer messages.
+
+The default scopes (overridable with the server-side `SLACK_SCOPES` variable) are:
+
+```text
+channels:read, channels:history, channels:manage,
+groups:read, groups:history, groups:write,
+chat:write, users:read, reactions:write,
+emoji:read, files:read, files:write
+```
+
+**Pull** maps each object type to a Slack method: `channels` calls `conversations.list`, `channel_history` (the default, aliased from `messages`) calls `conversations.history` and requires a channel, `users` calls `users.list`, and `files` calls `files.list`.
+
+**Push** maps each action to a Slack method: `post_message` (the default) calls `chat.postMessage` and accepts an optional `thread_ts`; with rich formatting enabled it parses Block Kit JSON. `schedule_message` calls `chat.scheduleMessage` and validates that `post_at` is in the future. `add_reaction` calls `reactions.add` and validates the emoji shortcode. `update_message` calls `chat.update`, `delete_message` calls `chat.delete`, and `set_topic` calls `conversations.setTopic`. `upload_file` runs Slack's three-step external upload: `getUploadURLExternal`, a multipart `POST` of the file, then `completeUploadExternal`.
+
+Channel and user dropdowns are populated dynamically. Channels come from a paginated `conversations.list` (labeled `# name`), users come from `users.list` (bots and deleted users filtered out), and the reaction picker merges a curated static emoji list with the workspace's `emoji.list` (loaded only for the add-reaction action).
+
+Credentials are stored in `user_integrations` as encrypted OAuth access and refresh tokens.
+
+## Prerequisites and credentials
+
+Slack is a one-click OAuth integration. You do not provide any manual keys or tokens. The Slack app's `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET` are platform server-side environment variables, and the integration config defines no `authFields`.
+
+<Info>
+Connection starts from the Slack connection card, not from a field form. During the OAuth consent screen you authorize the target workspace and grant the requested scopes.
+</Info>
+
+The scopes requested at consent are listed under [How it works under the hood](#how-it-works-under-the-hood). Approving them is what lets the integration read channels and messages and post on your behalf.
+
+## Connecting in FluxPrompt
+
+<Steps>
+<Step title="Add the Slack node">
+Open the node picker in your flow and add the Slack node.
+</Step>
+<Step title="Select Slack">
+Choose Slack as the integration. The Slack connection card appears.
+</Step>
+<Step title="Click Connect to Slack">
+Select **Connect to Slack**. An OAuth popup opens on Slack's authorization page.
+</Step>
+<Step title="Authorize the workspace">
+Pick the workspace to connect and approve the requested scopes. The popup closes and the card shows a **Connected** state with **Reconnect** and **Disconnect** options.
+</Step>
+</Steps>
+
+<Tip>
+Use **Reconnect** if you ever need to grant updated scopes, and **Disconnect** to remove the connection (you are asked to confirm).
+</Tip>
+
+## Pull reference
+
+Pull retrieves data from Slack. Select an object type and configure its fields.
+
+### Channel history (Messages)
+
+Fetch recent messages from a channel.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| channel | Select (dynamic) | Yes | Channel to read from |
+| limit | Number | No | Default 20, max 200 |
+| oldest | Text | No | Date from (Unix timestamp) |
+| latest | Text | No | Date to (Unix timestamp) |
+| threadOnly | Toggle | No | Default false |
+| thread_ts | Text | No | Thread TS (parent message); shown when threadOnly is true |
+
+<Note>
+`threadOnly` and `thread_ts` are frontend-only controls. The backend does not consume them.
+</Note>
+
+### Channels
+
+List channels in the workspace.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| limit | Number | No | Default 50, max 1000 |
+| excludeArchived | Toggle | No | Default true |
+| types | Select (static) | No | Public channels (`public_channel`) or Private channels (`private_channel`); all if empty |
+
+### Users
+
+List workspace members.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| limit | Number | No | Default 50, max 999 |
+| includeLocale | Toggle | No | Default false |
+
+### Files
+
+List files, optionally filtered by channel.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| channel | Select (dynamic) | No | Filter by channel |
+| limit | Number | No | Default 20, max 200 |
+
+## Push reference
+
+Push performs an action in Slack. Select an action and configure its fields.
+
+### Post message
+
+Send a message to a channel or thread.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| channel | Select (dynamic) | Yes | Target channel |
+| text | Textarea | No | Message text |
+| thread_ts | Text | No | Reply in a thread by parent timestamp |
+| richFormatting | Toggle | No | Rich formatting (Block Kit); default false |
+| blockKitJson | Textarea | No | Block Kit JSON; shown when richFormatting is true |
+
+### Schedule message
+
+Queue a message to send at a future time.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| channel | Select (dynamic) | Yes | Target channel |
+| post_at | Datetime | Yes | Send time; must be in the future |
+| text | Textarea | Yes | Message text |
+
+### Add reaction
+
+React to a message with an emoji.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| channel | Select (dynamic) | Yes | Channel containing the message |
+| timestamp | Text | Yes | Message timestamp (ts) |
+| reactionName | Select (dynamic) | Yes | Select reaction (emoji) |
+
+### Update message
+
+Edit the text of an existing message.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| channel | Select (dynamic) | Yes | Channel containing the message |
+| timestamp | Text | Yes | Message TS |
+| text | Textarea | Yes | New text |
+
+### Delete message
+
+Remove a message.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| channel | Select (dynamic) | Yes | Channel containing the message |
+| timestamp | Text | Yes | Message TS |
+
+### Set topic
+
+Set a channel's topic.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| channel | Select (dynamic) | Yes | Target channel |
+| name | Text | Yes | Topic |
+
+### Upload file
+
+Upload a file to a channel.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| channel | Select (dynamic) | Yes | Target channel |
+| fileUrl | Text | Yes | URL of the file to upload |
+| filename | Text | No | File name |
+| initial_comment | Text | No | Comment posted with the file |
+
+## Troubleshooting
+
+<Accordion title="Posting fails with not_in_channel">
+The Slack app is not a member of that channel. Invite the bot to the channel first, then retry. Posting to a channel the app has not joined returns `not_in_channel`.
+</Accordion>
+
+<Accordion title="An action fails with missing_scope">
+The connection does not have the scope the action requires. Open the Slack connection card and use **Reconnect** to grant the updated scopes, then run the action again.
+</Accordion>
+
+<Accordion title="Adding a reaction fails">
+Use a valid emoji shortcode without surrounding colons (for example, `thumbsup`, not `:thumbsup:`). The action validates the shortcode against the curated and workspace emoji lists before calling Slack.
+</Accordion>
+
+<Accordion title="A scheduled message is rejected">
+The `post_at` value must be in the future. Slack returns `time_in_past` when the scheduled time has already passed; pick a later time and retry.
+</Accordion>
+
+<Accordion title="The channel list is empty">
+Reading private channels requires the `groups:read` scope. If only public channels appear, reconnect to grant the scope, then reload the channel dropdown.
+</Accordion>

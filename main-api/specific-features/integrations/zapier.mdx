@@ -1,0 +1,127 @@
+---
+title: "Zapier integration"
+description: "Trigger flows from Zapier and send flow data to Zapier webhooks, all over webhooks with no credentials to manage."
+---
+
+## Overview
+
+The Zapier integration connects your flows to Zapier through webhooks. Pull mode receives data that a Zap sends into your flow, either by listening for inbound webhooks or by polling a Zapier endpoint. Push mode sends a payload from your flow to a Zapier Catch Hook URL. There is no OAuth and no token exchange; everything is webhook-based.
+
+| Feature | Mode | Description |
+|---|---|---|
+| Webhook listener | Pull | Receive payloads that Zapier delivers to a per-node webhook URL |
+| Poll endpoint | Pull | Make a GET request to a Zapier endpoint and read its response |
+| Send to webhook | Push | POST a payload to a Zapier Catch Hook URL |
+
+## How it works under the hood
+
+Zapier runs in webhook connection mode. `getInstallUrl` returns `{base}/integrations/zapier`, but there is no real authorization step: `exchangeCode` and `refreshAccessToken` both throw, and there is no credential exchange. You connect with an empty body, or skip connecting altogether.
+
+**Pull** has two object types:
+
+- **Webhook listener** (the default) reads from an in-memory store keyed by `nodeId`. Zapier delivers inbound webhooks to `{apiBase}/webhooks/zapier/{nodeId}`, and the listener stores the most recent delivery. On flow execution it returns `{ payload, lastReceivedAt }`, or just the payload when a `webhookSessionId` is supplied. Because the store is in memory and keyed by node, each node instance has its own URL and its own last-received payload.
+- **Poll endpoint** issues a `GET` to `payload.zapierEndpointUrl` (required) with a 30-second timeout and a 10 MB response cap. If the response is an array, it is sliced to the limit, computed as `min(limit || 10, 100)`.
+
+**Push** has one action:
+
+- **Send to webhook** issues a `POST` to `payload.webhookUrl`. The URL must pass an allowlist: the origin must be exactly `https://hooks.zapier.com` over HTTPS. This is an SSRF guard, so any other host is rejected. A non-null payload is required. With `payloadFormat: json` (the default) the integration tries `JSON.parse` and falls back to `{ value: <string> }` if parsing fails; with `payloadFormat: form` it sends `application/x-www-form-urlencoded`. Custom headers are merged in, accepting either an object or newline-separated `Key: Value` lines. The action returns `{ success, status, response }`.
+
+`getOptions` always returns an empty list (there are no dynamic dropdowns), and `testConnection` returns a synthetic active identity, which is what backs the **Test Push** button. No tokens are stored.
+
+## Prerequisites and credentials
+
+Zapier has no real connection credentials. You connect a node without authenticating, then wire up one of two webhook patterns:
+
+1. **Inbound webhook listener.** Copy the generated webhook URL, `{apiBase}/webhooks/zapier/{nodeId}`, and paste it into a **Webhooks by Zapier > POST** action in your Zap. Zapier then delivers payloads to your node.
+2. **Outbound to a Catch Hook.** Paste a Zapier Catch Hook URL into the node. The URL must start with `https://hooks.zapier.com/`; any other host is blocked by the SSRF allowlist. This applies to both the poll endpoint (pull) and send to webhook (push).
+
+<Note>
+The integration config defines one optional field, `apiKey` ("API Key (Zapier App mode only)", placeholder "Optional — leave empty for Webhook mode"). The backend does not use it. Leave it empty.
+</Note>
+
+## Connecting in FluxPrompt
+
+<Steps>
+<Step title="Add the Zapier node">
+Open the node picker in your flow and add the Zapier node.
+</Step>
+<Step title="Select Zapier">
+Choose Zapier as the integration. No credentials are required.
+</Step>
+<Step title="Connect">
+Connect the node with an empty body. There is no OAuth popup and no key to enter.
+</Step>
+<Step title="Copy or paste a webhook URL">
+For a webhook listener, use **Copy webhook URL** to copy the node's `{apiBase}/webhooks/zapier/{nodeId}` URL into your Zap's POST action. For a poll endpoint or a push action, paste your Zapier Catch Hook URL (`https://hooks.zapier.com/...`) into the node.
+</Step>
+</Steps>
+
+<Tip>
+On a webhook listener node, use **Load last received** to fetch the most recent payload Zapier delivered, so you can confirm the connection and inspect the data shape before running the flow.
+</Tip>
+
+## Pull reference
+
+Pull receives data into your flow. Select an object type and configure its fields.
+
+### Webhook listener
+
+Listen for payloads that Zapier delivers to this node's webhook URL.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| webhookUrl | Text (read-only) | No | Webhook URL to copy into Zapier; resolved at runtime to `{apiBase}/webhooks/zapier/{nodeId}` |
+
+Copy the webhook URL into your Zapier trigger or POST action. Use **Load last received** to see the latest stored payload.
+
+### Poll endpoint
+
+Make a GET request to a Zapier endpoint and read its response.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| zapierEndpointUrl | Text | Yes | URL of the Zapier webhook to poll for data |
+| limit | Number | No | Max items to return; default 1. When the response is an array it is sliced to `min(limit || 10, 100)` |
+
+## Push reference
+
+Push sends a payload from your flow to Zapier. Select an action and configure its fields.
+
+### Send to webhook
+
+POST a payload to a Zapier Catch Hook URL.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| webhookUrl | Text | Yes | Zapier Catch Hook URL; must start with `https://hooks.zapier.com/` |
+| payloadFormat | Select (static) | No | `json` (JSON) or `form` (Form Data); default `json` |
+| payload | Textarea | Yes | The payload body to send |
+| customHeaders | Textarea | No | Custom headers as a JSON object or newline-separated `Key: Value` lines |
+
+<Warning>
+The webhook URL must start with `https://hooks.zapier.com/`. Other hosts are rejected by the SSRF allowlist, which requires the origin to be exactly `https://hooks.zapier.com` over HTTPS.
+</Warning>
+
+Use **Test Push** to send a sample payload to your Catch Hook and confirm the Zap receives it.
+
+## Troubleshooting
+
+<Accordion title="The webhook listener returns null">
+No webhook has been received for this node yet. The store is empty until Zapier delivers a payload. Trigger the Zap so it POSTs to the node's webhook URL, then use **Load last received** to confirm the payload arrived.
+</Accordion>
+
+<Accordion title="Push is rejected">
+The webhook URL must start with `https://hooks.zapier.com/`. The SSRF allowlist requires the origin to be exactly `https://hooks.zapier.com` over HTTPS, so any other host is blocked. Copy the URL directly from a **Webhooks by Zapier > Catch Hook** trigger.
+</Accordion>
+
+<Accordion title="The payload is not parsed as JSON">
+With `payloadFormat: json`, the integration runs `JSON.parse` on the payload. If parsing fails, it falls back to `{ value: <string> }` and sends that instead. Send valid JSON if you need the structured shape, or switch to Form Data.
+</Accordion>
+
+<Accordion title="Custom headers are not applied">
+Provide custom headers as a JSON object, or as newline-separated `Key: Value` lines (one header per line). Other formats are not parsed.
+</Accordion>
+
+<Accordion title="Poll returns a single item">
+The default limit is 1. When the endpoint returns an array, raise `limit` to return more items. The effective cap is `min(limit || 10, 100)`.
+</Accordion>
