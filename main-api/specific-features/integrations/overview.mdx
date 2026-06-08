@@ -14,6 +14,13 @@ Some providers support both modes; others support only one.
 
 ## Available integrations
 
+Integrations come in two families:
+
+- **Third Party Integration node providers** use the shared adapter framework. You add a single **Third Party Integration** node and select the provider.
+- **Dedicated-node integrations** (Google Workspace, Microsoft 365, HubSpot) predate that framework. They are accessed through their own flow nodes — **Pull Data**, **Push Data**, **HubSpot CRM**, and the email/output node — and connect through their own settings cards.
+
+### Third Party Integration node providers
+
 <CardGroup cols={2}>
   <Card title="WordPress" href="/main-api/specific-features/integrations/wordpress">
     Read and publish posts, pages, and media. Credentials (Application Password).
@@ -35,19 +42,36 @@ Some providers support both modes; others support only one.
   </Card>
 </CardGroup>
 
+### Dedicated-node integrations
+
+<CardGroup cols={2}>
+  <Card title="Google Workspace" href="/main-api/specific-features/integrations/google">
+    Read and write Google Sheets, Docs, Slides, and Drive, and send Gmail. Pull Data / Push Data and email nodes. OAuth.
+  </Card>
+  <Card title="Microsoft 365" href="/main-api/specific-features/integrations/microsoft">
+    Read and write Excel, Word, PowerPoint, and OneDrive files, and send Outlook mail. Pull Data / Push Data and email nodes. OAuth.
+  </Card>
+  <Card title="HubSpot CRM" href="/main-api/specific-features/integrations/hubspot">
+    Read contacts, companies, and deals with the HubSpot CRM node. OAuth.
+  </Card>
+</CardGroup>
+
 ### Capability matrix
 
-| Provider | Connection | Pull | Push |
-|---|---|---|---|
-| WordPress | Credentials (site URL + Application Password) | Yes | Yes |
-| Slack | OAuth | Yes | Yes |
-| Notion | OAuth | Yes | Yes |
-| Stripe | Secret API key | Yes | Yes |
-| Zapier | Webhook URL | Yes | Yes |
-| MCP | API key / token (per transport) | Yes (list tools) | No |
+| Provider | Node | Connection | Pull | Push |
+|---|---|---|---|---|
+| WordPress | Third Party Integration | Credentials (site URL + Application Password) | Yes | Yes |
+| Slack | Third Party Integration | OAuth | Yes | Yes |
+| Notion | Third Party Integration | OAuth | Yes | Yes |
+| Stripe | Third Party Integration | Secret API key | Yes | Yes |
+| Zapier | Third Party Integration | Webhook URL | Yes | Yes |
+| MCP | Third Party Integration | API key / token (per transport) | Yes (list tools) | No |
+| Google Workspace | Pull Data / Push Data / email | OAuth (Google account) | Yes | Yes |
+| Microsoft 365 | Pull Data / Push Data / email | OAuth (Microsoft account) | Yes | Yes |
+| HubSpot CRM | HubSpot CRM | OAuth (HubSpot account) | Yes | No (read-only node) |
 
 <Note>
-The frontend config labels some providers as `oauth2` for grouping, but WordPress and Stripe actually connect with entered credentials (no OAuth flow), and Zapier is webhook-based. Each provider page documents the real connection method.
+The frontend config labels some providers as `oauth2` for grouping, but WordPress and Stripe actually connect with entered credentials (no OAuth flow), and Zapier is webhook-based. Google, Microsoft 365, and HubSpot also appear as Third Party Integration entries, but those are non-functional stubs — the working integrations live in their dedicated nodes. Each provider page documents the real connection method and node.
 </Note>
 
 ## Connection lifecycle
@@ -59,7 +83,7 @@ Every integration follows three phases:
     You save credentials once — an OAuth token, an API key, or a webhook URL — to link your account. Each user has at most one connection per provider.
   </Step>
   <Step title="Use in a flow">
-    You add a Third Party Integration node, select the connected provider, and choose a pull object type or a push action.
+    You add the integration's node — the Third Party Integration node for adapter-based providers, or a dedicated Pull Data, Push Data, HubSpot CRM, or email node — select the provider, and choose what to read or write.
   </Step>
   <Step title="Share (optional)">
     Teammates can use your connection through the flow without seeing your raw credentials. The node records who connected it and resolves their credentials at run time.

@@ -1,0 +1,234 @@
+---
+title: "Microsoft 365 integration"
+description: "Read and write Excel, Word, PowerPoint, and OneDrive files and send Outlook mail from your flows."
+---
+
+## Overview
+
+The Microsoft 365 integration connects a Microsoft account to your flows so you can read from and write to OneDrive files and send mail from Outlook. It is a dedicated module that lives behind the **Pull Data** and **Push Data** flow nodes and the email/output node, not the generic third-party adapter framework.
+
+In the Pull Data and Push Data nodes you choose a provider (Google or Microsoft). When you pick Microsoft, the node shows a Microsoft file picker and per-format options. Pull mode brings file contents into the flow as text; push mode writes the flow's text back into a file or uploads a new file. The email/output node can send the flow output through your connected Outlook account.
+
+<Note>
+Microsoft 365 is accessed through the Pull Data node, the Push Data node, and the email/output node. The "Microsoft 365" entry in the Third Party Integration screen is a non-functional stub: its provider config sets both `supportsPull` and `supportsPush` to `false`, and its connection card simply re-mounts the same Microsoft connect UI used everywhere else. Use it to connect your account, but the actual read/write happens in the Pull Data, Push Data, and email nodes.
+</Note>
+
+| Capability | Node | Read/Write |
+|---|---|---|
+| Excel range | Pull Data | Read |
+| Word document | Pull Data | Read |
+| PowerPoint slides | Pull Data | Read |
+| Excel range (write / new sheet) | Push Data | Write |
+| Word document (create / append) | Push Data | Write |
+| PowerPoint (create / append slides) | Push Data | Write |
+| Raw file upload to OneDrive | Push Data | Write |
+| Outlook send | email/output node | Write |
+
+## How it works under the hood
+
+### Authentication and scopes
+
+Auth uses MSAL (`@azure/msal-node`) with a `ConfidentialClientApplication`. The authority is `https://login.microsoftonline.com/{MICROSOFT_TENANT_ID}`, falling back to `common` when no tenant is set. The default scopes are:
+
+```text Default scopes
+openid User.Read offline_access Mail.Read Mail.Send Files.ReadWrite Sites.ReadWrite.All
+```
+
+Scopes can be overridden with `MICROSOFT_SCOPES` (whitespace-separated). The relevant environment variables are `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID`, `MICROSOFT_SCOPES`, and `MICROSOFT_REDIRECT_URI`.
+
+The OAuth code is exchanged with `acquireTokenByCode`. The serialized MSAL token cache and the MSAL `AccountInfo` are stored in `user_integrations.metadata` under the `msalCache` and `account` keys. On every call, `getValidAccessToken` rebuilds the MSAL client with a cache plugin bound to that metadata and calls `acquireTokenSilent`, persisting the refreshed cache back to `metadata`. If silent acquisition fails, the integration is disconnected automatically and the caller is asked to reconnect.
+
+### Graph access
+
+All Graph calls use the `@microsoft/microsoft-graph-client` SDK, initialized per request with the resolved access token. The `microsoft` module is split into focused services:
+
+- `MicrosoftAuthService` — install URL, connect, status, token validation/refresh, disconnect.
+- `MicrosoftDriveService` — OneDrive and workbook operations: `listFiles`, `listFolders`, `listWorksheets`, `getFileContent`, `getExcelRange`, `createWorksheet`, `patchWorksheetRange`, and the `uploadFileToRoot` / `uploadFileToFolder` / `uploadFileContent` upload helpers.
+- `MicrosoftMailService` — `sendMail`, plus `getMessages` / `getMessage` (see the latent read-mail note below).
+
+Graph resources used include `/me/drive/root/search`, `/me/drive/root/children`, `/me/drive/items/{id}/content`, and `/me/drive/items/{id}/workbook/worksheets` with `range(address=...)` or `usedRange`. File uploads use the `PUT .../content` endpoint directly.
+
+### Pull and push branches
+
+The Pull Data and Push Data nodes route to `PullDataService.executePullDataNode` and `PushDataService.executePushDataNode`. When `nodeData.provider` is `microsoft`, the service branches on `selectedMicrosoftService` (`Excel`, `Word`, `PowerPoint`, or `Raw Files`):
+
+- **Pull Excel** reads a range (or `usedRange`) and returns the values as tab-separated rows joined by newlines.
+- **Pull Word** downloads the `.docx` and extracts plain text with `mammoth`, optionally slicing a paragraph range.
+- **Pull PowerPoint** opens the `.pptx` with `JSZip`, reads each `ppt/slides/slideN.xml`, and pulls text from `<a:t>` runs, optionally filtered by slide selection.
+- **Push Excel** writes tab-separated text into a range with `patchWorksheetRange`, optionally creating a new worksheet first.
+- **Push Word** builds a `.docx` with the `docx` library; it either creates a new document or merges the new text with the existing text (read back via `mammoth`) at the chosen position, then uploads.
+- **Push PowerPoint** builds slides with `pptxgenjs`; for an existing file it appends the new slides into the existing OOXML package with `JSZip` (preserving existing content, layout, and theme), otherwise it creates a new presentation.
+- **Push Raw Files** downloads the file from a URL and uploads it to OneDrive root or a selected folder.
+
+### Outlook send
+
+The email/output node has a "Send from your Microsoft account" toggle (`useFromMicrosoft`). When it is on and Microsoft is connected, the node calls `POST /mail/send-microsoft`, which delegates to `MicrosoftMailService.sendMail`. That method posts to Graph `/me/sendMail`, sending HTML or templated/plain text and downloading any attachment URLs to inline them as Graph file attachments. If the toggle is on but no Microsoft account is connected, the node falls back to the system mailer and shows a warning.
+
+<Info>
+`MicrosoftMailService` also exposes `getMessages` and `getMessage` for reading Outlook mail, but no controller route is wired to them yet. Reading mail through Microsoft is not exposed in the product today.
+</Info>
+
+## Prerequisites and credentials
+
+Connecting is a one-click OAuth flow. You do not paste any client ID, secret, or token; the FluxPrompt server holds the app registration credentials and runs the MSAL exchange for you.
+
+When you connect, Microsoft asks you to consent to the requested scopes:
+
+| Scope | Used for |
+|---|---|
+| `openid` | OIDC sign-in |
+| `User.Read` | Reading your profile from Graph `/me` |
+| `offline_access` | Refresh tokens for silent renewal |
+| `Mail.Read` | Reading mail (service method only; no route yet) |
+| `Mail.Send` | Sending mail from Outlook |
+| `Files.ReadWrite` | Reading and writing your OneDrive files |
+| `Sites.ReadWrite.All` | Reading and writing SharePoint/site-hosted files |
+
+## Connecting in FluxPrompt
+
+<Steps>
+<Step title="Connect your Microsoft account">
+Open the Microsoft connection card (from the integrations screen, or the inline "Click here" prompt shown in a Pull Data or Push Data node when Microsoft is not yet connected). Select **Connect**. A Microsoft sign-in popup opens; complete sign-in and grant consent. FluxPrompt polls connection status and shows the connected account email once consent completes.
+</Step>
+<Step title="Add a Pull Data or Push Data node">
+Add the node to your flow and set the provider to **Microsoft**.
+</Step>
+<Step title="Choose a data type and file">
+Pick the data type (Excel, Word, PowerPoint, or, for Push, Raw Files) and select a file from the searchable picker. The picker searches your OneDrive by file extension as you type.
+</Step>
+</Steps>
+
+## Pull reference
+
+In the Pull Data node, set the provider to **Microsoft**, then choose a data type. The available data types are **Excel**, **Word**, and **PowerPoint**.
+
+### Excel
+
+Reads cell values from a worksheet. Select a file, then a worksheet, then optionally a range.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| microsoftFileId | Searchable select | Yes | Excel file from OneDrive (`.xlsx`); searches as you type |
+| microsoftWorksheetId | Searchable select | Yes | Worksheet within the selected file |
+| rangeFilter | Tag input | No | "Select Area (Optional)". A1 notation, for example `A1:Z40`. Empty reads the worksheet's used range |
+
+The returned text is tab-separated columns, one row per line.
+
+### Word
+
+Reads a Word document as plain text.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| microsoftWordFileId | Searchable select | Yes | Word file from OneDrive (`.docx`) |
+| microsoftWordContentType | Select | No | "Full Document" (`fullContent`) or "Pull Certain Paragraphs" (`pullCert`); defaults to full document |
+| paragraphStart | Tag input (number) | Conditional | First paragraph (1-based); required when content type is "Pull Certain Paragraphs" |
+| paragraphEnd | Tag input (number) | Conditional | Last paragraph (inclusive); required when content type is "Pull Certain Paragraphs" |
+
+### PowerPoint
+
+Reads text from presentation slides.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| microsoftPowerPointFileId | Searchable select | Yes | PowerPoint file from OneDrive (`.pptx`) |
+| slidesFilter | Tag input | No | "Select Slides (Optional)". Single slides and ranges, for example `1, 2-5, 8`. Empty returns all slides |
+
+Output is grouped per slide as `Slide N:` followed by that slide's text.
+
+## Push reference
+
+In the Push Data node, set the provider to **Microsoft**, then choose a data type. The available data types are **Excel**, **Word**, **PowerPoint**, and **Raw Files**. The text pushed comes from the node's text content (or connected `textContent` input).
+
+### Excel
+
+Writes the flow text into a worksheet range, starting at `A1`. The text is split into rows by newline and into columns by tab.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| microsoftFileId | Searchable select | Yes | Target Excel file (`.xlsx`) |
+| microsoftWorksheetId | Searchable select | Yes | Worksheet, or "Create New Sheet" (`new`) |
+| name (new sheet name) | Tag input | Conditional | New worksheet name; required when "Create New Sheet" is selected |
+
+When "Create New Sheet" is selected, the node creates the worksheet first and then writes into it.
+
+### Word
+
+Creates a new document or writes into an existing one.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| microsoftWordFileId | Searchable select | No | Existing Word file (`.docx`). Leave empty to create a new document |
+| newDocumentName | Text | Conditional | Name for the new document; required when no existing file is selected. `.docx` is appended if missing |
+| selectedPushDataOption | Select | No | Where to insert the text in an existing document (see options below). Defaults to "End of document" |
+| specifiedPage | Number | Conditional | 1-based page number; required when the option is "After a specific page" |
+
+The insertion options are:
+
+| Option | Value |
+|---|---|
+| Beginning of document | `Beginning of document` |
+| End of document | `End of document` |
+| Start of document as a new page | `Start of document as a new page` |
+| End of document as a new page | `End of document as a new page` |
+| After a specific page | `After a specific page` |
+
+### PowerPoint
+
+Creates a new presentation or appends slides to an existing one. Slides are parsed from the text by splitting on `---`; the first line of each chunk becomes the slide title and the rest becomes the body.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| microsoftPowerPointFileId | Searchable select | No | Existing PowerPoint file (`.pptx`). Leave empty to create a new presentation |
+| newPresentationName | Text | Conditional | Name for the new presentation; required when no existing file is selected. `.pptx` is appended if missing |
+| selectedSlideOption | Select | No | Slide placement option |
+
+{/* TODO: verify whether selectedSlideOption exposes more than "Append to end" — SlideOptions currently defines only APPEND = 'Append to end', and appending is the only behavior the push service implements for an existing file. */}
+
+When an existing file is selected, the generated slides are appended to the end while preserving the existing content, layout, and theme.
+
+### Raw file upload
+
+Uploads a file from a URL into OneDrive.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| microsoftRawFilesFolderId | Searchable select | No | Destination folder, or "Root (no folder)" (empty value) |
+| fileUrl / fileUrlData | Tag input | Yes | Source file URL (or connected input). Each URL in a connected list is uploaded |
+| fileName | Tag input | No | "New File Name". Defaults to the last path segment of the URL when omitted |
+
+### Send email from Outlook
+
+The email/output node sends the flow output through Outlook when the **Send from your Microsoft account** toggle (`useFromMicrosoft`) is enabled and a Microsoft account is connected.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| useFromMicrosoft | Toggle | No | Send through the connected Outlook account. Disabled until Microsoft is connected |
+
+The node posts to `POST /mail/send-microsoft` with the recipients, subject, body text, optional template flag, and any attachment URLs. Attachment URLs are downloaded and inlined as Graph file attachments. If the toggle is on but Microsoft is not connected, the node sends through the system mailer and shows a warning.
+
+## Troubleshooting
+
+<Accordion title="The account disconnected and asks me to reconnect">
+Tokens are refreshed silently from the MSAL cache stored in the integration's metadata. If silent refresh fails (revoked consent, expired refresh token, or missing cache), the backend disconnects the integration automatically and returns a reconnect prompt. Reconnect the Microsoft account from the connection card and run the node again.
+</Accordion>
+
+<Accordion title="A file does not appear in the picker">
+The picker searches OneDrive by file extension (`.xlsx`, `.docx`, or `.pptx`) and filters by MIME type, returning the most recently modified matches first. If a file is missing, confirm it has the right extension and is stored in the OneDrive of the connected account, then refine the search text. Files in other accounts or shared locations that the granted scopes do not cover will not appear.
+</Accordion>
+
+<Accordion title="Excel read or write returns nothing or the wrong cells">
+For Excel, range uses A1 notation (for example `A1:Z40`). An empty range reads the worksheet's used range. On write, text is split into rows by newline and into columns by tab, and written starting at `A1`. Make sure the pushed text is tab-delimited per column and newline-delimited per row, and that a worksheet (or new sheet name) is selected.
+</Accordion>
+
+<Accordion title="A large file is slow or fails">
+Pull operations download the whole file before extracting text (Word via `mammoth`, PowerPoint via `JSZip`), and push operations rebuild and re-upload the document. Very large workbooks, documents, or presentations take longer and are more likely to hit Graph limits. Narrow Excel ranges or paragraph/slide selections where possible to reduce the work.
+</Accordion>
+
+<Accordion title="Outlook send is greyed out or does not send">
+The **Send from your Microsoft account** toggle is disabled until a Microsoft account is connected. Connect Microsoft from the inline connect prompt in the email node, then enable the toggle. If the toggle is enabled but the account is not connected at send time, the node falls back to the system mailer and shows a "Not linked to Microsoft" warning. Sending requires the `Mail.Send` scope.
+</Accordion>
+
+<Accordion title="Reading Outlook mail is not available">
+The Microsoft mail service can list and fetch messages, but no endpoint exposes that capability yet, so reading Outlook mail in a flow is not available. Only sending mail through Outlook is wired up today.
+</Accordion>
