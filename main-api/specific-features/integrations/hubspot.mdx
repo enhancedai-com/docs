@@ -1,0 +1,122 @@
+---
+title: "HubSpot CRM integration"
+description: "Read HubSpot contacts, companies, and deals into a flow with the dedicated HubSpot CRM node."
+---
+
+## Overview
+
+The HubSpot CRM integration reads records from a connected HubSpot account into a flow. You connect HubSpot once with OAuth, then add the **HubSpot CRM** node (node type `hubSpotCRM`) to pull deals, contacts, or companies. Each pull returns either a list of records or the details of a single record by id.
+
+<Note>
+HubSpot is served by a dedicated module and a dedicated flow node, not by the generic **Third Party Integration** node or its adapter framework. The "HubSpot" provider listed under Third Party Integration is a non-functional stub: its connection card re-mounts the real HubSpot connect UI rather than running through the generic adapter. Use the **HubSpot CRM** node for all HubSpot work.
+</Note>
+
+| Object | Read | Write |
+|---|---|---|
+| Contacts | Yes (list and details) | Backend endpoint only, not in the node |
+| Companies | Yes (list and details) | Backend endpoint only, not in the node |
+| Deals | Yes (list and details) | No |
+
+<Warning>
+The HubSpot CRM node is read-only and runs **client-side only**. It executes in the browser while you have the flow editor open and triggers it. It does **not** run in headless, queued, or scheduled flow executions, so a flow that relies on this node will produce no HubSpot data when run outside the editor. Write operations (update contacts and companies) exist only as backend endpoints and are not exposed by the node.
+</Warning>
+
+## How it works under the hood
+
+The backend `hubspot` module uses the official `@hubspot/api-client` SDK and the OAuth 2.0 authorization-code flow.
+
+**OAuth and token storage.** `getInstallUrl` builds the authorization URL from `HUBSPOT_CLIENT_ID`, `HUBSPOT_REDIRECT_URI`, `HUBSPOT_SCOPES`, and `HUBSPOT_OPTIONAL_SCOPES`. After the user authorizes, `getAccessToken` exchanges the returned `code` for tokens (`tokensApi.create('authorization_code', ...)`) and stores them on the `User` entity in the `hubspotAccessToken` and `hubspotRefreshToken` columns. Tokens are kept on the user record, not in `user_integrations`. `refreshTokens` calls `tokensApi.create('refresh_token', ...)` with the stored refresh token and updates both columns; if the refresh fails, both columns are cleared to `null`. `getUserInformation` resolves the connected account via `accessTokensApi.get`.
+
+**Reads.** List endpoints (`getCompanies`, `getContacts`, `getDeals`) instantiate a client with the user's access token and call the object's `searchApi.doSearch`. They page in chunks of 100 using the `paging.next.after` cursor until the requested `limit` is reached. The request carries the selected `properties`, an optional free-text `query`, and a `sorts` entry built from `sortBy` plus a direction derived from `sortOrder`. Detail endpoints (`getCompanyById`, `getContactById`, `getDealById`) call the object's `basicApi.getById`. All responses are flattened by `customResponse`, which spreads `properties` up to the top level alongside the rest of the record.
+
+**Deal status mapping.** For deals, the `dealstatus` filter maps to HubSpot closed-state properties: `open` filters `hs_is_closed = false`, `won` filters `hs_is_closed_won = true`, and `lost` filters `hs_is_closed_lost = true`. `all` applies no filter. A `dealstage` filter exists in the code but is commented out and not active.
+
+{/* TODO: verify the sort direction mapping — in the service, sortOrder !== 'ASC' produces 'ASCENDING' and 'ASC' produces 'DESCENDING', which is inverted relative to the labels. */}
+
+**Properties schema.** `getEntityProperties` calls `crm.properties.coreApi.getAll(entity)` and returns each property's `name`, `label`, `fieldType`, `type`, and `options`. The node uses this to populate its Properties multi-select.
+
+**Writes (backend only).** `updateCompany` and `updateContact` call the object's `basicApi.update` with the supplied properties (company `industry` is upper-cased). These are reachable through the `PUT` endpoints below but are not surfaced in the node. There is no create endpoint and no deal write.
+
+## Prerequisites and credentials
+
+HubSpot connects with one-click OAuth. You do not paste any API keys; you authorize FluxPrompt against your HubSpot account in a popup, and the resulting tokens are stored on your user record.
+
+The connect popup opens the install URL the backend generates from the configured OAuth environment values:
+
+| Variable | Purpose |
+|---|---|
+| `HUBSPOT_CLIENT_ID` | OAuth app client id |
+| `HUBSPOT_CLIENT_SECRET_ID` | OAuth app client secret, used for the code and refresh exchanges |
+| `HUBSPOT_REDIRECT_URI` | Redirect target that lands on `/oauth-callback/hubspot` |
+| `HUBSPOT_SCOPES` | Required scopes (CRM read/write for contacts, companies, deals, plus schemas and lists) |
+| `HUBSPOT_OPTIONAL_SCOPES` | Optional scopes requested at authorize time |
+
+<Info>
+The token refresh is also attempted on login: when a refresh token is present, the app refreshes the HubSpot access token so an existing connection stays valid across sessions.
+</Info>
+
+## Connecting in FluxPrompt
+
+You can connect from the integrations settings card or directly inside the HubSpot CRM node when it shows the authenticate prompt.
+
+<Steps>
+<Step title="Open the HubSpot connect UI">
+Open the HubSpot Account card in integration settings and select **Connect**, or add the HubSpot CRM node to a flow and select **Click here** in the node's authenticate panel. Both open the same OAuth popup.
+</Step>
+<Step title="Authorize in the popup">
+The popup loads the HubSpot install URL. Sign in to HubSpot if needed and approve the requested scopes.
+</Step>
+<Step title="Return to FluxPrompt">
+HubSpot redirects to `/oauth-callback/hubspot`, which posts the authorization `code` back to the opener window with `postMessage` and closes the popup. FluxPrompt exchanges the code via `GET /hubspot/oauth-callback`, stores the tokens, and shows the connected state with your account email.
+</Step>
+</Steps>
+
+## Node reference
+
+The HubSpot CRM node has two top-level selectors — object type and response type — plus a Properties picker, a Limit, and a set of filter settings reached through the gear icon. The **Entity ID** field appears only when the response type is **Details**.
+
+| Option | Field | Type | Applies to | Description |
+|---|---|---|---|---|
+| Object type | `selectedObjectType` | Select | List and Details | The HubSpot object to read: **Deal**, **Contact**, or **Company**. Defaults to Deal. |
+| Response type | `selectedResponseType` | Select | List and Details | **List** returns multiple records via search; **Details** returns one record by id. Defaults to List. |
+| Properties | `selectedProperties` | Multi-select | List and Details | HubSpot properties to include in the response. Options are loaded for the selected object type from the properties schema endpoint. |
+| Limit | `limit` | Select | List | Maximum number of records to fetch. Options are 10, 50, 100, 500, 1000. Defaults to 10. |
+| Search query | `query` | Text | List | Free-text HubSpot search passed through to `searchApi.doSearch`. Placeholder "Search by name...". |
+| Sort by | `sortBy` | Select | List | Property to sort by. Options depend on the object type (see below). |
+| Sort order | `sortOrder` | Select | List | **Ascending** or **Descending**. Defaults to Ascending. |
+| Deal status | `dealstatus` | Select | List (Deal only) | **All**, **Open**, **Won**, or **Lost**. Shown only when the object type is Deal. Defaults to All. |
+| Entity ID | `entityId` | Tag input | Details | The id of the single record to fetch. Shown only when the response type is Details. Accepts a connected input from another node. |
+
+The **Sort by** options are object-specific:
+
+| Object type | Sort options (`value`) |
+|---|---|
+| Deal | Create Date (`createdate`), Close Date (`closedate`), Last Modified Date (`hs_lastmodifieddate`), Deal Name (`dealname`) |
+| Contact | Create Date (`createdate`), Last Modified Date (`hs_lastmodifieddate`), First Name (`firstname`), Last Name (`lastname`) |
+| Company | Create Date (`createdate`), Last Modified Date (`hs_lastmodifieddate`), Company Name (`name`) |
+
+In **Details** mode the node calls the by-id endpoint for the selected object type and ignores the list-only fields (limit, query, sort, deal status). The Entity ID label and placeholder follow the selected object type, for example "Deal ID" or "Select a HubSpot Contact id". Run the node with the **Get Data** button; the flattened record or record list is written to the node's output as formatted JSON.
+
+## Troubleshooting
+
+<AccordionGroup>
+<Accordion title="The node returns nothing in a scheduled or headless run">
+The HubSpot CRM node runs client-side only. It fetches data in the browser while the flow editor is open and you trigger it. Scheduled, queued, or otherwise headless executions do not run this node, so no HubSpot data is produced. Run the flow from the open editor, or stage the needed records upstream before any headless step depends on them.
+</Accordion>
+
+<Accordion title="The connection shows access timed out or requests fail with 401">
+The access token is invalid or expired. The app attempts a refresh automatically (on login and when the node detects an expired token), and a failed refresh clears the stored tokens. If you stay disconnected, reconnect from the HubSpot Account card or the node's authenticate panel to run the OAuth flow again.
+</Accordion>
+
+<Accordion title="The Properties list is empty">
+Properties are loaded from `GET /hubspot/properties?entity=` for the selected object type and require a valid connection. Confirm HubSpot is connected, then switch the object type to retrigger the fetch. If it stays empty, the access token has likely expired — reconnect and try again.
+</Accordion>
+
+<Accordion title="The deal status filter is not narrowing results">
+Deal status only applies when the object type is **Deal** and the response type is **List**. The values map to HubSpot closed-state properties: Open uses `hs_is_closed = false`, Won uses `hs_is_closed_won = true`, and Lost uses `hs_is_closed_lost = true`. **All** applies no filter. Filtering by a specific pipeline stage (`dealstage`) is not available in the node.
+</Accordion>
+
+<Accordion title="You cannot create records or update deals from the node">
+The node is read-only. Updating contacts and companies exists only as backend endpoints (`PUT /hubspot/contacts/:contactId` and `PUT /hubspot/companies/:companyId`), and there is no create endpoint and no deal write anywhere in the integration. Use the node for reading; perform writes outside the flow editor against the HubSpot API directly.
+</Accordion>
+</AccordionGroup>

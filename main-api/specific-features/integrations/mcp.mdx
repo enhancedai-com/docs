@@ -1,0 +1,104 @@
+---
+title: "MCP integration"
+description: "Connect a Model Context Protocol server and list the tools it exposes, over a remote HTTPS endpoint or an npm package run on the server."
+---
+
+## Overview
+
+The MCP integration saves a connection to a **Model Context Protocol** server and lists the tools that server exposes. It is the connection-and-discovery half of MCP support: you store the server address (or npm package) and its credentials once, and FluxPrompt validates the server and caches its tool catalog.
+
+This is distinct from the MCP Server flow node, which is what actually calls a tool. The integration finds and lists tools; the node runs them. For node usage, see [the MCP Server node reference](/client/specific-features/mcp-node) and [the MCP Server node user guide](/client/specific-features/mcp-user-guide).
+
+| Feature | Mode | Description |
+|---|---|---|
+| List tools | Pull | Enumerate the tools the connected MCP server exposes |
+
+<Note>
+Tool calls run from the MCP Server flow node, not through this integration. Push is not supported here. Pull is limited to listing tools; calling `list_tools` returns the catalog, and the node executes the chosen tool.
+</Note>
+
+## How it works under the hood
+
+The integration uses credentials mode, not an OAuth redirect. `getInstallUrl` returns only a frontend callback URL, and the code-exchange and token-refresh paths both throw — there is no token grant to complete. Connecting validates the server directly with the credentials you provide.
+
+There are two transports:
+
+**`remote_http` (default)** — Requires a `serverUrl` that starts with `http://` or `https://`, with an optional auth token. On connect, FluxPrompt computes a credential fingerprint, then calls the MCP call service `listToolsWithTarget({ transport: 'remote_http', serverUrl, authToken })` to both validate the server and fetch its tool list. The encrypted connection stores `{ transport, serverUrl, authToken, runtimeCache: { fingerprint, tools, resolvedAuthHeaders? } }`. The `providerAccountId` is the server host, and metadata records `{ serverHost, mcpTransport: 'remote_http' }`.
+
+**`stdio_npx`** — Requires an npm package name (`stdioPackage`), with an optional version. Any environment values you supply are resolved from the connect credentials, and the MCP server runs server-side via `npx`. FluxPrompt lists the tools once to validate the package and caches them. The `providerAccountId` is the sanitized package name, and metadata records `{ mcpTransport: 'stdio_npx', packageName }`.
+
+<Info>
+For a remote HTTPS server, the token is optional. If the server requires authentication and no token was supplied, the connect attempt throws `McpOAuthRequiredError(serverUrl, host)`, which signals that an OAuth handshake is needed before the connection can be saved.
+</Info>
+
+`pull()` only accepts the object type `list_tools`; any other type throws. It re-fetches tools through `listToolsWithTarget`, honoring the runtime cache for `remote_http` when the fingerprint still matches, and returns `{ tools }`. `push()` is not supported and throws `MCP tool calls run from the MCP Server flow node, not from push.` `getOptions` is not implemented. Credentials are stored encrypted in `user_integrations.apiCredentialsEncrypted`.
+
+## Prerequisites and credentials
+
+What you need depends on the transport you pick.
+
+- **Remote HTTPS (`remote_http`)** — the full HTTPS URL of the MCP endpoint, and a token only if your provider issued one.
+- **Npm package (`stdio_npx`)** — the exact package name from the provider's docs, an optional version, and optional authentication that the package needs.
+
+The connection form exposes these fields. Every field except `transport` is conditional and appears only when `transport` matches its `dependsOn` value.
+
+| Field | Type | Required | dependsOn | Description |
+|---|---|---|---|---|
+| transport | Select | Yes | — | How to connect. Default `remote_http`. Options: **Web address (HTTPS) — remote MCP** (`remote_http`) and **Npm package — runs like a desktop MCP app, on our servers** (`stdio_npx`). |
+| serverUrl | Text | Yes | `transport = remote_http` | MCP server web address. Placeholder `https://example.com/mcp`. Paste the full HTTPS URL from your provider. No coding required. |
+| authToken | Textarea | No | `transport = remote_http` | Secret token, only if your provider gave you one. Accepts a raw token (sent as `Authorization: Bearer <token>`), a full header, or JSON such as `{"scheme":"Bearer","token":"..."}` or `{"headers":{"x-api-key":"..."}}`. |
+| stdioPackage | Text | Yes | `transport = stdio_npx` | MCP package name. Placeholder `@modelcontextprotocol/server-github`. Copy the exact package name from the MCP server's documentation (often starts with `@modelcontextprotocol/`). |
+| stdioPackageVersion | Text | No | `transport = stdio_npx` | Package version. Only fill this if your provider tells you to pin a specific version. |
+| stdioSecrets | Textarea | No | `transport = stdio_npx` | Authentication for the package. Optional. Whatever you paste is turned into the right settings for the package above. |
+
+<Warning>
+A remote server that requires authentication but receives no token triggers an OAuth handshake on connect instead of saving. Complete the handshake when prompted, or paste the provider's token in **authToken**.
+</Warning>
+
+## Connecting in FluxPrompt
+
+<Steps>
+<Step title="Add the node and connect">
+Open the node picker in your flow, add the MCP node, and choose **MCP** as the integration. The connection card appears. Select **Connect**.
+</Step>
+<Step title="Choose the transport">
+Set **How to connect** to **Web address (HTTPS)** for a remote endpoint, or **Npm package** for a package run on the server. The remaining fields change to match your choice.
+</Step>
+<Step title="Fill the fields">
+For a remote endpoint, paste the full HTTPS **serverUrl** and, if your provider gave you one, the **authToken**. For an npm package, enter the exact **stdioPackage** name, an optional version, and any required authentication. Save the connection. FluxPrompt validates the server and caches its tool list.
+</Step>
+</Steps>
+
+<Tip>
+If the connection fails with an OAuth prompt on a remote HTTPS server, the server requires authentication. Either complete the OAuth handshake when prompted, or supply a token in **authToken** and try again.
+</Tip>
+
+## Pull reference
+
+Pull reads from the connected MCP server. There is one object type.
+
+### List tools
+
+Enumerate the tools the connected MCP server exposes. This object type has no fields — it returns the server's tool catalog. For `remote_http`, the runtime cache is reused when the credential fingerprint still matches; otherwise the tools are re-fetched from the server.
+
+## Troubleshooting
+
+<Accordion title="The remote server asks me to authenticate">
+The server requires a token. Paste the provider's token in **authToken** (a raw token is sent as `Authorization: Bearer <token>`), or complete the OAuth handshake when FluxPrompt prompts you on connect. A remote HTTPS server with no token that requires auth triggers the handshake automatically.
+</Accordion>
+
+<Accordion title="No tools are listed">
+Confirm the server URL or token is correct and that the server actually exposes tools. For a remote endpoint, verify the URL is the full HTTPS MCP endpoint and the token is valid. Re-run **List tools** after fixing the connection so the catalog refreshes.
+</Accordion>
+
+<Accordion title="The URL is rejected or returns nothing">
+The **serverUrl** must be the full MCP endpoint and start with `http://` or `https://` (it often ends with `/mcp`). A homepage URL or a path that is not the MCP endpoint will not validate.
+</Accordion>
+
+<Accordion title="The npm package is not found">
+Copy the exact package name from the provider's documentation into **stdioPackage**. Names are case-sensitive and often start with `@modelcontextprotocol/`. If the provider tells you to pin a version, set **stdioPackageVersion**.
+</Accordion>
+
+<Accordion title="How do I actually call a tool?">
+Calling a tool happens in the MCP Server flow node, not in this integration. After the connection lists its tools, add an MCP Server node, select this connection, load the tools, and run. See [the MCP Server node reference](/client/specific-features/mcp-node) and [the MCP Server node user guide](/client/specific-features/mcp-user-guide).
+</Accordion>

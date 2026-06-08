@@ -1,0 +1,220 @@
+---
+title: "Notion integration"
+description: "Read and write Notion pages and databases from your flows using pull and push."
+---
+
+## Overview
+
+The Notion integration connects your Notion workspace to a flow so you can read content in pull mode and write content in push mode. You authorize it once through OAuth, then select which pages and databases the integration can see.
+
+| Property | Value |
+|---|---|
+| Integration ID | `notion` |
+| Category | Productivity, content |
+| Authentication | OAuth2 |
+| Pull support | Yes — pages, database records, blocks |
+| Push support | Yes — create pages, update properties, append content, create and update database records |
+| Sharing | Yes — you pick pages and databases during consent |
+
+## How it works under the hood
+
+### OAuth mechanics
+
+The connection uses a true OAuth2 authorization-code flow. When you start the connection, FluxPrompt builds an install URL against `https://api.notion.com/v1/oauth/authorize` with `owner=user`, the server-side `client_id`, a `redirect_uri` pointing back to the FluxPrompt `/notion` callback, and a `state` value that encodes your user ID as base64url.
+
+After you approve access, Notion redirects back with a code. FluxPrompt exchanges it with a `POST` to `https://api.notion.com/v1/oauth/token` using HTTP Basic authentication, where the credentials are the base64-encoded `clientId:clientSecret` pair, and the `Notion-Version: 2022-06-28` header.
+
+```http
+POST https://api.notion.com/v1/oauth/token
+Authorization: Basic base64(clientId:clientSecret)
+Notion-Version: 2022-06-28
+Content-Type: application/json
+
+{ "grant_type": "authorization_code", "code": "<code>", "redirect_uri": "<base>/notion" }
+```
+
+The response yields an `access_token`, an optional `refresh_token`, and the workspace ID, which is stored as the provider account ID. Token refresh is supported, so the connection keeps working without you re-authorizing.
+
+### Notion API access
+
+All calls go to the Notion API at `https://api.notion.com` with the `Notion-Version: 2022-06-28` header and a `Bearer` access token. Responses are checked for `object === 'error'` so failures surface clearly. Object IDs have their dashes stripped before being sent to the API.
+
+### How pull works
+
+| Object type | Notion call | Notes |
+|---|---|---|
+| Pages | `POST /v1/search` with `filter.object = page` | `page_size` between 1 and 100 (default 20), optional `query`. Maps each result to `{ id, title, url, created_time, last_edited_time, properties }`. |
+| Database records | `POST /v1/databases/{id}/query` | Requires a database. A structured filter builder produces the Notion `filter` payload, with optional sort. |
+| Blocks | `GET /v1/blocks/{id}/children` (paginated) | Fetches up to `ceil(limit / pageSize)` pages and returns `{ blocks, markdown }`. |
+
+For blocks, the markdown output is built for paragraph, heading, bulleted list, numbered list, to-do, and code blocks.
+
+The database filter builder converts a structured filter into a Notion filter. It supports `and`/`or` grouping and per-type conditions for `checkbox`, `date`, `rich_text`, `number`, `select`, `multi_select`, and `status` properties.
+
+### How push works
+
+| Action | Notion call | Notes |
+|---|---|---|
+| Create page | `POST /v1/pages` | Parent is parsed from a `database:<id>` or `page:<id>` value. If content is present, markdown is converted to blocks and added via `PATCH /v1/blocks/{pageId}/children`. |
+| Update page properties | `PATCH /v1/pages/{id}` | Updates title and mapped properties. |
+| Append content | `PATCH /v1/blocks/{pageId}/children` | Markdown is converted to blocks and appended. |
+| Create database record | `POST /v1/pages` with a `database_id` parent | Fetches the database schema to locate the title property, then maps the supplied properties. |
+| Update database record | `PATCH /v1/pages/{recordId}` | Updates the mapped properties. Requires a non-empty properties set. |
+
+Markdown is converted to Notion blocks for create, append, and content writes, and Notion blocks are converted back to markdown for block pulls.
+
+### Credential storage
+
+Credentials are stored in the `user_integrations` table as an OAuth record and are encrypted at rest. The server holds `NOTION_CLIENT_ID` and `NOTION_CLIENT_SECRET` as environment variables; these are never exposed to the flow.
+
+## Prerequisites and credentials
+
+This integration uses one-click OAuth, so there are no manual API keys or auth fields to fill in. The client ID and secret live on the server.
+
+During the Notion consent screen you must explicitly select which pages and databases to share with the integration.
+
+<Warning>
+Content you do not share during consent is invisible to the integration. Pulls and pushes can only reach pages and databases you selected.
+</Warning>
+
+You can adjust shared content later from **Settings → Connections** inside Notion.
+
+## Connecting in FluxPrompt
+
+<Steps>
+  <Step title="Open the Notion connection card">
+    Add a Notion node to your flow and open its panel. The connection card shows the current connection state.
+  </Step>
+  <Step title="Start the OAuth flow">
+    Select connect. A Notion OAuth popup opens.
+  </Step>
+  <Step title="Select pages and databases to share">
+    On the consent screen, choose the pages and databases the integration may access, then approve.
+  </Step>
+  <Step title="Confirm the connection">
+    The popup closes and the connection card shows your connected workspace. You can disconnect from the same card.
+  </Step>
+</Steps>
+
+## Pull reference
+
+### Pages
+
+Search across the pages you shared.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Search query | Text | No | Free-text search across shared pages. |
+| Limit | Number | No | Default 20. Max 100. |
+
+### Database records
+
+Query a shared database and return its rows.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Database | Select (dynamic, searchable) | Yes | The database to query. |
+| Sort property | Select (dynamic, searchable) | No | A property to sort by, from the database schema. |
+| Sort direction | Select | No | Ascending or Descending. Default descending. |
+| Limit | Number | No | Default 20. |
+
+A filter builder adds a `notionFilter` value to this object type. It is not a plain field; see the filter builder below.
+
+<Accordion title="Filter builder (database records)">
+The filter builder loads the database schema and lets you add and remove condition rows. Operators depend on the property type:
+
+| Property type | Operators |
+|---|---|
+| Checkbox | equals, does not equal |
+| Date | after, before, on or after, on or before, is empty, is not empty |
+| Rich text | contains |
+| Number | equals, greater than, less than |
+| Select, multi-select | equals, contains |
+| Status | equals, does not equal, is empty, is not empty |
+
+A single row emits one condition. Multiple rows emit an `{ and: [...] }` group.
+</Accordion>
+
+### Blocks (page content)
+
+Fetch the content blocks of a single page, returned as blocks plus markdown.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Page | Select (dynamic, searchable) | Yes | The page whose content to fetch. |
+| Limit | Number | No | Default 20. |
+
+## Push reference
+
+### Create page
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Parent | Select (dynamic, searchable) | Yes | Search pages or databases to use as the parent. |
+| Title | Text | Yes | The new page title. |
+| Content | Textarea | No | Markdown or plain text, converted to Notion blocks. |
+
+### Update page properties
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Page | Select (dynamic, searchable) | Yes | The page to update. |
+| Title | Text | No | New title (optional). |
+
+Property edits beyond the title are handled by the properties editor.
+
+### Append content
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Page | Select (dynamic, searchable) | Yes | The page to append to. |
+| Content | Textarea | Yes | Markdown or plain text, appended as new blocks. |
+
+### Create database record
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Database | Select (dynamic, searchable) | Yes | Search databases to insert a row into. |
+
+Record values are set with the properties editor (`notionProperties`). See the properties editor below.
+
+### Update database record
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Database | Select (dynamic, searchable) | Yes | The database that holds the record. |
+| Record | Select (dynamic, searchable) | Yes | Search records in the selected database. |
+
+Property values are set with the properties editor and must not be empty.
+
+<Accordion title="Properties editor (create and update database record)">
+The properties editor loads the database schema and renders a typed input per property. Read-only types are hidden: `formula`, `rollup`, `created_time`, `created_by`, `last_edited_time`, and `last_edited_by`.
+
+| Property type | Input |
+|---|---|
+| Title | Text |
+| Checkbox | Checkbox |
+| Number | Number |
+| Date | Datetime |
+| Select, status | Single select |
+| Multi-select | Multi-select |
+| Rich text | Multiline text |
+</Accordion>
+
+## Troubleshooting
+
+<Accordion title="Connected, but no pages or databases appear">
+You must share content with the integration. Select pages and databases during the OAuth consent screen, or add them later from **Settings → Connections** inside Notion.
+</Accordion>
+
+<Accordion title="A database query returns no records">
+Confirm you shared the database itself, not only its parent page. Then review your filter conditions, since a too-narrow filter can exclude every row.
+</Accordion>
+
+<Accordion title="A push fails with a permissions error">
+The integration needs insert and update content capabilities for the target page or database. Verify the integration has write access to the content you are pushing to.
+</Accordion>
+
+<Accordion title="Markdown formatting looks off after a push">
+Notion supports a subset of markdown. Conversion covers common elements such as paragraphs, headings, lists, to-dos, and code, so unsupported constructs may not render as written. Simplify the markdown or split it into smaller blocks.
+</Accordion>

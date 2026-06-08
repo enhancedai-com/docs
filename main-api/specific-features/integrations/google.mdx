@@ -1,0 +1,244 @@
+---
+title: "Google Workspace integration"
+description: "Read and write Google Sheets, Docs, Slides, and Drive, and send Gmail from your flows."
+---
+
+## Overview
+
+The Google Workspace integration lets a flow read from and write to your Google account: Sheets, Docs, Slides, and arbitrary files in Drive, plus sending email through Gmail. You connect your Google account once, then add a **Pull Data** node to read or a **Push Data** node to write.
+
+<Note>
+Google is a dedicated integration, not part of the generic **Third Party Integration** node used by WordPress, Slack, Notion, Stripe, Zapier, and MCP. You reach Google through the **Pull Data** and **Push Data** flow nodes (each has a Google/Microsoft provider toggle) and through the email/output node for Gmail. The "Google" provider that appears under Third Party Integration is a non-functional stub; its connection card is the real connect UI, but there is no Third Party Integration adapter behind it.
+</Note>
+
+Both Pull Data and Push Data nodes share a **Provider** dropdown with two values, **Google** and **Microsoft**. This page covers the Google provider only.
+
+| Capability | Node | Read/Write |
+|---|---|---|
+| Google Sheets | Pull Data | Read |
+| Google Docs | Pull Data | Read |
+| Google Slides | Pull Data | Read |
+| Public Google Sheets (no connection) | Pull Data | Read |
+| Public Google Docs (no connection) | Pull Data | Read |
+| Google Sheets | Push Data | Write |
+| Google Docs | Push Data | Write |
+| Google Slides | Push Data | Write |
+| Raw Files (Drive upload) | Push Data | Write |
+| Gmail send | Email / output node | Write |
+
+## How it works under the hood
+
+### Authentication and scopes
+
+Connecting uses the login Google OAuth client (env `GOOGLE_LOGIN_CLIENT_ID` / `GOOGLE_LOGIN_CLIENT_SECRECT`), consented with broad data scopes through the Google connection card. The card uses `useGoogleLogin` from `@react-oauth/google` with `flow: 'auth-code'`. On success the authorization code is exchanged through `POST /auth/google-get-refresh-token`, and the resulting tokens are stored on the `User` entity as `googleAccessToken` and `googleRefreshToken` (via `UserService.updateUser`).
+
+The requested scopes are:
+
+```text Connect scopes
+https://www.googleapis.com/auth/spreadsheets
+https://www.googleapis.com/auth/drive
+https://www.googleapis.com/auth/drive.file
+https://www.googleapis.com/auth/drive.readonly
+https://www.googleapis.com/auth/spreadsheets.readonly
+https://www.googleapis.com/auth/documents
+https://www.googleapis.com/auth/documents.readonly
+https://www.googleapis.com/auth/presentations
+https://www.googleapis.com/auth/presentations.readonly
+https://www.googleapis.com/auth/gmail.send
+```
+
+### Token refresh at execution
+
+When a flow runs, `flux.service` checks whether it contains a Pull Data or Push Data node on the Google provider. If so, and the user has a `googleRefreshToken`, it builds an `OAuth2Client` from the login client credentials, sets the stored refresh token, calls `refreshAccessToken()`, and injects the fresh access token into the pull/push executors as `context.accessToken`. In the editor, the node components refresh tokens client-side through `AuthService.googleRefreshToken` and validate the access token against `https://oauth2.googleapis.com/tokeninfo`.
+
+### Pull and push modules
+
+- **Pull** (`pull_data.service.ts`, `executePullDataNode`) dispatches on `selectedGoogleService`. Sheets are read through the `google-spreadsheet` library by loading cells and walking a parsed range; Docs are read through the Docs REST API (`docs.googleapis.com`), either as the full document or filtered by a paragraph range; Slides are read through `googleapis` `slides('v1')`, and the presentation list comes from `drive('v3')`.
+- **Push** (`push_data.service.ts`, `executePushDataNode`) dispatches on `selectedGoogleService`. Sheets append rows through `sheets('v4')` `values.append` (and can create a new tab via `addSheet`); Docs are written through the Docs REST API `:batchUpdate` (`insertText` / `insertPageBreak`) or created via `documents` + a Drive parent move; Slides run through `slides('v1')` `presentations.batchUpdate`; Raw Files are streamed to Drive through `drive('v3')` `files.create`.
+
+### Standalone Google Sheets module
+
+A separate, metered module (`back/src/app-api/google_sheets/`) provides a Drive file picker plus sheet read/write using its own OAuth client (`GOOGLE_SHEET_CLIENT_ID`, `GOOGLE_SHEET_CLIENT_SECRET`, `GOOGLE_SHEET_REDIRECT_URL`) and bills usage through the `google-sheets` product. It is distinct from the Pull Data / Push Data flow nodes described here.
+
+### Document AI OCR
+
+A separate server-side capability (`back/src/app-api/google_ocr/`) runs Google Document AI for OCR. It authenticates with a service account (`GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_PROJECT`) and processors, and bills through the `google_ocr` product. It does not use the user's OAuth tokens.
+
+### Gmail send
+
+The email/output node sends through the user's Gmail when `useFromPersonalGmail` is set on the node. `flux.service` calls `MailService.sendGmailEmail`, which refreshes the user's `googleRefreshToken` into an access token, sends through `gmail('v1')` `users.messages.send` using the `gmail.send` scope, and supports HTML bodies and URL attachments (downloaded and base64-encoded into a multipart message).
+
+## Prerequisites and credentials
+
+Google is a one-click OAuth integration. There are no manual API keys to paste. You authorize FluxPrompt with your Google account through the connection card, which opens the Google consent screen and requests the data scopes listed above (Sheets, Drive, Docs, Slides, and Gmail send, including their read-only variants).
+
+<Info>
+The consent screen shows access to Google Docs and Sheets; the underlying scope set also covers Drive, Slides, and Gmail send. Grant all requested scopes so every Pull Data and Push Data service works and Gmail send is available.
+</Info>
+
+## Connecting in FluxPrompt
+
+<Steps>
+<Step title="Connect your Google account">
+Open the Google connection card and choose **Connect**. Sign in and accept the consent screen. Once connected, the card shows your connected email and a connected state. The same connect link also appears inside a Pull Data or Push Data node when no Google account is connected yet.
+</Step>
+<Step title="Add a Pull Data or Push Data node">
+Add a **Pull Data** node to read from Google or a **Push Data** node to write to Google.
+</Step>
+<Step title="Select the Google provider and a service">
+Set **Provider** to **Google**, then choose a **Data Type** service. Pull Data offers Google Sheets, Google Docs, and Google Slides. Push Data offers Google Sheets, Google Docs, Google Slides, and Raw Files.
+</Step>
+<Step title="Configure and run">
+Fill in the service fields (described below) and run the node. Use **Refresh Google** in the node to pull in newly created documents, spreadsheets, or presentations.
+</Step>
+</Steps>
+
+<Note>
+If you are not the flow creator and the flow belongs to a space, the node is read-only and shows "No Editing Permission".
+</Note>
+
+## Pull reference
+
+The Pull Data node reads data into your flow. Choose a **Data Type** (Google service), select a file, and configure the fields. Each service writes its result to the node's **Output**.
+
+### Google Sheets
+
+Reads cell values from a worksheet and returns them as comma-separated rows.
+
+| Field | Type | Description |
+|---|---|---|
+| spreadsheet | Select (searchable) | The spreadsheet to read. The list includes spreadsheets from your Drive and from shared drives. |
+| sheets | Select (searchable) | The worksheet (tab) within the selected spreadsheet. |
+| rangeFilter | Text (A1 notation) | Optional. "Select Area (Optional)", placeholder `A1:Z40`. Supports a cell range (`A1:B2`), a column range (`A:B`), or a row range (`1:5`). Comma-separated ranges are read and joined. Empty means the whole sheet. |
+
+### Google Docs
+
+Reads the text of a Google Doc, either the whole document or a paragraph range.
+
+| Field | Type | Description |
+|---|---|---|
+| docs | Select (searchable) | The document to read. |
+| docsType | Select | `fullContent` ("Full Document") or `pullCert` ("Pull Certain Paragraphs"). Defaults to full document. |
+| paragraphStart | Number | Required when `docsType` is `pullCert`. First paragraph (positive number). |
+| paragraphEnd | Number | Required when `docsType` is `pullCert`. Last paragraph (positive number). |
+
+### Google Slides
+
+Reads a presentation (optionally a subset of slides) and returns the presentation data as JSON.
+
+| Field | Type | Description |
+|---|---|---|
+| presentationId | Select | The presentation, chosen from presentations found in your Drive. |
+| slidesFilter | Text | Optional. "Select Area (Optional)", placeholder `Select slides [1, 2-5, 8]`. Accepts single slide numbers and ranges, comma-separated. Slide numbers are 1-based. Empty means all slides. |
+
+### Public Sheets and Docs (no connection)
+
+When no Google account is connected, the Pull Data node shows a public-read mode that reads publicly shared files without OAuth. You select **Google Sheets** or **Google Docs** and paste a file ID.
+
+| Field | Type | Description |
+|---|---|---|
+| Public Google Doc/Spreadsheet ID | Text | The shared file's ID, pasted from its URL. |
+| sheets | Select | For public Sheets: the worksheet within the shared spreadsheet. |
+| rangeFilter | Text (A1 notation) | For public Sheets: optional range, same format as the connected Sheets reader. |
+
+<Note>
+Public Sheets are read in the browser with a built-in Google API key. Public Docs require a valid document ID (30–60 characters of `[A-Za-z0-9_-]`). The file must be shared so that anyone with the link can view it.
+</Note>
+
+## Push reference
+
+The Push Data node writes data from your flow to Google. Choose a **Data Type** (Google service) and connect the data to write into the node's **Data** / **Text Input** / **File Input** field (depending on the service). For Sheets and Docs you can also pick a Drive **Folder** when creating a new file.
+
+### Google Sheets
+
+Appends rows to a worksheet, or creates a new worksheet and appends to it. Incoming text is split into rows by newline and into cells by comma (quoted values are preserved).
+
+| Field | Type | Description |
+|---|---|---|
+| textContent | Text (handle: `textContent`) | The data to push. "Connect data into Google Docs or Google Sheets". |
+| spreadsheet | Select (searchable) | The target spreadsheet. |
+| sheets | Select (searchable) | The target worksheet, or **Create New Sheet** (`new`) to add a tab. |
+| name | Text (handle: `sheetName`) | "New Sheet Name". Used when `sheets` is `new`. A numeric suffix is added if the name already exists. |
+
+### Google Docs
+
+Inserts text into an existing document at a chosen position, or creates a new document in a Drive folder and inserts text.
+
+| Field | Type | Description |
+|---|---|---|
+| textContent | Text (handle: `textContent`) | The data to push. |
+| docs | Select (searchable) | The target document. Hidden when a folder is selected for a new document. |
+| folders | Select (searchable) | "Select Document Folder". The Drive folder for a new document (`selectedFolderDoc`). |
+| newDocumentName | Text | "New Document Name". Used when no existing document is selected. |
+| selectedPushDataOption | Select | Where to insert into an existing document. See options below. Defaults to End of document. |
+| specifiedPage | Number | The page number, used when the option is "After a specific page". |
+
+Insertion options (`selectedPushDataOption`):
+
+| Value | Behavior |
+|---|---|
+| Beginning of document | Prepend at the start. |
+| End of document | Append at the end. |
+| Start of document as a new page | Insert a page break, then the text, at the start. |
+| End of document as a new page | Page break at the end, then the text. |
+| After a specific page | Page break after the given page, then the text. |
+
+<Note>
+When creating a new document (no `docs` selected), the text is inserted at the beginning of the new document regardless of the chosen option. The option list only applies to an existing document.
+</Note>
+
+### Google Slides
+
+Applies Slides API requests to an existing presentation. The connected text must be a JSON object containing a `requests` array.
+
+| Field | Type | Description |
+|---|---|---|
+| slideContent | Text (handle: `slideContent`) | "Text Input". A JSON object with a `requests` array, passed straight to the Slides `batchUpdate` API. |
+| presentationId | Text | "Presentation ID". The target presentation's ID. |
+| selectedSlideOption | Select | Only "Append to end" is available. |
+
+{/* TODO: verify whether the Google Slides push expects a raw Slides API batchUpdate `requests` payload from upstream nodes, since the form passes `JSON.parse(...).requests` through unchanged. */}
+
+### Raw Files
+
+Uploads one or more files to Drive by URL.
+
+| Field | Type | Description |
+|---|---|---|
+| fileUrl | Text (handle: `fileUrl`) | "File Input". One or more file URLs to download and upload. Multiple connected values are each uploaded. |
+| fileName | Text (handle: `fileName`) | "New File Name". Optional. Defaults to `Raw File <uuid>` when omitted. |
+| folders | Select (searchable) | "Select Document Folder". The Drive folder to upload into (`selectedFolderDoc`). Optional; uploads to Drive root when omitted. |
+
+### Send email from Gmail
+
+Gmail send is not part of the Push Data node. It lives on the email/output node. When that node's `useFromPersonalGmail` toggle is on, the flow sends the email through your connected Google account using the `gmail.send` scope, instead of the default FluxPrompt mail transport or Microsoft. The message supports an HTML body (the node template, unless `useTemplate` is `false`) and URL attachments, which are downloaded and attached as a multipart message.
+
+<Note>
+Gmail send requires a connected Google account with a stored refresh token. If the toggle is off, the email is sent through the default transport, not your Gmail.
+</Note>
+
+## Troubleshooting
+
+<Accordion title="Token expired or the node asks you to reconnect">
+The access token is short-lived and is refreshed from your stored refresh token at execution and in the editor. If the refresh fails (for example, the refresh token was revoked), the node treats it as a session expiry. Open the Google connection card and choose **Connect** again to issue a fresh refresh token.
+</Accordion>
+
+<Accordion title="A service does not work after connecting">
+The connection requests a broad scope set covering Sheets, Drive, Docs, Slides, and Gmail send. If you declined some scopes on the consent screen, the matching service or Gmail send will fail. Disconnect and reconnect, and accept all requested permissions.
+</Accordion>
+
+<Accordion title='Sheets range is rejected ("Invalid range format")'>
+The range filter must be A1 notation: a cell range like `A1:B2`, a column range like `A:B`, or a row range like `1:5`. You can pass several ranges separated by commas. Leave it empty to read the whole worksheet.
+</Accordion>
+
+<Accordion title="A private document cannot be read in public mode">
+The no-connection Pull mode only reads publicly shared files. A public Doc ID must be 30–60 characters of letters, digits, `_`, or `-`, and the file must be shared with anyone-with-the-link view access. To read private files, connect your Google account and use the connected Sheets, Docs, or Slides services.
+</Accordion>
+
+<Accordion title="Raw Files upload goes to the wrong place or fails">
+Raw Files downloads each URL and uploads it to Drive. Set **Select Document Folder** to choose the destination folder; without one, files land in your Drive root. Make sure each file URL is reachable, and set **New File Name** if you want a specific name (otherwise a generated `Raw File <uuid>` name is used).
+</Accordion>
+
+<Accordion title="Email is not sent from my Gmail">
+The flow only sends through your Gmail when the email node's **use from personal Gmail** toggle is on and your Google account has a stored refresh token. With the toggle off, the email goes out through the default FluxPrompt transport instead. Turn the toggle on and confirm your Google account is connected.
+</Accordion>
