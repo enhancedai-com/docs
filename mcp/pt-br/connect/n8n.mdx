@@ -1,0 +1,65 @@
+---
+title: "Conectar n8n"
+description: "Use as tools do FluxPrompt MCP dentro de workflows n8n para automatizar a descoberta e inspeção de agentes."
+---
+
+## O que isso habilita
+
+Dentro do n8n você pode construir workflows que automaticamente:
+
+- Buscam a lista dos seus agentes FluxPrompt
+- Inspecionam a estrutura de nodes de um agente
+- Ramificam a lógica com base nos agentes existentes
+
+## Pré-requisitos
+
+- Instância n8n (cloud ou self-hosted, v1.22+)
+- Seu token MCP de workspace do FluxPrompt (veja [Autenticação](/mcp/authentication))
+
+## Passo a passo
+
+<Steps>
+  <Step title="Adicione um node MCP Client Tool">
+    No seu workflow n8n, clique em **+** para adicionar um node. Pesquise por **MCP Client Tool** e selecione-o.
+  </Step>
+  <Step title="Configure a conexão">
+    Nas configurações do node, defina:
+
+    | Campo | Valor |
+    |-------|-------|
+    | **Server URL** | `https://mcp.fluxprompt.ai/mcp` |
+    | **Authentication** | Header Auth |
+    | **Header Name** | `Authorization` |
+    | **Header Value** | `Bearer YOUR_MCP_TOKEN` |
+
+    Substitua `YOUR_MCP_TOKEN` pelo seu token real.
+  </Step>
+  <Step title="Escolha a tool e os parâmetros">
+    No dropdown **Tool**, selecione entre:
+
+    - `list_agents` — nenhum parâmetro necessário
+    - `get_agent` — requer `agentId` (o UUID do agente)
+    - `list_node_types` — nenhum parâmetro necessário
+
+    Defina os parâmetros obrigatórios na seção **Tool Parameters**.
+  </Step>
+  <Step title="Teste o node">
+    Clique em **Execute node**. A saída conterá a resposta estruturada do FluxPrompt.
+  </Step>
+</Steps>
+
+## Exemplo: listar todos os agentes e filtrar por nome
+
+Este workflow lista todos os agentes FluxPrompt e filtra os que têm "Parser" no nome:
+
+1. **MCP Client Tool** — chama `list_agents`
+2. **Code node** — `return $input.first().json.agents.filter(a => a.name.includes('Parser'))`
+3. **O que você precisar a seguir** — envie os resultados para o Slack, escreva em uma planilha, etc.
+
+## Solução de problemas
+
+Consulte a página de [Solução de problemas](/mcp/pt-br/troubleshooting) para problemas comuns.
+
+<Note>
+O suporte a Streamable HTTP no n8n (o protocolo usado pelo FluxPrompt MCP) foi adicionado na versão 1.22. Se você estiver em uma versão mais antiga, atualize antes de conectar.
+</Note>

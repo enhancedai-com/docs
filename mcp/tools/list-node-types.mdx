@@ -1,0 +1,73 @@
+---
+title: "list_node_types"
+description: "Browse all available FluxPrompt node types with their input and output schemas."
+---
+
+## Description
+
+`list_node_types` returns the catalogue of every node type available in FluxPrompt — what each one does, what inputs it accepts, and what outputs it produces. Use this to understand the building blocks an agent is made of.
+
+## Input
+
+No parameters required.
+
+## Output
+
+```json
+{
+  "nodeTypes": [
+    {
+      "type": "TEXT_GENERATOR",
+      "label": "Text generator",
+      "description": "Calls an AI model (Claude, GPT-4, Gemini, etc.) with a prompt and returns the generated text.",
+      "category": "AI",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "model": { "type": "string", "description": "AI model to use" },
+          "prompt": { "type": "string", "description": "The prompt to send" },
+          "systemPrompt": { "type": "string", "description": "Optional system prompt" }
+        },
+        "required": ["model", "prompt"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string", "description": "Generated text output" }
+        }
+      }
+    },
+    {
+      "type": "API_CALLER",
+      "label": "API caller",
+      "description": "Makes an HTTP request to any external API and returns the response.",
+      "category": "Integration",
+      "inputSchema": { "..." : "..." },
+      "outputSchema": { "..." : "..." }
+    }
+  ]
+}
+```
+
+### Output fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `nodeTypes` | array | Full list of node types. |
+| `nodeTypes[].type` | string | Machine-readable identifier. Matches the `type` field in `get_agent` node objects. |
+| `nodeTypes[].label` | string | Human-readable name as shown in the FluxPrompt canvas. |
+| `nodeTypes[].description` | string | What this node does. |
+| `nodeTypes[].category` | string | Grouping: `AI`, `Integration`, `Logic`, `Data`, `Input/Output`, etc. |
+| `nodeTypes[].inputSchema` | JSON Schema | The configuration this node accepts. |
+| `nodeTypes[].outputSchema` | JSON Schema | The data this node produces for downstream nodes. |
+
+## Example prompts
+
+- *"What node types does FluxPrompt support?"*
+- *"List all AI node types in FluxPrompt"*
+- *"What inputs does the Text Generator node accept?"*
+- *"Are there any node types for database queries in FluxPrompt?"*
+
+## Related
+
+- [`get_agent`](/mcp/tools/get-agent) — see which node types an agent uses

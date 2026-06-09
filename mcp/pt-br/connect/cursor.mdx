@@ -1,0 +1,79 @@
+---
+title: "Conectar Cursor"
+description: "Adicione o FluxPrompt ao Cursor para que seu assistente de IA possa ler os agentes do seu workspace enquanto você programa."
+---
+
+## O que isso habilita
+
+Uma vez conectado, o assistente de IA do Cursor pode responder perguntas sobre seus agentes FluxPrompt sem sair do editor:
+
+- *"Quais agentes tenho configurados para enriquecimento de leads?"*
+- *"Mostre os nodes do agente Email Parser para eu replicar a lógica aqui"*
+
+## Pré-requisitos
+
+- Cursor instalado ([baixar aqui](https://cursor.sh))
+- Seu token MCP de workspace do FluxPrompt (veja [Autenticação](/mcp/authentication))
+
+## Passo a passo
+
+<Steps>
+  <Step title="Abra as configurações do Cursor">
+    Pressione `Cmd/Ctrl + Shift + P` para abrir a paleta de comandos, digite `MCP` e selecione **Cursor Settings → MCP**.
+
+    Alternativamente, vá em **Settings → Features → MCP Servers**.
+  </Step>
+  <Step title="Adicione um novo servidor MCP">
+    Clique em **Add new MCP server** e preencha os campos:
+
+    | Campo | Valor |
+    |-------|-------|
+    | **Name** | `fluxprompt` |
+    | **Type** | `url` |
+    | **URL** | `https://mcp.fluxprompt.ai/mcp` |
+
+    Para o header **Authorization**, adicione:
+    ```
+    Authorization: Bearer YOUR_MCP_TOKEN
+    ```
+
+    Substitua `YOUR_MCP_TOKEN` pelo seu token real.
+  </Step>
+  <Step title="Salve e verifique">
+    Salve as configurações. O Cursor se conecta imediatamente — nenhum reinício é necessário.
+
+    Abra o chat de IA (`Cmd/Ctrl + L`) e digite:
+
+    > *Liste meus agentes FluxPrompt*
+
+    Você deverá ver seus agentes do workspace listados.
+  </Step>
+</Steps>
+
+## Configuração manual (JSON)
+
+Se preferir editar o arquivo de configuração diretamente, o arquivo MCP do Cursor fica em:
+
+```
+~/.cursor/mcp.json            (macOS / Linux)
+%USERPROFILE%\.cursor\mcp.json  (Windows)
+```
+
+Adicione a entrada do FluxPrompt:
+
+```json
+{
+  "mcpServers": {
+    "fluxprompt": {
+      "url": "https://mcp.fluxprompt.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+## Solução de problemas
+
+Consulte a página de [Solução de problemas](/mcp/pt-br/troubleshooting) para problemas comuns.

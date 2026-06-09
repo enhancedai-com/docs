@@ -1,0 +1,78 @@
+---
+title: "list_agents"
+description: "List all agents in your FluxPrompt workspace."
+---
+
+## Description
+
+`list_agents` returns every agent (flow) in your workspace that your token has access to. The response includes each agent's ID, name, description, node count, and public URL — everything you need to reference or inspect an agent.
+
+## Input
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cursor` | string | No | Pagination cursor returned by a previous call. Omit for the first page. |
+| `limit` | number | No | Maximum number of agents to return. Default: 50. Maximum: 500. |
+
+No parameters are required. Calling `list_agents` with no input returns the first page of all agents in your workspace.
+
+## Output
+
+```json
+{
+  "agents": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Lead Scorer",
+      "description": "Scores inbound leads based on company size and tech stack",
+      "updatedAt": "2026-05-31T14:22:00Z",
+      "nodeCount": 12,
+      "isPublic": false
+    },
+    {
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "name": "Invoice Parser",
+      "description": null,
+      "updatedAt": "2026-06-01T09:45:00Z",
+      "nodeCount": 7,
+      "isPublic": true
+    }
+  ],
+  "nextCursor": "eyJsYXN0SWQiOiJiMmMzZDRlNSJ9"
+}
+```
+
+### Output fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agents` | array | List of agents. |
+| `agents[].id` | string (UUID) | Unique identifier. Use this with `get_agent`. |
+| `agents[].name` | string | Agent display name as shown in the FluxPrompt UI. |
+| `agents[].description` | string \| null | Agent description, or `null` if none is set. |
+| `agents[].updatedAt` | ISO 8601 string | When the agent was last modified. |
+| `agents[].nodeCount` | number | Number of nodes in the agent's current version. |
+| `agents[].isPublic` | boolean | Whether the agent has a public-facing endpoint. |
+| `nextCursor` | string \| null | Pass as `cursor` in the next call to get the next page. `null` means no more pages. |
+
+## Pagination
+
+If your workspace has more agents than `limit` allows in one call, the response includes a `nextCursor` value. Pass it as `cursor` in your next call to continue:
+
+```
+Call 1: list_agents()                       → returns agents 1-50, nextCursor = "abc"
+Call 2: list_agents({ cursor: "abc" })      → returns agents 51-100, nextCursor = "def"
+Call 3: list_agents({ cursor: "def" })      → returns agents 101-..., nextCursor = null
+```
+
+## Example prompts
+
+You can ask your AI client in plain language — it will call `list_agents` automatically:
+
+- *"Show me all my FluxPrompt agents"*
+- *"List the agents in FluxPrompt and tell me which ones are public"*
+- *"How many agents do I have in FluxPrompt?"*
+
+## Next steps
+
+Once you have an agent's `id`, use [`get_agent`](/mcp/tools/get-agent) to fetch its full node and edge structure.

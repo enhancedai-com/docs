@@ -1,0 +1,88 @@
+---
+title: "FluxPrompt MCP — Visão geral"
+description: "Conecte Claude Desktop, Cursor, n8n e outros clientes de IA ao seu workspace FluxPrompt via Model Context Protocol."
+---
+
+## O que é o FluxPrompt MCP?
+
+**FluxPrompt MCP** é um servidor [Model Context Protocol](https://modelcontextprotocol.io) de entrada. Ele permite que clientes de IA externos — Claude Desktop, Cursor, n8n e outros — se conectem ao seu workspace FluxPrompt e interajam com seus agentes por linguagem natural.
+
+Em vez de navegar pela interface do FluxPrompt, seu cliente de IA pode fazer perguntas como:
+
+- *"Liste todos os agentes do meu workspace"*
+- *"Mostre os nodes dentro do agente Invoice Parser"*
+- *"Quais tipos de node o FluxPrompt suporta?"*
+
+<Info>
+**Acesso beta.** O FluxPrompt MCP está atualmente em beta fechado. Seu token de workspace é fornecido pela equipe do FluxPrompt. A criação de tokens por conta própria estará disponível no app assim que o beta for concluído.
+</Info>
+
+## O que você pode fazer agora (Fase 1 — Somente leitura)
+
+<CardGroup cols={3}>
+  <Card title="Listar seus agentes" icon="list" href="/mcp/pt-br/tools/list-agents">
+    Veja todos os agentes do seu workspace — nome, descrição, quantidade de nodes e URL pública.
+  </Card>
+  <Card title="Inspecionar um agente" icon="file-json" href="/mcp/pt-br/tools/get-agent">
+    Busque a estrutura completa de qualquer agente: seus nodes, edges e configuração.
+  </Card>
+  <Card title="Descobrir tipos de node" icon="shapes" href="/mcp/pt-br/tools/list-node-types">
+    Navegue por todos os tipos de node disponíveis com seus schemas de entrada e saída.
+  </Card>
+</CardGroup>
+
+## Como funciona
+
+```
+Seu cliente de IA (Claude Desktop / Cursor / n8n)
+        │
+        │  JSON-RPC sobre HTTPS
+        │  Authorization: Bearer <seu token>
+        ▼
+Servidor FluxPrompt MCP  (mcp.fluxprompt.ai)
+        │
+        │  lê seu workspace
+        ▼
+FluxPrompt API  ──▶  Seus agentes, nodes e flows
+```
+
+1. Você se autentica com um **token MCP com escopo de workspace**.
+2. Seu cliente de IA se conecta a `https://mcp.fluxprompt.ai/mcp`.
+3. Ele chama as ferramentas — `list_agents`, `get_agent`, `list_node_types` — e recebe respostas estruturadas.
+4. Cada chamada é registrada no log de auditoria do FluxPrompt.
+
+## Glossário rápido
+
+| Termo | Significado |
+|-------|-------------|
+| **MCP** | Model Context Protocol — um padrão aberto para conectar clientes de IA a ferramentas e dados externos. |
+| **Token MCP** | Uma string secreta com escopo limitado ao seu workspace. Obrigatória em cada requisição. Diferente da sua API key do FluxPrompt. |
+| **Tool** | Uma ação nomeada que o servidor MCP expõe (ex.: `list_agents`). Seu cliente de IA chama as tools em seu nome. |
+| **Workspace** | O contexto da sua empresa ou equipe no FluxPrompt. Um token MCP = um workspace. |
+| **Streamable HTTP** | O protocolo de transporte que o FluxPrompt MCP utiliza. Um único endpoint HTTPS que aceita requisições JSON-RPC 2.0. |
+
+## Antes de começar
+
+Você vai precisar de:
+
+- Uma **conta FluxPrompt** com pelo menos um agente no seu workspace.
+- Um **token MCP de workspace** — entre em contato com a equipe do FluxPrompt caso ainda não tenha recebido o seu.
+- Um dos clientes de IA suportados instalado: Claude Desktop, Cursor ou n8n.
+
+<Note>
+Este guia assume que o servidor FluxPrompt MCP está em `https://mcp.fluxprompt.ai/mcp`. Se a sua equipe usa um endpoint dedicado, utilize esse no lugar.
+</Note>
+
+## Conecte seu cliente
+
+<CardGroup cols={3}>
+  <Card title="Claude Desktop" icon="message-circle" href="/mcp/pt-br/connect/claude-desktop">
+    Adicione o FluxPrompt ao Claude Desktop em menos de 2 minutos.
+  </Card>
+  <Card title="Cursor" icon="code" href="/mcp/pt-br/connect/cursor">
+    Use agentes FluxPrompt como contexto dentro do seu editor.
+  </Card>
+  <Card title="n8n" icon="workflow" href="/mcp/pt-br/connect/n8n">
+    Automatize a descoberta de agentes FluxPrompt dentro de workflows n8n.
+  </Card>
+</CardGroup>
