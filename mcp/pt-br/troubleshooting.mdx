@@ -1,0 +1,111 @@
+---
+title: "Solução de problemas"
+description: "Problemas comuns de conexão e como resolvê-los."
+---
+
+## Lista de verificação de conexão
+
+Antes de investigar erros específicos, verifique estas cinco coisas:
+
+<Steps>
+  <Step title="Formato do token">
+    Seu token deve começar com `mcp_` e não conter espaços. Se você o copiou de um e-mail, verifique se há espaços em branco no final.
+  </Step>
+  <Step title="Formato do header Authorization">
+    Deve ser `Bearer <token>` (B maiúsculo, um espaço). Não `bearer`, não `Token`, não o token puro sem o prefixo.
+
+    ✅ `Bearer mcp_abc123`
+    ❌ `mcp_abc123`
+    ❌ `bearer mcp_abc123`
+  </Step>
+  <Step title="URL do servidor">
+    A URL deve ser `https://mcp.fluxprompt.ai/mcp` (sem barra no final). Se a sua equipe usa um endpoint personalizado, confirme a URL com o FluxPrompt.
+  </Step>
+  <Step title="Reinicialização do cliente">
+    Para o Claude Desktop: feche completamente (bandeja do sistema → Sair) e reabra — fechar a janela não é suficiente.
+  </Step>
+  <Step title="Sintaxe JSON">
+    Os arquivos de configuração (claude_desktop_config.json, cursor/mcp.json) devem ser JSON válido. Use [jsonlint.com](https://jsonlint.com) para validar se você editou manualmente.
+  </Step>
+</Steps>
+
+---
+
+## Referência de erros
+
+### "Unauthorized" / 401
+
+**Causa:** O token está ausente, malformado ou revogado.
+
+**Solução:**
+1. Confirme que o seu header `Authorization` é `Bearer mcp_xxxxx` sem caracteres extras.
+2. Entre em contato com o FluxPrompt para verificar se seu token ainda está ativo.
+
+---
+
+### "Agent not found" / -32007
+
+**Causa:** O `agentId` passado não existe no seu workspace, ou pertence a um workspace diferente.
+
+**Solução:**
+1. Use `list_agents` para obter IDs válidos do seu workspace.
+2. Confirme que você está usando o token de workspace correto (se tiver tokens para múltiplos workspaces).
+
+---
+
+### As tools retornam lista vazia (`"agents": []`)
+
+**Causa:** Seu workspace não tem agentes, ou o token não tem acesso ao workspace.
+
+**Solução:**
+1. Faça login no FluxPrompt e confirme que você tem pelo menos um agente.
+2. Se tiver, entre em contato com o FluxPrompt — seu token pode estar com escopo no workspace errado.
+
+---
+
+### "Method not found" / -32601
+
+**Causa:** O nome da tool está errado (ex.: `listAgents` em vez de `list_agents`).
+
+**Solução:** Use os nomes exatos das tools com underscores: `list_agents`, `get_agent`, `list_node_types`.
+
+---
+
+### "Service disabled" / -32005
+
+**Causa:** O servidor FluxPrompt MCP está temporariamente desabilitado para manutenção.
+
+**Solução:** Aguarde alguns minutos e tente novamente. Verifique a [página de status do FluxPrompt](https://status.fluxprompt.ai) para incidentes em andamento.
+
+---
+
+### Claude Desktop não mostra tools MCP
+
+**Causa:** O arquivo de configuração não foi lido porque o Claude Desktop não foi totalmente reiniciado, ou o JSON está malformado.
+
+**Solução:**
+1. Feche completamente o Claude Desktop (clique com o botão direito na bandeja do sistema → Sair no Windows, ou Dock → Sair no macOS).
+2. Valide seu `claude_desktop_config.json` em [jsonlint.com](https://jsonlint.com).
+3. Reabra o Claude Desktop e inicie uma nova conversa.
+
+---
+
+### n8n: "Connection refused" ou timeout
+
+**Causa:** A versão do n8n é inferior a 1.22 (sem suporte a Streamable HTTP), ou um problema de rede/firewall.
+
+**Solução:**
+1. Verifique sua versão do n8n: **Settings → About**. Atualize para 1.22+ se necessário.
+2. A partir da sua instância n8n, verifique se ela consegue acessar `https://mcp.fluxprompt.ai` (nenhum firewall corporativo bloqueando HTTPS de saída).
+
+---
+
+## Ainda com problemas?
+
+Entre em contato com a equipe FluxPrompt com:
+
+1. A mensagem de erro exata ou a resposta JSON de erro
+2. Qual cliente você está usando (Claude Desktop / Cursor / n8n / outro)
+3. Seu ID de workspace (encontre-o no FluxPrompt em **Settings → Workspace**)
+
+**Não** inclua seu token MCP em nenhuma mensagem de suporte.

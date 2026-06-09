@@ -1,0 +1,111 @@
+---
+title: "Troubleshooting"
+description: "Common connection issues and how to fix them."
+---
+
+## Connection checklist
+
+Before digging into specific errors, verify these five things:
+
+<Steps>
+  <Step title="Token format">
+    Your token should start with `mcp_` and contain no spaces. If you copied it from an email, check for trailing whitespace.
+  </Step>
+  <Step title="Authorization header format">
+    It must be `Bearer <token>` (capital B, one space). Not `bearer`, not `Token`, not the raw token without the prefix.
+
+    ✅ `Bearer mcp_abc123`
+    ❌ `mcp_abc123`
+    ❌ `bearer mcp_abc123`
+  </Step>
+  <Step title="Server URL">
+    The URL must be `https://mcp.fluxprompt.ai/mcp` (no trailing slash). If your team uses a custom endpoint, confirm the URL with FluxPrompt.
+  </Step>
+  <Step title="Client restart">
+    For Claude Desktop: fully quit (system tray → Exit) and reopen — closing the window is not enough.
+  </Step>
+  <Step title="JSON syntax">
+    Config files (claude_desktop_config.json, cursor/mcp.json) must be valid JSON. Use [jsonlint.com](https://jsonlint.com) to validate if you edited manually.
+  </Step>
+</Steps>
+
+---
+
+## Error reference
+
+### "Unauthorized" / 401
+
+**Cause:** Token is missing, malformed, or revoked.
+
+**Fix:**
+1. Confirm your `Authorization` header is `Bearer mcp_xxxxx` with no extra characters.
+2. Contact FluxPrompt to verify your token is still active.
+
+---
+
+### "Agent not found" / -32007
+
+**Cause:** The `agentId` you passed doesn't exist in your workspace, or belongs to a different workspace.
+
+**Fix:**
+1. Use `list_agents` to get valid IDs from your workspace.
+2. Confirm you are using the correct workspace token (if you have tokens for multiple workspaces).
+
+---
+
+### Tools return empty list (`"agents": []`)
+
+**Cause:** Your workspace has no agents, or the token doesn't have access to the workspace.
+
+**Fix:**
+1. Log in to FluxPrompt and confirm you have at least one agent.
+2. If you do, contact FluxPrompt — your token may be scoped to the wrong workspace.
+
+---
+
+### "Method not found" / -32601
+
+**Cause:** The tool name is wrong (e.g. `listAgents` instead of `list_agents`).
+
+**Fix:** Use the exact tool names with underscores: `list_agents`, `get_agent`, `list_node_types`.
+
+---
+
+### "Service disabled" / -32005
+
+**Cause:** The FluxPrompt MCP server is temporarily disabled for maintenance.
+
+**Fix:** Wait a few minutes and try again. Check the [FluxPrompt status page](https://status.fluxprompt.ai) for ongoing incidents.
+
+---
+
+### Claude Desktop shows no MCP tools
+
+**Cause:** Config file was not read because Claude Desktop was not fully restarted, or the JSON is malformed.
+
+**Fix:**
+1. Fully quit Claude Desktop (right-click system tray → Exit on Windows, or Dock → Quit on macOS).
+2. Validate your `claude_desktop_config.json` at [jsonlint.com](https://jsonlint.com).
+3. Reopen Claude Desktop and start a new conversation.
+
+---
+
+### n8n: "Connection refused" or timeout
+
+**Cause:** n8n version is below 1.22 (no Streamable HTTP support), or a network/firewall issue.
+
+**Fix:**
+1. Check your n8n version: **Settings → About**. Upgrade to 1.22+ if needed.
+2. From your n8n instance, verify it can reach `https://mcp.fluxprompt.ai` (no corporate firewall blocking HTTPS outbound).
+
+---
+
+## Still stuck?
+
+Contact the FluxPrompt team with:
+
+1. The exact error message or JSON error response
+2. Which client you are using (Claude Desktop / Cursor / n8n / other)
+3. Your workspace ID (find it in FluxPrompt **Settings → Workspace**)
+
+Do **not** include your MCP token in any support message.

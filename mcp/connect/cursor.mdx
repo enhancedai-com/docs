@@ -1,0 +1,79 @@
+---
+title: "Connect Cursor"
+description: "Add FluxPrompt to Cursor so your AI assistant can read your workspace agents while you code."
+---
+
+## What this enables
+
+Once connected, the Cursor AI assistant can answer questions about your FluxPrompt agents without leaving your editor:
+
+- *"What agents do I have set up for lead enrichment?"*
+- *"Show me the nodes in the Email Parser agent so I can replicate the logic here"*
+
+## Prerequisites
+
+- Cursor installed ([download here](https://cursor.sh))
+- Your FluxPrompt workspace MCP token (see [Authentication](/mcp/authentication))
+
+## Step-by-step
+
+<Steps>
+  <Step title="Open Cursor settings">
+    Press `Cmd/Ctrl + Shift + P` to open the command palette, type `MCP`, and select **Cursor Settings → MCP**.
+
+    Alternatively, go to **Settings → Features → MCP Servers**.
+  </Step>
+  <Step title="Add a new MCP server">
+    Click **Add new MCP server** and fill in the fields:
+
+    | Field | Value |
+    |-------|-------|
+    | **Name** | `fluxprompt` |
+    | **Type** | `url` |
+    | **URL** | `https://mcp.fluxprompt.ai/mcp` |
+
+    For the **Authorization** header, add:
+    ```
+    Authorization: Bearer YOUR_MCP_TOKEN
+    ```
+
+    Replace `YOUR_MCP_TOKEN` with your actual token.
+  </Step>
+  <Step title="Save and verify">
+    Save the settings. Cursor connects immediately — no restart needed.
+
+    Open the AI chat (`Cmd/Ctrl + L`) and type:
+
+    > *List my FluxPrompt agents*
+
+    You should see your workspace agents listed.
+  </Step>
+</Steps>
+
+## Manual config (JSON)
+
+If you prefer editing the config file directly, Cursor's MCP config is at:
+
+```
+~/.cursor/mcp.json            (macOS / Linux)
+%USERPROFILE%\.cursor\mcp.json  (Windows)
+```
+
+Add the FluxPrompt entry:
+
+```json
+{
+  "mcpServers": {
+    "fluxprompt": {
+      "url": "https://mcp.fluxprompt.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+## Troubleshooting
+
+See the [Troubleshooting](/mcp/troubleshooting) page for common issues.

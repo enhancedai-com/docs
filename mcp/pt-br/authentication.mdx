@@ -1,0 +1,77 @@
+---
+title: "Autenticação"
+description: "Como funcionam os tokens MCP de workspace e como usar o seu."
+---
+
+## Seu token MCP de workspace
+
+Um **token MCP de workspace** é uma string secreta longa que dá a um cliente de IA acesso de leitura ao seu workspace FluxPrompt. Ele é diferente da sua API key comum do FluxPrompt:
+
+| | API key do FluxPrompt | Token MCP |
+|---|---|---|
+| **Escopo** | Sua conta de usuário | Um workspace específico |
+| **Usado para** | Chamadas REST API a partir do seu próprio código | Conexões de clientes de IA (Claude Desktop, Cursor, n8n) |
+| **Formato** | Alfanumérico curto | Começa com `mcp_` |
+| **Criado via** | Configurações do seu perfil | Fornecido pela equipe FluxPrompt (autoatendimento em breve) |
+
+<Info>
+**Acesso beta.** Durante o período de beta, seu token MCP é fornecido pela equipe FluxPrompt. Você o receberá por e-mail ou na sua chamada de onboarding. O gerenciamento de tokens por conta própria — criar, listar e revogar tokens pela interface do FluxPrompt — está no roadmap.
+</Info>
+
+## Como usar seu token
+
+Seu token vai no header `Authorization` de cada requisição MCP:
+
+```
+Authorization: Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Você nunca cola esse header manualmente — seu cliente de IA o lê de um arquivo de configuração (veja os guias de conexão para Claude Desktop, Cursor e n8n).
+
+## Segurança do token
+
+<Warning>
+Seu token MCP concede acesso de leitura completo aos agentes do seu workspace. Trate-o como uma senha:
+- Nunca o commite em um repositório Git.
+- Nunca o cole em um documento público ou screenshot.
+- Nunca o compartilhe no Slack, e-mail ou em qualquer mensagem que outras pessoas possam ver.
+</Warning>
+
+Se você acredita que seu token foi exposto:
+
+1. Entre em contato com a equipe FluxPrompt imediatamente.
+2. Iremos revogar o token e emitir um novo em minutos.
+3. Atualize seus arquivos de configuração do cliente com o novo token.
+
+## Escopos do token (Fase 1)
+
+Seu token MCP atual tem escopo **somente leitura**. Ele pode:
+
+- ✅ Listar agentes no seu workspace
+- ✅ Buscar a estrutura completa de qualquer agente
+- ✅ Listar todos os tipos de node disponíveis
+
+Ele não pode:
+
+- ❌ Criar ou editar agentes
+- ❌ Executar agentes ou iniciar execuções
+- ❌ Acessar faturamento, usuários ou configurações do workspace
+
+O acesso de escrita (`add_node`, `update_node`, `remove_node`) estará disponível na Fase 2 com um escopo separado.
+
+## Perguntas frequentes
+
+<AccordionGroup>
+  <Accordion title="Posso ter múltiplos tokens MCP para o mesmo workspace?">
+    Sim — cada token é independente. Você pode ter um token por cliente (ex.: um para Claude Desktop, outro para n8n) e revogá-los individualmente. Entre em contato com a equipe FluxPrompt para solicitar tokens adicionais durante o beta.
+  </Accordion>
+  <Accordion title="O token MCP expira?">
+    Tokens MCP não expiram automaticamente. Eles permanecem válidos até serem revogados. Recomendamos revogar tokens que você não usa mais.
+  </Accordion>
+  <Accordion title="Posso usar minha API key comum do FluxPrompt no lugar?">
+    Não. O servidor MCP usa um sistema de autenticação separado. Sua API key comum não funcionará.
+  </Accordion>
+  <Accordion title="O que o servidor MCP enxerga do meu workspace?">
+    Ele vê os mesmos agentes e estrutura que sua conta de usuário consegue ver dentro da interface do FluxPrompt. Ele não tem acesso a credenciais, faturamento ou gerenciamento de usuários.
+  </Accordion>
+</AccordionGroup>

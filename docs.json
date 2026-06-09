@@ -203,6 +203,30 @@
                     ]
                   }
                 ]
+              },
+              {
+                "group": "FluxPrompt MCP",
+                "pages": [
+                  "mcp/overview",
+                  "mcp/authentication",
+                  {
+                    "group": "Connect your AI client",
+                    "pages": [
+                      "mcp/connect/claude-desktop",
+                      "mcp/connect/cursor",
+                      "mcp/connect/n8n"
+                    ]
+                  },
+                  {
+                    "group": "Tool reference",
+                    "pages": [
+                      "mcp/tools/list-agents",
+                      "mcp/tools/get-agent",
+                      "mcp/tools/list-node-types"
+                    ]
+                  },
+                  "mcp/troubleshooting"
+                ]
               }
             ]
           },
@@ -417,6 +441,30 @@
                       "client/specific-features/mcp-user-guide"
                     ]
                   }
+                ]
+              },
+              {
+                "group": "FluxPrompt MCP",
+                "pages": [
+                  "mcp/pt-br/overview",
+                  "mcp/pt-br/authentication",
+                  {
+                    "group": "Conectar seu cliente de IA",
+                    "pages": [
+                      "mcp/pt-br/connect/claude-desktop",
+                      "mcp/pt-br/connect/cursor",
+                      "mcp/pt-br/connect/n8n"
+                    ]
+                  },
+                  {
+                    "group": "Referência de ferramentas",
+                    "pages": [
+                      "mcp/pt-br/tools/list-agents",
+                      "mcp/pt-br/tools/get-agent",
+                      "mcp/pt-br/tools/list-node-types"
+                    ]
+                  },
+                  "mcp/pt-br/troubleshooting"
                 ]
               }
             ]

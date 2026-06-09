@@ -1,0 +1,109 @@
+---
+title: "get_agent"
+description: "Fetch the full structure of a specific agent — its nodes, edges, and configuration."
+---
+
+## Description
+
+`get_agent` returns the complete definition of one agent: its metadata plus the full `nodes` and `edges` arrays that describe the agent's logic. Use this to inspect how an agent is built, audit its configuration, or understand its inputs and outputs.
+
+## Input
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `agentId` | string (UUID) | Yes | The agent's unique identifier. Get this from `list_agents`. |
+
+## Output
+
+```json
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "name": "Lead Scorer",
+  "description": "Scores inbound leads based on company size and tech stack",
+  "updatedAt": "2026-05-31T14:22:00Z",
+  "isPublic": false,
+  "nodes": [
+    {
+      "id": "node-001",
+      "type": "INPUT",
+      "label": "Lead data",
+      "config": { "fields": ["company", "employees", "techStack"] },
+      "position": { "x": 100, "y": 200 }
+    },
+    {
+      "id": "node-002",
+      "type": "TEXT_GENERATOR",
+      "label": "Score generator",
+      "config": { "model": "claude-3-5-sonnet", "prompt": "..." },
+      "position": { "x": 400, "y": 200 }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-001",
+      "source": "node-001",
+      "target": "node-002",
+      "sourceHandle": "output",
+      "targetHandle": "input"
+    }
+  ]
+}
+```
+
+### Output fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Agent UUID. |
+| `name` | string | Agent display name. |
+| `description` | string \| null | Agent description. |
+| `updatedAt` | ISO 8601 string | Last modification time. |
+| `isPublic` | boolean | Whether the agent has a public endpoint. |
+| `nodes` | array | All nodes in the agent. See below. |
+| `edges` | array | All connections between nodes. |
+
+#### Node fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Node ID (unique within this agent). |
+| `type` | string | Node type (e.g. `TEXT_GENERATOR`, `INPUT`, `API_CALLER`). See `list_node_types` for the full list. |
+| `label` | string | Node display name as shown in the canvas. |
+| `config` | object | Node-specific configuration. Shape depends on `type`. |
+| `position` | object | `{ x, y }` coordinates on the canvas. |
+
+#### Edge fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Edge ID. |
+| `source` | string | ID of the source node. |
+| `target` | string | ID of the target node. |
+| `sourceHandle` | string | Which output handle on the source node this edge leaves from. |
+| `targetHandle` | string | Which input handle on the target node this edge connects to. |
+
+## Error: agent not found
+
+If the `agentId` does not exist in your workspace, you will receive:
+
+```json
+{
+  "error": {
+    "code": -32007,
+    "message": "Agent not found"
+  }
+}
+```
+
+This error is also returned if the agent exists but belongs to a different workspace. For security, the response does not reveal whether the agent exists outside your workspace.
+
+## Example prompts
+
+- *"Show me the full structure of agent a1b2c3d4"*
+- *"What nodes does my Lead Scorer agent use?"*
+- *"Get the agent with ID a1b2c3d4 and explain how it works"*
+
+## Related
+
+- [`list_agents`](/mcp/tools/list-agents) — get agent IDs
+- [`list_node_types`](/mcp/tools/list-node-types) — understand what each node type does

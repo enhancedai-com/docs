@@ -1,0 +1,109 @@
+---
+title: "get_agent"
+description: "Busca a estrutura completa de um agente específico — seus nodes, edges e configuração."
+---
+
+## Descrição
+
+`get_agent` retorna a definição completa de um agente: seus metadados mais os arrays completos de `nodes` e `edges` que descrevem a lógica do agente. Use isso para inspecionar como um agente foi construído, auditar sua configuração ou entender suas entradas e saídas.
+
+## Entrada
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | string (UUID) | Sim | O identificador único do agente. Obtenha este valor a partir de `list_agents`. |
+
+## Saída
+
+```json
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "name": "Lead Scorer",
+  "description": "Scores inbound leads based on company size and tech stack",
+  "updatedAt": "2026-05-31T14:22:00Z",
+  "isPublic": false,
+  "nodes": [
+    {
+      "id": "node-001",
+      "type": "INPUT",
+      "label": "Lead data",
+      "config": { "fields": ["company", "employees", "techStack"] },
+      "position": { "x": 100, "y": 200 }
+    },
+    {
+      "id": "node-002",
+      "type": "TEXT_GENERATOR",
+      "label": "Score generator",
+      "config": { "model": "claude-3-5-sonnet", "prompt": "..." },
+      "position": { "x": 400, "y": 200 }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-001",
+      "source": "node-001",
+      "target": "node-002",
+      "sourceHandle": "output",
+      "targetHandle": "input"
+    }
+  ]
+}
+```
+
+### Campos da saída
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | string | UUID do agente. |
+| `name` | string | Nome de exibição do agente. |
+| `description` | string \| null | Descrição do agente. |
+| `updatedAt` | string ISO 8601 | Hora da última modificação. |
+| `isPublic` | boolean | Se o agente tem um endpoint público. |
+| `nodes` | array | Todos os nodes do agente. Veja abaixo. |
+| `edges` | array | Todas as conexões entre os nodes. |
+
+#### Campos de node
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | string | ID do node (único dentro deste agente). |
+| `type` | string | Tipo do node (ex.: `TEXT_GENERATOR`, `INPUT`, `API_CALLER`). Veja `list_node_types` para a lista completa. |
+| `label` | string | Nome de exibição do node conforme mostrado no canvas. |
+| `config` | object | Configuração específica do node. O formato depende do `type`. |
+| `position` | object | Coordenadas `{ x, y }` no canvas. |
+
+#### Campos de edge
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | string | ID do edge. |
+| `source` | string | ID do node de origem. |
+| `target` | string | ID do node de destino. |
+| `sourceHandle` | string | Qual handle de saída no node de origem este edge parte. |
+| `targetHandle` | string | Qual handle de entrada no node de destino este edge se conecta. |
+
+## Erro: agente não encontrado
+
+Se o `agentId` não existir no seu workspace, você receberá:
+
+```json
+{
+  "error": {
+    "code": -32007,
+    "message": "Agent not found"
+  }
+}
+```
+
+Este erro também é retornado se o agente existir mas pertencer a um workspace diferente. Por segurança, a resposta não revela se o agente existe fora do seu workspace.
+
+## Exemplos de prompts
+
+- *"Mostre a estrutura completa do agente a1b2c3d4"*
+- *"Quais nodes meu agente Lead Scorer usa?"*
+- *"Busque o agente com ID a1b2c3d4 e explique como ele funciona"*
+
+## Relacionados
+
+- [`list_agents`](/mcp/pt-br/tools/list-agents) — obtenha os IDs dos agentes
+- [`list_node_types`](/mcp/pt-br/tools/list-node-types) — entenda o que cada tipo de node faz

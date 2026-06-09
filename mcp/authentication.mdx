@@ -1,0 +1,77 @@
+---
+title: "Authentication"
+description: "How workspace MCP tokens work and how to use yours."
+---
+
+## Your workspace MCP token
+
+A **workspace MCP token** is a long secret string that gives an AI client read access to your FluxPrompt workspace. It is different from your regular FluxPrompt API key:
+
+| | FluxPrompt API key | MCP token |
+|---|---|---|
+| **Scope** | Your user account | One specific workspace |
+| **Used for** | REST API calls from your own code | AI client connections (Claude Desktop, Cursor, n8n) |
+| **Format** | Short alphanumeric | Starts with `mcp_` |
+| **Created via** | Your profile settings | Provided by FluxPrompt team (self-service coming soon) |
+
+<Info>
+**Beta access.** During the beta period, your MCP token is provided by the FluxPrompt team. You will receive it by email or in your onboarding call. Self-service token management — create, list, and revoke tokens from the FluxPrompt UI — is on the roadmap.
+</Info>
+
+## How to use your token
+
+Your token goes in the `Authorization` header of every MCP request:
+
+```
+Authorization: Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+You never paste this header manually — your AI client reads it from a config file (see the connection guides for Claude Desktop, Cursor, and n8n).
+
+## Token security
+
+<Warning>
+Your MCP token gives full read access to your workspace agents. Treat it like a password:
+- Never commit it to a Git repository.
+- Never paste it in a public document or screenshot.
+- Never share it on Slack, email, or in any message that others can see.
+</Warning>
+
+If you believe your token has been exposed:
+
+1. Contact the FluxPrompt team immediately.
+2. We will revoke the token and issue a new one within minutes.
+3. Update your client config files with the new token.
+
+## Token scopes (Phase 1)
+
+Your current MCP token has **read-only** scope. It can:
+
+- ✅ List agents in your workspace
+- ✅ Fetch the full structure of any agent
+- ✅ List all available node types
+
+It cannot:
+
+- ❌ Create or edit agents
+- ❌ Run agents or start executions
+- ❌ Access billing, users, or workspace settings
+
+Write access (`add_node`, `update_node`, `remove_node`) will be available in Phase 2 with a separate scope.
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Can I have multiple MCP tokens for the same workspace?">
+    Yes — each token is independent. You can have one token per client (e.g. one for Claude Desktop, one for n8n) and revoke them individually. Contact the FluxPrompt team to request additional tokens during the beta.
+  </Accordion>
+  <Accordion title="Does the MCP token expire?">
+    MCP tokens do not expire automatically. They remain valid until revoked. We recommend revoking tokens you no longer use.
+  </Accordion>
+  <Accordion title="Can I use my regular FluxPrompt API key instead?">
+    No. The MCP server uses a separate authentication system. Your regular API key will not work.
+  </Accordion>
+  <Accordion title="What does the MCP server see about my workspace?">
+    It sees the same agents and structure that your user account can see inside the FluxPrompt UI. It does not have access to credentials, billing, or user management.
+  </Accordion>
+</AccordionGroup>

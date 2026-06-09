@@ -1,0 +1,126 @@
+---
+title: "Conectar Claude Desktop"
+description: "Adicione o FluxPrompt ao Claude Desktop para poder perguntar ao Claude sobre os agentes do seu workspace."
+---
+
+## O que isso habilita
+
+Uma vez conectado, você pode perguntar ao Claude coisas como:
+
+- *"Quais agentes tenho no FluxPrompt?"*
+- *"Mostre a estrutura do meu agente Lead Scorer"*
+- *"Quais tipos de node estão disponíveis no FluxPrompt?"*
+
+O Claude chamará as tools do FluxPrompt MCP automaticamente e exibirá os resultados inline.
+
+## Pré-requisitos
+
+- Claude Desktop instalado ([baixar aqui](https://claude.ai/download))
+- Seu token MCP de workspace do FluxPrompt (veja [Autenticação](/mcp/authentication))
+
+## Passo a passo
+
+<Steps>
+  <Step title="Encontre o arquivo de configuração do Claude Desktop">
+    A localização do arquivo de configuração depende do seu sistema operacional:
+
+    | SO | Caminho |
+    |----|---------|
+    | **macOS** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+    | **Windows** | `%APPDATA%\Claude\claude_desktop_config.json` |
+    | **Linux** | `~/.config/Claude/claude_desktop_config.json` |
+
+    Se o arquivo ainda não existir, crie-o.
+  </Step>
+  <Step title="Adicione o servidor FluxPrompt MCP">
+    Abra o arquivo em qualquer editor de texto e adicione (ou mescle) o seguinte:
+
+    ```json
+    {
+      "mcpServers": {
+        "fluxprompt": {
+          "url": "https://mcp.fluxprompt.ai/mcp",
+          "headers": {
+            "Authorization": "Bearer YOUR_MCP_TOKEN"
+          }
+        }
+      }
+    }
+    ```
+
+    Substitua `YOUR_MCP_TOKEN` pelo seu token real (começa com `mcp_`).
+
+    <Warning>
+    Se o arquivo já tiver uma chave `mcpServers`, adicione `"fluxprompt": { ... }` dentro dela — não crie um segundo bloco `mcpServers`.
+    </Warning>
+  </Step>
+  <Step title="Reinicie o Claude Desktop">
+    Feche completamente o Claude Desktop (não apenas a janela) e reabra-o.
+
+    - **macOS:** clique com o botão direito no ícone do Claude no Dock → Sair
+    - **Windows:** clique com o botão direito no ícone do Claude na bandeja do sistema → Sair
+  </Step>
+  <Step title="Verifique a conexão">
+    Em uma nova conversa, digite:
+
+    > *Liste meus agentes FluxPrompt*
+
+    O Claude deve responder com a lista de agentes do seu workspace. Se aparecer um erro, consulte a página de [Solução de problemas](/mcp/pt-br/troubleshooting).
+  </Step>
+</Steps>
+
+## Exemplo completo de configuração
+
+Se o seu `claude_desktop_config.json` estiver vazio ou for novo:
+
+```json
+{
+  "mcpServers": {
+    "fluxprompt": {
+      "url": "https://mcp.fluxprompt.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+Se você já tiver outros servidores MCP configurados:
+
+```json
+{
+  "mcpServers": {
+    "some-other-server": {
+      "command": "npx",
+      "args": ["-y", "@some/server"]
+    },
+    "fluxprompt": {
+      "url": "https://mcp.fluxprompt.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+## O que o Claude pode fazer com o FluxPrompt
+
+Após a conexão, o Claude tem acesso a estas tools:
+
+| Tool | O que faz |
+|------|-----------|
+| `list_agents` | Lista todos os agentes do seu workspace |
+| `get_agent` | Busca a estrutura completa de um agente específico |
+| `list_node_types` | Lista todos os tipos de node disponíveis no FluxPrompt |
+
+O Claude escolherá a tool correta automaticamente com base na sua pergunta. Você também pode pedir explicitamente: *"Use `get_agent` para mostrar a estrutura do agente de ID abc123"*.
+
+## Solução de problemas
+
+Se a conexão não estiver funcionando, consulte a página de [Solução de problemas](/mcp/pt-br/troubleshooting). Os problemas mais comuns são:
+
+- Erro de digitação no token (verifique espaços extras)
+- Não fechar completamente o Claude Desktop antes de reiniciar
+- Erro de sintaxe JSON no arquivo de configuração (vírgula ausente, chave extra)
