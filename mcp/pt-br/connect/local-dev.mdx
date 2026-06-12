@@ -1,0 +1,162 @@
+---
+title: "Desenvolvimento local"
+description: "Rode o FluxPrompt MCP no localhost e teste com MCP Inspector ou Claude Desktop — sem precisar de deploy."
+---
+
+## Visão geral
+
+O servidor MCP usa Streamable HTTP, que funciona normalmente no `localhost`. Você não precisa de um transport separado para desenvolvimento local — o mesmo endpoint que vai para staging e produção funciona durante o desenvolvimento.
+
+As duas ferramentas recomendadas são:
+
+| Ferramenta | Melhor para |
+|------------|-------------|
+| **MCP Inspector** | Explorar tools, inspecionar JSON-RPC bruto, iteração rápida |
+| **Claude Desktop** | Teste end-to-end exatamente como um usuário real experimenta |
+
+## Pré-requisitos
+
+- Node.js 20+
+- `mcp-server/` clonado e dependências instaladas (`npm install`)
+- Uma instância local do `back/` rodando (ou túnel para o ambiente dev)
+- Um token dev válido na tabela `mcp_tokens` (peça para um colega ou crie diretamente via `back/`)
+
+## Passo 1 — Iniciar o servidor
+
+```bash
+# Copie e preencha o template
+cp .env.example .env
+
+# Inicie em modo watch
+npm run start:dev
+```
+
+O servidor escuta em `http://localhost:3000` por padrão. Você pode alterar a porta com `PORT` no `.env`.
+
+### `.env` mínimo para desenvolvimento local
+
+```env
+PORT=3000
+NODE_ENV=development
+
+BACK_BASE_URL=http://localhost:3001
+MCP_INTERNAL_SECRET=dev-secret-change-me
+
+MCP_KILL_SWITCH=off
+
+# Deixe em branco para não enviar logs ao Datadog localmente
+DD_API_KEY=
+DD_SITE=datadoghq.com
+```
+
+`MCP_INTERNAL_SECRET` deve ser o mesmo valor configurado no ambiente do `back/`.
+
+## Passo 2 — Testar com MCP Inspector
+
+O [MCP Inspector](https://github.com/modelcontextprotocol/inspector) é a ferramenta oficial para qualquer servidor Streamable HTTP. Sem necessidade de instalação:
+
+```bash
+npx @modelcontextprotocol/inspector http://localhost:3000/mcp
+```
+
+Uma interface web local abre no seu navegador.
+
+<Steps>
+  <Step title="Configure o header de autorização">
+    No painel **Headers**, adicione:
+
+    ```
+    Authorization: Bearer <seu-token-dev>
+    ```
+  </Step>
+  <Step title="Liste as tools disponíveis">
+    Clique em **Tools → List**. Você deve ver `list_agents`, `get_agent` e `list_node_types`.
+  </Step>
+  <Step title="Chame uma tool">
+    Selecione `list_agents`, defina `limit` como `5` e clique em **Call**. A requisição e resposta JSON-RPC brutas aparecem no painel.
+  </Step>
+</Steps>
+
+## Passo 3 — Testar com Claude Desktop
+
+Você pode conectar o Claude Desktop diretamente ao seu servidor local — sem ngrok ou túnel.
+
+<Steps>
+  <Step title="Abra o arquivo de configuração do Claude Desktop">
+    | SO | Caminho |
+    |----|---------|
+    | **macOS** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+    | **Windows** | `%APPDATA%\Claude\claude_desktop_config.json` |
+    | **Linux** | `~/.config/Claude/claude_desktop_config.json` |
+
+    Crie o arquivo se ele não existir.
+  </Step>
+  <Step title="Adicione a entrada do servidor local">
+    ```json
+    {
+      "mcpServers": {
+        "fluxprompt-local": {
+          "url": "http://localhost:3000/mcp",
+          "headers": {
+            "Authorization": "Bearer <seu-token-dev>"
+          }
+        }
+      }
+    }
+    ```
+
+    <Warning>
+    Se o arquivo já tiver uma chave `mcpServers`, adicione `"fluxprompt-local": { ... }` dentro dela — não crie um segundo bloco `mcpServers`.
+    </Warning>
+  </Step>
+  <Step title="Reinicie o Claude Desktop">
+    Feche completamente o Claude Desktop e reabra. A entrada **fluxprompt-local** aparece no painel de tools (ícone de martelo).
+  </Step>
+  <Step title="Peça para o Claude usar uma tool">
+    Tente: *"Liste meus agentes no FluxPrompt"* ou *"Quais tipos de nó estão disponíveis no FluxPrompt?"*
+  </Step>
+</Steps>
+
+## Smoke test rápido com curl
+
+```bash
+curl -s -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <seu-token-dev>" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+  | jq .result.tools[].name
+```
+
+Saída esperada:
+```
+"list_agents"
+"get_agent"
+"list_node_types"
+```
+
+## Executar a suíte de testes
+
+```bash
+npm test              # testes unitários — rápidos, sem rede
+npm run test:e2e      # testes e2e — Supertest, servidor em processo
+npx tsc --noEmit      # verificação de tipos
+```
+
+Os três devem passar antes de qualquer commit.
+
+## Solução de problemas
+
+<AccordionGroup>
+  <Accordion title="401 Unauthorized">
+    O token é inválido, revogado, ou o header `Authorization` está ausente. Verifique se o token existe e está ativo na tabela `mcp_tokens` no banco de dados local/dev.
+  </Accordion>
+  <Accordion title='Erro "service_disabled" (-32005)'>
+    `MCP_KILL_SWITCH=on` está configurado no seu `.env`. Altere para `off` e reinicie.
+  </Accordion>
+  <Accordion title="Não consegue acessar o back/ (ECONNREFUSED)">
+    `BACK_BASE_URL` aponta para um host que não está rodando. Inicie sua instância local do `back/` ou atualize a variável para apontar para o túnel do ambiente dev.
+  </Accordion>
+  <Accordion title="tools/list retorna array vazio">
+    O scope do token não inclui `read`. O token dev precisa ter `scope: 'read'` na tabela `mcp_tokens`.
+  </Accordion>
+</AccordionGroup>

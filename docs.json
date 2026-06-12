@@ -214,7 +214,8 @@
                     "pages": [
                       "mcp/connect/claude-desktop",
                       "mcp/connect/cursor",
-                      "mcp/connect/n8n"
+                      "mcp/connect/n8n",
+                      "mcp/connect/local-dev"
                     ]
                   },
                   {
@@ -453,7 +454,8 @@
                     "pages": [
                       "mcp/pt-br/connect/claude-desktop",
                       "mcp/pt-br/connect/cursor",
-                      "mcp/pt-br/connect/n8n"
+                      "mcp/pt-br/connect/n8n",
+                      "mcp/pt-br/connect/local-dev"
                     ]
                   },
                   {

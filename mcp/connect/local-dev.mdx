@@ -1,0 +1,162 @@
+---
+title: "Local development"
+description: "Run FluxPrompt MCP on localhost and test it with MCP Inspector or Claude Desktop — no deployment needed."
+---
+
+## Overview
+
+The MCP server uses Streamable HTTP, which runs fine on `localhost`. You don't need a separate transport for local work — the same endpoint you'll deploy to staging and production works during development.
+
+The two recommended tools are:
+
+| Tool | Best for |
+|------|----------|
+| **MCP Inspector** | Exploring tools, inspecting raw JSON-RPC, quick iteration |
+| **Claude Desktop** | End-to-end testing exactly as a real user would experience it |
+
+## Prerequisites
+
+- Node.js 20 +
+- `mcp-server/` cloned and dependencies installed (`npm install`)
+- A local `back/` instance running (or a dev tunnel to the dev environment)
+- A valid dev token from the `mcp_tokens` table (ask a teammate or create one via `back/` directly)
+
+## Step 1 — Start the server
+
+```bash
+# Copy and fill the template
+cp .env.example .env
+
+# Start in watch mode
+npm run start:dev
+```
+
+The server listens on `http://localhost:3000` by default. You can change the port with `PORT` in `.env`.
+
+### Minimal `.env` for local work
+
+```env
+PORT=3000
+NODE_ENV=development
+
+BACK_BASE_URL=http://localhost:3001
+MCP_INTERNAL_SECRET=dev-secret-change-me
+
+MCP_KILL_SWITCH=off
+
+# Leave blank to skip Datadog writes locally
+DD_API_KEY=
+DD_SITE=datadoghq.com
+```
+
+`MCP_INTERNAL_SECRET` must match the value set in `back/`'s environment.
+
+## Step 2 — Test with MCP Inspector
+
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector) is the canonical tool for any Streamable HTTP server. No installation needed:
+
+```bash
+npx @modelcontextprotocol/inspector http://localhost:3000/mcp
+```
+
+A local web UI opens in your browser.
+
+<Steps>
+  <Step title="Set the Authorization header">
+    In the **Headers** panel, add:
+
+    ```
+    Authorization: Bearer <your-dev-token>
+    ```
+  </Step>
+  <Step title="List available tools">
+    Click **Tools → List**. You should see `list_agents`, `get_agent`, and `list_node_types`.
+  </Step>
+  <Step title="Call a tool">
+    Select `list_agents`, set `limit` to `5`, and click **Call**. The raw JSON-RPC request and response appear in the panel.
+  </Step>
+</Steps>
+
+## Step 3 — Test with Claude Desktop
+
+You can connect Claude Desktop directly to your local server — no ngrok or tunnel required.
+
+<Steps>
+  <Step title="Open the Claude Desktop config file">
+    | OS | Path |
+    |----|------|
+    | **macOS** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+    | **Windows** | `%APPDATA%\Claude\claude_desktop_config.json` |
+    | **Linux** | `~/.config/Claude/claude_desktop_config.json` |
+
+    Create the file if it doesn't exist.
+  </Step>
+  <Step title="Add the local server entry">
+    ```json
+    {
+      "mcpServers": {
+        "fluxprompt-local": {
+          "url": "http://localhost:3000/mcp",
+          "headers": {
+            "Authorization": "Bearer <your-dev-token>"
+          }
+        }
+      }
+    }
+    ```
+
+    <Warning>
+    If the file already has an `mcpServers` key, add `"fluxprompt-local": { ... }` inside it — do not create a second `mcpServers` block.
+    </Warning>
+  </Step>
+  <Step title="Restart Claude Desktop">
+    Fully quit Claude Desktop and reopen it. The **fluxprompt-local** entry appears in the tools panel (hammer icon).
+  </Step>
+  <Step title="Ask Claude to use a tool">
+    Try: *"List my FluxPrompt agents"* or *"What node types are available in FluxPrompt?"*
+  </Step>
+</Steps>
+
+## Quick curl smoke test
+
+```bash
+curl -s -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <your-dev-token>" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+  | jq .result.tools[].name
+```
+
+Expected output:
+```
+"list_agents"
+"get_agent"
+"list_node_types"
+```
+
+## Run the test suite
+
+```bash
+npm test              # unit tests — fast, no network
+npm run test:e2e      # e2e tests — Supertest, in-process server
+npx tsc --noEmit      # type check
+```
+
+All three must pass before any commit.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="401 Unauthorized">
+    The token is invalid, revoked, or the `Authorization` header is missing. Check that the token exists and is active in the `mcp_tokens` table in your local/dev database.
+  </Accordion>
+  <Accordion title='"service_disabled" error (-32005)'>
+    `MCP_KILL_SWITCH=on` is set in your `.env`. Change it to `off` and restart.
+  </Accordion>
+  <Accordion title="Cannot reach back/ (ECONNREFUSED)">
+    `BACK_BASE_URL` points to a host that isn't running. Start your local `back/` instance or update the variable to point at the dev environment tunnel.
+  </Accordion>
+  <Accordion title="tools/list returns an empty array">
+    The token's scope doesn't include `read`. The dev token must have `scope: 'read'` in the `mcp_tokens` table.
+  </Accordion>
+</AccordionGroup>
