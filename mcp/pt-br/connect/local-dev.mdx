@@ -16,31 +16,61 @@ As duas ferramentas recomendadas são:
 
 ## Pré-requisitos
 
-- Node.js 20+
-- `mcp-server/` clonado e dependências instaladas (`npm install`)
+- Node.js ≥ 22.13 e pnpm ≥ 11 **ou** Docker Desktop (veja opção A abaixo)
+- `mcp-server/` clonado
 - Uma instância local do `back/` rodando (ou túnel para o ambiente dev)
-- Um token dev válido na tabela `mcp_tokens` (peça para um colega ou crie diretamente via `back/`)
+- Um token dev válido na tabela `mcp_tokens` (veja [Criar um token dev](#criar-um-token-dev) abaixo)
 
 ## Passo 1 — Iniciar o servidor
 
-```bash
-# Copie e preencha o template
-cp .env.example .env
+Escolha uma das opções. Docker Compose é recomendado para novos colaboradores — sem necessidade de instalar Node/pnpm no host.
 
-# Inicie em modo watch
-npm run start:dev
-```
+<Tabs>
+  <Tab title="Opção A — Docker Compose (recomendado)">
+    Inicia o `mcp-server` + MCP Inspector em um único comando.
 
-O servidor escuta em `http://localhost:3000` por padrão. Você pode alterar a porta com `PORT` no `.env`.
+    ```bash
+    cp .env.example .env
+    # Preencha BACK_BASE_URL e MCP_INTERNAL_SECRET (veja tabela abaixo)
+    docker compose up
+    ```
+
+    A interface web do MCP Inspector abre em **http://localhost:5173**.
+
+    <Note>
+    **`BACK_BASE_URL` no Docker** — o valor depende de onde o `back/` está rodando:
+
+    | Onde o `back/` roda | Valor de `BACK_BASE_URL` |
+    |---------------------|--------------------------|
+    | Host (pnpm start:dev) — macOS / Windows | `http://host.docker.internal:<porta>` |
+    | Host — Linux | IP do host, ou adicione `extra_hosts: [host.docker.internal:host-gateway]` |
+    | Docker (mesmo compose, rede `back_default`) | `http://<nome-do-serviço-back>:<porta>` |
+
+    Nunca use `http://localhost:...` como `BACK_BASE_URL` dentro do Docker — dentro de um container, `localhost` aponta para o próprio container, não para a máquina host.
+    </Note>
+  </Tab>
+  <Tab title="Opção B — Standalone (pnpm start:dev)">
+    Requer pnpm e Node ≥ 22.13 instalados no host.
+
+    ```bash
+    cp .env.example .env
+    # Defina BACK_BASE_URL=http://localhost:<porta-do-back>
+    pnpm install
+    pnpm start:dev        # modo watch — reinicia ao salvar
+    ```
+
+    O servidor escuta em `http://localhost:3100` por padrão.
+  </Tab>
+</Tabs>
 
 ### `.env` mínimo para desenvolvimento local
 
 ```env
-PORT=3000
+PORT=3100
 NODE_ENV=development
 
-BACK_BASE_URL=http://localhost:3001
-MCP_INTERNAL_SECRET=dev-secret-change-me
+BACK_BASE_URL=http://host.docker.internal:3001   # Docker; use http://localhost:3001 para pnpm
+MCP_INTERNAL_SECRET=mcp_dev_local
 
 MCP_KILL_SWITCH=off
 
@@ -49,40 +79,86 @@ DD_API_KEY=
 DD_SITE=datadoghq.com
 ```
 
-`MCP_INTERNAL_SECRET` deve ser o mesmo valor configurado no ambiente do `back/`.
+`MCP_INTERNAL_SECRET` deve ser o mesmo valor configurado no `back/`.
+
+### Criar um token dev
+
+Execute o script auxiliar uma vez a partir da pasta `back/`. Ele busca o primeiro workspace e usuário no banco de dados local e insere um token pronto para uso:
+
+```bash
+# A partir da pasta back/
+node scripts/create-dev-mcp-token.mjs
+```
+
+O token gerado é `mcp_dev_local`. Use-o como `Authorization: Bearer mcp_dev_local` em todas as requisições abaixo.
+
+<Note>
+O script é idempotente — executá-lo novamente substitui o token anterior com o mesmo hash.
+</Note>
 
 ## Passo 2 — Testar com MCP Inspector
 
-O [MCP Inspector](https://github.com/modelcontextprotocol/inspector) é a ferramenta oficial para qualquer servidor Streamable HTTP. Execute **sem argumentos** — passar uma URL diretamente faz o Inspector tratá-la como processo stdio para executar, o que falha para servidores HTTP:
+<Tabs>
+  <Tab title="Docker Compose (Opção A)">
+    O MCP Inspector já está rodando. Abra **http://localhost:5173** e conecte:
 
-```bash
-npx @modelcontextprotocol/inspector
-```
+    | Campo | Valor |
+    |-------|-------|
+    | Transport | Streamable HTTP |
+    | URL | `http://mcp-server:3100/mcp` |
+    | Header | `Authorization: Bearer mcp_dev_local` |
 
-A interface web abre em `http://localhost:6274`.
+    <Warning>
+    Use `http://mcp-server:3100/mcp`, **não** `http://localhost:3100/mcp`. O proxy do Inspector roda dentro do Docker — `localhost` lá se refere ao próprio container do Inspector. O Docker resolve `mcp-server` para o container correto via rede interna.
+    </Warning>
 
-<Steps>
-  <Step title="Troque para o transport Streamable HTTP">
-    No dropdown **Transport Type**, mude de `STDIO` para `Streamable HTTP`.
-  </Step>
-  <Step title="Configure a URL do servidor">
-    Digite `http://localhost:3100/mcp` no campo de URL.
-  </Step>
-  <Step title="Adicione o header de autorização">
-    No painel **Headers**, adicione:
+    Clique em **Connect**, depois em **Tools → List**. Você deve ver `list_agents`, `get_agent` e `list_node_types`.
+  </Tab>
+  <Tab title="Standalone (Opção B)">
+    O [MCP Inspector](https://github.com/modelcontextprotocol/inspector) também pode ser executado diretamente. Execute **sem argumentos** — passar uma URL diretamente faz o Inspector tratá-la como processo stdio, o que falha para servidores HTTP:
 
+    ```bash
+    npx @modelcontextprotocol/inspector
     ```
-    Authorization: Bearer <seu-token-dev>
-    ```
-  </Step>
-  <Step title="Conecte e explore">
-    Clique em **Connect**, depois em **Tools → List**. Você deve ver `list_agents`, `get_agent` e `list_node_types`. Selecione qualquer tool e clique em **Call** para ver a requisição e resposta JSON-RPC brutas.
-  </Step>
-</Steps>
+
+    A interface web abre em `http://localhost:6274`.
+
+    <Steps>
+      <Step title="Troque para o transport Streamable HTTP">
+        No dropdown **Transport Type**, mude de `STDIO` para `Streamable HTTP`.
+      </Step>
+      <Step title="Configure a URL do servidor">
+        Digite `http://localhost:3100/mcp` no campo de URL.
+      </Step>
+      <Step title="Adicione o header de autorização">
+        No painel **Headers**, adicione:
+
+        ```
+        Authorization: Bearer mcp_dev_local
+        ```
+      </Step>
+      <Step title="Conecte e explore">
+        Clique em **Connect**, depois em **Tools → List**. Você deve ver `list_agents`, `get_agent` e `list_node_types`. Selecione qualquer tool e clique em **Call** para ver a requisição e resposta JSON-RPC brutas.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
 
 ## Passo 3 — Testar com Claude Desktop
 
-Você pode conectar o Claude Desktop diretamente ao seu servidor local — sem ngrok ou túnel.
+### Opção A — Registrar com um comando
+
+A partir da pasta `mcp-server/` (o servidor já deve estar rodando):
+
+```bash
+pnpm claude:register
+```
+
+Este script lê `PORT` e `MCP_INTERNAL_SECRET` do `.env` e escreve a entrada `fluxprompt-mcp` no `claude_desktop_config.json` automaticamente. É idempotente — executá-lo novamente exibe o estado atual e sai sem alterações.
+
+Após executar, **reinicie completamente o Claude Desktop**. A entrada `fluxprompt-mcp` aparece no painel de tools (ícone de martelo).
+
+### Opção B — Editar o arquivo de configuração manualmente
 
 <Steps>
   <Step title="Abra o arquivo de configuração do Claude Desktop">
@@ -101,7 +177,7 @@ Você pode conectar o Claude Desktop diretamente ao seu servidor local — sem n
         "fluxprompt-local": {
           "url": "http://localhost:3100/mcp",
           "headers": {
-            "Authorization": "Bearer <seu-token-dev>"
+            "Authorization": "Bearer mcp_dev_local"
           }
         }
       }
@@ -125,7 +201,7 @@ Você pode conectar o Claude Desktop diretamente ao seu servidor local — sem n
 ```bash
 curl -s -X POST http://localhost:3100/mcp \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <seu-token-dev>" \
+  -H "Authorization: Bearer mcp_dev_local" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
   | jq .result.tools[].name
 ```
@@ -140,9 +216,9 @@ Saída esperada:
 ## Executar a suíte de testes
 
 ```bash
-npm test              # testes unitários — rápidos, sem rede
-npm run test:e2e      # testes e2e — Supertest, servidor em processo
-npx tsc --noEmit      # verificação de tipos
+pnpm test              # testes unitários — rápidos, sem rede
+pnpm test:e2e          # testes e2e — Supertest, servidor em processo
+npx tsc --noEmit       # verificação de tipos
 ```
 
 Os três devem passar antes de qualquer commit.
@@ -157,7 +233,19 @@ Os três devem passar antes de qualquer commit.
     `MCP_KILL_SWITCH=on` está configurado no seu `.env`. Altere para `off` e reinicie.
   </Accordion>
   <Accordion title="Não consegue acessar o back/ (ECONNREFUSED)">
-    `BACK_BASE_URL` aponta para um host que não está rodando. Inicie sua instância local do `back/` ou atualize a variável para apontar para o túnel do ambiente dev.
+    `BACK_BASE_URL` aponta para um host que não está rodando. Se estiver rodando no Docker, use `http://host.docker.internal:<porta>` (não `http://localhost:...`). Se estiver rodando standalone, inicie sua instância local do `back/`.
+  </Accordion>
+  <Accordion title="Inspector mostra porta errada ou ECONNREFUSED (Docker)">
+    O cache npm dentro do container do Inspector pode ter uma versão desatualizada. Limpe e reinicie:
+
+    ```bash
+    docker compose down -v && docker compose up
+    ```
+
+    O flag `-v` remove os volumes nomeados, incluindo o cache npm do Inspector.
+  </Accordion>
+  <Accordion title="Inspector não consegue acessar o servidor MCP (Docker)">
+    Verifique a URL na interface do Inspector. Deve ser `http://mcp-server:3100/mcp`, não `http://localhost:3100/mcp`. O proxy do Inspector roda dentro do Docker — `localhost` lá é o container do Inspector, não o seu host.
   </Accordion>
   <Accordion title="tools/list retorna array vazio">
     O scope do token não inclui `read`. O token dev precisa ter `scope: 'read'` na tabela `mcp_tokens`.
