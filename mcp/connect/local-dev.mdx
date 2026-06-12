@@ -53,27 +53,30 @@ DD_SITE=datadoghq.com
 
 ## Step 2 — Test with MCP Inspector
 
-[MCP Inspector](https://github.com/modelcontextprotocol/inspector) is the canonical tool for any Streamable HTTP server. No installation needed:
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector) is the canonical tool for any Streamable HTTP server. Run it **without arguments** — passing a URL directly makes it treat the URL as a stdio process to spawn, which fails for HTTP servers:
 
 ```bash
-npx @modelcontextprotocol/inspector http://localhost:3000/mcp
+npx @modelcontextprotocol/inspector
 ```
 
-A local web UI opens in your browser.
+The web UI opens at `http://localhost:6274`.
 
 <Steps>
-  <Step title="Set the Authorization header">
+  <Step title="Switch to Streamable HTTP transport">
+    In the **Transport Type** dropdown, change `STDIO` to `Streamable HTTP`.
+  </Step>
+  <Step title="Set the server URL">
+    Enter `http://localhost:3100/mcp` in the URL field.
+  </Step>
+  <Step title="Add the Authorization header">
     In the **Headers** panel, add:
 
     ```
     Authorization: Bearer <your-dev-token>
     ```
   </Step>
-  <Step title="List available tools">
-    Click **Tools → List**. You should see `list_agents`, `get_agent`, and `list_node_types`.
-  </Step>
-  <Step title="Call a tool">
-    Select `list_agents`, set `limit` to `5`, and click **Call**. The raw JSON-RPC request and response appear in the panel.
+  <Step title="Connect and explore">
+    Click **Connect**, then **Tools → List**. You should see `list_agents`, `get_agent`, and `list_node_types`. Select any tool and click **Call** to see the raw JSON-RPC request and response.
   </Step>
 </Steps>
 
@@ -96,7 +99,7 @@ You can connect Claude Desktop directly to your local server — no ngrok or tun
     {
       "mcpServers": {
         "fluxprompt-local": {
-          "url": "http://localhost:3000/mcp",
+          "url": "http://localhost:3100/mcp",
           "headers": {
             "Authorization": "Bearer <your-dev-token>"
           }
@@ -120,7 +123,7 @@ You can connect Claude Desktop directly to your local server — no ngrok or tun
 ## Quick curl smoke test
 
 ```bash
-curl -s -X POST http://localhost:3000/mcp \
+curl -s -X POST http://localhost:3100/mcp \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <your-dev-token>" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \

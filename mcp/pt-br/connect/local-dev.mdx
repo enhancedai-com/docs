@@ -53,27 +53,30 @@ DD_SITE=datadoghq.com
 
 ## Passo 2 — Testar com MCP Inspector
 
-O [MCP Inspector](https://github.com/modelcontextprotocol/inspector) é a ferramenta oficial para qualquer servidor Streamable HTTP. Sem necessidade de instalação:
+O [MCP Inspector](https://github.com/modelcontextprotocol/inspector) é a ferramenta oficial para qualquer servidor Streamable HTTP. Execute **sem argumentos** — passar uma URL diretamente faz o Inspector tratá-la como processo stdio para executar, o que falha para servidores HTTP:
 
 ```bash
-npx @modelcontextprotocol/inspector http://localhost:3000/mcp
+npx @modelcontextprotocol/inspector
 ```
 
-Uma interface web local abre no seu navegador.
+A interface web abre em `http://localhost:6274`.
 
 <Steps>
-  <Step title="Configure o header de autorização">
+  <Step title="Troque para o transport Streamable HTTP">
+    No dropdown **Transport Type**, mude de `STDIO` para `Streamable HTTP`.
+  </Step>
+  <Step title="Configure a URL do servidor">
+    Digite `http://localhost:3100/mcp` no campo de URL.
+  </Step>
+  <Step title="Adicione o header de autorização">
     No painel **Headers**, adicione:
 
     ```
     Authorization: Bearer <seu-token-dev>
     ```
   </Step>
-  <Step title="Liste as tools disponíveis">
-    Clique em **Tools → List**. Você deve ver `list_agents`, `get_agent` e `list_node_types`.
-  </Step>
-  <Step title="Chame uma tool">
-    Selecione `list_agents`, defina `limit` como `5` e clique em **Call**. A requisição e resposta JSON-RPC brutas aparecem no painel.
+  <Step title="Conecte e explore">
+    Clique em **Connect**, depois em **Tools → List**. Você deve ver `list_agents`, `get_agent` e `list_node_types`. Selecione qualquer tool e clique em **Call** para ver a requisição e resposta JSON-RPC brutas.
   </Step>
 </Steps>
 
@@ -96,7 +99,7 @@ Você pode conectar o Claude Desktop diretamente ao seu servidor local — sem n
     {
       "mcpServers": {
         "fluxprompt-local": {
-          "url": "http://localhost:3000/mcp",
+          "url": "http://localhost:3100/mcp",
           "headers": {
             "Authorization": "Bearer <seu-token-dev>"
           }
@@ -120,7 +123,7 @@ Você pode conectar o Claude Desktop diretamente ao seu servidor local — sem n
 ## Smoke test rápido com curl
 
 ```bash
-curl -s -X POST http://localhost:3000/mcp \
+curl -s -X POST http://localhost:3100/mcp \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <seu-token-dev>" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
