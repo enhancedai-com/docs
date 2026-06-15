@@ -13,52 +13,34 @@ Uma vez conectado, você pode perguntar ao Claude coisas como:
 
 O Claude chamará as tools do FluxPrompt MCP automaticamente e exibirá os resultados inline.
 
+<Warning>
+**O Claude Desktop não aceita tokens colados.** Ele rejeita tokens bearer fornecidos pelo usuário, então o FluxPrompt conecta via **OAuth** — você faz login por uma tela de consentimento do FluxPrompt e nunca manipula um token. Não tente adicionar um header `Authorization` em um arquivo de configuração; não vai funcionar. Veja [Autenticação](/mcp/pt-br/authentication).
+</Warning>
+
 ## Pré-requisitos
 
 - Claude Desktop instalado ([baixar aqui](https://claude.ai/download))
-- Seu token MCP de workspace do FluxPrompt (veja [Autenticação](/mcp/authentication))
+- Uma conta FluxPrompt com acesso a pelo menos um workspace
 
 ## Passo a passo
 
 <Steps>
-  <Step title="Encontre o arquivo de configuração do Claude Desktop">
-    A localização do arquivo de configuração depende do seu sistema operacional:
-
-    | SO | Caminho |
-    |----|---------|
-    | **macOS** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-    | **Windows** | `%APPDATA%\Claude\claude_desktop_config.json` |
-    | **Linux** | `~/.config/Claude/claude_desktop_config.json` |
-
-    Se o arquivo ainda não existir, crie-o.
+  <Step title="Abra as configurações de conectores">
+    No Claude Desktop, vá em **Settings → Connectors** e clique em **Add custom connector**.
   </Step>
-  <Step title="Adicione o servidor FluxPrompt MCP">
-    Abra o arquivo em qualquer editor de texto e adicione (ou mescle) o seguinte:
+  <Step title="Informe a URL do servidor FluxPrompt">
+    Cole a URL do servidor FluxPrompt MCP:
 
-    ```json
-    {
-      "mcpServers": {
-        "fluxprompt": {
-          "url": "https://mcp.fluxprompt.ai/mcp",
-          "headers": {
-            "Authorization": "Bearer YOUR_MCP_TOKEN"
-          }
-        }
-      }
-    }
+    ```
+    https://mcp.fluxprompt.ai/mcp
     ```
 
-    Substitua `YOUR_MCP_TOKEN` pelo seu token real (começa com `mcp_`).
-
-    <Warning>
-    Se o arquivo já tiver uma chave `mcpServers`, adicione `"fluxprompt": { ... }` dentro dela — não crie um segundo bloco `mcpServers`.
-    </Warning>
+    Dê ao conector um nome reconhecível (ex.: `FluxPrompt`) e confirme.
   </Step>
-  <Step title="Reinicie o Claude Desktop">
-    Feche completamente o Claude Desktop (não apenas a janela) e reabra-o.
+  <Step title="Faça login e conceda acesso">
+    O Claude abre uma tela de login + consentimento do FluxPrompt. Faça login com sua conta FluxPrompt, **selecione qual workspace** você quer liberar e aprove.
 
-    - **macOS:** clique com o botão direito no ícone do Claude no Dock → Sair
-    - **Windows:** clique com o botão direito no ícone do Claude na bandeja do sistema → Sair
+    Nenhum token está envolvido — a autenticação é feita inteiramente por esse fluxo OAuth.
   </Step>
   <Step title="Verifique a conexão">
     Em uma nova conversa, digite:
@@ -68,42 +50,6 @@ O Claude chamará as tools do FluxPrompt MCP automaticamente e exibirá os resul
     O Claude deve responder com a lista de agentes do seu workspace. Se aparecer um erro, consulte a página de [Solução de problemas](/mcp/pt-br/troubleshooting).
   </Step>
 </Steps>
-
-## Exemplo completo de configuração
-
-Se o seu `claude_desktop_config.json` estiver vazio ou for novo:
-
-```json
-{
-  "mcpServers": {
-    "fluxprompt": {
-      "url": "https://mcp.fluxprompt.ai/mcp",
-      "headers": {
-        "Authorization": "Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
-}
-```
-
-Se você já tiver outros servidores MCP configurados:
-
-```json
-{
-  "mcpServers": {
-    "some-other-server": {
-      "command": "npx",
-      "args": ["-y", "@some/server"]
-    },
-    "fluxprompt": {
-      "url": "https://mcp.fluxprompt.ai/mcp",
-      "headers": {
-        "Authorization": "Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
-}
-```
 
 ## O que o Claude pode fazer com o FluxPrompt
 
@@ -121,6 +67,7 @@ O Claude escolherá a tool correta automaticamente com base na sua pergunta. Voc
 
 Se a conexão não estiver funcionando, consulte a página de [Solução de problemas](/mcp/pt-br/troubleshooting). Os problemas mais comuns são:
 
-- Erro de digitação no token (verifique espaços extras)
-- Não fechar completamente o Claude Desktop antes de reiniciar
-- Erro de sintaxe JSON no arquivo de configuração (vírgula ausente, chave extra)
+- Tentar usar um token colado em vez do fluxo OAuth (o Claude Desktop só suporta OAuth)
+- Não concluir a tela de login + consentimento do FluxPrompt
+- Selecionar o workspace errado durante o consentimento
+</content>

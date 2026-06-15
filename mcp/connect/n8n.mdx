@@ -14,7 +14,7 @@ Inside n8n you can build workflows that automatically:
 ## Prerequisites
 
 - n8n instance (cloud or self-hosted, v1.22+)
-- Your FluxPrompt workspace MCP token (see [Authentication](/mcp/authentication))
+- A FluxPrompt workspace **service token** (see [Authentication](/mcp/authentication)) — generate one in **Settings → MCP Tokens**. A static service token is the recommended method for n8n.
 
 ## Step-by-step
 
@@ -30,9 +30,9 @@ Inside n8n you can build workflows that automatically:
     | **Server URL** | `https://mcp.fluxprompt.ai/mcp` |
     | **Authentication** | Header Auth |
     | **Header Name** | `Authorization` |
-    | **Header Value** | `Bearer YOUR_MCP_TOKEN` |
+    | **Header Value** | `Bearer YOUR_SERVICE_TOKEN` |
 
-    Replace `YOUR_MCP_TOKEN` with your actual token.
+    Replace `YOUR_SERVICE_TOKEN` with your actual service token (starts with `mcp_`).
   </Step>
   <Step title="Choose the tool and parameters">
     In the **Tool** dropdown, select from:
