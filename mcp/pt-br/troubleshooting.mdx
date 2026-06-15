@@ -43,9 +43,9 @@ Antes de investigar erros específicos, verifique estas cinco coisas:
 
 ---
 
-### "Agent not found" / -32007
+### "Agent not found" (`isError: true`)
 
-**Causa:** O `agentId` passado não existe no seu workspace, ou pertence a um workspace diferente.
+**Causa:** O `agentId` passado não existe no seu workspace, ou pertence a um workspace diferente. O `get_agent` reporta isso como erro de tool (`result.isError: true`), e não como um código de erro de protocolo.
 
 **Solução:**
 1. Use `list_agents` para obter IDs válidos do seu workspace.

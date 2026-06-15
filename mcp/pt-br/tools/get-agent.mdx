@@ -12,6 +12,7 @@ description: "Busca a estrutura completa de um agente específico — seus nodes
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |-----------|------|-------------|-----------|
 | `agentId` | string (UUID) | Sim | O identificador único do agente. Obtenha este valor a partir de `list_agents`. |
+| `includeNodes` | boolean | Não | Se deve incluir os arrays `nodes` e `edges`. Padrão: `true`. Defina como `false` para uma resposta leve, apenas com metadados. |
 
 ## Saída
 
@@ -21,34 +22,43 @@ description: "Busca a estrutura completa de um agente específico — seus nodes
   "name": "Lead Scorer",
   "description": "Scores inbound leads based on company size and tech stack",
   "updatedAt": "2026-05-31T14:22:00Z",
+  "nodeCount": 2,
   "isPublic": false,
   "nodes": [
     {
-      "id": "node-001",
-      "type": "INPUT",
-      "label": "Lead data",
-      "config": { "fields": ["company", "employees", "techStack"] },
-      "position": { "x": 100, "y": 200 }
+      "id": "flow-global-starter_0.689",
+      "type": "globalStarter",
+      "data": { "myId": "flow-global-starter_0.689", "label": "Flow Global Node" },
+      "position": { "x": 250, "y": 25 },
+      "width": 402,
+      "height": 206
     },
     {
-      "id": "node-002",
-      "type": "TEXT_GENERATOR",
-      "label": "Score generator",
-      "config": { "model": "claude-3-5-sonnet", "prompt": "..." },
-      "position": { "x": 400, "y": 200 }
+      "id": "commandTextNode_0.628",
+      "type": "commandTextNode",
+      "data": { "label": "Score generator", "model": "claude-3-5-sonnet" },
+      "position": { "x": 400, "y": 200 },
+      "width": 320,
+      "height": 180
     }
   ],
   "edges": [
     {
-      "id": "edge-001",
-      "source": "node-001",
-      "target": "node-002",
-      "sourceHandle": "output",
-      "targetHandle": "input"
+      "id": "reactflow__edge-flow-global-starter_0.689a-commandTextNode_0.628input",
+      "source": "flow-global-starter_0.689",
+      "sourceHandle": "a",
+      "target": "commandTextNode_0.628",
+      "targetHandle": "input",
+      "type": "custom",
+      "style": { "stroke": "#6e75ff", "strokeWidth": 1 },
+      "animated": true,
+      "markerEnd": { "type": "arrowclosed", "color": "red", "width": 25, "height": 25 }
     }
   ]
 }
 ```
+
+Quando `includeNodes` é `false`, os arrays `nodes` e `edges` são omitidos e apenas os campos de metadados são retornados.
 
 ### Campos da saída
 
@@ -58,19 +68,21 @@ description: "Busca a estrutura completa de um agente específico — seus nodes
 | `name` | string | Nome de exibição do agente. |
 | `description` | string \| null | Descrição do agente. |
 | `updatedAt` | string ISO 8601 | Hora da última modificação. |
+| `nodeCount` | number | Número de nodes na versão atual do agente. |
 | `isPublic` | boolean | Se o agente tem um endpoint público. |
-| `nodes` | array | Todos os nodes do agente. Veja abaixo. |
-| `edges` | array | Todas as conexões entre os nodes. |
+| `nodes` | array | Todos os nodes do agente (omitido quando `includeNodes` é `false`). Veja abaixo. |
+| `edges` | array | Todas as conexões entre os nodes (omitido quando `includeNodes` é `false`). |
 
 #### Campos de node
 
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
 | `id` | string | ID do node (único dentro deste agente). |
-| `type` | string | Tipo do node (ex.: `TEXT_GENERATOR`, `INPUT`, `API_CALLER`). Veja `list_node_types` para a lista completa. |
-| `label` | string | Nome de exibição do node conforme mostrado no canvas. |
-| `config` | object | Configuração específica do node. O formato depende do `type`. |
+| `type` | string | Tipo do node (ex.: `globalStarter`, `commandTextNode`, `conditionNode`). Veja `list_node_types` para a lista completa. |
+| `data` | object | Configuração e dados de exibição específicos do node (inclui o `label` do node). O formato depende do `type`. |
 | `position` | object | Coordenadas `{ x, y }` no canvas. |
+| `width` | number | Largura do node no canvas. |
+| `height` | number | Altura do node no canvas. |
 
 #### Campos de edge
 
@@ -78,24 +90,30 @@ description: "Busca a estrutura completa de um agente específico — seus nodes
 |-------|------|-----------|
 | `id` | string | ID do edge. |
 | `source` | string | ID do node de origem. |
-| `target` | string | ID do node de destino. |
 | `sourceHandle` | string | Qual handle de saída no node de origem este edge parte. |
+| `target` | string | ID do node de destino. |
 | `targetHandle` | string | Qual handle de entrada no node de destino este edge se conecta. |
+| `type` | string | Tipo de renderização do edge (ex.: `custom`). |
+| `style` | object | Estilo visual (cor e espessura do traço). |
+| `animated` | boolean | Se o edge é animado no canvas. |
+| `markerEnd` | object | Configuração da ponta da seta. |
 
 ## Erro: agente não encontrado
 
-Se o `agentId` não existir no seu workspace, você receberá:
+Se o `agentId` não existir no seu workspace, a chamada retorna um **erro de tool** (não um erro de protocolo) — uma resposta JSON-RPC bem-sucedida cujo `result` tem `isError: true`:
 
 ```json
 {
-  "error": {
-    "code": -32007,
-    "message": "Agent not found"
+  "result": {
+    "content": [
+      { "type": "text", "text": "Agent \"a1b2c3d4-...\" not found in this workspace." }
+    ],
+    "isError": true
   }
 }
 ```
 
-Este erro também é retornado se o agente existir mas pertencer a um workspace diferente. Por segurança, a resposta não revela se o agente existe fora do seu workspace.
+Isso também é retornado se o agente existir mas pertencer a um workspace diferente. Por segurança, a resposta não revela se o agente existe fora do seu workspace.
 
 ## Exemplos de prompts
 

@@ -17,18 +17,17 @@ Nenhum parâmetro necessário.
 {
   "nodeTypes": [
     {
-      "type": "TEXT_GENERATOR",
-      "label": "Text generator",
-      "description": "Calls an AI model (Claude, GPT-4, Gemini, etc.) with a prompt and returns the generated text.",
+      "type": "commandTextNode",
+      "label": "Command Text Node",
+      "description": "Executes a text command or prompt and passes it downstream.",
       "category": "AI",
       "inputSchema": {
         "type": "object",
         "properties": {
           "model": { "type": "string", "description": "AI model to use" },
-          "prompt": { "type": "string", "description": "The prompt to send" },
-          "systemPrompt": { "type": "string", "description": "Optional system prompt" }
+          "command": { "type": "string", "description": "Text command or prompt to execute" }
         },
-        "required": ["model", "prompt"]
+        "required": ["command"]
       },
       "outputSchema": {
         "type": "object",
@@ -38,10 +37,10 @@ Nenhum parâmetro necessário.
       }
     },
     {
-      "type": "API_CALLER",
-      "label": "API caller",
-      "description": "Makes an HTTP request to any external API and returns the response.",
-      "category": "Integration",
+      "type": "conditionNode",
+      "label": "Condition Node",
+      "description": "Evaluates a condition and routes flow execution along the true or false branch.",
+      "category": "Logic",
       "inputSchema": { "..." : "..." },
       "outputSchema": { "..." : "..." }
     }
@@ -54,10 +53,10 @@ Nenhum parâmetro necessário.
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
 | `nodeTypes` | array | Lista completa de tipos de node. |
-| `nodeTypes[].type` | string | Identificador legível por máquina. Corresponde ao campo `type` nos objetos de node do `get_agent`. |
+| `nodeTypes[].type` | string | Identificador legível por máquina (camelCase, ex.: `commandTextNode`). Corresponde ao campo `type` nos objetos de node do `get_agent`. |
 | `nodeTypes[].label` | string | Nome legível por humanos conforme exibido no canvas do FluxPrompt. |
 | `nodeTypes[].description` | string | O que este node faz. |
-| `nodeTypes[].category` | string | Agrupamento: `AI`, `Integration`, `Logic`, `Data`, `Input/Output`, etc. |
+| `nodeTypes[].category` | string | Agrupamento: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. |
 | `nodeTypes[].inputSchema` | JSON Schema | A configuração que este node aceita. |
 | `nodeTypes[].outputSchema` | JSON Schema | Os dados que este node produz para nodes downstream. |
 
@@ -65,7 +64,7 @@ Nenhum parâmetro necessário.
 
 - *"Quais tipos de node o FluxPrompt suporta?"*
 - *"Liste todos os tipos de node de IA no FluxPrompt"*
-- *"Quais entradas o node Text Generator aceita?"*
+- *"Quais entradas o node Command Text Node aceita?"*
 - *"Existem tipos de node para consultas de banco de dados no FluxPrompt?"*
 
 ## Relacionado

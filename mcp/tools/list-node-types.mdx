@@ -17,18 +17,17 @@ No parameters required.
 {
   "nodeTypes": [
     {
-      "type": "TEXT_GENERATOR",
-      "label": "Text generator",
-      "description": "Calls an AI model (Claude, GPT-4, Gemini, etc.) with a prompt and returns the generated text.",
+      "type": "commandTextNode",
+      "label": "Command Text Node",
+      "description": "Executes a text command or prompt and passes it downstream.",
       "category": "AI",
       "inputSchema": {
         "type": "object",
         "properties": {
           "model": { "type": "string", "description": "AI model to use" },
-          "prompt": { "type": "string", "description": "The prompt to send" },
-          "systemPrompt": { "type": "string", "description": "Optional system prompt" }
+          "command": { "type": "string", "description": "Text command or prompt to execute" }
         },
-        "required": ["model", "prompt"]
+        "required": ["command"]
       },
       "outputSchema": {
         "type": "object",
@@ -38,10 +37,10 @@ No parameters required.
       }
     },
     {
-      "type": "API_CALLER",
-      "label": "API caller",
-      "description": "Makes an HTTP request to any external API and returns the response.",
-      "category": "Integration",
+      "type": "conditionNode",
+      "label": "Condition Node",
+      "description": "Evaluates a condition and routes flow execution along the true or false branch.",
+      "category": "Logic",
       "inputSchema": { "..." : "..." },
       "outputSchema": { "..." : "..." }
     }
@@ -54,10 +53,10 @@ No parameters required.
 | Field | Type | Description |
 |-------|------|-------------|
 | `nodeTypes` | array | Full list of node types. |
-| `nodeTypes[].type` | string | Machine-readable identifier. Matches the `type` field in `get_agent` node objects. |
+| `nodeTypes[].type` | string | Machine-readable identifier (camelCase, e.g. `commandTextNode`). Matches the `type` field in `get_agent` node objects. |
 | `nodeTypes[].label` | string | Human-readable name as shown in the FluxPrompt canvas. |
 | `nodeTypes[].description` | string | What this node does. |
-| `nodeTypes[].category` | string | Grouping: `AI`, `Integration`, `Logic`, `Data`, `Input/Output`, etc. |
+| `nodeTypes[].category` | string | Grouping: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. |
 | `nodeTypes[].inputSchema` | JSON Schema | The configuration this node accepts. |
 | `nodeTypes[].outputSchema` | JSON Schema | The data this node produces for downstream nodes. |
 
@@ -65,7 +64,7 @@ No parameters required.
 
 - *"What node types does FluxPrompt support?"*
 - *"List all AI node types in FluxPrompt"*
-- *"What inputs does the Text Generator node accept?"*
+- *"What inputs does the Command Text Node accept?"*
 - *"Are there any node types for database queries in FluxPrompt?"*
 
 ## Related

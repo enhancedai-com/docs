@@ -11,8 +11,9 @@ description: "Lista todos os agentes do seu workspace FluxPrompt."
 
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |-----------|------|-------------|-----------|
-| `cursor` | string | Não | Cursor de paginação retornado por uma chamada anterior. Omita na primeira página. |
-| `limit` | number | Não | Número máximo de agentes a retornar. Padrão: 50. Máximo: 500. |
+| `search` | string | Não | Filtro de substring (case-insensitive) sobre o nome do agente. Omita para retornar todos os agentes. |
+| `limit` | number | Não | Número máximo de agentes a retornar. Padrão: 20. Máximo: 200. |
+| `offset` | number | Não | Número de agentes a pular, para paginação. Padrão: 0. |
 
 Nenhum parâmetro é obrigatório. Chamar `list_agents` sem entrada retorna a primeira página de todos os agentes do seu workspace.
 
@@ -38,7 +39,7 @@ Nenhum parâmetro é obrigatório. Chamar `list_agents` sem entrada retorna a pr
       "isPublic": true
     }
   ],
-  "nextCursor": "eyJsYXN0SWQiOiJiMmMzZDRlNSJ9"
+  "total": 19
 }
 ```
 
@@ -53,16 +54,16 @@ Nenhum parâmetro é obrigatório. Chamar `list_agents` sem entrada retorna a pr
 | `agents[].updatedAt` | string ISO 8601 | Quando o agente foi modificado pela última vez. |
 | `agents[].nodeCount` | number | Número de nodes na versão atual do agente. |
 | `agents[].isPublic` | boolean | Se o agente tem um endpoint público. |
-| `nextCursor` | string \| null | Passe como `cursor` na próxima chamada para obter a próxima página. `null` significa que não há mais páginas. |
+| `total` | number | Número total de agentes que correspondem à consulta (ignorando `limit`/`offset`), para você saber quantas páginas faltam. |
 
 ## Paginação
 
-Se o seu workspace tiver mais agentes do que o `limit` permite em uma única chamada, a resposta incluirá um valor `nextCursor`. Passe-o como `cursor` na próxima chamada para continuar:
+`list_agents` usa paginação baseada em `offset`. Compare `total` com `limit` + `offset` para saber se ainda há agentes, e então avance o `offset`:
 
 ```
-Chamada 1: list_agents()                       → retorna agentes 1-50, nextCursor = "abc"
-Chamada 2: list_agents({ cursor: "abc" })      → retorna agentes 51-100, nextCursor = "def"
-Chamada 3: list_agents({ cursor: "def" })      → retorna agentes 101-..., nextCursor = null
+Chamada 1: list_agents({ limit: 20 })              → agentes 1-20,  total = 45
+Chamada 2: list_agents({ limit: 20, offset: 20 })  → agentes 21-40, total = 45
+Chamada 3: list_agents({ limit: 20, offset: 40 })  → agentes 41-45, total = 45
 ```
 
 ## Exemplos de prompts

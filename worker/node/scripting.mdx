@@ -78,7 +78,7 @@ Execution happens in AWS Lambda, not inside the Worker process.
 
 ### Python (`code-executor-python`)
 
-- **Package type:** Container image (ECR: `109622968129.dkr.ecr.us-east-1.amazonaws.com/code-executor`).
+- **Package type:** Container image (ECR: `<aws-account-id>.dkr.ecr.us-east-1.amazonaws.com/code-executor`).
 - **Base image:** `public.ecr.aws/lambda/python:3.12`.
 - **Pre-installed libraries:** `numpy` 2.2.6, `pandas` 2.2.3, `scipy` 1.15.3, `pendulum` 3.1.0, `matplotlib` 3.10.3, `pypdf` 6.8.0. Available to user scripts without runtime installation.
 - **Configuration:** 512 MB memory, 30 s timeout.

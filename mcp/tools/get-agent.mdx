@@ -12,6 +12,7 @@ description: "Fetch the full structure of a specific agent — its nodes, edges,
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `agentId` | string (UUID) | Yes | The agent's unique identifier. Get this from `list_agents`. |
+| `includeNodes` | boolean | No | Whether to include the `nodes` and `edges` arrays. Default: `true`. Set to `false` for a lightweight, metadata-only response. |
 
 ## Output
 
@@ -21,34 +22,43 @@ description: "Fetch the full structure of a specific agent — its nodes, edges,
   "name": "Lead Scorer",
   "description": "Scores inbound leads based on company size and tech stack",
   "updatedAt": "2026-05-31T14:22:00Z",
+  "nodeCount": 2,
   "isPublic": false,
   "nodes": [
     {
-      "id": "node-001",
-      "type": "INPUT",
-      "label": "Lead data",
-      "config": { "fields": ["company", "employees", "techStack"] },
-      "position": { "x": 100, "y": 200 }
+      "id": "flow-global-starter_0.689",
+      "type": "globalStarter",
+      "data": { "myId": "flow-global-starter_0.689", "label": "Flow Global Node" },
+      "position": { "x": 250, "y": 25 },
+      "width": 402,
+      "height": 206
     },
     {
-      "id": "node-002",
-      "type": "TEXT_GENERATOR",
-      "label": "Score generator",
-      "config": { "model": "claude-3-5-sonnet", "prompt": "..." },
-      "position": { "x": 400, "y": 200 }
+      "id": "commandTextNode_0.628",
+      "type": "commandTextNode",
+      "data": { "label": "Score generator", "model": "claude-3-5-sonnet" },
+      "position": { "x": 400, "y": 200 },
+      "width": 320,
+      "height": 180
     }
   ],
   "edges": [
     {
-      "id": "edge-001",
-      "source": "node-001",
-      "target": "node-002",
-      "sourceHandle": "output",
-      "targetHandle": "input"
+      "id": "reactflow__edge-flow-global-starter_0.689a-commandTextNode_0.628input",
+      "source": "flow-global-starter_0.689",
+      "sourceHandle": "a",
+      "target": "commandTextNode_0.628",
+      "targetHandle": "input",
+      "type": "custom",
+      "style": { "stroke": "#6e75ff", "strokeWidth": 1 },
+      "animated": true,
+      "markerEnd": { "type": "arrowclosed", "color": "red", "width": 25, "height": 25 }
     }
   ]
 }
 ```
+
+When `includeNodes` is `false`, the `nodes` and `edges` arrays are omitted and only the metadata fields are returned.
 
 ### Output fields
 
@@ -58,19 +68,21 @@ description: "Fetch the full structure of a specific agent — its nodes, edges,
 | `name` | string | Agent display name. |
 | `description` | string \| null | Agent description. |
 | `updatedAt` | ISO 8601 string | Last modification time. |
+| `nodeCount` | number | Number of nodes in the agent's current version. |
 | `isPublic` | boolean | Whether the agent has a public endpoint. |
-| `nodes` | array | All nodes in the agent. See below. |
-| `edges` | array | All connections between nodes. |
+| `nodes` | array | All nodes in the agent (omitted when `includeNodes` is `false`). See below. |
+| `edges` | array | All connections between nodes (omitted when `includeNodes` is `false`). |
 
 #### Node fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | string | Node ID (unique within this agent). |
-| `type` | string | Node type (e.g. `TEXT_GENERATOR`, `INPUT`, `API_CALLER`). See `list_node_types` for the full list. |
-| `label` | string | Node display name as shown in the canvas. |
-| `config` | object | Node-specific configuration. Shape depends on `type`. |
+| `type` | string | Node type (e.g. `globalStarter`, `commandTextNode`, `conditionNode`). See `list_node_types` for the full list. |
+| `data` | object | Node-specific configuration and display data (includes the node's `label`). Shape depends on `type`. |
 | `position` | object | `{ x, y }` coordinates on the canvas. |
+| `width` | number | Node width on the canvas. |
+| `height` | number | Node height on the canvas. |
 
 #### Edge fields
 
@@ -78,24 +90,30 @@ description: "Fetch the full structure of a specific agent — its nodes, edges,
 |-------|------|-------------|
 | `id` | string | Edge ID. |
 | `source` | string | ID of the source node. |
-| `target` | string | ID of the target node. |
 | `sourceHandle` | string | Which output handle on the source node this edge leaves from. |
+| `target` | string | ID of the target node. |
 | `targetHandle` | string | Which input handle on the target node this edge connects to. |
+| `type` | string | Edge renderer type (e.g. `custom`). |
+| `style` | object | Visual styling (stroke color, width). |
+| `animated` | boolean | Whether the edge is animated on the canvas. |
+| `markerEnd` | object | Arrowhead marker configuration. |
 
 ## Error: agent not found
 
-If the `agentId` does not exist in your workspace, you will receive:
+If the `agentId` does not exist in your workspace, the call returns a **tool error** (not a protocol-level error) — a successful JSON-RPC response whose `result` has `isError: true`:
 
 ```json
 {
-  "error": {
-    "code": -32007,
-    "message": "Agent not found"
+  "result": {
+    "content": [
+      { "type": "text", "text": "Agent \"a1b2c3d4-...\" not found in this workspace." }
+    ],
+    "isError": true
   }
 }
 ```
 
-This error is also returned if the agent exists but belongs to a different workspace. For security, the response does not reveal whether the agent exists outside your workspace.
+This is also returned if the agent exists but belongs to a different workspace. For security, the response does not reveal whether the agent exists outside your workspace.
 
 ## Example prompts
 

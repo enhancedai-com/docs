@@ -10,8 +10,6 @@ The **text generator** node produces LLM output using the Vercel AI SDK (`stream
 
 [`textGeneratorActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`TextGeneratorService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/text-generator/text-generator.service.ts).
 
-For **product and UI** details (inputs, provider knobs, model capability tables), see [AI Text Generator](/worker/text-generator).
-
 ## When it runs
 
 `textGeneratorActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **text generator** (`NodeType.TEXT_GENERATOR`). The workflow typically calls [`validateModelAccessActivity`](/worker/activities/validate-model-access) before execution and [`chargeTokensActivity`](/worker/activities/charge-tokens) afterward using the returned token counts.
@@ -206,7 +204,6 @@ Unsupported or missing providers throw during model selection.
 
 ## Related documentation
 
-- [AI Text Generator](/worker/text-generator) — Field-level and model-matrix reference
 - [`processSingleNode` workflow](/worker/workflows/process-single-node)
 - [Validate model access](/worker/activities/validate-model-access)
 - [Charge tokens](/worker/activities/charge-tokens)
