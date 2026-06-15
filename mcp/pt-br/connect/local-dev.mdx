@@ -19,7 +19,7 @@ As duas ferramentas recomendadas são:
 - Node.js ≥ 22.13 e pnpm ≥ 11 **ou** Docker Desktop (veja opção A abaixo)
 - `mcp-server/` clonado
 - Uma instância local do `back/` rodando (ou túnel para o ambiente dev)
-- Um token dev válido na tabela `mcp_tokens` (veja [Criar um token dev](#criar-um-token-dev) abaixo)
+- Um **service token** dev válido na tabela `mcp_tokens` (veja [Criar um token dev](#criar-um-token-dev) abaixo). O desenvolvimento local sempre usa um service token estático; veja [Autenticação](/mcp/pt-br/authentication) para entender como os service tokens funcionam em produção.
 
 ## Passo 1 — Iniciar o servidor
 
@@ -187,6 +187,24 @@ Após executar, **reinicie completamente o Claude Desktop**. A entrada `fluxprom
     <Warning>
     Se o arquivo já tiver uma chave `mcpServers`, adicione `"fluxprompt-local": { ... }` dentro dela — não crie um segundo bloco `mcpServers`.
     </Warning>
+
+    <Note>
+    **Expondo o servidor via ngrok?** Aponte a `url` para o endereço do ngrok e adicione o header `ngrok-skip-browser-warning` — valor **`1`**, não `true` (veja [Troubleshooting](#troubleshooting)). Caso contrário, toda chamada falha com `Unexpected content type: text/html`:
+
+    ```json
+    {
+      "mcpServers": {
+        "fluxprompt-local": {
+          "url": "https://<seu-subdominio>.ngrok-free.dev/mcp",
+          "headers": {
+            "Authorization": "Bearer mcp_dev_local",
+            "ngrok-skip-browser-warning": "1"
+          }
+        }
+      }
+    }
+    ```
+    </Note>
   </Step>
   <Step title="Reinicie o Claude Desktop">
     Feche completamente o Claude Desktop e reabra. A entrada **fluxprompt-local** aparece no painel de tools (ícone de martelo).
@@ -249,5 +267,36 @@ Os três devem passar antes de qualquer commit.
   </Accordion>
   <Accordion title="tools/list retorna array vazio">
     O scope do token não inclui `read`. O token dev precisa ter `scope: 'read'` na tabela `mcp_tokens`.
+  </Accordion>
+  <Accordion title='Expondo o servidor via ngrok — respostas voltam como HTML ("Unexpected content type: text/html")'>
+    Ao expor o servidor local através do **ngrok** (plano free), o ngrok devolve a própria página de aviso do navegador (HTTP 200, `Content-Type: text/html`) em vez de encaminhar para o servidor MCP. O cliente MCP então falha com `Unexpected content type: text/html`.
+
+    Envie o header de skip em toda requisição — e atenção: o valor precisa ser **`1`**, não `true` (o ngrok só reconhece `1`):
+
+    ```
+    ngrok-skip-browser-warning: 1
+    ```
+
+    Na config do Claude Desktop / Claude Code, adicione junto ao `Authorization`:
+
+    ```json
+    "headers": {
+      "Authorization": "Bearer <token>",
+      "ngrok-skip-browser-warning": "1"
+    }
+    ```
+
+    Verifique com curl (note o valor `1`):
+
+    ```bash
+    curl -s -X POST https://<seu-subdominio>.ngrok-free.dev/mcp \
+      -H "Authorization: Bearer <token>" \
+      -H "ngrok-skip-browser-warning: 1" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+    ```
+
+    Uma resposta correta tem `Content-Type: text/event-stream`. Se ainda vier `text/html`, o valor do header está errado (`true` em vez de `1`) ou ausente.
   </Accordion>
 </AccordionGroup>

@@ -13,52 +13,34 @@ Once connected, you can ask Claude things like:
 
 Claude will call the FluxPrompt MCP tools automatically and show you the results inline.
 
+<Warning>
+**Claude Desktop does not accept pasted tokens.** It rejects user-supplied bearer tokens, so FluxPrompt connects via **OAuth** instead — you log in through a FluxPrompt consent screen and never handle a token. Do not try to add an `Authorization` header in a config file; it will not work. See [Authentication](/mcp/authentication).
+</Warning>
+
 ## Prerequisites
 
 - Claude Desktop installed ([download here](https://claude.ai/download))
-- Your FluxPrompt workspace MCP token (see [Authentication](/mcp/authentication))
+- A FluxPrompt account with access to at least one workspace
 
 ## Step-by-step
 
 <Steps>
-  <Step title="Find the Claude Desktop config file">
-    The config file location depends on your operating system:
-
-    | OS | Path |
-    |----|------|
-    | **macOS** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-    | **Windows** | `%APPDATA%\Claude\claude_desktop_config.json` |
-    | **Linux** | `~/.config/Claude/claude_desktop_config.json` |
-
-    If the file doesn't exist yet, create it.
+  <Step title="Open the connector settings">
+    In Claude Desktop, go to **Settings → Connectors** and click **Add custom connector**.
   </Step>
-  <Step title="Add the FluxPrompt MCP server">
-    Open the file in any text editor and add (or merge) the following:
+  <Step title="Enter the FluxPrompt server URL">
+    Paste the FluxPrompt MCP server URL:
 
-    ```json
-    {
-      "mcpServers": {
-        "fluxprompt": {
-          "url": "https://mcp.fluxprompt.ai/mcp",
-          "headers": {
-            "Authorization": "Bearer YOUR_MCP_TOKEN"
-          }
-        }
-      }
-    }
+    ```
+    https://mcp.fluxprompt.ai/mcp
     ```
 
-    Replace `YOUR_MCP_TOKEN` with your actual token (starts with `mcp_`).
-
-    <Warning>
-    If the file already has an `mcpServers` key, add `"fluxprompt": { ... }` inside it — do not create a second `mcpServers` block.
-    </Warning>
+    Give the connector a recognizable name (e.g. `FluxPrompt`) and confirm.
   </Step>
-  <Step title="Restart Claude Desktop">
-    Fully quit Claude Desktop (not just close the window) and reopen it.
+  <Step title="Log in and grant access">
+    Claude opens a FluxPrompt login + consent screen. Log in with your FluxPrompt account, **select which workspace** you want to grant access to, and approve.
 
-    - **macOS:** right-click the Claude icon in the Dock → Quit
-    - **Windows:** right-click the Claude icon in the system tray → Exit
+    No token is involved — authentication is handled entirely through this OAuth flow.
   </Step>
   <Step title="Verify the connection">
     In a new conversation, type:
@@ -68,42 +50,6 @@ Claude will call the FluxPrompt MCP tools automatically and show you the results
     Claude should respond with a list of agents from your workspace. If you see an error, check the [Troubleshooting](/mcp/troubleshooting) page.
   </Step>
 </Steps>
-
-## Full config example
-
-If your `claude_desktop_config.json` is empty or new:
-
-```json
-{
-  "mcpServers": {
-    "fluxprompt": {
-      "url": "https://mcp.fluxprompt.ai/mcp",
-      "headers": {
-        "Authorization": "Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
-}
-```
-
-If you already have other MCP servers configured:
-
-```json
-{
-  "mcpServers": {
-    "some-other-server": {
-      "command": "npx",
-      "args": ["-y", "@some/server"]
-    },
-    "fluxprompt": {
-      "url": "https://mcp.fluxprompt.ai/mcp",
-      "headers": {
-        "Authorization": "Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-      }
-    }
-  }
-}
-```
 
 ## What Claude can do with FluxPrompt
 
@@ -121,6 +67,7 @@ Claude will choose the right tool automatically based on your question. You can 
 
 If the connection isn't working, see the [Troubleshooting](/mcp/troubleshooting) page. The most common issues are:
 
-- Typo in the token (check for extra spaces)
-- Not fully quitting Claude Desktop before restarting
-- JSON syntax error in the config file (missing comma, extra brace)
+- Trying to use a pasted token instead of the OAuth flow (Claude Desktop only supports OAuth)
+- Not completing the FluxPrompt login + consent screen
+- Selecting the wrong workspace during consent
+</content>

@@ -1,57 +1,78 @@
 ---
 title: "Autenticação"
-description: "Como funcionam os tokens MCP de workspace e como usar o seu."
+description: "As duas formas de autenticar no FluxPrompt MCP — OAuth e service tokens — e quando usar cada uma."
 ---
 
-## Seu token MCP de workspace
+## Dois métodos de autenticação
 
-Um **token MCP de workspace** é uma string secreta longa que dá a um cliente de IA acesso de leitura ao seu workspace FluxPrompt. Ele é diferente da sua API key comum do FluxPrompt:
+O servidor MCP de entrada do FluxPrompt suporta **dois** modos de autenticação. Qual deles você usa depende do seu cliente:
 
-| | API key do FluxPrompt | Token MCP |
+| Método | Quando usar | O que você faz |
 |---|---|---|
-| **Escopo** | Sua conta de usuário | Um workspace específico |
-| **Usado para** | Chamadas REST API a partir do seu próprio código | Conexões de clientes de IA (Claude Desktop, Cursor, n8n) |
-| **Formato** | Alfanumérico curto | Começa com `mcp_` |
-| **Criado via** | Configurações do seu perfil | Fornecido pela equipe FluxPrompt (autoatendimento em breve) |
+| **OAuth 2.0** | Claude Desktop e Claude.ai (**obrigatório** — eles rejeitam tokens colados) e, opcionalmente, Claude Code / CLI e Cursor | Adiciona a URL do servidor como conector e faz login por uma tela de consentimento do FluxPrompt — **sem token** |
+| **Service token estático** | Serviços de backend / máquina-a-máquina, a CLI, Cursor e n8n — clientes que não podem ou não devem executar um fluxo de consentimento no navegador | Gera um token e o coloca no header `Authorization` |
 
 <Info>
-**Acesso beta.** Durante o período de beta, seu token MCP é fornecido pela equipe FluxPrompt. Você o receberá por e-mail ou na sua chamada de onboarding. O gerenciamento de tokens por conta própria — criar, listar e revogar tokens pela interface do FluxPrompt — está no roadmap.
+**Usuários do Claude Desktop e do Claude.ai NÃO usam token.** Esses clientes rejeitam tokens bearer colados pelo usuário, então autenticam exclusivamente via OAuth. Se algum guia mandar você colar um token no Claude Desktop, ele está desatualizado — veja [Conectar Claude Desktop](/mcp/pt-br/connect/claude-desktop).
 </Info>
 
-## Como usar seu token
+## Método 1 — OAuth 2.0
 
-Seu token vai no header `Authorization` de cada requisição MCP:
+OAuth é a escolha certa para qualquer cliente que consegue abrir um navegador. Você nunca vê nem manipula um token.
+
+1. No seu cliente, adicione `https://mcp.fluxprompt.ai/mcp` como conector personalizado.
+2. O cliente abre uma tela de login + consentimento do FluxPrompt.
+3. Você faz login, **seleciona qual workspace** quer liberar e aprova.
+4. O cliente armazena a autorização resultante automaticamente e a renova quando necessário.
+
+Isso é **obrigatório** para Claude Desktop e Claude.ai, e **suportado** por Claude Code / CLI e Cursor. Veja os guias por cliente para os passos exatos.
+
+## Método 2 — Service token estático
+
+Para clientes máquina-a-máquina (serviços de backend), a CLI, o Cursor e o n8n, você usa um **service token** em vez de um fluxo no navegador.
+
+### Gerar um service token
+
+O dono do workspace gera um na interface do FluxPrompt:
+
+1. Vá em **Settings → MCP Tokens**.
+2. Crie um novo token e escolha o workspace a que ele dá acesso.
+3. Copie o token — ele começa com `mcp_` e é **exibido apenas uma vez**. Guarde-o em local seguro.
+
+### Usar o token
+
+O token vai no header `Authorization` de cada requisição MCP:
 
 ```
 Authorization: Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-Você nunca cola esse header manualmente — seu cliente de IA o lê de um arquivo de configuração (veja os guias de conexão para Claude Desktop, Cursor e n8n).
+Normalmente você não digita esse header à mão — seu cliente o lê de um arquivo de configuração (veja os guias de conexão para [Cursor](/mcp/pt-br/connect/cursor), [n8n](/mcp/pt-br/connect/n8n) e [desenvolvimento local](/mcp/pt-br/connect/local-dev)).
 
-## Segurança do token
+## Segurança do service token
 
 <Warning>
-Seu token MCP concede acesso de leitura completo aos agentes do seu workspace. Trate-o como uma senha:
+Um service token concede acesso de leitura completo aos agentes do seu workspace. Trate-o como uma senha:
 - Nunca o commite em um repositório Git.
 - Nunca o cole em um documento público ou screenshot.
 - Nunca o compartilhe no Slack, e-mail ou em qualquer mensagem que outras pessoas possam ver.
 </Warning>
 
-Se você acredita que seu token foi exposto:
+Se você acredita que um service token foi exposto:
 
-1. Entre em contato com a equipe FluxPrompt imediatamente.
-2. Iremos revogar o token e emitir um novo em minutos.
+1. Revogue-o em **Settings → MCP Tokens**.
+2. Gere um novo.
 3. Atualize seus arquivos de configuração do cliente com o novo token.
 
-## Escopos do token (Fase 1)
+## Escopos (Fase 1)
 
-Seu token MCP atual tem escopo **somente leitura**. Ele pode:
+Ambos os métodos de autenticação concedem atualmente acesso **somente leitura**. Eles podem:
 
 - ✅ Listar agentes no seu workspace
 - ✅ Buscar a estrutura completa de qualquer agente
 - ✅ Listar todos os tipos de node disponíveis
 
-Ele não pode:
+Eles não podem:
 
 - ❌ Criar ou editar agentes
 - ❌ Executar agentes ou iniciar execuções
@@ -62,16 +83,20 @@ O acesso de escrita (`add_node`, `update_node`, `remove_node`) estará disponív
 ## Perguntas frequentes
 
 <AccordionGroup>
-  <Accordion title="Posso ter múltiplos tokens MCP para o mesmo workspace?">
-    Sim — cada token é independente. Você pode ter um token por cliente (ex.: um para Claude Desktop, outro para n8n) e revogá-los individualmente. Entre em contato com a equipe FluxPrompt para solicitar tokens adicionais durante o beta.
+  <Accordion title="Qual método devo usar?">
+    Se o seu cliente é Claude Desktop ou Claude.ai, você precisa usar OAuth. Para serviços de backend, a CLI ou o n8n, use um service token. Cursor e Claude Code podem usar qualquer um dos dois — OAuth é o mais simples se você consegue abrir um navegador.
   </Accordion>
-  <Accordion title="O token MCP expira?">
-    Tokens MCP não expiram automaticamente. Eles permanecem válidos até serem revogados. Recomendamos revogar tokens que você não usa mais.
+  <Accordion title="Posso ter múltiplos service tokens para o mesmo workspace?">
+    Sim — cada token é independente. Você pode ter um token por cliente (ex.: um para n8n, outro para um serviço de backend) e revogá-los individualmente em **Settings → MCP Tokens**.
+  </Accordion>
+  <Accordion title="O service token expira?">
+    Service tokens não expiram automaticamente. Eles permanecem válidos até serem revogados. Recomendamos revogar tokens que você não usa mais.
   </Accordion>
   <Accordion title="Posso usar minha API key comum do FluxPrompt no lugar?">
     Não. O servidor MCP usa um sistema de autenticação separado. Sua API key comum não funcionará.
   </Accordion>
   <Accordion title="O que o servidor MCP enxerga do meu workspace?">
-    Ele vê os mesmos agentes e estrutura que sua conta de usuário consegue ver dentro da interface do FluxPrompt. Ele não tem acesso a credenciais, faturamento ou gerenciamento de usuários.
+    Ele vê os mesmos agentes e estrutura que o usuário autenticado consegue ver dentro da interface do FluxPrompt. Ele não tem acesso a credenciais, faturamento ou gerenciamento de usuários.
   </Accordion>
 </AccordionGroup>
+</content>

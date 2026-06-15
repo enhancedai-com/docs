@@ -13,7 +13,11 @@ Once connected, the Cursor AI assistant can answer questions about your FluxProm
 ## Prerequisites
 
 - Cursor installed ([download here](https://cursor.sh))
-- Your FluxPrompt workspace MCP token (see [Authentication](/mcp/authentication))
+- A FluxPrompt workspace **service token** (see [Authentication](/mcp/authentication))
+
+<Note>
+Cursor can also authenticate via **OAuth** (add the server URL and complete the FluxPrompt login + consent flow), the same as Claude Code. This guide uses a static service token, which is handy for shared or headless setups. Either method works.
+</Note>
 
 ## Step-by-step
 
@@ -34,10 +38,10 @@ Once connected, the Cursor AI assistant can answer questions about your FluxProm
 
     For the **Authorization** header, add:
     ```
-    Authorization: Bearer YOUR_MCP_TOKEN
+    Authorization: Bearer YOUR_SERVICE_TOKEN
     ```
 
-    Replace `YOUR_MCP_TOKEN` with your actual token.
+    Replace `YOUR_SERVICE_TOKEN` with your actual service token (starts with `mcp_`).
   </Step>
   <Step title="Save and verify">
     Save the settings. Cursor connects immediately — no restart needed.

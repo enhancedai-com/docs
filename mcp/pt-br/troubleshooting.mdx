@@ -8,10 +8,13 @@ description: "Problemas comuns de conexão e como resolvê-los."
 Antes de investigar erros específicos, verifique estas cinco coisas:
 
 <Steps>
-  <Step title="Formato do token">
-    Seu token deve começar com `mcp_` e não conter espaços. Se você o copiou de um e-mail, verifique se há espaços em branco no final.
+  <Step title="O método de autenticação combina com o cliente">
+    Claude Desktop e Claude.ai usam **somente OAuth** — sem token. Se você está tentando colar um token neles, esse é o problema; adicione o FluxPrompt como conector personalizado. Os passos abaixo valem para clientes que usam service token (Cursor, n8n, CLI, serviços de backend).
   </Step>
-  <Step title="Formato do header Authorization">
+  <Step title="Formato do token (clientes com service token)">
+    Seu service token deve começar com `mcp_` e não conter espaços. Se você o copiou de **Settings → MCP Tokens**, verifique se há espaços em branco no final.
+  </Step>
+  <Step title="Formato do header Authorization (clientes com service token)">
     Deve ser `Bearer <token>` (B maiúsculo, um espaço). Não `bearer`, não `Token`, não o token puro sem o prefixo.
 
     ✅ `Bearer mcp_abc123`
@@ -33,13 +36,21 @@ Antes de investigar erros específicos, verifique estas cinco coisas:
 
 ## Referência de erros
 
-### "Unauthorized" / 401
+### O Claude Desktop diz que o token é inválido / não consigo colar meu token
 
-**Causa:** O token está ausente, malformado ou revogado.
+**Causa:** O Claude Desktop (e o Claude.ai) rejeitam tokens bearer colados pelo usuário. Eles autenticam via **OAuth**, não por um token em arquivo de configuração.
+
+**Solução:** Não cole um token. Adicione o FluxPrompt como conector personalizado e conclua o fluxo de login + consentimento — veja [Conectar Claude Desktop](/mcp/pt-br/connect/claude-desktop). Service tokens são apenas para clientes como Cursor, n8n, a CLI e serviços de backend.
+
+---
+
+### "Unauthorized" / 401 (clientes com service token)
+
+**Causa:** Para clientes baseados em token (Cursor, n8n, CLI, serviços de backend), o service token está ausente, malformado ou revogado. (Claude Desktop / Claude.ai não usam token — veja a entrada acima.)
 
 **Solução:**
 1. Confirme que o seu header `Authorization` é `Bearer mcp_xxxxx` sem caracteres extras.
-2. Entre em contato com o FluxPrompt para verificar se seu token ainda está ativo.
+2. Verifique se o token ainda está ativo em **Settings → MCP Tokens**, ou gere um novo.
 
 ---
 

@@ -13,9 +13,23 @@ Em vez de navegar pela interface do FluxPrompt, seu cliente de IA pode fazer per
 - *"Mostre os nodes dentro do agente Invoice Parser"*
 - *"Quais tipos de node o FluxPrompt suporta?"*
 
-<Info>
-**Acesso beta.** O FluxPrompt MCP está atualmente em beta fechado. Seu token de workspace é fornecido pela equipe do FluxPrompt. A criação de tokens por conta própria estará disponível no app assim que o beta for concluído.
-</Info>
+## Autenticação em resumo
+
+O FluxPrompt MCP suporta **dois** métodos de autenticação, e o correto depende do seu cliente:
+
+- **OAuth 2.0** — você adiciona a URL do servidor como conector, faz login por uma tela de consentimento do FluxPrompt e escolhe um workspace. Nenhum token é colado. É **obrigatório** para Claude Desktop e Claude.ai (que rejeitam tokens colados) e também é suportado por Claude Code / CLI e Cursor.
+- **Service token estático** — o dono do workspace gera um token (começa com `mcp_`) em **Settings → MCP Tokens** e o coloca no header `Authorization`. É para clientes máquina-a-máquina, a CLI, o Cursor e o n8n — clientes que não podem ou não devem executar um fluxo de consentimento no navegador.
+
+| Cliente | OAuth | Service token estático |
+|---------|-------|------------------------|
+| Claude Desktop | ✅ obrigatório | ❌ não suportado |
+| Claude.ai | ✅ obrigatório | ❌ não suportado |
+| Claude Code / CLI | ✅ | ✅ |
+| Cursor | ✅ | ✅ |
+| n8n | parcial | ✅ recomendado |
+| Serviços de backend (M2M) | ❌ (sem navegador) | ✅ |
+
+Veja [Autenticação](/mcp/pt-br/authentication) para todos os detalhes.
 
 ## O que você pode fazer agora (Fase 1 — Somente leitura)
 
@@ -37,7 +51,7 @@ Em vez de navegar pela interface do FluxPrompt, seu cliente de IA pode fazer per
 Seu cliente de IA (Claude Desktop / Cursor / n8n)
         │
         │  JSON-RPC sobre HTTPS
-        │  Authorization: Bearer <seu token>
+        │  Sessão OAuth  ou  Authorization: Bearer <service token>
         ▼
 Servidor FluxPrompt MCP  (mcp.fluxprompt.ai)
         │
@@ -46,7 +60,7 @@ Servidor FluxPrompt MCP  (mcp.fluxprompt.ai)
 FluxPrompt API  ──▶  Seus agentes, nodes e flows
 ```
 
-1. Você se autentica com um **token MCP com escopo de workspace**.
+1. Você se autentica via **OAuth** (consentimento no navegador) ou um **service token com escopo de workspace**, dependendo do seu cliente.
 2. Seu cliente de IA se conecta a `https://mcp.fluxprompt.ai/mcp`.
 3. Ele chama as ferramentas — `list_agents`, `get_agent`, `list_node_types` — e recebe respostas estruturadas.
 4. Cada chamada é registrada no log de auditoria do FluxPrompt.
@@ -56,7 +70,8 @@ FluxPrompt API  ──▶  Seus agentes, nodes e flows
 | Termo | Significado |
 |-------|-------------|
 | **MCP** | Model Context Protocol — um padrão aberto para conectar clientes de IA a ferramentas e dados externos. |
-| **Token MCP** | Uma string secreta com escopo limitado ao seu workspace. Obrigatória em cada requisição. Diferente da sua API key do FluxPrompt. |
+| **OAuth** | Um fluxo de consentimento no navegador em que você faz login no FluxPrompt e concede a um cliente acesso a um workspace. Nenhum token é colado. Obrigatório para Claude Desktop e Claude.ai. |
+| **Service token** | Uma string secreta com escopo limitado ao seu workspace (começa com `mcp_`), gerada em **Settings → MCP Tokens**. Enviada no header `Authorization`. Usada por clientes máquina-a-máquina, a CLI e o n8n. Diferente da sua API key do FluxPrompt. |
 | **Tool** | Uma ação nomeada que o servidor MCP expõe (ex.: `list_agents`). Seu cliente de IA chama as tools em seu nome. |
 | **Workspace** | O contexto da sua empresa ou equipe no FluxPrompt. Um token MCP = um workspace. |
 | **Streamable HTTP** | O protocolo de transporte que o FluxPrompt MCP utiliza. Um único endpoint HTTPS que aceita requisições JSON-RPC 2.0. |
@@ -66,8 +81,8 @@ FluxPrompt API  ──▶  Seus agentes, nodes e flows
 Você vai precisar de:
 
 - Uma **conta FluxPrompt** com pelo menos um agente no seu workspace.
-- Um **token MCP de workspace** — entre em contato com a equipe do FluxPrompt caso ainda não tenha recebido o seu.
-- Um dos clientes de IA suportados instalado: Claude Desktop, Cursor ou n8n.
+- Um cliente compatível com OAuth (Claude Desktop, Claude.ai, Claude Code, Cursor) ou um **service token** de **Settings → MCP Tokens** para clientes baseados em token (n8n, serviços de backend).
+- Um dos clientes de IA suportados instalado.
 
 <Note>
 Este guia assume que o servidor FluxPrompt MCP está em `https://mcp.fluxprompt.ai/mcp`. Se a sua equipe usa um endpoint dedicado, utilize esse no lugar.

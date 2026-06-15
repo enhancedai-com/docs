@@ -8,10 +8,13 @@ description: "Common connection issues and how to fix them."
 Before digging into specific errors, verify these five things:
 
 <Steps>
-  <Step title="Token format">
-    Your token should start with `mcp_` and contain no spaces. If you copied it from an email, check for trailing whitespace.
+  <Step title="Auth method matches the client">
+    Claude Desktop and Claude.ai use **OAuth only** — no token. If you're trying to paste a token into them, that's the problem; add FluxPrompt as a custom connector instead. The steps below apply to service-token clients (Cursor, n8n, CLI, backend services).
   </Step>
-  <Step title="Authorization header format">
+  <Step title="Token format (service-token clients)">
+    Your service token should start with `mcp_` and contain no spaces. If you copied it from **Settings → MCP Tokens**, check for trailing whitespace.
+  </Step>
+  <Step title="Authorization header format (service-token clients)">
     It must be `Bearer <token>` (capital B, one space). Not `bearer`, not `Token`, not the raw token without the prefix.
 
     ✅ `Bearer mcp_abc123`
@@ -33,13 +36,21 @@ Before digging into specific errors, verify these five things:
 
 ## Error reference
 
-### "Unauthorized" / 401
+### Claude Desktop says the token is invalid / I can't paste my token
 
-**Cause:** Token is missing, malformed, or revoked.
+**Cause:** Claude Desktop (and Claude.ai) reject user-pasted bearer tokens. They authenticate via **OAuth**, not a token in a config file.
+
+**Fix:** Don't paste a token. Add FluxPrompt as a custom connector and complete the login + consent flow — see [Connect Claude Desktop](/mcp/connect/claude-desktop). Service tokens are only for clients like Cursor, n8n, the CLI, and backend services.
+
+---
+
+### "Unauthorized" / 401 (service-token clients)
+
+**Cause:** For token-based clients (Cursor, n8n, CLI, backend services), the service token is missing, malformed, or revoked. (Claude Desktop / Claude.ai don't use tokens — see the entry above.)
 
 **Fix:**
 1. Confirm your `Authorization` header is `Bearer mcp_xxxxx` with no extra characters.
-2. Contact FluxPrompt to verify your token is still active.
+2. Check the token is still active in **Settings → MCP Tokens**, or generate a new one.
 
 ---
 

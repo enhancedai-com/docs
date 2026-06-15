@@ -13,9 +13,23 @@ Instead of navigating the FluxPrompt UI, your AI client can ask things like:
 - *"Show me the nodes inside the Invoice Parser agent"*
 - *"What node types does FluxPrompt support?"*
 
-<Info>
-**Beta access.** FluxPrompt MCP is currently in closed beta. Your workspace token is provided by the FluxPrompt team. Self-service token creation will be available in the app once beta completes.
-</Info>
+## Authentication at a glance
+
+FluxPrompt MCP supports **two** authentication methods, and the right one depends on your client:
+
+- **OAuth 2.0** — you add the server URL as a connector, log in through a FluxPrompt consent screen, and pick a workspace. No token is ever pasted. This is **required** for Claude Desktop and Claude.ai (they reject pasted tokens) and is also supported by Claude Code / CLI and Cursor.
+- **Static service token** — the workspace owner generates a token (starts with `mcp_`) in **Settings → MCP Tokens** and puts it in the `Authorization` header. This is for machine-to-machine clients, the CLI, Cursor, and n8n — clients that can't or shouldn't run a browser consent flow.
+
+| Client | OAuth | Static service token |
+|--------|-------|----------------------|
+| Claude Desktop | ✅ required | ❌ not supported |
+| Claude.ai | ✅ required | ❌ not supported |
+| Claude Code / CLI | ✅ | ✅ |
+| Cursor | ✅ | ✅ |
+| n8n | partial | ✅ recommended |
+| Backend services (M2M) | ❌ (no browser) | ✅ |
+
+See [Authentication](/mcp/authentication) for the full details.
 
 ## What you can do right now (Phase 1 — Read-only)
 
@@ -37,7 +51,7 @@ Instead of navigating the FluxPrompt UI, your AI client can ask things like:
 Your AI client (Claude Desktop / Cursor / n8n)
         │
         │  JSON-RPC over HTTPS
-        │  Authorization: Bearer <your token>
+        │  OAuth session  or  Authorization: Bearer <service token>
         ▼
 FluxPrompt MCP server  (mcp.fluxprompt.ai)
         │
@@ -46,7 +60,7 @@ FluxPrompt MCP server  (mcp.fluxprompt.ai)
 FluxPrompt API  ──▶  Your agents, nodes, and flows
 ```
 
-1. You authenticate with a **workspace-scoped MCP token**.
+1. You authenticate via **OAuth** (browser consent) or a **workspace-scoped service token**, depending on your client.
 2. Your AI client connects to `https://mcp.fluxprompt.ai/mcp`.
 3. It calls tools — `list_agents`, `get_agent`, `list_node_types` — and gets structured responses.
 4. Every call is logged in the FluxPrompt audit trail.
@@ -56,7 +70,8 @@ FluxPrompt API  ──▶  Your agents, nodes, and flows
 | Term | Meaning |
 |------|---------|
 | **MCP** | Model Context Protocol — an open standard for connecting AI clients to external tools and data. |
-| **MCP token** | A secret string scoped to your workspace. Required for every request. Different from your FluxPrompt API key. |
+| **OAuth** | A browser-based consent flow where you log in to FluxPrompt and grant a client access to a workspace. No token is pasted. Required for Claude Desktop and Claude.ai. |
+| **Service token** | A secret string scoped to your workspace (starts with `mcp_`), generated in **Settings → MCP Tokens**. Sent in the `Authorization` header. Used by machine-to-machine clients, the CLI, and n8n. Different from your FluxPrompt API key. |
 | **Tool** | A named action the MCP server exposes (e.g. `list_agents`). Your AI client calls tools on your behalf. |
 | **Workspace** | Your company or team context in FluxPrompt. One MCP token = one workspace. |
 | **Streamable HTTP** | The transport protocol FluxPrompt MCP uses. A single HTTPS endpoint that accepts JSON-RPC 2.0 requests. |
@@ -66,8 +81,8 @@ FluxPrompt API  ──▶  Your agents, nodes, and flows
 You will need:
 
 - A **FluxPrompt account** with at least one agent in your workspace.
-- A **workspace MCP token** — contact the FluxPrompt team if you haven't received yours.
-- One of the supported AI clients installed: Claude Desktop, Cursor, or n8n.
+- Either an OAuth-capable client (Claude Desktop, Claude.ai, Claude Code, Cursor) or a **service token** from **Settings → MCP Tokens** for token-based clients (n8n, backend services).
+- One of the supported AI clients installed.
 
 <Note>
 This guide assumes the FluxPrompt MCP server is at `https://mcp.fluxprompt.ai/mcp`. If your team uses a dedicated endpoint, use that instead.
