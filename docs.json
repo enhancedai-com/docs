@@ -56,8 +56,7 @@
                         "pages": [
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel",
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod",
-                          "ai-workflows/internal-developer-workflows/skills/db-migration",
-                          "ai-workflows/internal-developer-workflows/skills/tlc-spec-driven"
+                          "ai-workflows/internal-developer-workflows/skills/db-migration"
                         ]
                       },
                       {
@@ -281,8 +280,7 @@
                         "pages": [
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel",
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod",
-                          "ai-workflows/internal-developer-workflows/skills/db-migration",
-                          "ai-workflows/internal-developer-workflows/skills/tlc-spec-driven"
+                          "ai-workflows/internal-developer-workflows/skills/db-migration"
                         ]
                       },
                       {
