@@ -57,7 +57,8 @@
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel",
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod",
                           "ai-workflows/internal-developer-workflows/skills/db-migration",
-                          "ai-workflows/internal-developer-workflows/skills/tlc-spec-driven"
+                          "ai-workflows/internal-developer-workflows/skills/tlc-spec-driven",
+                          "ai-workflows/internal-developer-workflows/skills/mcp-validation"
                         ]
                       },
                       {
@@ -66,7 +67,8 @@
                           "ai-workflows/internal-developer-workflows/agents/db-investigator",
                           "ai-workflows/internal-developer-workflows/agents/db-setup",
                           "ai-workflows/internal-developer-workflows/agents/pr-creator",
-                          "ai-workflows/internal-developer-workflows/agents/mintlify-docs-writer"
+                          "ai-workflows/internal-developer-workflows/agents/mintlify-docs-writer",
+                          "ai-workflows/internal-developer-workflows/agents/mcp-validator"
                         ]
                       },
                       {
@@ -316,7 +318,8 @@
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel",
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod",
                           "ai-workflows/internal-developer-workflows/skills/db-migration",
-                          "ai-workflows/internal-developer-workflows/skills/tlc-spec-driven"
+                          "ai-workflows/internal-developer-workflows/skills/tlc-spec-driven",
+                          "ai-workflows/internal-developer-workflows/skills/mcp-validation"
                         ]
                       },
                       {
@@ -325,7 +328,8 @@
                           "ai-workflows/internal-developer-workflows/agents/db-investigator",
                           "ai-workflows/internal-developer-workflows/agents/db-setup",
                           "ai-workflows/internal-developer-workflows/agents/pr-creator",
-                          "ai-workflows/internal-developer-workflows/agents/mintlify-docs-writer"
+                          "ai-workflows/internal-developer-workflows/agents/mintlify-docs-writer",
+                          "ai-workflows/internal-developer-workflows/agents/mcp-validator"
                         ]
                       },
                       {

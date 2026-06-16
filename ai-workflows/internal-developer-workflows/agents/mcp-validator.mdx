@@ -1,0 +1,41 @@
+---
+title: "mcp-validator"
+description: "Runs the MCP validation gate in an isolated context and returns a go/no-go verdict with evidence. Read-only with respect to dev, staging, and prod."
+---
+
+## What it does
+
+A thin isolation wrapper around the [`mcp-validation`](/ai-workflows/internal-developer-workflows/skills/mcp-validation) skill. Its value is running the validation in its **own context** — keeping the main conversation clean — and returning a crisp **GO / NO-GO** verdict.
+
+The agent lives at `.workflow/agents/mcp-validator.md`. It loads the `mcp-validation` skill (the source of truth for the tracks, gotchas, and reporting format) and executes it.
+
+<Note>
+  This is the **hybrid** pattern. The procedure is the skill; the agent just runs it isolated. Update validation logic in the skill, not here.
+</Note>
+
+## When to use it
+
+- "Validate the MCP" / "run the MCP gate"
+- "Is MCP Phase 1 releasable?"
+- Before opening an MCP PR
+
+## How to invoke
+
+- The Agent tool with `subagent_type: "mcp-validator"`, or
+- Name it directly: "use the mcp-validator agent".
+
+It reports a `GO` / `NO-GO` on the first line, then a per-track table with evidence, then any flagged follow-ups (especially anything deferred to dev/staging).
+
+## Hard boundaries
+
+<Warning>
+  - **Runs tests and reads state only** — never implements features.
+  - **Never touches dev / staging / prod** databases or remote services. If a check needs a remote env, it stops and tells you exactly what to run.
+  - **Never requests a secret/JWT in chat** — you export it in your shell.
+  - **Surfaces failures verbatim** and proposes a fix; it does not silently fix-and-rerun.
+</Warning>
+
+## Related
+
+- [`mcp-validation` skill](/ai-workflows/internal-developer-workflows/skills/mcp-validation) — the procedure it runs.
+- [Validating the MCP](/mcp/development/validating-the-mcp) — the customer-docs contributor page.

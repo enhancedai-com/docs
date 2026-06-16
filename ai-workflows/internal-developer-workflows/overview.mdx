@@ -34,10 +34,10 @@ The tooling is layered. Knowing which layer you are in tells you where to look f
 
 <Columns cols={3}>
   <Card title="Skill" icon="screwdriver-wrench">
-    A reusable capability the model invokes via the `Skill` tool. Self-contained: instructions in `SKILL.md`, code in `templates/`, references in `references/`. Examples: `ec2-tunnel`, `ec2-tunnel-prod`, `db-migration`.
+    A reusable capability the model invokes via the `Skill` tool. Self-contained: instructions in `SKILL.md`, code in `templates/`, references in `references/`. Examples: `ec2-tunnel`, `ec2-tunnel-prod`, `db-migration`, `mcp-validation`.
   </Card>
   <Card title="Agent" icon="user-gear">
-    A specialized subagent defined in `.claude/agents/<name>.md`. Composes skills, tools, and rules to solve a specific class of problem. Examples: `db-investigator`, `db-setup`, `pr-creator`.
+    A specialized subagent defined in `.claude/agents/<name>.md` (or `.workflow/agents/`). Composes skills, tools, and rules to solve a specific class of problem. Examples: `db-investigator`, `db-setup`, `pr-creator`, `mcp-validator` (which runs the `mcp-validation` skill in isolation).
   </Card>
   <Card title="Playbook" icon="book-open">
     A documented diagnostic recipe a human follows (with or without Claude). Combines skills and agents in a known sequence for a known class of incident. Examples: Flux error investigation, memory leak diagnosis.
@@ -64,14 +64,17 @@ The tooling is layered. Knowing which layer you are in tells you where to look f
 │  │  ├─ ec2-tunnel/                Dev/staging DB access via SSH tunnel
 │  │  ├─ ec2-tunnel-prod/           Read-only prod DB access (triple-layer safety)
 │  │  ├─ db-migration/              Data migration between environments
-│  │  └─ tlc-spec-driven/           Adaptive feature planning
+│  │  ├─ tlc-spec-driven/           Adaptive feature planning
+│  │  └─ mcp-validation/            Local validation gate for the MCP server
 │  ├─ rules/                        Always-applied context for code work
+│  ├─ agents/                       Custom subagents (incl. mcp-validator)
 │  └─ kb/                           Knowledge base (node specs, conventions)
 └─ .claude/
    └─ agents/                       Custom subagents
       ├─ db-investigator.md         Diagnose "data missing" reports
       ├─ db-setup.md                Onboard new teammates
-      └─ pr-creator.md              Create PRs from ClickUp tasks
+      ├─ pr-creator.md              Create PRs from ClickUp tasks
+      └─ mcp-validator.md           Run the MCP validation gate (isolated)
 ```
 
 <Warning>

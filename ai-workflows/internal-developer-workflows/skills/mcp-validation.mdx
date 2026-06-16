@@ -1,0 +1,53 @@
+---
+title: "mcp-validation"
+description: "The procedure for locally validating the FluxPrompt MCP integration before shipping — validation tracks, hard-won gotchas, and the go/no-go reporting format. Read-only with respect to dev/staging/prod."
+---
+
+## What it does
+
+Encapsulates how the team validates the MCP server (`mcp-server/` + `back/src/app-mcp` + `front/`) before releasing changes. It is the **source of truth** for the validation procedure — the [`mcp-validator`](/ai-workflows/internal-developer-workflows/agents/mcp-validator) agent is a thin wrapper that loads this skill and runs it in an isolated context.
+
+The skill lives at `.workflow/skills/mcp-validation/`. Source of truth is its `SKILL.md`.
+
+<Note>
+  This is the **hybrid** pattern: the reusable procedure is the skill; the agent just runs it in isolation and returns a verdict. To update how validation works, edit the skill — the agent stays thin.
+</Note>
+
+## How to use it
+
+In Claude Code, say **"validate the MCP"** (also: "run the MCP gate", "is MCP Phase 1 releasable?"). The skill loads inline and runs the tracks. For an isolated run that keeps your main session clean, use the `mcp-validator` agent.
+
+## Validation tracks
+
+Run in order; stop and report at the first hard failure. Each track reports pass / fail / skipped with the output that proves it.
+
+| # | Track | What it checks |
+| --- | --- | --- |
+| 1 | **Unit + coverage** | `mcp-server`, `back/src/app-mcp`, and `front` MCP suites; one suite at a time (RAM); `back` needs the heap bump + `--runInBand` |
+| 2 | **In-process e2e** | `mcp-server` and `back` e2e, including the full OAuth handshake |
+| 3 | **Migration apply + revert** | All MCP migrations (`mcp_tokens`, dual-auth columns, `mcp_oauth_clients`) on a throwaway Postgres |
+| 4 | **Local-stack acceptance** | `back` (fresh build) + `mcp-server` up locally; protocol/tools acceptance |
+| 5 | **Protection checks** | Auth required (401 + `WWW-Authenticate`), kill switch + rate limit return JSON-RPC `-32006`, expired tokens rejected |
+| 6 | **OAuth + transport interop** | AS/protected-resource metadata (incl. path-aware), DCR → authorize → consent → token → authenticated call, `protocolVersion` echo, `Mcp-Session-Id`, CORS, `DELETE /mcp` → 204, and **DCR client persistence across a restart** |
+
+## Hard rules
+
+<Warning>
+  - **Local-only.** Never touches dev, staging, or prod databases or remote services.
+  - **Never asks for secrets in chat.** Admin JWTs / workspace IDs are exported in the shell, never pasted.
+  - **Failures are surfaced verbatim** — tests are not silently fixed and re-run.
+  - Migrations to shared environments go through a reviewed PR, not the gate.
+</Warning>
+
+## Gotchas it encodes
+
+- Static-token `Authorization` must be `Bearer mcp_...` (a bare token → 401).
+- `MCP_OAUTH_CONSENT_SECRET` must be byte-identical in `back/.env` and `mcp-server/.env`.
+- `.env` CRLF (WSL) can corrupt a curl header → 400; strip `\r`.
+- mcp-server restarts wipe in-memory pending/codes, but **not** DCR clients (persisted in Postgres).
+- Codex's `tool_search` does not list MCP tools — they are directly callable.
+
+## Related
+
+- [`mcp-validator`](/ai-workflows/internal-developer-workflows/agents/mcp-validator) — the agent that runs this skill in isolation.
+- [Best practices](/ai-workflows/internal-developer-workflows/best-practices).
