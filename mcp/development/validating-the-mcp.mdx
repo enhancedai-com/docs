@@ -1,0 +1,63 @@
+---
+title: "Validating the MCP"
+description: "Contributor guide: run the local validation gate before shipping the FluxPrompt MCP server."
+---
+
+<Note>
+This is a **contributor / maintainer** page, not a customer connect guide. If you just want to use FluxPrompt from an AI client, see [Connect your AI client](/mcp/connect/claude-desktop) instead.
+</Note>
+
+## Why this exists
+
+Before shipping any change to the MCP server, run the **local validation gate**. It runs tests and reads local state — it is **read-only with respect to dev, staging, and prod**, and never touches shared databases or remote services.
+
+In Claude Code the gate is driven by two complementary pieces:
+
+- The **`mcp-validation` skill** — the canonical validation procedure (tracks, gotchas, reporting format). This is the source of truth.
+- The **`mcp-validator` agent** — runs the skill in an isolated context and returns a single **GO / NO-GO** verdict with evidence.
+
+## Validation tracks
+
+Run in order. Stop and report at the first hard failure (unless you explicitly want a full sweep). Each track reports pass / fail / skipped with the output that proves it.
+
+| # | Track | What it checks |
+|---|-------|----------------|
+| 1 | **Unit + coverage** | `mcp-server`, `back/src/app-mcp`, and `front` MCP suites pass; coverage holds. Run one suite at a time (heavy on RAM). |
+| 2 | **In-process e2e** | `mcp-server` and `back` end-to-end suites, including the full OAuth handshake. |
+| 3 | **Migration apply + revert** | All MCP migrations apply and cleanly revert on a **throwaway** local Postgres (never dev/staging/prod). |
+| 4 | **Local-stack acceptance** | `back` + `mcp-server` started locally over HTTP; protocol/tools acceptance suite passes against a local token. |
+| 5 | **Protection checks** | Auth required (401 with `WWW-Authenticate`), kill switch + rate limit return the expected JSON-RPC error, expired tokens rejected. |
+| 6 | **OAuth + transport interop** | AS/protected-resource metadata, DCR, authorize → consent → token → authenticated call, CORS preflight, session header — **and DCR client persistence across an `mcp-server` restart**. |
+
+<Note>
+Tracks 3 and 4 use a disposable local Postgres and a locally started stack. They must never run against shared environments. Anything that needs dev/staging/prod (e.g. applying a migration there) stops and goes through a reviewed PR.
+</Note>
+
+## How to run it
+
+<Steps>
+  <Step title="Load the skill inline">
+    In Claude Code, say **“validate the MCP”** (also: “run the MCP gate”, “is MCP Phase 1 releasable?”). This loads the `mcp-validation` skill and runs the tracks in the current session.
+  </Step>
+  <Step title="Or use the agent for an isolated run">
+    Invoke the **`mcp-validator`** agent. It runs the same tracks in its own context and reports a clean **GO / NO-GO** without polluting your main conversation.
+  </Step>
+  <Step title="Read the verdict">
+    The first line is **GO** or **NO-GO**, followed by a per-track table (pass / fail / skipped + one-line evidence) and any flagged follow-ups — especially anything deferred to dev/staging.
+  </Step>
+</Steps>
+
+## Hard rules
+
+<Warning>
+- **Local-only.** The gate never touches dev, staging, or prod databases or remote services.
+- **Never asks for secrets in chat.** If a track needs an admin JWT or workspace ID, export it locally (via a shell escape) — never paste it into the conversation.
+- **Failures are surfaced verbatim.** Tests are not silently fixed and re-run; the failing output is reported so a human decides the fix.
+- **Stale builds = false greens.** `back` runs from a built `dist` with no watch — rebuild and restart after a `back` change before acceptance.
+</Warning>
+
+## Related
+
+- [Authentication](/mcp/authentication) — the dual auth model (OAuth for Claude hosts, service tokens for M2M/CLI).
+- [Connect your AI client](/mcp/connect/claude-desktop) — customer-facing connect flows.
+- [Troubleshooting](/mcp/troubleshooting) — common connection errors.
