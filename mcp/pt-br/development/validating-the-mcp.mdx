@@ -1,0 +1,63 @@
+---
+title: "Validando o MCP"
+description: "Guia para contribuidores: rode o gate de validação local antes de publicar o servidor MCP do FluxPrompt."
+---
+
+<Note>
+Esta é uma página para **contribuidores / mantenedores**, não um guia de conexão. Se você só quer usar o FluxPrompt a partir de um cliente de IA, veja [Conecte seu cliente de IA](/mcp/pt-br/connect/claude-desktop).
+</Note>
+
+## Por que existe
+
+Antes de publicar qualquer mudança no servidor MCP, rode o **gate de validação local**. Ele roda testes e lê estado local — é **somente leitura em relação a dev, staging e prod**, e nunca toca em bancos compartilhados ou serviços remotos.
+
+No Claude Code o gate é guiado por duas peças complementares:
+
+- O **skill `mcp-validation`** — o procedimento canônico de validação (tracks, gotchas, formato de relatório). É a fonte da verdade.
+- O **agente `mcp-validator`** — roda o skill em contexto isolado e devolve um único veredito **GO / NO-GO** com evidências.
+
+## Tracks de validação
+
+Rode em ordem. Pare e reporte na primeira falha grave (a menos que você queira uma varredura completa). Cada track reporta pass / fail / skipped com a saída que comprova.
+
+| # | Track | O que verifica |
+|---|-------|----------------|
+| 1 | **Unit + cobertura** | Suítes MCP de `mcp-server`, `back/src/app-mcp` e `front` passam; cobertura se mantém. Rode uma suíte por vez (pesado de RAM). |
+| 2 | **e2e in-process** | Suítes e2e de `mcp-server` e `back`, incluindo o handshake OAuth completo. |
+| 3 | **Migration apply + revert** | Todas as migrations do MCP aplicam e revertem limpas num Postgres local **descartável** (nunca dev/staging/prod). |
+| 4 | **Aceitação local-stack** | `back` + `mcp-server` no ar localmente via HTTP; suíte de aceitação de protocolo/tools com token local. |
+| 5 | **Checagens de proteção** | Auth exigida (401 com `WWW-Authenticate`), kill switch + rate limit retornam o erro JSON-RPC esperado, tokens expirados rejeitados. |
+| 6 | **Interop OAuth + transporte** | Metadata AS/protected-resource, DCR, authorize → consent → token → chamada autenticada, preflight CORS, header de sessão — **e persistência do cliente DCR após restart do `mcp-server`**. |
+
+<Note>
+Os tracks 3 e 4 usam um Postgres local descartável e um stack iniciado localmente. Nunca devem rodar contra ambientes compartilhados. Qualquer coisa que precise de dev/staging/prod (ex.: aplicar migration lá) para e segue por um PR revisado.
+</Note>
+
+## Como rodar
+
+<Steps>
+  <Step title="Carregue o skill inline">
+    No Claude Code, diga **“validate the MCP”** (também: “run the MCP gate”, “is MCP Phase 1 releasable?”). Isso carrega o skill `mcp-validation` e roda os tracks na sessão atual.
+  </Step>
+  <Step title="Ou use o agente para rodar isolado">
+    Invoque o agente **`mcp-validator`**. Ele roda os mesmos tracks no próprio contexto e reporta um **GO / NO-GO** limpo, sem poluir a conversa principal.
+  </Step>
+  <Step title="Leia o veredito">
+    A primeira linha é **GO** ou **NO-GO**, seguida de uma tabela por track (pass / fail / skipped + evidência) e os follow-ups — especialmente o que ficou adiado para dev/staging.
+  </Step>
+</Steps>
+
+## Regras rígidas
+
+<Warning>
+- **Somente local.** O gate nunca toca em bancos de dev, staging ou prod, nem em serviços remotos.
+- **Nunca pede segredos no chat.** Se um track precisar de um JWT admin ou workspace ID, exporte localmente (via escape de shell) — nunca cole na conversa.
+- **Falhas são mostradas na íntegra.** Os testes não são corrigidos e re-rodados em silêncio; a saída que falhou é reportada para um humano decidir a correção.
+- **Build velho = falso verde.** O `back` roda de um `dist` buildado sem watch — rebuild e restart após mudar o `back` antes da aceitação.
+</Warning>
+
+## Relacionado
+
+- [Autenticação](/mcp/pt-br/authentication) — o modelo de auth dual (OAuth para hosts Claude, service tokens para M2M/CLI).
+- [Conecte seu cliente de IA](/mcp/pt-br/connect/claude-desktop) — fluxos de conexão para o cliente.
+- [Solução de problemas](/mcp/pt-br/troubleshooting) — erros comuns de conexão.

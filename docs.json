@@ -237,6 +237,12 @@
                       "mcp/tools/list-node-types"
                     ]
                   },
+                  {
+                    "group": "Development",
+                    "pages": [
+                      "mcp/development/validating-the-mcp"
+                    ]
+                  },
                   "mcp/troubleshooting"
                 ]
               }
@@ -247,7 +253,9 @@
             "groups": [
               {
                 "group": "API documentation",
-                "pages": ["api-reference/introduction"]
+                "pages": [
+                  "api-reference/introduction"
+                ]
               },
               {
                 "group": "Endpoint examples",
@@ -488,6 +496,12 @@
                       "mcp/pt-br/tools/list-node-types"
                     ]
                   },
+                  {
+                    "group": "Desenvolvimento",
+                    "pages": [
+                      "mcp/pt-br/development/validating-the-mcp"
+                    ]
+                  },
                   "mcp/pt-br/troubleshooting"
                 ]
               }
@@ -498,7 +512,9 @@
             "groups": [
               {
                 "group": "API documentation",
-                "pages": ["api-reference/introduction"]
+                "pages": [
+                  "api-reference/introduction"
+                ]
               },
               {
                 "group": "Endpoint examples",
