@@ -1,0 +1,94 @@
+---
+title: "Connect OpenCode"
+description: "Add FluxPrompt to OpenCode so your terminal AI assistant can read your workspace agents and node types."
+---
+
+## What this enables
+
+Once connected, OpenCode can answer questions about your FluxPrompt workspace directly from the terminal:
+
+- *"What agents do I have set up for lead enrichment?"*
+- *"Show me the configuration of the Email Parser agent"*
+- *"What node types are available in FluxPrompt?"*
+
+The Phase 1 tools are read-only: `list_agents`, `get_agent`, and `list_node_types`.
+
+## Prerequisites
+
+- OpenCode installed
+- A FluxPrompt workspace **service token** (see [Authentication](/mcp/authentication))
+
+<Note>
+The **server** decides which auth method applies, not the client. For OpenCode we recommend the **static service token** (`Bearer mcp_...`) as the primary path — it's reliable for both interactive and headless use.
+
+OpenCode's **OAuth** support is currently limited and may be unstable; it can work if the server advertises OAuth, but we don't promise it. Use the static token unless you have a reason not to.
+</Note>
+
+## Step-by-step
+
+<Steps>
+  <Step title="Get a service token">
+    In FluxPrompt, go to **Settings → MCP Tokens** and generate a token with `read` scope. It's shown only once — copy it. See [Authentication](/mcp/authentication).
+  </Step>
+  <Step title="Open your OpenCode config">
+    OpenCode reads config from `~/.config/opencode/opencode.json` (global) or `opencode.json` in your project root. Open it in your editor (create it if it doesn't exist).
+  </Step>
+  <Step title="Add the FluxPrompt server">
+    Add a `fluxprompt` entry under the `mcp` key:
+
+    ```json
+    {
+      "$schema": "https://opencode.ai/config.json",
+      "mcp": {
+        "fluxprompt": {
+          "type": "remote",
+          "url": "https://mcp.fluxprompt.ai/mcp",
+          "enabled": true,
+          "headers": {
+            "Authorization": "Bearer mcp_xxxxxxxxxxxx"
+          }
+        }
+      }
+    }
+    ```
+
+    Replace `mcp_xxxxxxxxxxxx` with your actual service token. Note: the root key is `mcp` (not `mcpServers`), `type: "remote"` is explicit, and `enabled: true` is **required**.
+  </Step>
+  <Step title="Restart OpenCode and verify">
+    Restart OpenCode so it loads the server, then ask:
+
+    > *List my FluxPrompt agents*
+
+    You should see your workspace agents listed.
+  </Step>
+</Steps>
+
+## Manual config (JSON)
+
+`~/.config/opencode/opencode.json` (or `opencode.json` in your project):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "fluxprompt": {
+      "type": "remote",
+      "url": "https://mcp.fluxprompt.ai/mcp",
+      "enabled": true,
+      "headers": {
+        "Authorization": "Bearer mcp_xxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+## Troubleshooting
+
+- **Server doesn't appear.** Make sure `enabled: true` is set — OpenCode requires it explicitly, and the server is silently skipped without it.
+- **Wrong root key.** The entry goes under `mcp`, not `mcpServers` (which is Cursor/Claude syntax).
+- **401 Unauthorized.** The `headers.Authorization` value must include the `Bearer ` prefix: `"Bearer mcp_..."`. A bare token fails.
+- **OAuth login loops or fails.** OAuth on OpenCode is limited/unstable. Switch to a static service token (the config above).
+- **Changes not picked up.** Restart OpenCode after editing the config.
+
+See the [Troubleshooting](/mcp/troubleshooting) page for more.
