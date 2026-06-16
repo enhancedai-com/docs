@@ -35,7 +35,7 @@ For machine-to-machine clients (backend services), the CLI, Cursor, and n8n, you
 
 The workspace owner generates one in the FluxPrompt UI:
 
-1. Go to **Settings → MCP Tokens**.
+1. Open **Settings → MCP Tokens** — or jump straight there by appending `?settings=mcpTokens` to your FluxPrompt app URL (e.g. `https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens`).
 2. Create a new token and pick the workspace it grants access to.
 3. Copy the token — it starts with `mcp_` and is **shown only once**. Store it somewhere safe.
 
@@ -99,5 +99,3 @@ Write access (`add_node`, `update_node`, `remove_node`) will be available in Pha
     It sees the same agents and structure that the authenticated user can see inside the FluxPrompt UI. It does not have access to credentials, billing, or user management.
   </Accordion>
 </AccordionGroup>
-</content>
-</invoke>
