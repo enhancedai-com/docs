@@ -1,5 +1,6 @@
 {
-	"scripts": {
-		"dev": "npx --yes mint@latest dev --port 3002"
-	}
+  "scripts": {
+    "start": "npx --yes mint@latest dev --port 3002",
+    "dev": "npx --yes mint@latest dev --port 3002"
+  }
 }
