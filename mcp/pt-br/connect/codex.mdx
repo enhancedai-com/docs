@@ -1,0 +1,117 @@
+---
+title: "Conectar Codex CLI"
+description: "Adicione o FluxPrompt ao Codex CLI para que seu assistente de IA no terminal possa ler os agentes e tipos de node do seu workspace."
+---
+
+## O que isso habilita
+
+Uma vez conectado, o Codex CLI pode responder perguntas sobre seu workspace FluxPrompt direto do terminal:
+
+- *"Quais agentes tenho configurados para enriquecimento de leads?"*
+- *"Mostre a configuração do agente Email Parser"*
+- *"Quais tipos de node estão disponíveis no FluxPrompt?"*
+
+As ferramentas da Fase 1 são somente leitura: `list_agents`, `get_agent` e `list_node_types`.
+
+## Pré-requisitos
+
+- Codex CLI instalado e autenticado
+- Uma conta FluxPrompt (para OAuth) **ou** um **service token** de workspace (veja [Autenticação](/mcp/pt-br/authentication))
+
+<Note>
+Quem decide o método de autenticação é o **servidor**, não o cliente. O Codex CLI suporta **ambos**:
+
+- **OAuth** — recomendado quando você não tem um token. O Codex faz o Dynamic Client Registration e abre o navegador para o fluxo de login + consentimento do FluxPrompt.
+- **Service token estático** — recomendado para setups headless / máquina-a-máquina (M2M). Use um token `Bearer mcp_...`.
+
+O Codex CLI fala com o servidor do FluxPrompt via **Streamable HTTP** remoto nativamente — sem necessidade de proxy.
+</Note>
+
+## Passo a passo
+
+<Steps>
+  <Step title="Abra a configuração do Codex">
+    O Codex CLI lê os servidores MCP de `~/.codex/config.toml` (formato TOML). Abra o arquivo no seu editor (crie-o se não existir).
+  </Step>
+  <Step title="Adicione o servidor FluxPrompt (OAuth)">
+    Para OAuth, adicione apenas a URL — sem header de autenticação:
+
+    ```toml
+    [mcp_servers.fluxprompt]
+    enabled = true
+    url = "https://mcp.fluxprompt.ai/mcp"
+    ```
+
+    Na próxima sessão, o Codex se registra no servidor e abre o navegador para concluir o login + consentimento do FluxPrompt.
+  </Step>
+  <Step title="...ou adicione um service token estático">
+    Para uso headless / M2M, aponte o Codex para uma variável de ambiente que contém seu token. O Codex adiciona o prefixo `Bearer ` automaticamente:
+
+    ```toml
+    [mcp_servers.fluxprompt]
+    enabled = true
+    url = "https://mcp.fluxprompt.ai/mcp"
+    bearer_token_env_var = "MCP_TOKEN"
+    ```
+
+    Em seguida, exporte o token no seu shell ou perfil:
+
+    ```bash
+    export MCP_TOKEN=mcp_xxxxxxxxxxxx
+    ```
+
+    Gere um token em FluxPrompt → **Settings → MCP Tokens** → com escopo `read` (exibido apenas uma vez). Veja [Autenticação](/mcp/pt-br/authentication).
+  </Step>
+  <Step title="Reinicie o Codex e verifique">
+    Após editar o `config.toml`, inicie uma nova sessão do Codex para carregar o servidor.
+
+    Peça ao Codex para chamar uma ferramenta diretamente:
+
+    > *Chame list_agents e mostre meus agentes FluxPrompt*
+
+    Você deverá ver seus agentes do workspace listados.
+  </Step>
+</Steps>
+
+## Configuração manual (TOML)
+
+`~/.codex/config.toml`:
+
+**OAuth:**
+
+```toml
+[mcp_servers.fluxprompt]
+enabled = true
+url = "https://mcp.fluxprompt.ai/mcp"
+```
+
+**Token estático via variável de ambiente (recomendado para M2M):**
+
+```toml
+[mcp_servers.fluxprompt]
+enabled = true
+url = "https://mcp.fluxprompt.ai/mcp"
+bearer_token_env_var = "MCP_TOKEN"
+```
+
+**Token estático via header literal** (o prefixo `Bearer ` é obrigatório):
+
+```toml
+[mcp_servers.fluxprompt]
+enabled = true
+url = "https://mcp.fluxprompt.ai/mcp"
+
+[mcp_servers.fluxprompt.http_headers]
+Authorization = "Bearer mcp_xxxxxxxxxxxx"
+```
+
+Use **apenas uma** entrada de autenticação por servidor.
+
+## Solução de problemas
+
+- **401 Unauthorized com header literal.** O valor de `Authorization` precisa incluir o prefixo `Bearer ` — `Authorization = "mcp_xxxxxxxxxxxx"` (sem `Bearer `) falha com 401. Use sempre `Bearer mcp_...`.
+- **Entradas de autenticação conflitantes.** Não combine `bearer_token_env_var` e um `http_headers` Authorization para o mesmo servidor — escolha um. Entradas duplicadas ou conflitantes causam falhas.
+- **`tool_search` não retorna nada.** O `tool_search` interno do Codex não lista as ferramentas de servidores MCP, então buscar por `fluxprompt` retorna 0 — isso é esperado. As ferramentas MCP são expostas como ferramentas chamáveis diretamente (namespaced). Peça ao Codex para chamar `list_agents`, `get_agent` ou `list_node_types` diretamente.
+- **Servidor não carregado.** Após editar o `config.toml`, é necessário reiniciar o Codex (nova sessão) para a mudança ter efeito.
+
+Consulte a página de [Solução de problemas](/mcp/pt-br/troubleshooting) para mais.

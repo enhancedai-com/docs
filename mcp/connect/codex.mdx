@@ -1,0 +1,117 @@
+---
+title: "Connect Codex CLI"
+description: "Add FluxPrompt to Codex CLI so your terminal AI assistant can read your workspace agents and node types."
+---
+
+## What this enables
+
+Once connected, Codex CLI can answer questions about your FluxPrompt workspace directly from the terminal:
+
+- *"What agents do I have set up for lead enrichment?"*
+- *"Show me the configuration of the Email Parser agent"*
+- *"What node types are available in FluxPrompt?"*
+
+The Phase 1 tools are read-only: `list_agents`, `get_agent`, and `list_node_types`.
+
+## Prerequisites
+
+- Codex CLI installed and signed in
+- Either a FluxPrompt account (for OAuth) **or** a workspace **service token** (see [Authentication](/mcp/authentication))
+
+<Note>
+The **server** decides which auth method applies, not the client. Codex CLI supports **both**:
+
+- **OAuth** — recommended when you don't have a token. Codex performs Dynamic Client Registration and opens your browser for the FluxPrompt login + consent flow.
+- **Static service token** — recommended for headless / machine-to-machine (M2M) setups. Use a `Bearer mcp_...` token.
+
+Codex CLI talks to the FluxPrompt server over remote **Streamable HTTP** natively — no proxy needed.
+</Note>
+
+## Step-by-step
+
+<Steps>
+  <Step title="Open your Codex config">
+    Codex CLI reads MCP servers from `~/.codex/config.toml` (TOML format). Open it in your editor (create it if it doesn't exist).
+  </Step>
+  <Step title="Add the FluxPrompt server (OAuth)">
+    For OAuth, add just the URL — no auth header:
+
+    ```toml
+    [mcp_servers.fluxprompt]
+    enabled = true
+    url = "https://mcp.fluxprompt.ai/mcp"
+    ```
+
+    On the next session, Codex registers itself with the server and opens your browser to complete the FluxPrompt login + consent.
+  </Step>
+  <Step title="...or add a static service token">
+    For headless / M2M use, point Codex at an environment variable holding your token. Codex prepends `Bearer ` itself:
+
+    ```toml
+    [mcp_servers.fluxprompt]
+    enabled = true
+    url = "https://mcp.fluxprompt.ai/mcp"
+    bearer_token_env_var = "MCP_TOKEN"
+    ```
+
+    Then export the token in your shell or profile:
+
+    ```bash
+    export MCP_TOKEN=mcp_xxxxxxxxxxxx
+    ```
+
+    Get a token from FluxPrompt → **Settings → MCP Tokens** → generate one with `read` scope (it's shown only once). See [Authentication](/mcp/authentication).
+  </Step>
+  <Step title="Restart Codex and verify">
+    After editing `config.toml`, start a new Codex session so the server loads.
+
+    Ask Codex to call a tool directly:
+
+    > *Call list_agents and show my FluxPrompt agents*
+
+    You should see your workspace agents listed.
+  </Step>
+</Steps>
+
+## Manual config (TOML)
+
+`~/.codex/config.toml`:
+
+**OAuth:**
+
+```toml
+[mcp_servers.fluxprompt]
+enabled = true
+url = "https://mcp.fluxprompt.ai/mcp"
+```
+
+**Static token via env var (recommended for M2M):**
+
+```toml
+[mcp_servers.fluxprompt]
+enabled = true
+url = "https://mcp.fluxprompt.ai/mcp"
+bearer_token_env_var = "MCP_TOKEN"
+```
+
+**Static token via literal header** (the `Bearer ` prefix is required):
+
+```toml
+[mcp_servers.fluxprompt]
+enabled = true
+url = "https://mcp.fluxprompt.ai/mcp"
+
+[mcp_servers.fluxprompt.http_headers]
+Authorization = "Bearer mcp_xxxxxxxxxxxx"
+```
+
+Use **only one** auth entry per server.
+
+## Troubleshooting
+
+- **401 Unauthorized with a literal header.** The `Authorization` value must include the `Bearer ` prefix — `Authorization = "mcp_xxxxxxxxxxxx"` (without `Bearer `) fails with 401. Always use `Bearer mcp_...`.
+- **Conflicting auth entries.** Don't combine `bearer_token_env_var` and an `http_headers` Authorization for the same server — pick one. Duplicate or conflicting entries cause failures.
+- **`tool_search` returns nothing.** Codex's internal `tool_search` does not list MCP server tools, so searching for `fluxprompt` returns 0 — that's expected. MCP tools are exposed as directly-callable (namespaced) tools. Ask Codex to call `list_agents`, `get_agent`, or `list_node_types` directly.
+- **Server not loaded.** After editing `config.toml`, you must restart Codex (start a new session) for the change to take effect.
+
+See the [Troubleshooting](/mcp/troubleshooting) page for more.
