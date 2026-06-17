@@ -35,7 +35,7 @@ Para clientes máquina-a-máquina (serviços de backend), a CLI, o Cursor e o n8
 
 O dono do workspace gera um na interface do FluxPrompt:
 
-1. Abra **Settings → MCP Tokens** — ou vá direto adicionando `?settings=mcpTokens` à URL do seu app FluxPrompt (ex.: `https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens`).
+1. Abra [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) — ou vá direto adicionando `?settings=mcpTokens` à URL do seu app FluxPrompt (ex.: `https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens`).
 2. Crie um novo token e escolha o workspace a que ele dá acesso.
 3. Copie o token — ele começa com `mcp_` e é **exibido apenas uma vez**. Guarde-o em local seguro.
 
@@ -60,7 +60,7 @@ Um service token concede acesso de leitura completo aos agentes do seu workspace
 
 Se você acredita que um service token foi exposto:
 
-1. Revogue-o em **Settings → MCP Tokens**.
+1. Revogue-o em [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
 2. Gere um novo.
 3. Atualize seus arquivos de configuração do cliente com o novo token.
 
@@ -87,7 +87,7 @@ O acesso de escrita (`add_node`, `update_node`, `remove_node`) estará disponív
     Se o seu cliente é Claude Desktop ou Claude.ai, você precisa usar OAuth. Para serviços de backend, a CLI ou o n8n, use um service token. Cursor e Claude Code podem usar qualquer um dos dois — OAuth é o mais simples se você consegue abrir um navegador.
   </Accordion>
   <Accordion title="Posso ter múltiplos service tokens para o mesmo workspace?">
-    Sim — cada token é independente. Você pode ter um token por cliente (ex.: um para n8n, outro para um serviço de backend) e revogá-los individualmente em **Settings → MCP Tokens**.
+    Sim — cada token é independente. Você pode ter um token por cliente (ex.: um para n8n, outro para um serviço de backend) e revogá-los individualmente em [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
   </Accordion>
   <Accordion title="O service token expira?">
     Service tokens não expiram automaticamente. Eles permanecem válidos até serem revogados. Recomendamos revogar tokens que você não usa mais.

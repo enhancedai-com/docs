@@ -35,7 +35,7 @@ For machine-to-machine clients (backend services), the CLI, Cursor, and n8n, you
 
 The workspace owner generates one in the FluxPrompt UI:
 
-1. Open **Settings → MCP Tokens** — or jump straight there by appending `?settings=mcpTokens` to your FluxPrompt app URL (e.g. `https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens`).
+1. Open [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) — or jump straight there by appending `?settings=mcpTokens` to your FluxPrompt app URL (e.g. `https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens`).
 2. Create a new token and pick the workspace it grants access to.
 3. Copy the token — it starts with `mcp_` and is **shown only once**. Store it somewhere safe.
 
@@ -60,7 +60,7 @@ A service token gives full read access to your workspace agents. Treat it like a
 
 If you believe a service token has been exposed:
 
-1. Revoke it from **Settings → MCP Tokens**.
+1. Revoke it from [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
 2. Generate a new one.
 3. Update your client config files with the new token.
 
@@ -87,7 +87,7 @@ Write access (`add_node`, `update_node`, `remove_node`) will be available in Pha
     If your client is Claude Desktop or Claude.ai, you must use OAuth. For backend services, the CLI, or n8n, use a service token. Cursor and Claude Code can use either — OAuth is simplest if you can open a browser.
   </Accordion>
   <Accordion title="Can I have multiple service tokens for the same workspace?">
-    Yes — each token is independent. You can have one token per client (e.g. one for n8n, one for a backend service) and revoke them individually from **Settings → MCP Tokens**.
+    Yes — each token is independent. You can have one token per client (e.g. one for n8n, one for a backend service) and revoke them individually from [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
   </Accordion>
   <Accordion title="Does a service token expire?">
     Service tokens do not expire automatically. They remain valid until revoked. We recommend revoking tokens you no longer use.

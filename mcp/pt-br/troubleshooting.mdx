@@ -12,7 +12,7 @@ Antes de investigar erros específicos, verifique estas cinco coisas:
     Claude Desktop e Claude.ai usam **somente OAuth** — sem token. Se você está tentando colar um token neles, esse é o problema; adicione o FluxPrompt como conector personalizado. Os passos abaixo valem para clientes que usam service token (Cursor, n8n, CLI, serviços de backend).
   </Step>
   <Step title="Formato do token (clientes com service token)">
-    Seu service token deve começar com `mcp_` e não conter espaços. Se você o copiou de **Settings → MCP Tokens**, verifique se há espaços em branco no final.
+    Seu service token deve começar com `mcp_` e não conter espaços. Se você o copiou de [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens), verifique se há espaços em branco no final.
   </Step>
   <Step title="Formato do header Authorization (clientes com service token)">
     Deve ser `Bearer <token>` (B maiúsculo, um espaço). Não `bearer`, não `Token`, não o token puro sem o prefixo.
@@ -50,7 +50,7 @@ Antes de investigar erros específicos, verifique estas cinco coisas:
 
 **Solução:**
 1. Confirme que o seu header `Authorization` é `Bearer mcp_xxxxx` sem caracteres extras.
-2. Verifique se o token ainda está ativo em **Settings → MCP Tokens**, ou gere um novo.
+2. Verifique se o token ainda está ativo em [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens), ou gere um novo.
 
 ---
 
