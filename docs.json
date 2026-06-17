@@ -245,7 +245,17 @@
                       "mcp/development/validating-the-mcp"
                     ]
                   },
-                  "mcp/troubleshooting"
+                  {
+                    "group": "API Reference",
+                    "pages": [
+                      "mcp/api-reference/tokens",
+                      "mcp/api-reference/oauth",
+                      "mcp/api-reference/mcp-server-oauth",
+                      "mcp/api-reference/internal"
+                    ]
+                  },
+                  "mcp/troubleshooting",
+                  "mcp/changelog"
                 ]
               }
             ]
@@ -506,7 +516,17 @@
                       "mcp/pt-br/development/validating-the-mcp"
                     ]
                   },
-                  "mcp/pt-br/troubleshooting"
+                  {
+                    "group": "Referência de API",
+                    "pages": [
+                      "mcp/pt-br/api-reference/tokens",
+                      "mcp/pt-br/api-reference/oauth",
+                      "mcp/pt-br/api-reference/mcp-server-oauth",
+                      "mcp/pt-br/api-reference/internal"
+                    ]
+                  },
+                  "mcp/pt-br/troubleshooting",
+                  "mcp/pt-br/changelog"
                 ]
               }
             ]

@@ -1,0 +1,199 @@
+---
+title: "MCP Server OAuth AS"
+description: "OAuth 2.0 Authorization Server endpoints exposed by the MCP server for AI client connections."
+---
+
+The FluxPrompt MCP server is a spec-compliant **OAuth 2.0 Authorization Server** (RFC 8414). These endpoints are used automatically by AI clients that support Dynamic Client Registration — you do not call them manually.
+
+Base URL: `https://mcp.fluxprompt.ai`
+
+---
+
+## Discovery
+
+### OAuth Authorization Server metadata
+
+```http
+GET /.well-known/oauth-authorization-server
+GET /mcp/.well-known/oauth-authorization-server
+GET /.well-known/oauth-authorization-server/mcp
+```
+
+All three paths return the same metadata document (path-aware, per MCP spec).
+
+### Response
+
+```json
+{
+  "issuer": "https://mcp.fluxprompt.ai",
+  "authorization_endpoint": "https://mcp.fluxprompt.ai/oauth/authorize",
+  "token_endpoint": "https://mcp.fluxprompt.ai/oauth/token",
+  "registration_endpoint": "https://mcp.fluxprompt.ai/oauth/register",
+  "response_types_supported": ["code"],
+  "grant_types_supported": ["authorization_code"],
+  "code_challenge_methods_supported": ["S256"],
+  "client_id_metadata_document_supported": true
+}
+```
+
+### OAuth Protected Resource metadata
+
+```http
+GET /.well-known/oauth-protected-resource
+GET /mcp/.well-known/oauth-protected-resource
+```
+
+```json
+{
+  "resource": "https://mcp.fluxprompt.ai",
+  "authorization_servers": ["https://mcp.fluxprompt.ai"]
+}
+```
+
+---
+
+## Dynamic Client Registration
+
+AI clients that support DCR register themselves automatically on first connection.
+
+```http
+POST /oauth/register
+Content-Type: application/json
+```
+
+### Request body
+
+```json
+{
+  "redirect_uris": ["https://claude.ai/callback"],
+  "client_name": "Claude Desktop"
+}
+```
+
+`redirect_uris` is required and must be non-empty — a 400 is returned otherwise.
+
+### Response `201 Created`
+
+```json
+{
+  "client_id": "client_abc123",
+  "redirect_uris": ["https://claude.ai/callback"],
+  "client_name": "Claude Desktop"
+}
+```
+
+DCR clients are **persisted in Postgres** via `back/` and survive mcp-server restarts.
+
+---
+
+## Authorization
+
+```http
+GET /oauth/authorize
+  ?response_type=code
+  &client_id=client_abc123
+  &redirect_uri=https://claude.ai/callback
+  &code_challenge=BASE64URL(SHA256(verifier))
+  &code_challenge_method=S256
+  &state=random-state
+  &scope=read
+```
+
+Redirects the user's browser to the FluxPrompt consent page (`/mcp-authorize.html`). After the user approves, the consent page posts the signed assertion back to `/oauth/consent-callback`.
+
+---
+
+## Consent callback (internal)
+
+```http
+POST /oauth/consent-callback
+Content-Type: application/json
+```
+
+Called by the FluxPrompt consent page after the user approves. The `assertion` is a short-lived HS256 JWT signed by `back/` with the shared `MCP_OAUTH_CONSENT_SECRET`.
+
+### Request body
+
+```json
+{
+  "assertion": "<hs256-jwt>",
+  "request_id": "original-request-id"
+}
+```
+
+On success, redirects to `redirect_uri?code=<auth-code>&state=<state>`.
+
+---
+
+## Token exchange
+
+```http
+POST /oauth/token
+Content-Type: application/x-www-form-urlencoded
+```
+
+```
+grant_type=authorization_code
+&code=<auth-code>
+&redirect_uri=https://claude.ai/callback
+&client_id=client_abc123
+&code_verifier=<pkce-verifier>
+```
+
+### Response
+
+```json
+{
+  "access_token": "mcp_oauth_abc123...",
+  "token_type": "Bearer",
+  "expires_in": 2592000,
+  "scope": "read"
+}
+```
+
+The `access_token` is an opaque `mcp_oauth_…` token persisted in Postgres. It is used as a `Bearer` token in all subsequent MCP requests.
+
+---
+
+## Transport endpoints
+
+### MCP requests
+
+```http
+POST /mcp
+POST /
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+JSON-RPC 2.0 over Streamable HTTP. All tool calls go here.
+
+### Session termination
+
+```http
+DELETE /mcp
+Authorization: Bearer <token>
+```
+
+Returns `204 No Content`. Signals session end to the server.
+
+### Health check
+
+```http
+GET /healthz
+```
+
+Returns `200 OK` with `{ "status": "ok" }`. No auth required. Used by ECS health checks and post-deploy smoke tests.
+
+---
+
+## CORS
+
+The MCP server enables CORS for browser-based OAuth clients. The following headers are present on all responses:
+
+```
+Access-Control-Allow-Origin: *
+Access-Control-Expose-Headers: Mcp-Session-Id, WWW-Authenticate
+```
+
+CORS preflight (`OPTIONS /mcp`) returns `204` with the appropriate `Access-Control-Allow-*` headers.

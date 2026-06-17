@@ -1,0 +1,194 @@
+---
+title: "API Interna"
+description: "Endpoints chamados pelo servidor MCP ao back/. Não são voltados ao usuário."
+---
+
+<Warning>
+  Esses endpoints são **exclusivamente internos**. Eles são chamados apenas pelo processo `mcp-server` usando o header `x-mcp-internal-secret`. Nunca os exponha publicamente.
+</Warning>
+
+Todos os endpoints são protegidos pelo `McpInternalGuard`, que valida o header `x-mcp-internal-secret` contra a variável de ambiente `MCP_INTERNAL_SECRET`.
+
+---
+
+## Resolver token
+
+Resolve um hash de token bruto para seu workspace e escopos. Chamado pelo resolvedor de tokens do servidor MCP em cada requisição autenticada.
+
+```http
+POST /mcp/v1/internal/resolve-token
+x-mcp-internal-secret: <secret>
+Content-Type: application/json
+```
+
+### Corpo da requisição
+
+```json
+{ "tokenHash": "sha256-hex-do-token-bruto" }
+```
+
+O `tokenHash` é `sha256(tokenBruto)` em hex. O token bruto (ex.: `mcp_abc…`) nunca é enviado — apenas o hash.
+
+### Resposta `200 OK`
+
+```json
+{
+  "tokenId": "aaaaaaaa-0000-0000-0000-000000000001",
+  "workspaceId": "ws-uuid-1",
+  "scopes": ["read"],
+  "kind": "service",
+  "expiresAt": null
+}
+```
+
+Atualiza `lastUsedAt` no registro do token a cada resolução bem-sucedida.
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 401 | Secret interno ausente ou inválido. |
+| 404 | Token não encontrado, revogado ou expirado. |
+
+---
+
+## Listar tipos de node
+
+Retorna o registro completo de tipos de node do FluxPrompt.
+
+```http
+GET /mcp/v1/internal/node-types
+x-mcp-internal-secret: <secret>
+```
+
+### Resposta
+
+Array de objetos com `type`, `label`, `description`, `category`, `inputSchema`, `outputSchema`.
+
+---
+
+## Listar agentes
+
+Retorna agentes de um workspace, com busca opcional.
+
+```http
+GET /mcp/v1/internal/agents?workspaceId={ws}&search={q}&limit={n}&offset={n}
+x-mcp-internal-secret: <secret>
+```
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `workspaceId` | UUID | Sim | Workspace a consultar. |
+| `search` | string | Não | Filtro de substring (case-insensitive) no nome do agente. |
+| `limit` | number | Não | Tamanho da página. Padrão 20, máximo 200. |
+| `offset` | number | Não | Offset para paginação. Padrão 0. |
+
+### Resposta
+
+```json
+{ "agents": [ { "id": "...", "name": "...", "nodeCount": 12, "isPublic": false } ], "total": 45 }
+```
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 400 | `workspaceId` ausente. |
+| 401 | Secret inválido. |
+
+---
+
+## Obter agente
+
+Retorna a estrutura completa de nodes e edges de um agente.
+
+```http
+GET /mcp/v1/internal/agents/{agentId}?workspaceId={ws}
+x-mcp-internal-secret: <secret>
+```
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 401 | Secret inválido. |
+| 404 | Agente não encontrado ou não pertence ao workspace. |
+
+---
+
+## Conceder token OAuth
+
+Persiste um token de acesso OAuth após a conclusão do fluxo de consentimento.
+
+```http
+POST /mcp/v1/internal/oauth/grant
+x-mcp-internal-secret: <secret>
+Content-Type: application/json
+```
+
+### Corpo da requisição
+
+```json
+{
+  "tokenHash": "sha256-hex",
+  "workspaceId": "ws-uuid",
+  "grantedUserId": "user-uuid",
+  "clientId": "client_abc",
+  "scopes": ["read"],
+  "name": "Claude Desktop (Acme Corp)",
+  "expiresAt": "2026-07-17T10:00:00Z"
+}
+```
+
+Idempotente no `tokenHash` — submissões duplicadas retornam o registro existente sem erro.
+
+### Resposta `201 Created`
+
+```json
+{ "tokenId": "token-uuid" }
+```
+
+---
+
+## Registrar cliente OAuth
+
+Persiste um registro de Dynamic Client Registration.
+
+```http
+POST /mcp/v1/internal/oauth/clients
+x-mcp-internal-secret: <secret>
+Content-Type: application/json
+```
+
+### Corpo da requisição
+
+```json
+{
+  "clientId": "client_abc123",
+  "redirectUris": ["https://claude.ai/callback"],
+  "clientName": "Claude Desktop",
+  "ttlSeconds": 7776000
+}
+```
+
+### Resposta `201 Created`
+
+```json
+{ "clientId": "client_abc123", "redirectUris": ["https://claude.ai/callback"], "clientName": "Claude Desktop" }
+```
+
+---
+
+## Obter cliente OAuth
+
+```http
+GET /mcp/v1/internal/oauth/clients/{clientId}
+x-mcp-internal-secret: <secret>
+```
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 401 | Secret inválido. |
+| 404 | Cliente não encontrado ou TTL expirado. |

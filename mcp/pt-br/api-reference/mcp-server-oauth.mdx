@@ -1,0 +1,169 @@
+---
+title: "OAuth AS do Servidor MCP"
+description: "Endpoints do Authorization Server OAuth 2.0 expostos pelo servidor MCP para conexões de clientes de IA."
+---
+
+O servidor MCP do FluxPrompt é um **Authorization Server OAuth 2.0** compatível com a spec (RFC 8414). Esses endpoints são usados automaticamente por clientes de IA que suportam Dynamic Client Registration — você não os chama manualmente.
+
+URL base: `https://mcp.fluxprompt.ai`
+
+---
+
+## Descoberta
+
+### Metadados do Authorization Server
+
+```http
+GET /.well-known/oauth-authorization-server
+GET /mcp/.well-known/oauth-authorization-server
+GET /.well-known/oauth-authorization-server/mcp
+```
+
+### Resposta
+
+```json
+{
+  "issuer": "https://mcp.fluxprompt.ai",
+  "authorization_endpoint": "https://mcp.fluxprompt.ai/oauth/authorize",
+  "token_endpoint": "https://mcp.fluxprompt.ai/oauth/token",
+  "registration_endpoint": "https://mcp.fluxprompt.ai/oauth/register",
+  "response_types_supported": ["code"],
+  "grant_types_supported": ["authorization_code"],
+  "code_challenge_methods_supported": ["S256"],
+  "client_id_metadata_document_supported": true
+}
+```
+
+### Metadados do Protected Resource
+
+```http
+GET /.well-known/oauth-protected-resource
+GET /mcp/.well-known/oauth-protected-resource
+```
+
+```json
+{
+  "resource": "https://mcp.fluxprompt.ai",
+  "authorization_servers": ["https://mcp.fluxprompt.ai"]
+}
+```
+
+---
+
+## Registro Dinâmico de Cliente (DCR)
+
+```http
+POST /oauth/register
+Content-Type: application/json
+```
+
+### Corpo da requisição
+
+```json
+{
+  "redirect_uris": ["https://claude.ai/callback"],
+  "client_name": "Claude Desktop"
+}
+```
+
+`redirect_uris` é obrigatório e não pode ser vazio.
+
+### Resposta `201 Created`
+
+```json
+{
+  "client_id": "client_abc123",
+  "redirect_uris": ["https://claude.ai/callback"],
+  "client_name": "Claude Desktop"
+}
+```
+
+Clientes DCR são **persistidos no Postgres** via `back/` e sobrevivem a reinicializações do mcp-server.
+
+---
+
+## Autorização
+
+```http
+GET /oauth/authorize
+  ?response_type=code
+  &client_id=client_abc123
+  &redirect_uri=https://claude.ai/callback
+  &code_challenge=BASE64URL(SHA256(verifier))
+  &code_challenge_method=S256
+  &state=random-state
+  &scope=read
+```
+
+Redireciona o navegador do usuário para a página de consentimento do FluxPrompt (`/mcp-authorize.html`).
+
+---
+
+## Troca de token
+
+```http
+POST /oauth/token
+Content-Type: application/x-www-form-urlencoded
+```
+
+```
+grant_type=authorization_code
+&code=<auth-code>
+&redirect_uri=https://claude.ai/callback
+&client_id=client_abc123
+&code_verifier=<pkce-verifier>
+```
+
+### Resposta
+
+```json
+{
+  "access_token": "mcp_oauth_abc123...",
+  "token_type": "Bearer",
+  "expires_in": 2592000,
+  "scope": "read"
+}
+```
+
+---
+
+## Endpoints de transporte
+
+### Requisições MCP
+
+```http
+POST /mcp
+POST /
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+JSON-RPC 2.0 via Streamable HTTP.
+
+### Encerramento de sessão
+
+```http
+DELETE /mcp
+Authorization: Bearer <token>
+```
+
+Retorna `204 No Content`.
+
+### Health check
+
+```http
+GET /healthz
+```
+
+Retorna `200 OK` com `{ "status": "ok" }`. Sem autenticação.
+
+---
+
+## CORS
+
+```
+Access-Control-Allow-Origin: *
+Access-Control-Expose-Headers: Mcp-Session-Id, WWW-Authenticate
+```
+
+Preflight (`OPTIONS /mcp`) retorna `204` com os headers `Access-Control-Allow-*` apropriados.

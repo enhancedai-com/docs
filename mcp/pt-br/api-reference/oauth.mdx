@@ -1,0 +1,103 @@
+---
+title: "OAuth"
+description: "Endpoints OAuth voltados ao usuário, usados pelo fluxo de autorização do MCP."
+---
+
+Esses endpoints suportam o fluxo **OAuth 2.0 PKCE** que o Claude Desktop e o Claude.ai usam para conectar ao servidor MCP do FluxPrompt. Eles são chamados pela página de consentimento do FluxPrompt (`/mcp-authorize.html`) — não diretamente por clientes de IA.
+
+Todos os endpoints exigem um JWT de usuário válido.
+
+---
+
+## Listar workspaces
+
+Retorna os workspaces dos quais o usuário autenticado faz parte, para que ele possa escolher qual workspace autorizar durante o fluxo de consentimento OAuth.
+
+```http
+GET /mcp/v1/oauth/workspaces
+Authorization: Bearer <jwt>
+```
+
+### Resposta
+
+```json
+{
+  "status": "success",
+  "data": [
+    { "id": "ws-uuid-1", "name": "Acme Corp" },
+    { "id": "ws-uuid-2", "name": "Pessoal" }
+  ],
+  "meta": { "total": 2 }
+}
+```
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 401 | JWT ausente ou inválido. |
+
+---
+
+## Enviar consentimento
+
+O usuário aprova a solicitação OAuth. O back-end assina uma assertion HS256 que o servidor MCP usa para emitir um token de acesso OAuth.
+
+```http
+POST /mcp/v1/oauth/consent
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+### Corpo da requisição
+
+```json
+{
+  "workspaceId": "ws-uuid-1",
+  "scopes": ["read"],
+  "clientId": "client_abc123",
+  "nonce": "request-id-from-authorize"
+}
+```
+
+| Campo | Tipo | Obrigatório | Descrição |
+|-------|------|-------------|-----------|
+| `workspaceId` | UUID | Sim | Workspace ao qual o usuário está concedendo acesso. |
+| `scopes` | string[] | Sim | Escopos concedidos. Fase 1: `["read"]`. |
+| `clientId` | string | Sim | Client ID OAuth da solicitação de autorização. |
+| `nonce` | string | Sim | O `request_id` do fluxo `/oauth/authorize`, usado para vincular o consentimento à solicitação original. |
+
+### Resposta
+
+```json
+{
+  "assertion": "<jwt-hs256-assinado>"
+}
+```
+
+A `assertion` é um JWT de curta duração assinado que a página de consentimento envia de volta ao endpoint `/oauth/consent-callback` do servidor MCP para concluir o fluxo.
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 400 | Campos ausentes ou inválidos. |
+| 401 | JWT ausente ou inválido. |
+| 403 | Usuário sem papel suficiente no workspace. |
+
+---
+
+## Como isso se encaixa no fluxo OAuth completo
+
+```
+1. Cliente IA → GET /.well-known/oauth-authorization-server   (mcp-server)
+2. Cliente IA → POST /oauth/register                          (mcp-server DCR)
+3. Cliente IA → GET /oauth/authorize                          (mcp-server → redireciona para página de consentimento)
+4. Página de consentimento → GET /mcp/v1/oauth/workspaces     (back — esta API)
+5. Usuário aprova → POST /mcp/v1/oauth/consent                (back — esta API)
+6. Página de consentimento → POST /oauth/consent-callback     (mcp-server)
+7. mcp-server → POST /oauth/token                             (mcp-server)
+8. Cliente IA recebe token de acesso (mcp_oauth_…)
+```
+
+Para os endpoints do AS OAuth do servidor MCP, consulte a [referência OAuth do servidor MCP](/mcp/pt-br/api-reference/mcp-server-oauth).

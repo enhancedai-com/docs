@@ -1,0 +1,27 @@
+---
+title: "Changelog"
+description: "Novidades na integração MCP do FluxPrompt."
+---
+
+## 2026-06-17 — Phase 1 GA
+
+**Primeiro lançamento público do servidor MCP do FluxPrompt.**
+
+### Novas ferramentas
+- **`list_agents`** — retorna uma lista paginada de agentes do seu workspace (paginação server-side, padrão 20, máximo 200).
+- **`get_agent`** — retorna a estrutura completa de nodes e edges de um único agente. Suporta `includeNodes: false` para uma resposta leve com apenas os metadados.
+- **`list_node_types`** — retorna o catálogo completo de tipos de node do FluxPrompt com seus schemas de entrada e saída.
+
+### Autenticação
+- **Modelo dual de autenticação:** OAuth 2.0 (PKCE + DCR) para Claude Desktop e Claude.ai; tokens de serviço estáticos (`mcp_…`) para ferramentas CLI, n8n, Cursor, Codex e OpenCode.
+- Tokens de serviço são criados e gerenciados em **Settings → MCP Tokens**.
+- Clientes OAuth são registrados automaticamente pelo seu host de IA via Dynamic Client Registration.
+
+### Proteção
+- Rate limiting por token: 60 requisições/minuto, 5 000 requisições/dia.
+- Circuit breaker: abre após erros sustentados de um único token, com cooldown automático.
+- Kill switch: desativação instantânea do serviço sem redeploy.
+- Log de auditoria completo em cada requisição (Datadog).
+
+### Clientes suportados
+Claude Desktop · Claude.ai · Cursor · Codex CLI · OpenCode · n8n · Qualquer cliente compatível com MCP via token estático.

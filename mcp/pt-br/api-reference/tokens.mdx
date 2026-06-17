@@ -1,0 +1,152 @@
+---
+title: "MCP Tokens"
+description: "Crie, liste e revogue tokens de serviço para acesso ao MCP."
+---
+
+Esses endpoints permitem que proprietários de workspace gerenciem **tokens de serviço** (`mcp_…`) — os bearer tokens estáticos usados por ferramentas CLI, n8n, Cursor, Codex e OpenCode para autenticar no servidor MCP.
+
+Todos os endpoints exigem um JWT válido (`Authorization: Bearer <jwt>`) e papel de proprietário do workspace.
+
+---
+
+## Listar tokens
+
+<ParamField path="workspaceId" type="string (UUID)" required>
+  O workspace cujos tokens serão listados.
+</ParamField>
+
+```http
+GET /workspaces/{workspaceId}/mcp-tokens
+Authorization: Bearer <jwt>
+```
+
+Retorna todos os tokens ativos (não revogados) do workspace. O valor bruto do token **nunca** é retornado nas listagens — ele é exibido apenas uma vez, no momento da criação.
+
+### Resposta
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "aaaaaaaa-0000-0000-0000-000000000001",
+      "name": "CI pipeline",
+      "kind": "service",
+      "scopes": ["read"],
+      "clientId": null,
+      "authorizedBy": null,
+      "createdAt": "2026-06-15T12:00:00.000Z",
+      "lastUsedAt": "2026-06-17T08:30:00.000Z",
+      "revokedAt": null
+    }
+  ],
+  "meta": { "total": 1 }
+}
+```
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | UUID | Identificador do token. Use para revogar. |
+| `name` | string | Nome de exibição definido na criação. |
+| `kind` | `"service"` \| `"oauth"` | `service` = token estático; `oauth` = emitido via fluxo OAuth. |
+| `scopes` | string[] | Permissões concedidas. Fase 1: `["read"]` apenas. |
+| `clientId` | string \| null | Client ID OAuth; `null` para tokens de serviço. |
+| `authorizedBy` | string \| null | Usuário que concedeu acesso (apenas tokens OAuth). |
+| `createdAt` | ISO 8601 | Data de criação. |
+| `lastUsedAt` | ISO 8601 \| null | Último uso pelo servidor MCP. |
+| `revokedAt` | ISO 8601 \| null | Data de revogação; `null` se ainda ativo. |
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 401 | JWT ausente ou inválido. |
+| 403 | Usuário autenticado não é proprietário do workspace. |
+
+---
+
+## Criar token
+
+<ParamField path="workspaceId" type="string (UUID)" required>
+  O workspace onde o token será criado.
+</ParamField>
+
+```http
+POST /workspaces/{workspaceId}/mcp-tokens
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+### Corpo da requisição
+
+```json
+{
+  "name": "CI pipeline",
+  "scopes": ["read"]
+}
+```
+
+| Campo | Tipo | Obrigatório | Restrições |
+|-------|------|-------------|------------|
+| `name` | string | Sim | 1–120 caracteres. |
+| `scopes` | string[] | Sim | Fase 1: deve ser `["read"]`. |
+
+### Resposta `201 Created`
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000001",
+    "name": "CI pipeline",
+    "kind": "service",
+    "scopes": ["read"],
+    "token": "mcp_abc123xyz...",
+    "createdAt": "2026-06-17T10:00:00.000Z"
+  }
+}
+```
+
+<Warning>
+  O campo `token` é retornado **exatamente uma vez** na criação. Armazene-o com segurança — ele não pode ser recuperado novamente.
+</Warning>
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 400 | Validação falhou (`name` vazio, `scopes` inválido ou vazio). |
+| 401 | JWT ausente ou inválido. |
+| 403 | Usuário autenticado não é proprietário do workspace. |
+
+---
+
+## Revogar token
+
+<ParamField path="workspaceId" type="string (UUID)" required>
+  O workspace ao qual o token pertence.
+</ParamField>
+<ParamField path="tokenId" type="string (UUID)" required>
+  O token a revogar. Obtenha pelo endpoint de listagem.
+</ParamField>
+
+```http
+DELETE /workspaces/{workspaceId}/mcp-tokens/{tokenId}
+Authorization: Bearer <jwt>
+```
+
+Define `revokedAt` no token. O servidor MCP respeita a revogação dentro do TTL do cache de tokens (padrão 30 segundos).
+
+### Resposta `200 OK`
+
+```json
+{ "status": "success", "data": {} }
+```
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 401 | JWT ausente ou inválido. |
+| 403 | Usuário autenticado não é proprietário do workspace. |
+| 404 | Token não encontrado ou não pertence a este workspace. |

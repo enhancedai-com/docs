@@ -1,0 +1,152 @@
+---
+title: "MCP Tokens"
+description: "Create, list, and revoke service tokens for MCP access."
+---
+
+These endpoints let workspace owners manage **service tokens** (`mcp_…`) — the static bearer tokens used by CLI tools, n8n, Cursor, Codex, and OpenCode to authenticate against the MCP server.
+
+All endpoints require a valid JWT (`Authorization: Bearer <jwt>`) and workspace owner role.
+
+---
+
+## List tokens
+
+<ParamField path="workspaceId" type="string (UUID)" required>
+  The workspace whose tokens to list.
+</ParamField>
+
+```http
+GET /workspaces/{workspaceId}/mcp-tokens
+Authorization: Bearer <jwt>
+```
+
+Returns all active (non-revoked) tokens for the workspace. The raw token value is **never** returned in list responses — it is shown only once, at creation time.
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "aaaaaaaa-0000-0000-0000-000000000001",
+      "name": "CI pipeline",
+      "kind": "service",
+      "scopes": ["read"],
+      "clientId": null,
+      "authorizedBy": null,
+      "createdAt": "2026-06-15T12:00:00.000Z",
+      "lastUsedAt": "2026-06-17T08:30:00.000Z",
+      "revokedAt": null
+    }
+  ],
+  "meta": { "total": 1 }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Token identifier. Use this to revoke. |
+| `name` | string | Display name given at creation. |
+| `kind` | `"service"` \| `"oauth"` | `service` = static token; `oauth` = issued via OAuth flow. |
+| `scopes` | string[] | Granted permissions. Phase 1: `["read"]` only. |
+| `clientId` | string \| null | OAuth client ID; `null` for service tokens. |
+| `authorizedBy` | string \| null | User who granted consent (OAuth tokens only). |
+| `createdAt` | ISO 8601 | Creation timestamp. |
+| `lastUsedAt` | ISO 8601 \| null | Last time the token was used by the MCP server. |
+| `revokedAt` | ISO 8601 \| null | Revocation timestamp; `null` if still active. |
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 401 | Missing or invalid JWT. |
+| 403 | Authenticated user is not a workspace owner. |
+
+---
+
+## Create token
+
+<ParamField path="workspaceId" type="string (UUID)" required>
+  The workspace to create the token in.
+</ParamField>
+
+```http
+POST /workspaces/{workspaceId}/mcp-tokens
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+### Request body
+
+```json
+{
+  "name": "CI pipeline",
+  "scopes": ["read"]
+}
+```
+
+| Field | Type | Required | Constraints |
+|-------|------|----------|-------------|
+| `name` | string | Yes | 1–120 characters. |
+| `scopes` | string[] | Yes | Phase 1: must be `["read"]`. |
+
+### Response `201 Created`
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000001",
+    "name": "CI pipeline",
+    "kind": "service",
+    "scopes": ["read"],
+    "token": "mcp_abc123xyz...",
+    "createdAt": "2026-06-17T10:00:00.000Z"
+  }
+}
+```
+
+<Warning>
+  The `token` field is returned **exactly once** at creation. Store it securely — it cannot be retrieved again.
+</Warning>
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 400 | Validation failed (`name` empty, `scopes` invalid or empty). |
+| 401 | Missing or invalid JWT. |
+| 403 | Authenticated user is not a workspace owner. |
+
+---
+
+## Revoke token
+
+<ParamField path="workspaceId" type="string (UUID)" required>
+  The workspace the token belongs to.
+</ParamField>
+<ParamField path="tokenId" type="string (UUID)" required>
+  The token to revoke. Obtain from the list endpoint.
+</ParamField>
+
+```http
+DELETE /workspaces/{workspaceId}/mcp-tokens/{tokenId}
+Authorization: Bearer <jwt>
+```
+
+Sets `revokedAt` on the token. The MCP server honours revocation within its token cache TTL (default 30 seconds).
+
+### Response `200 OK`
+
+```json
+{ "status": "success", "data": {} }
+```
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 401 | Missing or invalid JWT. |
+| 403 | Authenticated user is not a workspace owner. |
+| 404 | Token not found or does not belong to this workspace. |

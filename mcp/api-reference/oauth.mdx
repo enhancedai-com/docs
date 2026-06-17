@@ -1,0 +1,109 @@
+---
+title: "OAuth"
+description: "User-facing OAuth consent endpoints used by the MCP authorization flow."
+---
+
+These endpoints support the **OAuth 2.0 PKCE** flow that Claude Desktop and Claude.ai use to connect to the FluxPrompt MCP server. They are called by the FluxPrompt consent page (`/mcp-authorize.html`) — not directly by AI clients.
+
+All endpoints require a valid user JWT.
+
+---
+
+## List workspaces
+
+Returns the workspaces the authenticated user belongs to, so they can choose which workspace to grant access to during the OAuth consent flow.
+
+```http
+GET /mcp/v1/oauth/workspaces
+Authorization: Bearer <jwt>
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "ws-uuid-1",
+      "name": "Acme Corp"
+    },
+    {
+      "id": "ws-uuid-2",
+      "name": "Personal"
+    }
+  ],
+  "meta": { "total": 2 }
+}
+```
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 401 | Missing or invalid JWT. |
+
+---
+
+## Submit consent
+
+The user approves the OAuth request. The back-end signs an HS256 assertion that the MCP server uses to mint an OAuth access token.
+
+```http
+POST /mcp/v1/oauth/consent
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+### Request body
+
+```json
+{
+  "workspaceId": "ws-uuid-1",
+  "scopes": ["read"],
+  "clientId": "client_abc123",
+  "nonce": "request-id-from-authorize"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `workspaceId` | UUID | Yes | Workspace the user is granting access to. |
+| `scopes` | string[] | Yes | Scopes being granted. Phase 1: `["read"]`. |
+| `clientId` | string | Yes | OAuth client ID from the authorization request. |
+| `nonce` | string | Yes | The `request_id` from the `/oauth/authorize` flow, used to bind consent to the original request. |
+
+### Response
+
+```json
+{
+  "assertion": "<signed-hs256-jwt>"
+}
+```
+
+The `assertion` is a short-lived signed JWT that the consent page posts back to the MCP server's `/oauth/consent-callback` to complete the flow. It is not a user-facing token.
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 400 | Missing or invalid fields. |
+| 401 | Missing or invalid JWT. |
+| 403 | User does not have sufficient role in the workspace (`read` requires any active member; `write`/`execute` require ADMIN — Phase 2). |
+
+---
+
+## How this fits into the full OAuth flow
+
+```
+1. AI client → GET /.well-known/oauth-authorization-server   (mcp-server)
+2. AI client → POST /oauth/register                          (mcp-server DCR)
+3. AI client → GET /oauth/authorize                          (mcp-server → redirects to consent page)
+4. Consent page → GET /mcp/v1/oauth/workspaces               (back — this API)
+5. User approves → POST /mcp/v1/oauth/consent                (back — this API)
+6. Consent page → POST /oauth/consent-callback + assertion   (mcp-server)
+7. mcp-server → POST /oauth/token                            (mcp-server)
+8. AI client receives access token (mcp_oauth_…)
+```
+
+For the full OAuth AS metadata and token endpoints, see the [MCP server OAuth reference](/mcp/api-reference/mcp-server-oauth).

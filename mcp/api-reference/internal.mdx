@@ -1,0 +1,244 @@
+---
+title: "Internal API"
+description: "Endpoints called by the MCP server to back/. Not user-facing."
+---
+
+<Warning>
+  These endpoints are **internal only**. They are called exclusively by the `mcp-server` process using the `x-mcp-internal-secret` header. They are never called by users, AI clients, or third-party integrations.
+</Warning>
+
+All endpoints are guarded by `McpInternalGuard`, which validates the `x-mcp-internal-secret` header against the `MCP_INTERNAL_SECRET` environment variable. Never expose these endpoints publicly.
+
+---
+
+## Resolve token
+
+Resolves a raw token hash to its workspace and scopes. Called by the MCP server's token resolver on every authenticated request.
+
+```http
+POST /mcp/v1/internal/resolve-token
+x-mcp-internal-secret: <secret>
+Content-Type: application/json
+```
+
+### Request body
+
+```json
+{ "tokenHash": "sha256-hex-of-raw-token" }
+```
+
+The `tokenHash` is `sha256(rawToken)` in hex. The raw token (e.g. `mcp_abc…`) is never sent — only the hash.
+
+### Response `200 OK`
+
+```json
+{
+  "tokenId": "aaaaaaaa-0000-0000-0000-000000000001",
+  "workspaceId": "ws-uuid-1",
+  "scopes": ["read"],
+  "kind": "service",
+  "expiresAt": null
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tokenId` | UUID | Token identifier (used in rate limiting and circuit breaker keying). |
+| `workspaceId` | UUID | Workspace the token belongs to. |
+| `scopes` | string[] | Granted permissions. |
+| `kind` | `"service"` \| `"oauth"` | Token type. |
+| `expiresAt` | ISO 8601 \| null | `null` for service tokens with no expiry; set for OAuth tokens. |
+
+Updates `lastUsedAt` on the token record on every successful resolution.
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 401 | Missing or invalid `x-mcp-internal-secret`. |
+| 404 | Token not found, revoked, or expired. |
+
+---
+
+## List node types
+
+Returns the complete registry of FluxPrompt node types.
+
+```http
+GET /mcp/v1/internal/node-types
+x-mcp-internal-secret: <secret>
+```
+
+### Response
+
+```json
+[
+  {
+    "type": "commandTextNode",
+    "label": "Command Text Node",
+    "description": "Executes a text prompt and passes output downstream.",
+    "category": "AI",
+    "inputSchema": { "type": "object", "properties": { "model": { "type": "string" }, "command": { "type": "string" } } },
+    "outputSchema": { "type": "object", "properties": { "text": { "type": "string" } } }
+  }
+]
+```
+
+---
+
+## List agents
+
+Returns agents in a workspace, with optional search.
+
+```http
+GET /mcp/v1/internal/agents?workspaceId={ws}&search={q}&limit={n}&offset={n}
+x-mcp-internal-secret: <secret>
+```
+
+| Query param | Type | Required | Description |
+|-------------|------|----------|-------------|
+| `workspaceId` | UUID | Yes | Workspace to query. |
+| `search` | string | No | Case-insensitive substring filter on agent name. |
+| `limit` | number | No | Page size. Default 20, max 200. |
+| `offset` | number | No | Pagination offset. Default 0. |
+
+### Response
+
+```json
+{
+  "agents": [
+    {
+      "id": "agent-uuid",
+      "name": "Lead Scorer",
+      "description": "Scores inbound leads",
+      "updatedAt": "2026-06-17T00:00:00Z",
+      "nodeCount": 12,
+      "isPublic": false
+    }
+  ],
+  "total": 45
+}
+```
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 400 | `workspaceId` missing. |
+| 401 | Invalid internal secret. |
+
+---
+
+## Get agent
+
+Returns the full node and edge structure of one agent.
+
+```http
+GET /mcp/v1/internal/agents/{agentId}?workspaceId={ws}
+x-mcp-internal-secret: <secret>
+```
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `agentId` | UUID (path) | Yes | Agent to fetch. |
+| `workspaceId` | UUID (query) | Yes | Workspace scope — prevents cross-workspace access. |
+
+### Response
+
+Same as `list_agents` item plus `nodes` and `edges` arrays. See [`get_agent` tool reference](/mcp/tools/get-agent) for the full shape.
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 401 | Invalid internal secret. |
+| 404 | Agent not found or does not belong to the workspace. |
+
+---
+
+## Grant OAuth token
+
+Persists an OAuth access token after the consent flow completes. Called by the MCP server after verifying the consent assertion.
+
+```http
+POST /mcp/v1/internal/oauth/grant
+x-mcp-internal-secret: <secret>
+Content-Type: application/json
+```
+
+### Request body
+
+```json
+{
+  "tokenHash": "sha256-hex",
+  "workspaceId": "ws-uuid",
+  "grantedUserId": "user-uuid",
+  "clientId": "client_abc",
+  "scopes": ["read"],
+  "name": "Claude Desktop (Acme Corp)",
+  "expiresAt": "2026-07-17T10:00:00Z"
+}
+```
+
+### Response `201 Created`
+
+```json
+{ "tokenId": "token-uuid" }
+```
+
+Idempotent on `tokenHash` — if the same hash is submitted twice (retry), returns the existing record without error.
+
+---
+
+## Register OAuth client
+
+Persists a Dynamic Client Registration record. Called by the MCP server's `/oauth/register` endpoint.
+
+```http
+POST /mcp/v1/internal/oauth/clients
+x-mcp-internal-secret: <secret>
+Content-Type: application/json
+```
+
+### Request body
+
+```json
+{
+  "clientId": "client_abc123",
+  "redirectUris": ["https://claude.ai/callback"],
+  "clientName": "Claude Desktop",
+  "ttlSeconds": 7776000
+}
+```
+
+### Response `201 Created`
+
+```json
+{
+  "clientId": "client_abc123",
+  "redirectUris": ["https://claude.ai/callback"],
+  "clientName": "Claude Desktop"
+}
+```
+
+---
+
+## Get OAuth client
+
+Fetches a registered OAuth client by ID. Called during `/oauth/authorize` to validate the client.
+
+```http
+GET /mcp/v1/internal/oauth/clients/{clientId}
+x-mcp-internal-secret: <secret>
+```
+
+### Response
+
+Same shape as the register response.
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 401 | Invalid internal secret. |
+| 404 | Client not found or TTL expired. |
