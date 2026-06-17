@@ -245,15 +245,6 @@
                       "mcp/development/validating-the-mcp"
                     ]
                   },
-                  {
-                    "group": "API Reference",
-                    "pages": [
-                      "mcp/api-reference/tokens",
-                      "mcp/api-reference/oauth",
-                      "mcp/api-reference/mcp-server-oauth",
-                      "mcp/api-reference/internal"
-                    ]
-                  },
                   "mcp/troubleshooting",
                   "mcp/changelog"
                 ]
@@ -276,6 +267,15 @@
                   "api-reference/endpoint/create",
                   "api-reference/endpoint/delete",
                   "api-reference/endpoint/webhook"
+                ]
+              },
+              {
+                "group": "FluxPrompt MCP",
+                "pages": [
+                  "api-reference/mcp/tokens",
+                  "api-reference/mcp/oauth",
+                  "api-reference/mcp/mcp-server-oauth",
+                  "api-reference/mcp/internal"
                 ]
               }
             ]
@@ -516,15 +516,6 @@
                       "mcp/pt-br/development/validating-the-mcp"
                     ]
                   },
-                  {
-                    "group": "Referência de API",
-                    "pages": [
-                      "mcp/pt-br/api-reference/tokens",
-                      "mcp/pt-br/api-reference/oauth",
-                      "mcp/pt-br/api-reference/mcp-server-oauth",
-                      "mcp/pt-br/api-reference/internal"
-                    ]
-                  },
                   "mcp/pt-br/troubleshooting",
                   "mcp/pt-br/changelog"
                 ]
@@ -547,6 +538,15 @@
                   "api-reference/endpoint/create",
                   "api-reference/endpoint/delete",
                   "api-reference/endpoint/webhook"
+                ]
+              },
+              {
+                "group": "FluxPrompt MCP",
+                "pages": [
+                  "api-reference/pt-br/mcp/tokens",
+                  "api-reference/pt-br/mcp/oauth",
+                  "api-reference/pt-br/mcp/mcp-server-oauth",
+                  "api-reference/pt-br/mcp/internal"
                 ]
               }
             ]
