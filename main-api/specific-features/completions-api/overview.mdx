@@ -1,0 +1,78 @@
+---
+title: "Completions API overview"
+description: "FluxPrompt's OpenRouter-like, OpenAI-compatible completions endpoint: pick any model we support, send a minimal payload, and we resolve the provider and run it for you."
+---
+
+The Completions API is FluxPrompt's OpenRouter-like endpoint. You pick any AI model FluxPrompt supports, send a minimal OpenAI-compatible payload, and the API resolves the right provider, fills in the missing parameters from the model's metadata, calls the model, and returns the response.
+
+Because the request and response shapes match OpenAI's `/v1/chat/completions`, off-the-shelf OpenAI SDKs work by swapping the `baseURL` to point at FluxPrompt.
+
+```http
+POST /v1/chat/completions
+```
+
+## How it works
+
+<Steps>
+  <Step title="You send a model and messages">
+    The only required fields are `model` and `messages`. Everything else is optional.
+  </Step>
+  <Step title="FluxPrompt resolves the provider">
+    The provider (Anthropic, OpenAI, Google Gemini, Groq, Perplexity, or xAI) is derived from the model id. You never send a provider name.
+  </Step>
+  <Step title="The API auto-completes the rest">
+    Missing parameters such as `max_tokens` are filled from the model's metadata and provider defaults.
+  </Step>
+  <Step title="The model runs and returns">
+    FluxPrompt calls the model and returns an OpenAI-shaped `chat.completion` response.
+  </Step>
+</Steps>
+
+## Supported providers
+
+The provider is selected automatically from the model id. Current providers:
+
+| Provider | Examples of what runs there |
+| --- | --- |
+| Anthropic | Claude models |
+| OpenAI | GPT models |
+| Google Gemini | Gemini models |
+| Groq | Groq-hosted models |
+| Perplexity | Perplexity models |
+| xAI | Grok models |
+
+## Authentication
+
+Every request authenticates with an API key sent in the `api-key` header. The key can be a user API key or a company-space API key, and it determines model gating and billing.
+
+```http
+api-key: <your-api-key>
+content-type: application/json
+```
+
+<Warning>
+The header is literally `api-key`. Not `x-api-key`, not `Authorization`, and no `Bearer` prefix — send the raw value.
+</Warning>
+
+### API key types
+
+| Type | Where it lives | Behavior |
+| --- | --- | --- |
+| User API key | On your user profile | Requests run as that user; gating and billing follow your account. |
+| Space API key | On a company space | Requests run as the company owner of that space; gating and billing follow the space. |
+
+## OpenAI SDK compatibility
+
+Because the path and payload mirror OpenAI, you can reuse existing OpenAI SDKs by pointing the client at FluxPrompt's base URL and sending the key in the `api-key` header.
+
+<Note>
+The OpenAI SDKs send credentials in the `Authorization` header by default. FluxPrompt expects the `api-key` header, so configure the client to send that header (most SDKs allow custom default headers).
+</Note>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Chat completions" icon="message-square" href="/main-api/specific-features/completions-api/chat-completions">
+    `POST /v1/chat/completions` — full request parameters, response shape, and the error table.
+  </Card>
+</CardGroup>
