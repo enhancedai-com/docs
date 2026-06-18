@@ -1,0 +1,260 @@
+---
+title: "Chat completions"
+description: "POST /v1/chat/completions — OpenAI-compatible completion endpoint. Send a model and messages; FluxPrompt resolves the provider, fills in defaults, and returns the response."
+---
+
+Send a chat completion request to any model FluxPrompt supports. The provider is resolved from the `model` id, missing parameters are filled in automatically, and the response comes back in OpenAI's `chat.completion` shape.
+
+| Method | Path |
+| --- | --- |
+| `POST` | `/v1/chat/completions` |
+
+## Request
+
+### Headers
+
+```http
+api-key: <your-api-key>
+content-type: application/json
+```
+
+### Body
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `model` | string | yes | The model id. The provider is resolved from it internally — you never send a provider name. |
+| `messages` | array | yes | OpenAI chat format. Each item is `{ "role": "system" \| "user" \| "assistant", "content": string }`. |
+| `max_tokens` | integer | no | Defaults to the model's maximum output tokens. |
+| `temperature` | number | no | Passed through where the provider supports it; ignored otherwise. |
+| `top_p` | number | no | Passed through where the provider supports it; ignored otherwise. |
+| `stop` | string \| array | no | Passed through where the provider supports it; ignored otherwise. |
+| `stream` | boolean | no | Defaults to `false`. Set to `true` for a server-sent event stream — see [Streaming](#streaming). |
+| `deprecated_model_behavior` | string | no | FluxPrompt extension. `"error"` (default) or `"substitute"`. See [Deprecated models](#deprecated-models). |
+
+<Note>
+Optional parameters that the underlying provider doesn't support are accepted and ignored rather than rejected, matching gateway behavior.
+</Note>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST "https://api.fluxprompt.ai/v1/chat/completions" \
+  -H "api-key: <your-api-key>" \
+  -H "content-type: application/json" \
+  -d '{
+    "model": "claude-opus-4-5-20251101",
+    "messages": [
+      { "role": "system", "content": "You are concise." },
+      { "role": "user", "content": "Summarize the theory of relativity in one sentence." }
+    ],
+    "max_tokens": 256,
+    "temperature": 0.7
+  }'
+```
+
+```python OpenAI SDK (Python)
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.fluxprompt.ai/v1",
+    api_key="unused",  # FluxPrompt reads the api-key header instead
+    default_headers={"api-key": "<your-api-key>"},
+)
+
+response = client.chat.completions.create(
+    model="claude-opus-4-5-20251101",
+    messages=[
+        {"role": "system", "content": "You are concise."},
+        {"role": "user", "content": "Summarize the theory of relativity in one sentence."},
+    ],
+    max_tokens=256,
+)
+print(response.choices[0].message.content)
+```
+
+```json JSON body
+{
+  "model": "claude-opus-4-5-20251101",
+  "messages": [
+    { "role": "system", "content": "You are concise." },
+    { "role": "user", "content": "Summarize the theory of relativity in one sentence." }
+  ],
+  "max_tokens": 256,
+  "temperature": 0.7
+}
+```
+
+</CodeGroup>
+
+<Tip>
+Existing OpenAI SDKs work by swapping `baseURL` to `https://api.fluxprompt.ai/v1`. Configure the client to send the key in the `api-key` header rather than `Authorization`.
+</Tip>
+
+## Response
+
+On success, returns an OpenAI-shaped `chat.completion` object. The `model` field reflects the model that actually ran, and `provider` names the resolved provider.
+
+```json
+{
+  "id": "cmpl_8c5b1b1c3a4f",
+  "object": "chat.completion",
+  "created": 1718600000,
+  "model": "claude-opus-4-5-20251101",
+  "provider": "anthropic",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Spacetime tells matter how to move, and matter tells spacetime how to curve."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 28,
+    "completion_tokens": 16,
+    "total_tokens": 44
+  }
+}
+```
+
+### Response fields
+
+<ResponseField name="id" type="string">
+  Unique identifier for the completion.
+</ResponseField>
+
+<ResponseField name="object" type="string">
+  `chat.completion` for non-streaming responses, or `chat.completion.chunk` for each streamed event.
+</ResponseField>
+
+<ResponseField name="created" type="integer">
+  Unix timestamp (seconds) of when the completion was created.
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  The model that actually ran. With `deprecated_model_behavior: "substitute"`, this may differ from the requested model.
+</ResponseField>
+
+<ResponseField name="provider" type="string">
+  The provider resolved from the model, such as `anthropic` or `openai`.
+</ResponseField>
+
+<ResponseField name="choices" type="array">
+  The generated completions. Each entry has an `index`, a `message` (`{ role, content }`), and a `finish_reason`.
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  Token counts: `prompt_tokens`, `completion_tokens`, and `total_tokens`.
+</ResponseField>
+
+## Streaming
+
+Set `stream: true` to receive the completion incrementally as server-sent events. The response is returned with `Content-Type: text/event-stream` and HTTP `200`, and each event is an OpenAI-style `chat.completion.chunk`.
+
+### Stream behavior
+
+- Each chunk has `object: "chat.completion.chunk"` and carries a `delta` instead of a full `message`. The `delta.content` field holds the next slice of text.
+- Intermediate chunks have `finish_reason: null`.
+- The terminal chunk carries the final `finish_reason` (for example `"stop"`) and a `usage` object with `prompt_tokens`, `completion_tokens`, and `total_tokens`.
+- The stream ends with a literal `data: [DONE]` line.
+
+```text Event stream
+data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-opus-4-5-20251101","provider":"anthropic","choices":[{"index":0,"delta":{"role":"assistant","content":"Spacetime"},"finish_reason":null}]}
+
+data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-opus-4-5-20251101","provider":"anthropic","choices":[{"index":0,"delta":{"content":" tells matter how to move."},"finish_reason":null}]}
+
+data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-opus-4-5-20251101","provider":"anthropic","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":28,"completion_tokens":16,"total_tokens":44}}
+
+data: [DONE]
+```
+
+### Streaming example
+
+<CodeGroup>
+
+```bash cURL
+curl -N -X POST "https://api.fluxprompt.ai/v1/chat/completions" \
+  -H "api-key: <your-api-key>" \
+  -H "content-type: application/json" \
+  -d '{
+    "model": "claude-opus-4-5-20251101",
+    "messages": [
+      { "role": "user", "content": "Summarize the theory of relativity in one sentence." }
+    ],
+    "stream": true
+  }'
+```
+
+```python OpenAI SDK (Python)
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.fluxprompt.ai/v1",
+    api_key="unused",  # FluxPrompt reads the api-key header instead
+    default_headers={"api-key": "<your-api-key>"},
+)
+
+stream = client.chat.completions.create(
+    model="claude-opus-4-5-20251101",
+    messages=[
+        {"role": "user", "content": "Summarize the theory of relativity in one sentence."},
+    ],
+    stream=True,
+)
+
+for chunk in stream:
+    delta = chunk.choices[0].delta
+    if delta.content:
+        print(delta.content, end="", flush=True)
+```
+
+</CodeGroup>
+
+<Tip>
+Pass `-N` (`--no-buffer`) to cURL so it prints each event as it arrives instead of waiting for the full response.
+</Tip>
+
+## Deprecated models
+
+FluxPrompt marks some models as deprecated. The `deprecated_model_behavior` parameter controls what happens when you request one:
+
+| Value | Behavior |
+| --- | --- |
+| `"error"` (default) | Returns `400 model_deprecated`. The contract stays predictable — no silent swaps. |
+| `"substitute"` | Transparently runs the model's replacement. The response `model` field reflects the model that actually ran, so you can detect the swap. |
+
+## Timeouts
+
+Non-streaming requests have a synchronous cap of roughly 120 seconds. Requests that exceed it return `504 timeout`. For long generations, use `stream: true` to receive output incrementally, or lower `max_tokens`.
+
+## Errors
+
+Errors use the OpenAI-compatible envelope:
+
+```json
+{
+  "error": {
+    "message": "Model not found",
+    "type": "invalid_request_error",
+    "code": "model_not_found"
+  }
+}
+```
+
+| HTTP | `code` | Cause |
+| --- | --- | --- |
+| `401` | `unauthorized` | Missing or invalid `api-key` header. |
+| `400` | `model_not_found` | The model is unknown or inactive. |
+| `400` | `model_deprecated` | The model is deprecated and `deprecated_model_behavior` is `"error"` (the default). |
+| `400` | `unsupported_provider` | The model's provider can't be run by the engine. |
+| `403` | `model_not_enabled` | The model is disabled for the caller's company or space. |
+| `402` | `insufficient_quota` | The caller has no active subscription or no remaining credits. Returned by a pre-flight check before the model runs. |
+| `504` | `timeout` | A synchronous request exceeded the ~120s cap. Use `stream: true` for long generations. |
+
+<Info>
+`402 insufficient_quota` is enforced by a pre-flight credit check: when the caller has no active subscription or no remaining credits, the request is rejected before the model runs.
+</Info>
