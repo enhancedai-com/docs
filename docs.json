@@ -151,6 +151,7 @@
                         "group": "Completions API",
                         "pages": [
                           "main-api/specific-features/completions-api/overview",
+                          "main-api/specific-features/completions-api/how-it-works",
                           "main-api/specific-features/completions-api/chat-completions"
                         ]
                       },
@@ -419,6 +420,7 @@
                         "group": "Completions API",
                         "pages": [
                           "main-api/specific-features/completions-api/overview",
+                          "main-api/specific-features/completions-api/how-it-works",
                           "main-api/specific-features/completions-api/chat-completions"
                         ]
                       },
