@@ -1,0 +1,276 @@
+---
+title: "Update the FluxPrompt MCP Terraform"
+description: "From scratch to terraform apply for the FluxPrompt MCP service (dev / staging / prod): prerequisites, AWS account check, tfvars, SSM secrets, plan/apply, and the ARM64 image build & push."
+---
+
+## When to use this
+
+You need to provision or update the FluxPrompt MCP infrastructure on AWS (ECS/Fargate + ALB + Route53) for any environment. The Terraform lives in the `mcp-server` repo under `infra/terraform`.
+
+<Note>
+State is on S3 with **native locking** (`use_lockfile`, Terraform &gt;= 1.10) — there is **no DynamoDB lock table**. Confirm with the AWS admin that no pre-existing remote state or lock table exists for this project.
+</Note>
+
+## Prerequisites
+
+You need **AWS CLI v2**, **Terraform &gt;= 1.10**, and **Docker** (with `buildx`, for the image step). Pick your platform.
+
+<Note>
+On Windows, run the whole flow from **WSL2**, not PowerShell. The deploy steps use bash and `docker buildx` for the ARM64 image — Docker Desktop with the WSL2 backend handles the arm64 emulation cleanly. Install Docker Desktop on Windows and enable *Settings → Resources → WSL Integration* for your distro.
+</Note>
+
+<Tabs>
+
+<Tab title="WSL2 / Ubuntu / Linux">
+
+```bash
+# AWS CLI v2
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+unzip awscliv2.zip && sudo ./aws/install
+
+# Terraform >= 1.10 (required for use_lockfile — no DynamoDB needed)
+sudo apt-get update && sudo apt-get install -y gnupg software-properties-common
+wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt update && sudo apt install terraform
+
+aws --version          # aws-cli/2.x
+terraform -version     # must be >= 1.10
+docker buildx version  # buildx present (Docker Desktop WSL2 integration)
+```
+
+</Tab>
+
+<Tab title="macOS">
+
+```bash
+# Homebrew
+brew install awscli
+brew tap hashicorp/tap && brew install hashicorp/tap/terraform
+# Docker Desktop (if not installed): brew install --cask docker
+
+aws --version          # aws-cli/2.x
+terraform -version     # must be >= 1.10
+docker buildx version  # buildx present
+```
+
+Apple Silicon builds `linux/arm64` natively; Intel Macs build it via emulation through `buildx`.
+
+</Tab>
+
+<Tab title="Windows (PowerShell)">
+
+Only for installing the tools — **run the actual deploy from WSL2** (see the note above).
+
+```powershell
+winget install -e --id Amazon.AWSCLI
+winget install -e --id Hashicorp.Terraform
+winget install -e --id Docker.DockerDesktop   # then enable WSL2 integration
+
+aws --version
+terraform -version     # must be >= 1.10
+```
+
+</Tab>
+
+</Tabs>
+
+<Steps>
+
+<Step title="Confirm the AWS account">
+
+```bash
+aws sts get-caller-identity
+# Account MUST be 109622968129
+```
+
+A green plan against the wrong account is the most dangerous failure mode — always confirm first.
+
+</Step>
+
+<Step title="Clone the repo">
+
+```bash
+git clone -b feat/868jx6p60 git@github.com:Brad-EnhancedAi/FluxPrompt-MCP.git
+cd FluxPrompt-MCP/mcp-server/infra/terraform
+```
+
+</Step>
+
+<Step title="Create the S3 state bucket (once, skip if it already exists)">
+
+```bash
+aws s3api head-bucket --bucket enhancedai-tfstate 2>/dev/null \
+  || aws s3api create-bucket --bucket enhancedai-tfstate --region us-east-1
+aws s3api put-bucket-versioning \
+  --bucket enhancedai-tfstate \
+  --versioning-configuration Status=Enabled
+```
+
+The bucket must exist **before** `terraform init` — the backend does not self-create it.
+
+</Step>
+
+<Step title="Populate the tfvars for the target environment">
+
+Use the [`terraform-infra-helper` agent](/ai-workflows/internal-developer-workflows/agents) to auto-discover the AWS IDs and fill the `REPLACE_` placeholders:
+
+```
+use the terraform-infra-helper agent for <env>   # env = dev | staging | prod
+```
+
+It queries AWS read-only and writes the correct values into `<env>.tfvars`:
+
+- VPC ID, subnet IDs
+- ALB listener ARN, ALB security group ID
+- ALB DNS / canonical hosted-zone ID
+- Route 53 zone ID
+- ECS cluster ARN
+- SSM parameter ARNs (`MCP_INTERNAL_SECRET`, `MCP_OAUTH_CONSENT_SECRET`)
+- ECR repository URI
+
+Verify the proposed values, then confirm to let it write the file.
+
+</Step>
+
+<Step title="SSM secrets (first deploy only)">
+
+The MCP shared secrets live in SSM and **must be identical on both sides** (`back/` and `mcp-server`).
+
+Read the values stored for the environment:
+
+```bash
+aws ssm get-parameter --name /fluxprompt/<env>/mcp/internal-secret \
+  --with-decryption --query Parameter.Value --output text --region us-east-1
+
+aws ssm get-parameter --name /fluxprompt/<env>/mcp/consent-secret \
+  --with-decryption --query Parameter.Value --output text --region us-east-1
+```
+
+If they don't exist yet, generate and store them:
+
+```bash
+aws ssm put-parameter --name /fluxprompt/<env>/mcp/internal-secret \
+  --type SecureString --overwrite --region us-east-1 \
+  --value "mcp_<env>_$(openssl rand -hex 24)"
+
+aws ssm put-parameter --name /fluxprompt/<env>/mcp/consent-secret \
+  --type SecureString --overwrite --region us-east-1 \
+  --value "$(openssl rand -hex 32)"
+```
+
+Mirror the **same values** into `back/.env` for that environment:
+
+```
+MCP_INTERNAL_SECRET=<value from SSM above>
+MCP_OAUTH_CONSENT_SECRET=<value from SSM above>
+FRONTEND_OAUTH_CALLBACK_BASE=https://<env>.fluxprompt.ai
+```
+
+<Warning>
+If the secrets diverge between `back/` and `mcp-server`, the MCP server gets a 401 from `back/` and the OAuth consent signature breaks. Never commit secret values to any repo — they live only in SSM and the server's `.env`.
+</Warning>
+
+</Step>
+
+<Step title="Validate: account vs. Terraform config">
+
+Run the `terraform-infra-helper` validation pass (go/no-go before plan):
+
+```
+validate terraform config for <env>
+```
+
+It checks that every ID in `<env>.tfvars` resolves in the AWS account and that the ACM cert covers `mcp-<env>.fluxprompt.ai`.
+
+</Step>
+
+<Step title="Init, plan, apply">
+
+```bash
+# Init (downloads providers, configures S3 backend with use_lockfile)
+terraform init
+
+# Plan — review carefully before applying
+terraform plan -var-file=<env>.tfvars -out=<env>.plan
+
+# Apply
+terraform apply <env>.plan
+
+# Confirm the service URL
+terraform output url
+```
+
+Use `-out=<plan>` + `apply <plan>` so the apply matches exactly what you reviewed. `desired_count` is owned by Application Auto Scaling (`ignore_changes`) — divergence in later plans is expected, not drift.
+
+</Step>
+
+<Step title="Build & push the Docker image (first deploy or after code changes)">
+
+Run from inside `mcp-server/`, authenticated to account `109622968129`:
+
+```bash
+ACCOUNT=109622968129
+REGION=us-east-1
+REPO=enhancedai-mcp-ecr-<env>
+REGISTRY=$ACCOUNT.dkr.ecr.$REGION.amazonaws.com
+
+# Login
+aws ecr get-login-password --region $REGION \
+  | docker login --username AWS --password-stdin $REGISTRY
+
+# Build ARM64 (Graviton) + push
+docker buildx create --use --name mcpbuilder 2>/dev/null || docker buildx use mcpbuilder
+docker buildx build \
+  --platform linux/arm64 \
+  -t $REGISTRY/$REPO:latest \
+  --push .
+
+# Confirm image arrived
+aws ecr describe-images --repository-name $REPO \
+  --query "imageDetails[].imageTags" --output table
+
+# Force ECS to pull the new image
+aws ecs update-service \
+  --cluster enhancedai-<env> \
+  --service $(aws ecs list-services --cluster enhancedai-<env> \
+    --query "serviceArns[?contains(@,'mcp')]|[0]" --output text) \
+  --force-new-deployment --region $REGION
+```
+
+<Warning>
+The image MUST be `linux/arm64`. A plain `docker build` on an x86 machine produces an amd64 image that crash-loops on Graviton ECS tasks.
+</Warning>
+
+</Step>
+
+</Steps>
+
+## Off-hours shutdown (non-prod)
+
+Scheduled scaling is defined in Terraform (`modules/mcp-service/autoscaling.tf`) and toggled per environment via `schedule_enabled` in the tfvars. The scale-up and scale-down actions use **independent timezones** so the window covers both the São Paulo morning and the Mountain (MST) evening.
+
+| Setting | dev / staging | prod |
+| --- | --- | --- |
+| `schedule_enabled` | `true` | `false` |
+| Scale up | `cron(0 9 ? * MON-FRI *)` — 09:00 `schedule_timezone` | — |
+| Scale down | `cron(0 18 ? * MON-FRI *)` — 18:00 `scale_down_timezone` | — |
+| `schedule_timezone` (up) | `America/Sao_Paulo` | — |
+| `scale_down_timezone` (down) | `America/Phoenix` (MST, no DST) | — |
+
+When `schedule_enabled = true`, the service scales up at **09:00 São Paulo** and scales to zero at **18:00 MST** on weekdays (and stays off on weekends). This gives each team its full **09:00–18:00 local** window — São Paulo in the morning, Mountain (MST) through the afternoon — a ~13h on-window.
+
+<Note>
+`scale_down_timezone` defaults to `America/Phoenix` (permanent MST, UTC-7). If the team wants Mountain Time that follows daylight saving, set it to `America/Denver` instead.
+</Note>
+
+## Environment checklist
+
+| Step | dev | staging | prod |
+| --- | --- | --- | --- |
+| S3 bucket exists | ✓ | ✓ | ✓ |
+| `<env>.tfvars` filled | ✓ | — | — |
+| SSM secrets match `back/.env` | ✓ | — | — |
+| ACM cert covers `mcp-<env>.fluxprompt.ai` | ✓ | — | — |
+| ARM64 image pushed to ECR | ✓ | — | — |
+| `terraform apply` run | ✓ | — | — |
