@@ -44,7 +44,7 @@ curl -X POST "https://api.fluxprompt.ai/v1/chat/completions" \
   -H "api-key: <your-api-key>" \
   -H "content-type: application/json" \
   -d '{
-    "model": "claude-opus-4-5-20251101",
+    "model": "claude-sonnet-4-6",
     "messages": [
       { "role": "system", "content": "You are concise." },
       { "role": "user", "content": "Summarize the theory of relativity in one sentence." }
@@ -64,7 +64,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="claude-opus-4-5-20251101",
+    model="claude-sonnet-4-6",
     messages=[
         {"role": "system", "content": "You are concise."},
         {"role": "user", "content": "Summarize the theory of relativity in one sentence."},
@@ -76,7 +76,7 @@ print(response.choices[0].message.content)
 
 ```json JSON body
 {
-  "model": "claude-opus-4-5-20251101",
+  "model": "claude-sonnet-4-6",
   "messages": [
     { "role": "system", "content": "You are concise." },
     { "role": "user", "content": "Summarize the theory of relativity in one sentence." }
@@ -101,7 +101,7 @@ On success, returns an OpenAI-shaped `chat.completion` object. The `model` field
   "id": "cmpl_8c5b1b1c3a4f",
   "object": "chat.completion",
   "created": 1718600000,
-  "model": "claude-opus-4-5-20251101",
+  "model": "claude-sonnet-4-6",
   "provider": "anthropic",
   "choices": [
     {
@@ -163,11 +163,11 @@ Set `stream: true` to receive the completion incrementally as server-sent events
 - The stream ends with a literal `data: [DONE]` line.
 
 ```text Event stream
-data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-opus-4-5-20251101","provider":"anthropic","choices":[{"index":0,"delta":{"role":"assistant","content":"Spacetime"},"finish_reason":null}]}
+data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-sonnet-4-6","provider":"anthropic","choices":[{"index":0,"delta":{"role":"assistant","content":"Spacetime"},"finish_reason":null}]}
 
-data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-opus-4-5-20251101","provider":"anthropic","choices":[{"index":0,"delta":{"content":" tells matter how to move."},"finish_reason":null}]}
+data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-sonnet-4-6","provider":"anthropic","choices":[{"index":0,"delta":{"content":" tells matter how to move."},"finish_reason":null}]}
 
-data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-opus-4-5-20251101","provider":"anthropic","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":28,"completion_tokens":16,"total_tokens":44}}
+data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-sonnet-4-6","provider":"anthropic","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":28,"completion_tokens":16,"total_tokens":44}}
 
 data: [DONE]
 ```
@@ -181,7 +181,7 @@ curl -N -X POST "https://api.fluxprompt.ai/v1/chat/completions" \
   -H "api-key: <your-api-key>" \
   -H "content-type: application/json" \
   -d '{
-    "model": "claude-opus-4-5-20251101",
+    "model": "claude-sonnet-4-6",
     "messages": [
       { "role": "user", "content": "Summarize the theory of relativity in one sentence." }
     ],
@@ -199,7 +199,7 @@ client = OpenAI(
 )
 
 stream = client.chat.completions.create(
-    model="claude-opus-4-5-20251101",
+    model="claude-sonnet-4-6",
     messages=[
         {"role": "user", "content": "Summarize the theory of relativity in one sentence."},
     ],
