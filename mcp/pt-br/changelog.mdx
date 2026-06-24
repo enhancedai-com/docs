@@ -3,6 +3,13 @@ title: "Changelog"
 description: "Novidades na integração MCP do FluxPrompt."
 ---
 
+## 2026-06-24 — Correções
+
+**A paginação do `list_agents` agora é aplicada no servidor.**
+
+- O `list_agents` agora respeita `limit` (padrão 20, máximo 200) e `offset`, e sempre retorna `{ agents, total }`. Builds anteriores aceitavam esses parâmetros mas os ignoravam, retornando a lista completa sem limite. Nenhuma mudança no cliente é necessária — isso corresponde ao contrato documentado.
+- Corrigida a descrição da ferramenta `list_node_types`, que citava uma contagem de tipos de node desatualizada.
+
 ## 2026-06-17 — Phase 1 GA
 
 **Primeiro lançamento público do servidor MCP do FluxPrompt.**
