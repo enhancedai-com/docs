@@ -30,10 +30,49 @@ content-type: application/json
 | `stop` | string \| array | no | Passed through where the provider supports it; ignored otherwise. |
 | `stream` | boolean | no | Defaults to `false`. Set to `true` for a server-sent event stream — see [Streaming](#streaming). |
 | `deprecated_model_behavior` | string | no | FluxPrompt extension. `"error"` (default) or `"substitute"`. See [Deprecated models](#deprecated-models). |
+| _provider params_ | any | no | Any extra top-level field (e.g. `thinking`, `reasoning_effort`, `thinkingConfig`) is forwarded to the resolved provider. Use **each provider's own official parameter names and shape** — FluxPrompt translates them to the engine internally. See [Advanced provider parameters](#advanced-provider-parameters). |
 
 <Note>
 Optional parameters that the underlying provider doesn't support are accepted and ignored rather than rejected, matching gateway behavior.
 </Note>
+
+<Warning>
+**Payload limits.** Extra provider params are capped at **256,000 characters**, and the
+**total request** (messages + params) must stay under **~1.5 MB** — requests above that
+return `400 payload_too_large`. Credentials/transport keys (e.g. `api_key`, `base_url`,
+`headers`) are stripped for security and never forwarded.
+</Warning>
+
+### Advanced provider parameters
+
+To enable reasoning / extended thinking, send the parameters exactly as documented by
+the **provider you're targeting** — you do not need to know FluxPrompt's internals.
+FluxPrompt translates them to the engine and routes model-aware (for example, on
+Claude 4.6+ models, which only support adaptive thinking, a `budget_tokens` request is
+converted to adaptive automatically instead of being rejected).
+
+| Provider | Send (provider-native) |
+| --- | --- |
+| Anthropic (Claude) | `"thinking": { "type": "enabled", "budget_tokens": 4000 }` — on 4.6+ models, any thinking request runs as adaptive. |
+| OpenAI | `"reasoning_effort": "high"` |
+| Gemini | `"thinkingConfig": { "thinkingBudget": 4000, "includeThoughts": true }` |
+
+When the model produces reasoning, it comes back on `choices[].message.reasoning_content`
+(and `delta.reasoning_content` when streaming), with reasoning token counts under
+`usage.completion_tokens_details`. See [Response fields](#response-fields).
+
+```bash Reasoning (cURL)
+curl -X POST "https://api.fluxprompt.ai/v1/chat/completions" \
+  -H "api-key: <your-api-key>" \
+  -H "content-type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4-6",
+    "messages": [
+      { "role": "user", "content": "How many r in strawberry? Think it through." }
+    ],
+    "thinking": { "type": "enabled", "budget_tokens": 4000 }
+  }'
+```
 
 ### Example
 
@@ -144,12 +183,44 @@ On success, returns an OpenAI-shaped `chat.completion` object. The `model` field
 </ResponseField>
 
 <ResponseField name="choices" type="array">
-  The generated completions. Each entry has an `index`, a `message` (`{ role, content }`), and a `finish_reason`.
+  The generated completions. Each entry has an `index`, a `message`, and a `finish_reason`. The `message` is `{ role, content }`, plus `reasoning_content` (string) when the model produced reasoning / extended thinking.
 </ResponseField>
 
 <ResponseField name="usage" type="object">
-  Token counts: `prompt_tokens`, `completion_tokens`, and `total_tokens`.
+  Token counts: `prompt_tokens`, `completion_tokens`, and `total_tokens`. When the provider reports them, also includes `completion_tokens_details.reasoning_tokens` (reasoning/thinking tokens) and `prompt_tokens_details.cached_tokens` (cached input tokens).
 </ResponseField>
+
+<ResponseField name="provider_metadata" type="object">
+  Present only when the provider returns extra metadata. The raw provider-specific payload (capped), passed through verbatim for anything not normalized into the fields above.
+</ResponseField>
+
+<Note>
+`reasoning_content`, `usage.completion_tokens_details`, `usage.prompt_tokens_details`, and `provider_metadata` are present only when the model/provider produces them — a plain completion omits them. Request reasoning via [Advanced provider parameters](#advanced-provider-parameters).
+</Note>
+
+```json Response with reasoning
+{
+  "model": "claude-sonnet-4-6",
+  "provider": "anthropic",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "There are 3 r's in \"strawberry\".",
+        "reasoning_content": "Let me count: s-t-r-a-w-b-e-r-r-y …"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 18,
+    "completion_tokens": 12,
+    "total_tokens": 30,
+    "completion_tokens_details": { "reasoning_tokens": 240 }
+  }
+}
+```
 
 ## Streaming
 
@@ -158,11 +229,14 @@ Set `stream: true` to receive the completion incrementally as server-sent events
 ### Stream behavior
 
 - Each chunk has `object: "chat.completion.chunk"` and carries a `delta` instead of a full `message`. The `delta.content` field holds the next slice of text.
+- When the model is reasoning, those slices arrive as `delta.reasoning_content` (emitted before the text content).
 - Intermediate chunks have `finish_reason: null`.
-- The terminal chunk carries the final `finish_reason` (for example `"stop"`) and a `usage` object with `prompt_tokens`, `completion_tokens`, and `total_tokens`.
+- The terminal chunk carries the final `finish_reason` (for example `"stop"`) and a `usage` object with `prompt_tokens`, `completion_tokens`, and `total_tokens` (plus `completion_tokens_details` / `prompt_tokens_details` when reported), and `provider_metadata` when the provider returns it.
 - The stream ends with a literal `data: [DONE]` line.
 
 ```text Event stream
+data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-sonnet-4-6","provider":"anthropic","choices":[{"index":0,"delta":{"reasoning_content":"Let me recall the field equations…"},"finish_reason":null}]}
+
 data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-sonnet-4-6","provider":"anthropic","choices":[{"index":0,"delta":{"role":"assistant","content":"Spacetime"},"finish_reason":null}]}
 
 data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-sonnet-4-6","provider":"anthropic","choices":[{"index":0,"delta":{"content":" tells matter how to move."},"finish_reason":null}]}
