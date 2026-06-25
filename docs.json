@@ -154,7 +154,8 @@
                         "pages": [
                           "main-api/specific-features/completions-api/overview",
                           "main-api/specific-features/completions-api/how-it-works",
-                          "main-api/specific-features/completions-api/chat-completions"
+                          "main-api/specific-features/completions-api/chat-completions",
+                          "main-api/specific-features/completions-api/list-models"
                         ]
                       },
                       "main-api/specific-features/local-development",
@@ -429,7 +430,8 @@
                         "pages": [
                           "main-api/specific-features/completions-api/overview",
                           "main-api/specific-features/completions-api/how-it-works",
-                          "main-api/specific-features/completions-api/chat-completions"
+                          "main-api/specific-features/completions-api/chat-completions",
+                          "main-api/specific-features/completions-api/list-models"
                         ]
                       },
                       "main-api/specific-features/local-development",
