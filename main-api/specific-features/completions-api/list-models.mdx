@@ -1,0 +1,133 @@
+---
+title: "List models"
+description: "GET /v1/models — list the models available to your API key for use with the completions API, in an OpenAI-compatible shape plus FluxPrompt capability fields."
+---
+
+List the models your API key can use with the completions API. The response is an OpenAI-compatible list, with extra FluxPrompt fields describing each model's capabilities.
+
+| Method | Path |
+| --- | --- |
+| `GET` | `/v1/models` |
+
+The endpoint returns only models that are active, not deprecated, enabled for your company, and on a supported provider (`openai`, `anthropic`, `gemini`, `groq`, `perplexity`, `xai`).
+
+## Request
+
+### Headers
+
+```http
+api-key: <your-api-key>
+```
+
+No request body and no query parameters. A missing or invalid `api-key` header returns `401`.
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl "https://api.fluxprompt.ai/v1/models" \
+  -H "api-key: <your-api-key>"
+```
+
+```python OpenAI SDK (Python)
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://api.fluxprompt.ai/v1",
+    api_key="unused",  # FluxPrompt reads the api-key header instead
+    default_headers={"api-key": "<your-api-key>"},
+)
+
+models = client.models.list()
+for model in models.data:
+    print(model.id)
+```
+
+</CodeGroup>
+
+<Tip>
+Each `id` in the response is exactly what you pass as `model` in [Chat completions](/main-api/specific-features/completions-api/chat-completions).
+</Tip>
+
+## Response
+
+On success, returns an OpenAI-shaped list object. Each item is a model entry with the standard OpenAI fields plus FluxPrompt capability fields.
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "claude-sonnet-4-6",
+      "object": "model",
+      "created": 1767225600,
+      "owned_by": "anthropic",
+      "provider": "anthropic",
+      "supports_reasoning": true,
+      "context_window": 200000,
+      "max_output_tokens": 64000
+    }
+  ]
+}
+```
+
+### Response fields
+
+<ResponseField name="object" type="string">
+  Always `list` for the top-level response.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  The available models. Each entry has the fields below.
+</ResponseField>
+
+<ResponseField name="data[].id" type="string">
+  The model id. Pass this as `model` in [Chat completions](/main-api/specific-features/completions-api/chat-completions).
+</ResponseField>
+
+<ResponseField name="data[].object" type="string">
+  Always `model`.
+</ResponseField>
+
+<ResponseField name="data[].created" type="integer">
+  Unix timestamp (seconds).
+</ResponseField>
+
+<ResponseField name="data[].owned_by" type="string">
+  The resolved provider (OpenAI-compatible field), such as `anthropic` or `openai`.
+</ResponseField>
+
+<ResponseField name="data[].provider" type="string">
+  The resolved provider (FluxPrompt field). Same value as `owned_by`.
+</ResponseField>
+
+<ResponseField name="data[].supports_reasoning" type="boolean">
+  Whether the model accepts thinking / reasoning parameters. See [Advanced provider parameters](/main-api/specific-features/completions-api/chat-completions#advanced-provider-parameters).
+</ResponseField>
+
+<ResponseField name="data[].context_window" type="integer">
+  Maximum context tokens.
+</ResponseField>
+
+<ResponseField name="data[].max_output_tokens" type="integer">
+  Maximum output tokens. Also the default cap for `max_tokens` in chat completions.
+</ResponseField>
+
+## Errors
+
+Errors use the OpenAI-compatible envelope:
+
+```json
+{
+  "error": {
+    "message": "Unauthorized",
+    "type": "invalid_request_error",
+    "code": "unauthorized"
+  }
+}
+```
+
+| HTTP | `code` | Cause |
+| --- | --- | --- |
+| `401` | `unauthorized` | Missing or invalid `api-key` header. |
