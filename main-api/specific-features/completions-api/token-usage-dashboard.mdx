@@ -1,0 +1,93 @@
+---
+title: "Token usage dashboard"
+description: "The Token Usage dashboard and its Personal, Company, and Both views — how completion (flux) usage is aggregated and attributed, why it is tracked per user, and how it appears on the Overall and Text tabs."
+---
+
+The Token Usage dashboard charts how many tokens an account consumes over time, broken down by usage type: Image, Text, Audio, Other (API calls), and Completion. It supports a date range, weekly or monthly granularity, and — for company admins — a view selector that switches between Personal, Company, and Both.
+
+This page explains the three views, how completion usage is aggregated and attributed in each, and why completion is tracked per user rather than per company.
+
+## Why completion is tracked per user
+
+Completion (the [Completions API](/main-api/specific-features/completions-api/overview)) is billed **per user, against that user's own balance**. When a completion request runs, its usage is written as a `Completion` report tied to the user, with **no company tag** — unlike Text, Image, and Audio usage, which is tagged to the company when the user belongs to one.
+
+This has a direct consequence for the dashboard: a company's completion usage is not stored as a single company-level total. It only exists as the sum of each member's per-user completion. The **Both** view exists precisely to roll those per-member totals back up to the company so an admin can see the full picture.
+
+<Info>
+Text, Image, and Audio usage is tagged to the company. Completion usage is not — it lives only on the user. Any company-wide completion figure is computed by summing the active members' completion at read time.
+</Info>
+
+## The three views
+
+The view selector appears only for company admins. A user without a company always sees their own personal usage.
+
+<Tabs>
+  <Tab title="Personal">
+    Shows the logged-in user's own usage, scoped to reports tied to that user with no company tag. Completion appears as the user's own completion total — the same completion that was billed against their balance.
+  </Tab>
+  <Tab title="Company">
+    Shows usage for the whole company. Text, Image, and Audio come from the company-tagged reports. Completion is shown as a single **Completion** total computed by summing the completion of **all active company members**, because no company-level completion record exists on its own.
+  </Tab>
+  <Tab title="Both">
+    Combines company-tagged usage with each member's personal usage. In the Text tab, completion is split into **Completion (you)** and **Completion (other members)** so the extra members' usage is clearly attributed rather than blended into one bar.
+  </Tab>
+</Tabs>
+
+The view maps to query parameters on the report endpoints:
+
+| View | Query parameters |
+| --- | --- |
+| Personal | _(none)_ — scoped to the current user |
+| Company | `companyId=<id>` |
+| Both | `companyId=<id>&both=true` |
+
+### How completion is aggregated per view
+
+The completion report endpoint (`GET /report/completion/:id`) resolves completion differently depending on the view:
+
+- **Personal** — returns the user's own `Completion` reports.
+- **Company** — returns the `Completion` reports of every active member, aggregated into one `Completion` series. This is what produces the single company-wide completion total.
+- **Both** — returns the current user's own completion as `Completion`, and the other members' completion relabeled as `CompletionOthers`, so the two can be charted as separate series.
+
+## How completion appears on each tab
+
+Completion is presented differently depending on which dashboard tab you are viewing.
+
+### Overall tab
+
+On the Overall tab, completion is **folded into the Text series**. There is no separate Completion bar. For each time bucket, the dashboard adds the completion tokens (and cost) onto the Text tokens, so the Text bar represents Text + Completion combined.
+
+This keeps the Overall view to four series — Image, Text, Audio, and Other — while still accounting for completion usage within Text.
+
+### Text tab
+
+On the Text tab, Text and Completion are shown as **separate series**, so you can see each independently:
+
+- **Personal** and **Company** — two series: `Text` and `Completion`.
+- **Both** — three series: `Text`, `Completion (you)`, and `Completion (other members)`.
+
+The third series in the Both view comes from the `CompletionOthers` data described above. It isolates the completion billed to other members from your own, which is the only place in the dashboard where the per-member breakdown of completion is visible.
+
+<Note>
+The completion folded into Text on the Overall tab is the same completion charted separately on the Text tab. The difference is presentation: Overall combines it into Text for a compact summary; the Text tab breaks it out for detail.
+</Note>
+
+## Date range and granularity
+
+The dashboard charts a selectable date range with two granularities:
+
+- **Weekly** — buckets usage by week of month.
+- **Monthly** — buckets usage by month.
+
+Selecting a range that spans two calendar years fetches each year separately and merges the results; ranges longer than two years are rejected. The selected range and granularity are encoded into the `year`, `months`, and `weeks` query parameters sent to the report endpoints.
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Completion logs" icon="list" href="/main-api/specific-features/completions-api/completion-logs">
+    The admin page for per-request completion logs, with filters, cursor pagination, and CSV export.
+  </Card>
+  <Card title="How it works" icon="route" href="/main-api/specific-features/completions-api/how-it-works">
+    How a Completions API request flows through FluxPrompt and how token billing works.
+  </Card>
+</CardGroup>

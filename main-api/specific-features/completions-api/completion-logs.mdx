@@ -1,0 +1,109 @@
+---
+title: "Completion logs"
+description: "The admin page for inspecting per-request Completions API logs — filters, cursor pagination, the column reference (including flux tokens vs provider tokens, cost, latency, status), and CSV export."
+---
+
+Completion logs is an admin page that lists every Completions API request as an individual row. Each row records who made the request, which model and provider ran it, how it finished, how many tokens it consumed, what it cost, and how long it took. You filter the list by date, status, provider, model, and user, page through results with a cursor, and export the filtered set as a CSV.
+
+The data comes from the `completion_log` table, which stores one row per request to the Completions API.
+
+<Info>
+This page is admin-facing. A company admin sees the logs for their company and can filter by any member; a non-admin sees only their own requests, and the user filter is hidden.
+</Info>
+
+## What the page shows
+
+The log table is backed by `GET /completions/logs`. The endpoint resolves the caller's company and role from their session, then scopes the results:
+
+- **Company admin** — sees all logs for the selected company, and can filter by any company member with the user dropdown.
+- **Non-admin** — sees only their own logs. The user filter is not shown.
+
+The page loads the last 7 days by default and shows 25 rows per page.
+
+## Filters
+
+Filters are applied server-side and map directly onto the query parameters of `GET /completions/logs`.
+
+| Filter | Query param | Notes |
+| --- | --- | --- |
+| From / To | `from`, `to` | ISO date range. Defaults to the last 7 days. |
+| Status | `status` | `ok` (HTTP 2xx) or `error` (HTTP 4xx/5xx). Empty means all. |
+| Provider | `provider` | One of `anthropic`, `openai`, `gemini`, `groq`, `perplexity`, `xai`, `mistral`. |
+| User | `userId` | Admin only. Filters to a single company member by user ID. |
+| Model | `model` | Free-text match on the model id (for example, `claude-opus`). |
+
+Changing any filter and refreshing re-runs the query from the first page. Filters are sent only when set, so an empty filter is omitted from the request.
+
+## Cursor pagination
+
+The list uses cursor-based pagination rather than page numbers. Each response carries a `nextCursor`:
+
+- A non-null `nextCursor` means more rows exist. The page shows a **Load more** button that fetches the next batch with `cursor` set to that value and appends the rows to the table.
+- A null `nextCursor` means you have reached the end of the result set.
+
+Because results are appended, loading more does not reset the rows already on screen. The page footer shows how many rows are currently loaded. The `limit` parameter controls batch size (default 25, maximum 100).
+
+<Note>
+Cursor pagination keeps results stable as you page forward, even while new logs are being written. Always pass the `nextCursor` from the previous response — do not construct cursors by hand.
+</Note>
+
+## Columns
+
+Each row maps to a `completion_log` record. The table surfaces the fields that matter most for inspecting usage.
+
+| Column | Source field | Meaning |
+| --- | --- | --- |
+| Timestamp | `createdAt` | When the request was recorded. |
+| User | `userId` (`userName` when available) | Who made the request. The cell copies the raw user ID to the clipboard. |
+| Model | `model` | The model id that ran. |
+| Provider | `provider` | The provider the model resolved to. |
+| Status | `status`, `errorCode` | HTTP status, shown green for 2xx and red for 4xx/5xx. When an `errorCode` is present it is shown instead of the numeric status. |
+| Flux In | `fluxInputTokens` | Input tokens billed in flux (FluxPrompt's billing unit). |
+| Flux Out | `fluxOutputTokens` | Output tokens billed in flux. |
+| Cost | `cost` | Monetary cost of the request. Zero renders as `—`. |
+| Latency | `latencyMs` | End-to-end request latency in milliseconds. |
+| Mode | `stream` | `Stream` for streamed requests, `Sync` for non-streamed. |
+
+### Flux tokens vs provider tokens
+
+Each log stores two distinct token measurements:
+
+- **Provider tokens** (`inputTokens`, `outputTokens`) — the raw token counts reported by the model provider. These are integers.
+- **Flux tokens** (`fluxInputTokens`, `fluxOutputTokens`) — the input and output tokens converted into flux, FluxPrompt's billing unit. These are decimals and are what the account is actually billed.
+
+The table displays the flux columns because they reflect what was billed. Both pairs, plus the provider tokens, are included in the CSV export so you can reconcile the raw provider usage against the billed amount.
+
+### Status and error codes
+
+`status` is the HTTP status code of the request. A request that failed carries an `errorCode` (for example, the code behind a `402` insufficient-quota rejection). The table shows the `errorCode` when present, which makes failed requests easier to scan than a bare status number.
+
+### Correlation ID
+
+Every log carries a `correlationId` that ties the row back to a specific request across systems. It is not shown as a table column but is included in the CSV export, which makes it the key field for tracing a single request end to end.
+
+## CSV export
+
+The **Export CSV** button calls `GET /completions/logs/export` with the current filters (date range, status, provider, model, user) — but without `cursor` or `limit`, so the export covers the whole filtered set rather than a single page.
+
+The endpoint responds with `text/csv` and a `Content-Disposition: attachment; filename="completion-logs.csv"` header, and the browser downloads `completion-logs.csv` directly.
+
+```http
+GET /completions/logs/export?from=2026-06-01&to=2026-06-29&status=error&provider=anthropic
+```
+
+The export contains every field on the log record, including the provider token counts and the `correlationId` that the table omits.
+
+<Tip>
+To audit failures across a company, set the status filter to **Error**, pick the date range, and export. The CSV gives you the `errorCode` and `correlationId` for every failed request in one file.
+</Tip>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Completions API overview" icon="compass" href="/main-api/specific-features/completions-api/overview">
+    What the endpoint is, the providers it supports, and how authentication works.
+  </Card>
+  <Card title="How it works" icon="route" href="/main-api/specific-features/completions-api/how-it-works">
+    How a request flows through FluxPrompt and how token billing works.
+  </Card>
+</CardGroup>
