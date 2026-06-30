@@ -12,10 +12,9 @@ description: "Lista todos os agentes do seu workspace FluxPrompt."
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |-----------|------|-------------|-----------|
 | `search` | string | Não | Filtro de substring (case-insensitive) sobre o nome do agente. Omita para retornar todos os agentes. |
-| `limit` | number | Não | Número máximo de agentes a retornar. Padrão: 20. Máximo: 200. |
-| `offset` | number | Não | Número de agentes a pular, para paginação. Padrão: 0. |
+| `cursor` | string | Não | Cursor de paginação opaco, retornado como `nextCursor` por uma chamada anterior. Omita para buscar a primeira página. Trate o valor como opaco — não o interprete, não o construa e não o reutilize entre ferramentas. |
 
-Nenhum parâmetro é obrigatório. Chamar `list_agents` sem entrada retorna a primeira página de todos os agentes do seu workspace.
+Nenhum parâmetro é obrigatório. Chamar `list_agents` sem entrada retorna a primeira página de todos os agentes do seu workspace. O servidor controla o tamanho da página.
 
 ## Saída
 
@@ -39,7 +38,8 @@ Nenhum parâmetro é obrigatório. Chamar `list_agents` sem entrada retorna a pr
       "isPublic": true
     }
   ],
-  "total": 19
+  "total": 19,
+  "nextCursor": "eyJvIjo1MH0"
 }
 ```
 
@@ -47,24 +47,29 @@ Nenhum parâmetro é obrigatório. Chamar `list_agents` sem entrada retorna a pr
 
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
-| `agents` | array | Lista de agentes. |
+| `agents` | array | Lista de agentes desta página. |
 | `agents[].id` | string (UUID) | Identificador único. Use este valor com `get_agent`. |
 | `agents[].name` | string | Nome de exibição do agente conforme mostrado na interface do FluxPrompt. |
 | `agents[].description` | string \| null | Descrição do agente, ou `null` se nenhuma estiver definida. |
 | `agents[].updatedAt` | string ISO 8601 | Quando o agente foi modificado pela última vez. |
 | `agents[].nodeCount` | number | Número de nodes na versão atual do agente. |
 | `agents[].isPublic` | boolean | Se o agente tem um endpoint público. |
-| `total` | number | Número total de agentes que correspondem à consulta (ignorando `limit`/`offset`), para você saber quantas páginas faltam. |
+| `total` | number | Número total de agentes que correspondem à consulta. Informativo — use `nextCursor` para conduzir a paginação. |
+| `nextCursor` | string | Cursor opaco para a próxima página. **Presente apenas quando há mais resultados; omitido na última página.** |
 
 ## Paginação
 
-`list_agents` usa paginação baseada em `offset`. Compare `total` com `limit` + `offset` para saber se ainda há agentes, e então avance o `offset`:
+`list_agents` usa paginação por cursor opaco ([MCP 2025-11-25](https://modelcontextprotocol.io)). O servidor decide o tamanho da página. Para percorrer os resultados, chame novamente passando o `nextCursor` anterior como `cursor` e pare quando `nextCursor` estiver ausente:
 
 ```
-Chamada 1: list_agents({ limit: 20 })              → agentes 1-20,  total = 45
-Chamada 2: list_agents({ limit: 20, offset: 20 })  → agentes 21-40, total = 45
-Chamada 3: list_agents({ limit: 20, offset: 40 })  → agentes 41-45, total = 45
+Chamada 1: list_agents({})                        → página 1, nextCursor = "eyJvIjo1MH0"
+Chamada 2: list_agents({ cursor: "eyJvIjo1MH0" }) → página 2, nextCursor = "eyJvIjoxMDB9"
+Chamada 3: list_agents({ cursor: "eyJvIjoxMDB9" })→ página 3, sem nextCursor → última página
 ```
+
+<Warning>
+Os valores de cursor são opacos. Não os interprete nem os construa, e nunca passe um cursor retornado por uma ferramenta diferente. Um cursor malformado ou inválido retorna o erro JSON-RPC `-32602` (Invalid params) com `data: { "invalid": "cursor" }`.
+</Warning>
 
 ## Exemplos de prompts
 

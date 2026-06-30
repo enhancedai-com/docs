@@ -12,10 +12,9 @@ description: "List all agents in your FluxPrompt workspace."
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `search` | string | No | Case-insensitive substring filter on the agent name. Omit to return all agents. |
-| `limit` | number | No | Maximum number of agents to return. Default: 20. Maximum: 200. |
-| `offset` | number | No | Number of agents to skip, for pagination. Default: 0. |
+| `cursor` | string | No | Opaque pagination cursor returned as `nextCursor` by a previous call. Omit to fetch the first page. Treat the value as opaque — do not parse, construct, or reuse it across tools. |
 
-No parameters are required. Calling `list_agents` with no input returns the first page of all agents in your workspace.
+No parameters are required. Calling `list_agents` with no input returns the first page of all agents in your workspace. The server controls the page size.
 
 ## Output
 
@@ -39,7 +38,8 @@ No parameters are required. Calling `list_agents` with no input returns the firs
       "isPublic": true
     }
   ],
-  "total": 19
+  "total": 19,
+  "nextCursor": "eyJvIjo1MH0"
 }
 ```
 
@@ -47,24 +47,29 @@ No parameters are required. Calling `list_agents` with no input returns the firs
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `agents` | array | List of agents. |
+| `agents` | array | List of agents for this page. |
 | `agents[].id` | string (UUID) | Unique identifier. Use this with `get_agent`. |
 | `agents[].name` | string | Agent display name as shown in the FluxPrompt UI. |
 | `agents[].description` | string \| null | Agent description, or `null` if none is set. |
 | `agents[].updatedAt` | ISO 8601 string | When the agent was last modified. |
 | `agents[].nodeCount` | number | Number of nodes in the agent's current version. |
 | `agents[].isPublic` | boolean | Whether the agent has a public-facing endpoint. |
-| `total` | number | Total number of agents matching the query (ignoring `limit`/`offset`), so you know how many pages remain. |
+| `total` | number | Total number of agents matching the query. Informative — use `nextCursor` to drive pagination. |
+| `nextCursor` | string | Opaque cursor for the next page. **Present only when more results exist; omitted on the last page.** |
 
 ## Pagination
 
-`list_agents` uses offset-based pagination. Compare `total` against `limit` + `offset` to know whether more agents remain, then advance `offset`:
+`list_agents` uses opaque-cursor pagination ([MCP 2025-11-25](https://modelcontextprotocol.io)). The server decides the page size. To page through results, call again passing the previous `nextCursor` as `cursor`, and stop when `nextCursor` is absent:
 
 ```
-Call 1: list_agents({ limit: 20 })              → agents 1-20,  total = 45
-Call 2: list_agents({ limit: 20, offset: 20 })  → agents 21-40, total = 45
-Call 3: list_agents({ limit: 20, offset: 40 })  → agents 41-45, total = 45
+Call 1: list_agents({})                        → page 1, nextCursor = "eyJvIjo1MH0"
+Call 2: list_agents({ cursor: "eyJvIjo1MH0" }) → page 2, nextCursor = "eyJvIjoxMDB9"
+Call 3: list_agents({ cursor: "eyJvIjoxMDB9" })→ page 3, no nextCursor → last page
 ```
+
+<Warning>
+Cursor values are opaque. Do not parse or construct them, and never pass a cursor returned by a different tool. A malformed or invalid cursor returns JSON-RPC error `-32602` (Invalid params) with `data: { "invalid": "cursor" }`.
+</Warning>
 
 ## Example prompts
 

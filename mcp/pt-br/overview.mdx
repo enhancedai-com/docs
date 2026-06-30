@@ -61,6 +61,10 @@ As tools são agrupadas pelo [escopo](/mcp/pt-br/authentication#escopos) que um 
 As tools de `read` estão sempre disponíveis. As tools de `write` e `execute` também exigem a feature flag de workspace correspondente (veja [Mutações são dry-run por padrão](#mutações-são-dry-run-por-padrão)).
 </Note>
 
+### Paginação
+
+As tools de listagem — `list_agents`, `list_folders` e `list_versions` — usam paginação por cursor opaco ([MCP 2025-11-25](https://modelcontextprotocol.io)). O servidor decide o tamanho da página; não há `limit` nem `offset` na superfície da tool. Cada resposta inclui um `total` (informativo) e, quando há mais resultados, um `nextCursor`. Passe esse valor de volta como o argumento `cursor` para buscar a próxima página e pare quando `nextCursor` estiver ausente — isso marca a última página. Trate os cursores como opacos: não os interprete, não os construa e não os reutilize entre tools. Um cursor inválido retorna o erro JSON-RPC `-32602` (Invalid params). Veja [`list_agents`](/mcp/pt-br/tools/list-agents) para um exemplo completo.
+
 ### Como a IA deve consumir tipos de node
 
 A descoberta de tipos de node usa **divulgação progressiva** (progressive disclosure) — duas tools que trabalham juntas para que a IA carregue apenas o que precisa:

@@ -61,6 +61,10 @@ Tools are grouped by the [scope](/mcp/authentication#scopes) a token needs to ca
 `read` tools are always available. `write` and `execute` tools also require the matching workspace feature flag (see [Mutations are dry-run by default](#mutations-are-dry-run-by-default)).
 </Note>
 
+### Pagination
+
+The list tools — `list_agents`, `list_folders`, and `list_versions` — use opaque-cursor pagination ([MCP 2025-11-25](https://modelcontextprotocol.io)). The server decides the page size; there is no `limit` or `offset` on the tool surface. Each response includes a `total` (informative) and, when more results exist, a `nextCursor`. Pass that value back as the `cursor` argument to fetch the next page, and stop when `nextCursor` is absent — that marks the last page. Treat cursors as opaque: don't parse, construct, or reuse them across tools. An invalid cursor returns JSON-RPC error `-32602` (Invalid params). See [`list_agents`](/mcp/tools/list-agents) for a worked example.
+
 ### How the AI should consume node types
 
 Node-type discovery uses **progressive disclosure** — two tools that work together so the AI loads only what it needs:
