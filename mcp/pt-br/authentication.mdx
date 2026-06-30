@@ -52,7 +52,7 @@ Normalmente você não digita esse header à mão — seu cliente o lê de um ar
 ## Segurança do service token
 
 <Warning>
-Um service token concede acesso de leitura completo aos agentes do seu workspace. Trate-o como uma senha:
+Um service token concede acesso aos agentes do seu workspace nos escopos com que foi gerado (leitura e, opcionalmente, escrita e execução). Trate-o como uma senha:
 - Nunca o commite em um repositório Git.
 - Nunca o cole em um documento público ou screenshot.
 - Nunca o compartilhe no Slack, e-mail ou em qualquer mensagem que outras pessoas possam ver.
@@ -64,21 +64,23 @@ Se você acredita que um service token foi exposto:
 2. Gere um novo.
 3. Atualize seus arquivos de configuração do cliente com o novo token.
 
-## Escopos (Fase 1)
+## Escopos
 
-Ambos os métodos de autenticação concedem atualmente acesso **somente leitura**. Eles podem:
+Um token (ou sessão OAuth) carrega um ou mais **escopos** que decidem quais tools ele pode chamar. São três:
 
-- ✅ Listar agentes no seu workspace
-- ✅ Buscar a estrutura completa de qualquer agente
-- ✅ Listar todos os tipos de node disponíveis
+| Escopo | Concede | Tools de exemplo |
+|---|---|---|
+| `read` | Descobrir e inspecionar — nunca altera nada | `list_agents`, `get_agent`, `list_node_types`, `get_node_type`, `list_folders`, `list_versions` |
+| `write` | Criar e editar agentes, pastas, nodes, conexões e versões | `add_node`, `update_node`, `connect_nodes`, `create_agent`, `create_version`, `publish_version` |
+| `execute` | Executar agentes e gerenciar execuções | `run_agent`, `get_run_status`, `cancel_run` |
 
-Eles não podem:
+`write` e `execute` se apoiam em `read` — um token precisa de `read` para descobrir os agentes e tipos de node sobre os quais vai agir.
 
-- ❌ Criar ou editar agentes
-- ❌ Executar agentes ou iniciar execuções
-- ❌ Acessar faturamento, usuários ou configurações do workspace
+<Info>
+Os escopos são necessários, mas não suficientes. As tools de `write` e `execute` também exigem as **feature flags de workspace** correspondentes (`mcp.writes.enabled`, `mcp.execute.enabled`) ligadas. Um token com escopo `write` ainda não consegue alterar um workspace cuja flag `mcp.writes.enabled` esteja desligada. Veja [O que a IA pode fazer](/mcp/pt-br/overview#o-que-a-ia-pode-fazer) para o modelo de dry-run e flags.
+</Info>
 
-O acesso de escrita (`add_node`, `update_node`, `remove_node`) estará disponível na Fase 2 com um escopo separado.
+Independentemente do escopo, o servidor MCP **não** acessa faturamento, usuários ou configurações do workspace — ele enxerga apenas o que o usuário autenticado vê na interface do FluxPrompt.
 
 ## Perguntas frequentes
 

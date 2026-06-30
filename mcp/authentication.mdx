@@ -52,7 +52,7 @@ You usually don't type this header by hand — your client reads it from its con
 ## Service token security
 
 <Warning>
-A service token gives full read access to your workspace agents. Treat it like a password:
+A service token gives access to your workspace agents at the scopes it was granted (read, and optionally write and execute). Treat it like a password:
 - Never commit it to a Git repository.
 - Never paste it in a public document or screenshot.
 - Never share it on Slack, email, or in any message that others can see.
@@ -64,21 +64,23 @@ If you believe a service token has been exposed:
 2. Generate a new one.
 3. Update your client config files with the new token.
 
-## Scopes (Phase 1)
+## Scopes
 
-Both authentication methods currently grant **read-only** access. They can:
+A token (or OAuth session) carries one or more **scopes** that decide which tools it can call. There are three:
 
-- ✅ List agents in your workspace
-- ✅ Fetch the full structure of any agent
-- ✅ List all available node types
+| Scope | Grants | Example tools |
+|---|---|---|
+| `read` | Discover and inspect — never changes anything | `list_agents`, `get_agent`, `list_node_types`, `get_node_type`, `list_folders`, `list_versions` |
+| `write` | Create and edit agents, folders, nodes, connections, and versions | `add_node`, `update_node`, `connect_nodes`, `create_agent`, `create_version`, `publish_version` |
+| `execute` | Run agents and manage runs | `run_agent`, `get_run_status`, `cancel_run` |
 
-They cannot:
+`write` and `execute` build on `read` — a token needs `read` to discover the agents and node types it will act on.
 
-- ❌ Create or edit agents
-- ❌ Run agents or start executions
-- ❌ Access billing, users, or workspace settings
+<Info>
+Scopes are necessary but not sufficient. `write` and `execute` tools also require the matching **workspace feature flags** (`mcp.writes.enabled`, `mcp.execute.enabled`) to be turned on. A token with the `write` scope still can't mutate a workspace whose `mcp.writes.enabled` flag is off. See [What the AI can do](/mcp/overview#what-the-ai-can-do) for the dry-run and flag model.
+</Info>
 
-Write access (`add_node`, `update_node`, `remove_node`) will be available in Phase 2 with a separate scope.
+Regardless of scope, the MCP server **cannot** access billing, users, or workspace settings — it sees only what the authenticated user sees in the FluxPrompt UI.
 
 ## FAQ
 

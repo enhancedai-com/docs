@@ -31,19 +31,95 @@ O FluxPrompt MCP suporta **dois** métodos de autenticação, e o correto depend
 
 Veja [Autenticação](/mcp/pt-br/authentication) para todos os detalhes.
 
-## O que você pode fazer agora (Fase 1 — Somente leitura)
+## O que a IA pode fazer
+
+O FluxPrompt MCP expõe **23 tools** mais os primitivos **Prompts** e **Resources** da spec MCP (revisão 2025-11-25). As tools cobrem todo o ciclo de vida de um agente: descobrir os blocos de construção, montar e editar flows, tirar snapshots e publicar versões, e executar agentes.
 
 <CardGroup cols={3}>
-  <Card title="Listar seus agentes" icon="list" href="/mcp/pt-br/tools/list-agents">
-    Veja todos os agentes do seu workspace — nome, descrição, quantidade de nodes e URL pública.
+  <Card title="Descobrir" icon="shapes" href="/mcp/pt-br/tools/list-node-types">
+    Navegue por agentes, pastas, versões e tipos de node. Somente leitura.
   </Card>
-  <Card title="Inspecionar um agente" icon="file-json" href="/mcp/pt-br/tools/get-agent">
-    Busque a estrutura completa de qualquer agente: seus nodes, edges e configuração.
+  <Card title="Montar e editar" icon="pen-line">
+    Crie agentes e pastas, adicione e conecte nodes, tire snapshots e publique versões.
   </Card>
-  <Card title="Descobrir tipos de node" icon="shapes" href="/mcp/pt-br/tools/list-node-types">
-    Navegue por todos os tipos de node disponíveis com seus schemas de entrada e saída.
+  <Card title="Executar" icon="play">
+    Inicie a execução de um agente, acompanhe o status e cancele-a.
   </Card>
 </CardGroup>
+
+### Referência de tools
+
+As tools são agrupadas pelo [escopo](/mcp/pt-br/authentication#escopos) que um token precisa para chamá-las.
+
+| Escopo | Tools |
+|---|---|
+| `read` | `list_agents`, `get_agent`, `list_node_types`, `get_node_type`, `list_folders`, `list_versions` |
+| `write` | `create_agent`, `remove_agent`, `update_agent`, `move_agent`, `add_node`, `update_node`, `remove_node`, `connect_nodes`, `disconnect_nodes`, `create_folder`, `rename_folder`, `remove_folder`, `create_version`, `publish_version` |
+| `execute` | `run_agent`, `get_run_status`, `cancel_run` |
+
+<Note>
+As tools de `read` estão sempre disponíveis. As tools de `write` e `execute` também exigem a feature flag de workspace correspondente (veja [Mutações são dry-run por padrão](#mutações-são-dry-run-por-padrão)).
+</Note>
+
+### Como a IA deve consumir tipos de node
+
+A descoberta de tipos de node usa **divulgação progressiva** (progressive disclosure) — duas tools que trabalham juntas para que a IA carregue apenas o que precisa:
+
+<Steps>
+<Step title="Chame list_node_types primeiro">
+  Retorna um **resumo leve** de cada tipo de node: `type`, `label`, `category` e `description`. Sem schemas. É barato o suficiente para carregar o catálogo inteiro no contexto.
+</Step>
+<Step title="Chame get_node_type só para os tipos que vai usar">
+  Passe um único `type` e receba de volta o `inputSchema` e o `outputSchema` completos daquele tipo de node. Chame uma vez por tipo de node que pretende adicionar ou configurar.
+</Step>
+</Steps>
+
+Isso mantém o uso de tokens baixo: a IA varre um catálogo compacto e busca os schemas detalhados apenas para os poucos tipos de node que a tarefa envolve — em vez de puxar todos os schemas de antemão. Veja [`list_node_types`](/mcp/pt-br/tools/list-node-types).
+
+### Mutações são dry-run por padrão
+
+Toda tool de `write` roda como **dry-run** a menos que você opte por aplicar. Um dry-run valida a mudança e retorna o que *aconteceria* sem persistir nada.
+
+Para de fato aplicar uma mutação, passe ambos:
+
+- `dryRun: false`
+- `idempotencyKey` — uma string fornecida pelo chamador. Repetir a mesma chave retorna o resultado original em vez de aplicar a mudança duas vezes, então uma chamada repetida ou duplicada é segura.
+
+As mutações também são limitadas por feature flags de workspace e escopos de token:
+
+| Limite | Controla |
+|---|---|
+| `mcp.writes.enabled` (flag) | Se as tools de `write` podem rodar neste workspace |
+| `mcp.execute.enabled` (flag) | Se as tools de `execute` podem rodar neste workspace |
+| `write` / `execute` (escopo do token) | Se *este* token pode chamar essas tools |
+
+Tanto a flag quanto o escopo precisam permitir a chamada. Um dry-run bem-sucedido confirma que a mudança é válida; a aplicação ainda falha se a flag ou o escopo estiverem ausentes.
+
+### Versionamento
+
+Agentes têm uma **cópia de trabalho** ao vivo e um histórico de **versões** (snapshots). Três tools as gerenciam:
+
+| Tool | Escopo | O que faz |
+|---|---|---|
+| `list_versions` | `read` | Lista o histórico de versões de um agente. |
+| `create_version` | `write` | Tira um snapshot da cópia de trabalho atual como uma nova versão. |
+| `publish_version` | `write` | Marca uma versão como a publicada (deployed). |
+
+As tools de `write` aceitam um `versionId` opcional. Quando informado, a edição mira o histórico daquela versão em vez da cópia de trabalho ao vivo — assim a IA pode revisar um snapshot sem tocar no que está ao vivo.
+
+### Primitivos MCP: quem controla o quê
+
+O FluxPrompt MCP expõe os três primitivos do MCP. Eles diferem em **qual ator os invoca**, o que importa para como a IA os usa:
+
+| Primitivo | Controlado por | Métodos | O que o FluxPrompt expõe |
+|---|---|---|---|
+| **Tools** | O modelo (a IA decide) | `tools/list`, `tools/call` | As 23 tools acima — descoberta e ações. É assim que a IA consome tipos de node de forma autônoma (`list_node_types` → `get_node_type`). |
+| **Prompts** | O usuário | `prompts/list`, `prompts/get` | Receitas guiadas que um usuário escolhe: `build_flow`, `edit_agent`, `organize_workspace`, `run_agent_recipe`. |
+| **Resources** | A aplicação / o usuário | `resources/list`, `resources/read` | Contexto que um usuário ou app anexa: `fluxprompt://models` (modelos de IA disponíveis) e `fluxprompt://node-types` (o catálogo completo de tipos de node). |
+
+<Warning>
+Os Resources **não** são invocados automaticamente pelo modelo. O resource `fluxprompt://node-types` serve para um usuário ou app anexar o catálogo como contexto — não é o caminho de descoberta autônoma. Para a IA descobrir tipos de node por conta própria, ela usa as **tools** (`list_node_types` e depois `get_node_type`), não o resource.
+</Warning>
 
 ## Como funciona
 
@@ -62,7 +138,7 @@ FluxPrompt API  ──▶  Seus agentes, nodes e flows
 
 1. Você se autentica via **OAuth** (consentimento no navegador) ou um **service token com escopo de workspace**, dependendo do seu cliente.
 2. Seu cliente de IA se conecta a `https://mcp.fluxprompt.ai/mcp`.
-3. Ele chama as ferramentas — `list_agents`, `get_agent`, `list_node_types` — e recebe respostas estruturadas.
+3. Ele chama as tools — para descobrir, montar, versionar ou executar agentes — e recebe respostas estruturadas.
 4. Cada chamada é registrada no log de auditoria do FluxPrompt.
 
 ## Glossário rápido

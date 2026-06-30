@@ -5,7 +5,9 @@ description: "Browse all available FluxPrompt node types with their input and ou
 
 ## Description
 
-`list_node_types` returns the catalogue of every node type available in FluxPrompt — what each one does, what inputs it accepts, and what outputs it produces. Use this to understand the building blocks an agent is made of.
+`list_node_types` returns a **lightweight summary** of every node type available in FluxPrompt — its identifier, label, category, and a one-line description. It does **not** include input or output schemas. Use it to scan the building blocks an agent can be made of, then call [`get_node_type`](#get-the-full-schema-for-one-type) for the detailed schema of the specific types you need.
+
+This is the first half of a two-step **progressive disclosure** pattern. Pulling the full schema for every node type up front is wasteful; the summary is small enough to load the entire catalog into context cheaply.
 
 ## Input
 
@@ -20,29 +22,13 @@ No parameters required.
       "type": "commandTextNode",
       "label": "Command Text Node",
       "description": "Executes a text command or prompt and passes it downstream.",
-      "category": "AI",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "model": { "type": "string", "description": "AI model to use" },
-          "command": { "type": "string", "description": "Text command or prompt to execute" }
-        },
-        "required": ["command"]
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "text": { "type": "string", "description": "Generated text output" }
-        }
-      }
+      "category": "AI"
     },
     {
       "type": "conditionNode",
       "label": "Condition Node",
       "description": "Evaluates a condition and routes flow execution along the true or false branch.",
-      "category": "Logic",
-      "inputSchema": { "..." : "..." },
-      "outputSchema": { "..." : "..." }
+      "category": "Logic"
     }
   ]
 }
@@ -52,13 +38,46 @@ No parameters required.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `nodeTypes` | array | Full list of node types. |
-| `nodeTypes[].type` | string | Machine-readable identifier (camelCase, e.g. `commandTextNode`). Matches the `type` field in `get_agent` node objects. |
+| `nodeTypes` | array | Summary list of node types (no schemas). |
+| `nodeTypes[].type` | string | Machine-readable identifier (camelCase, e.g. `commandTextNode`). Matches the `type` field in `get_agent` node objects, and is the argument to `get_node_type`. |
 | `nodeTypes[].label` | string | Human-readable name as shown in the FluxPrompt canvas. |
 | `nodeTypes[].description` | string | What this node does. |
 | `nodeTypes[].category` | string | Grouping: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. |
-| `nodeTypes[].inputSchema` | JSON Schema | The configuration this node accepts. |
-| `nodeTypes[].outputSchema` | JSON Schema | The data this node produces for downstream nodes. |
+
+## Get the full schema for one type
+
+To read the `inputSchema` and `outputSchema` of a specific node type, call `get_node_type` with its `type`:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `type` | string | Yes | The node-type identifier from `list_node_types`, e.g. `commandTextNode`. |
+
+```json
+{
+  "type": "commandTextNode",
+  "label": "Command Text Node",
+  "description": "Executes a text command or prompt and passes it downstream.",
+  "category": "AI",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "model": { "type": "string", "description": "AI model to use" },
+      "command": { "type": "string", "description": "Text command or prompt to execute" }
+    },
+    "required": ["command"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": { "type": "string", "description": "Generated text output" }
+    }
+  }
+}
+```
+
+<Tip>
+The recommended flow for an AI building or editing an agent: call `list_node_types` once to see the catalog, then call `get_node_type` only for the handful of types it will actually add or configure.
+</Tip>
 
 ## Example prompts
 

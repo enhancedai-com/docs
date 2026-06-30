@@ -1,11 +1,13 @@
 ---
 title: "list_node_types"
-description: "Navegue por todos os tipos de node disponíveis no FluxPrompt com seus schemas de entrada e saída."
+description: "Navegue por um resumo leve de todos os tipos de node do FluxPrompt e busque o schema completo de um tipo com get_node_type."
 ---
 
 ## Descrição
 
-`list_node_types` retorna o catálogo de todos os tipos de node disponíveis no FluxPrompt — o que cada um faz, quais entradas aceita e quais saídas produz. Use isso para entender os blocos de construção dos quais um agente é composto.
+`list_node_types` retorna um **resumo leve** de todos os tipos de node disponíveis no FluxPrompt — identificador, label, categoria e uma descrição de uma linha. Ele **não** inclui os schemas de entrada e saída. Use-o para varrer os blocos de construção dos quais um agente pode ser composto e depois chame [`get_node_type`](#buscar-o-schema-completo-de-um-tipo) para o schema detalhado dos tipos específicos que você precisa.
+
+Esta é a primeira metade de um padrão de **divulgação progressiva** (progressive disclosure) em dois passos. Puxar o schema completo de cada tipo de node de antemão é um desperdício; o resumo é pequeno o suficiente para carregar o catálogo inteiro no contexto de forma barata.
 
 ## Entrada
 
@@ -20,29 +22,13 @@ Nenhum parâmetro necessário.
       "type": "commandTextNode",
       "label": "Command Text Node",
       "description": "Executes a text command or prompt and passes it downstream.",
-      "category": "AI",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "model": { "type": "string", "description": "AI model to use" },
-          "command": { "type": "string", "description": "Text command or prompt to execute" }
-        },
-        "required": ["command"]
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "text": { "type": "string", "description": "Generated text output" }
-        }
-      }
+      "category": "AI"
     },
     {
       "type": "conditionNode",
       "label": "Condition Node",
       "description": "Evaluates a condition and routes flow execution along the true or false branch.",
-      "category": "Logic",
-      "inputSchema": { "..." : "..." },
-      "outputSchema": { "..." : "..." }
+      "category": "Logic"
     }
   ]
 }
@@ -52,13 +38,46 @@ Nenhum parâmetro necessário.
 
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
-| `nodeTypes` | array | Lista completa de tipos de node. |
-| `nodeTypes[].type` | string | Identificador legível por máquina (camelCase, ex.: `commandTextNode`). Corresponde ao campo `type` nos objetos de node do `get_agent`. |
+| `nodeTypes` | array | Lista de resumo dos tipos de node (sem schemas). |
+| `nodeTypes[].type` | string | Identificador legível por máquina (camelCase, ex.: `commandTextNode`). Corresponde ao campo `type` nos objetos de node do `get_agent` e é o argumento do `get_node_type`. |
 | `nodeTypes[].label` | string | Nome legível por humanos conforme exibido no canvas do FluxPrompt. |
 | `nodeTypes[].description` | string | O que este node faz. |
 | `nodeTypes[].category` | string | Agrupamento: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. |
-| `nodeTypes[].inputSchema` | JSON Schema | A configuração que este node aceita. |
-| `nodeTypes[].outputSchema` | JSON Schema | Os dados que este node produz para nodes downstream. |
+
+## Buscar o schema completo de um tipo
+
+Para ler o `inputSchema` e o `outputSchema` de um tipo de node específico, chame `get_node_type` com o `type`:
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `type` | string | Sim | O identificador do tipo de node vindo do `list_node_types`, ex.: `commandTextNode`. |
+
+```json
+{
+  "type": "commandTextNode",
+  "label": "Command Text Node",
+  "description": "Executes a text command or prompt and passes it downstream.",
+  "category": "AI",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "model": { "type": "string", "description": "AI model to use" },
+      "command": { "type": "string", "description": "Text command or prompt to execute" }
+    },
+    "required": ["command"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": { "type": "string", "description": "Generated text output" }
+    }
+  }
+}
+```
+
+<Tip>
+O fluxo recomendado para uma IA montar ou editar um agente: chamar `list_node_types` uma vez para ver o catálogo e depois chamar `get_node_type` apenas para os poucos tipos que ela vai de fato adicionar ou configurar.
+</Tip>
 
 ## Exemplos de prompts
 
