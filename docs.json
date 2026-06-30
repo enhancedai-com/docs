@@ -109,6 +109,7 @@
                       "main-api/specific-features/add-new-model",
                       "main-api/specific-features/add-multimodal-model",
                       "main-api/specific-features/memory-pods-architecture",
+                      "main-api/specific-features/flow-and-single-node-execution",
                       {
                         "group": "Integrations",
                         "pages": [
