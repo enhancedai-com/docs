@@ -28,7 +28,8 @@ Prefer a ready-to-run request package? Expand the collection below, copy it, and
     { "key": "baseUrl", "value": "https://api-dev.example.com", "type": "string" },
     { "key": "jwtToken", "value": "", "type": "string" },
     { "key": "masterKey", "value": "", "type": "string" },
-    { "key": "targetSpaceId", "value": "", "type": "string" }
+    { "key": "targetSpaceId", "value": "", "type": "string" },
+    { "key": "flowId", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -124,6 +125,72 @@ Prefer a ready-to-run request package? Expand the collection below, copy it, and
           }
         }
       ]
+    },
+    {
+      "name": "Master flows (cross-tenant, no header)",
+      "item": [
+        {
+          "name": "Search flows across all tenants",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.agents && res.agents[0]) { pm.collectionVariables.set('flowId', res.agents[0].id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "api-key", "value": "{{masterKey}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/master/flows?name=onboarding&active=true&page=1&limit=25",
+              "host": ["{{baseUrl}}"],
+              "path": ["master", "flows"],
+              "query": [
+                { "key": "name", "value": "onboarding" },
+                { "key": "active", "value": "true" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "25" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get any flow by id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "api-key", "value": "{{masterKey}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/master/flows/{{flowId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["master", "flows", "{{flowId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update any flow by id",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "api-key", "value": "{{masterKey}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"name\": \"Patched by support\" }"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/master/flows/{{flowId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["master", "flows", "{{flowId}}"]
+            }
+          }
+        }
+      ]
     }
   ]
 }
@@ -138,6 +205,7 @@ Prefer a ready-to-run request package? Expand the collection below, copy it, and
 - You use it programmatically through the existing `api-key` HTTP header, the same header regular API keys use. It is never entered in the UI.
 - To act as a specific customer, add the header `x-flux-act-as-space: <SPACE_ID>`. The request then runs with full access **as that space's owner**.
 - Sent without `x-flux-act-as-space`, the key authenticates as the owner's own account — no impersonation.
+- It also unlocks a dedicated set of endpoints, [`/master/flows`](#search-and-edit-any-flow-master-flows), to **search, read, and edit flows across every tenant** without any header. Regular API keys cannot reach those routes.
 - Rotating the key immediately invalidates the previous one. Only one key is active at any moment.
 - Every use is audited server-side, including rejected attempts.
 
@@ -266,6 +334,76 @@ Omit `x-flux-act-as-space`. The request authenticates as the owner's own account
 curl https://api.example.com/user/me \
   -H "api-key: FLUX_MASTER_9f2b3c4a...dddd"
 ```
+
+## Search and edit any flow (`/master/flows`)
+
+Acting as one space at a time (above) is ideal when you already know the customer. When you **don't** — you just need to find a flow by name or space and fix it — use the dedicated `/master/flows` endpoints. They **search, read, and edit flows across every tenant at once**, with **no `x-flux-act-as-space` header**. These routes accept only the master key (a regular `api-key` gets **403 Forbidden**), and every call is audited.
+
+Typical workflow: **search → open → edit**.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/master/flows` | Search flows across all tenants (filters + pagination). |
+| `GET` | `/master/flows/:id` | Get any flow's full JSON (nodes + edges). |
+| `PATCH` | `/master/flows/:id` | Update any flow's name and/or content. |
+
+### Search flows
+
+`GET /master/flows` returns flows from any customer. All filters are optional, combine with AND, and results are paginated.
+
+| Query param | Type | Default | Description |
+| --- | --- | --- | --- |
+| `spaceId` | uuid | — | Only flows in this space. |
+| `name` | string | — | Case-insensitive substring of the flow name. |
+| `active` | boolean | `true` | Only active (non-deleted) flows. Set `false` to include deleted ones. |
+| `page` | integer | `1` | Page number. |
+| `limit` | integer | `25` | Page size (max 100). |
+
+```bash
+curl "https://api.example.com/master/flows?name=onboarding&active=true&page=1&limit=25" \
+  -H "api-key: FLUX_MASTER_9f2b3c4a...dddd"
+```
+
+```json
+{
+  "agents": [
+    {
+      "id": "1a2b3c4d-aaaa-bbbb-cccc-ddddeeeeffff",
+      "name": "Onboarding Email Drafter",
+      "isChatbot": false,
+      "isWebhook": true,
+      "space": { "id": "5e6f7a8b-...", "name": "Acme Space" },
+      "endpoints": { "api": "https://api.example.com/api-v2/1a2b3c4d-...", "webhook": "https://api.example.com/api-v2-webhook/1a2b3c4d-..." }
+    }
+  ]
+}
+```
+
+Take the `id` from a result and use it with the next two endpoints. Each item's `space` tells you which customer the flow belongs to.
+
+### Get a flow
+
+`GET /master/flows/:id` returns the full flow JSON — the same shape as the Integrations API `GET /integrations/agents/:id`: `id`, `name`, `type`, `spaceId`, `folderId`, `documentation`, and `content { nodes, edges }`.
+
+```bash
+curl https://api.example.com/master/flows/1a2b3c4d-aaaa-bbbb-cccc-ddddeeeeffff \
+  -H "api-key: FLUX_MASTER_9f2b3c4a...dddd"
+```
+
+### Update a flow
+
+`PATCH /master/flows/:id` updates the flow's `name` and/or its full `content` (nodes + edges). Provide at least one; when both are present they are applied atomically. Returns the updated flow JSON.
+
+```bash
+curl -X PATCH https://api.example.com/master/flows/1a2b3c4d-aaaa-bbbb-cccc-ddddeeeeffff \
+  -H "api-key: FLUX_MASTER_9f2b3c4a...dddd" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Onboarding Email Drafter (patched by support)" }'
+```
+
+<Note>
+`/master/flows` covers **flows only** — it does not touch memory pods or other resources. For those, use `x-flux-act-as-space` impersonation on the relevant API. Search returns data across all tenants, so always paginate.
+</Note>
 
 ### Find the target space id
 
