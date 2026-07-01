@@ -13,11 +13,123 @@ This is an internal support and engineering feature. Customers never see or use 
 
 ## Postman collection
 
-Prefer a ready-to-run request package? Download the Postman collection below, import it into Postman, set the `baseUrl`, `jwtToken` and `targetSpaceId` variables, and run **Rotate (create) master key** — it auto-saves the returned secret so the impersonation requests are ready to go.
+Prefer a ready-to-run request package? Expand the collection below, copy it, and save it as a file such as `master-api-key.postman_collection.json`, then import it into Postman. Set the `baseUrl`, `jwtToken` and `targetSpaceId` variables and run **Rotate (create) master key** — its test script auto-saves the returned secret so the impersonation requests are ready to go.
 
-<Card title="Download the Postman collection" icon="download" href="/main-api/specific-features/master-api-key.postman_collection.json">
-  Management calls (rotate / status) plus impersonation examples, in one importable file.
-</Card>
+<Accordion title="Postman collection — copy, save as a .json file, then import into Postman">
+
+```json
+{
+  "info": {
+    "name": "Flux — Master API Key (Brad)",
+    "description": "Automated request package for the platform master API key.\n\nHow to use:\n1. Set the baseUrl variable for the target environment (dev/staging).\n2. Log in as Brad in the app, copy your access token into the jwtToken variable.\n3. Run Management > Rotate (create) master key once — the test script auto-saves the returned secret into the masterKey variable (shown only once).\n4. Set targetSpaceId to the customer's space id you want to act as.\n5. Run any request under Impersonation — they send the master key in the api-key header plus x-flux-act-as-space to run as that customer. Omit the act-as header to run as Brad himself.\n\nEvery master-key call is audited server-side, including rejected attempts.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://api-dev.example.com", "type": "string" },
+    { "key": "jwtToken", "value": "", "type": "string" },
+    { "key": "masterKey", "value": "", "type": "string" },
+    { "key": "targetSpaceId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Management (Brad, JWT session)",
+      "item": [
+        {
+          "name": "Rotate (create) master key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "if (res.apiKey) { pm.collectionVariables.set('masterKey', res.apiKey); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwtToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/internal/master-api-key/rotate",
+              "host": ["{{baseUrl}}"],
+              "path": ["internal", "master-api-key", "rotate"]
+            }
+          }
+        },
+        {
+          "name": "Get master key status",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{jwtToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/internal/master-api-key",
+              "host": ["{{baseUrl}}"],
+              "path": ["internal", "master-api-key"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Impersonation (master key)",
+      "item": [
+        {
+          "name": "List a customer's agents (act as space)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "api-key", "value": "{{masterKey}}" },
+              { "key": "x-flux-act-as-space", "value": "{{targetSpaceId}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/integrations/agents",
+              "host": ["{{baseUrl}}"],
+              "path": ["integrations", "agents"]
+            }
+          }
+        },
+        {
+          "name": "Create a flow for a customer (act as space)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "api-key", "value": "{{masterKey}}" },
+              { "key": "x-flux-act-as-space", "value": "{{targetSpaceId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"name\": \"Support flow created by Brad\", \"type\": \"agent\" }"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/integrations/agents",
+              "host": ["{{baseUrl}}"],
+              "path": ["integrations", "agents"]
+            }
+          }
+        },
+        {
+          "name": "List agents as Brad himself (no impersonation)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "api-key", "value": "{{masterKey}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/integrations/agents",
+              "host": ["{{baseUrl}}"],
+              "path": ["integrations", "agents"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+</Accordion>
 
 ## How it works
 
