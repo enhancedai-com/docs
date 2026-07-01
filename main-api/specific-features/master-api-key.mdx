@@ -1,0 +1,198 @@
+---
+title: "Master API Key"
+description: "How the platform owner uses the single privileged master API key to call any FluxPrompt endpoint on behalf of any customer, with per-request impersonation and full server-side auditing."
+---
+
+The master API key is a single, global, privileged credential for the FluxPrompt platform. It lets the designated owner call any API endpoint as themselves, or impersonate any customer and act with that customer's full access — for example, to create a flow for a client or reproduce a customer-reported problem against their real data.
+
+There is exactly **one** master key at a time, and only the designated owner (identified by their account email) can create, rotate, or view its status.
+
+<Info>
+This is an internal support and engineering feature. Customers never see or use the master key. If you are integrating a customer-facing application, use a regular user-level or space-level `api-key` instead — see the [Integrations API](/main-api/specific-features/integrations-api/overview) or [Memory Pods API](/main-api/specific-features/memory-pods-api/overview).
+</Info>
+
+## How it works
+
+- The key is a long random secret with the prefix `FLUX_MASTER_`.
+- It is shown **exactly once**, at creation or rotation. The server stores only a SHA-256 hash — the secret can never be retrieved again.
+- You use it programmatically through the existing `api-key` HTTP header, the same header regular API keys use. It is never entered in the UI.
+- To act as a specific customer, add the header `x-flux-act-as-space: <SPACE_ID>`. The request then runs with full access **as that space's owner**.
+- Sent without `x-flux-act-as-space`, the key authenticates as the owner's own account — no impersonation.
+- Rotating the key immediately invalidates the previous one. Only one key is active at any moment.
+- Every use is audited server-side, including rejected attempts.
+
+## Base URL
+
+The management endpoints and the `api-key` header work on the same host as the rest of FluxPrompt:
+
+| Environment | Base URL |
+| --- | --- |
+| Production | `https://app.fluxprompt.ai` |
+| Staging | `https://staging.fluxprompt.ai` |
+| Dev | `https://dev.fluxprompt.ai` |
+
+Examples below use `https://api.example.com` as a placeholder — substitute the base URL for your target environment.
+
+## Manage the key
+
+The two management endpoints are internal and require the owner to be logged in with a **normal JWT session** (a `Bearer` token, not the master key itself). They are guarded so that only the owner's account email passes; every other authenticated user receives **403 Forbidden**.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/internal/master-api-key/rotate` | Create or rotate the key. Returns the secret once. |
+| `GET` | `/internal/master-api-key` | Return status only, never the secret. |
+
+### Rotate or create the key
+
+`POST /internal/master-api-key/rotate` mints a new secret, marks any previous key inactive, and returns the new secret a single time.
+
+```bash
+curl -X POST https://api.example.com/internal/master-api-key/rotate \
+  -H "Authorization: Bearer <YOUR_JWT>"
+```
+
+```json
+{
+  "apiKey": "FLUX_MASTER_9f2b3c4a1111222233334444555566667777888899990000aaaabbbbccccdddd"
+}
+```
+
+<Warning>
+The `apiKey` value is shown **once** and is never recoverable — the server keeps only its hash. Save it to your secret manager immediately. If you lose it, your only option is to rotate again, which invalidates the lost key.
+</Warning>
+
+The same endpoint both **creates** the first key and **rotates** an existing one. There is no separate "create" call.
+
+### Get the key status
+
+`GET /internal/master-api-key` returns metadata only. It never returns the secret.
+
+```bash
+curl https://api.example.com/internal/master-api-key \
+  -H "Authorization: Bearer <YOUR_JWT>"
+```
+
+```json
+{
+  "exists": true,
+  "prefix": "FLUX_MASTER_9f2b",
+  "lastRotatedAt": "2026-07-01T14:03:22.000Z",
+  "isActive": true
+}
+```
+
+<ResponseField name="exists" type="boolean">
+  Whether a key has ever been created.
+</ResponseField>
+
+<ResponseField name="prefix" type="string | null">
+  The first characters of the key (`FLUX_MASTER_` plus four more), safe to display. `null` if no key exists.
+</ResponseField>
+
+<ResponseField name="lastRotatedAt" type="string (ISO 8601) | null">
+  When the active key was created or last rotated. `null` if no key exists.
+</ResponseField>
+
+<ResponseField name="isActive" type="boolean">
+  Whether the current key is active.
+</ResponseField>
+
+## Use the key
+
+Send the secret in the `api-key` header, exactly like a regular API key. No `Bearer` scheme, no `x-` prefix on the key header itself.
+
+```http
+api-key: FLUX_MASTER_...
+```
+
+### Call an endpoint as a customer
+
+Add `x-flux-act-as-space` with the target customer's space id. The request authenticates as that space's owner and behaves as if the customer made the call. Any endpoint the customer can reach, you can reach on their behalf.
+
+```bash
+curl -X POST https://api.example.com/integrations/agents \
+  -H "api-key: FLUX_MASTER_9f2b3c4a...dddd" \
+  -H "x-flux-act-as-space: 1a2b3c4d-aaaa-bbbb-cccc-ddddeeeeffff" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Welcome Email Drafter",
+    "type": "agent",
+    "spaceId": "1a2b3c4d-aaaa-bbbb-cccc-ddddeeeeffff",
+    "folderName": "Onboarding"
+  }'
+```
+
+The agent above is created **inside the customer's space, owned by the customer** — identical to the customer creating it themselves through their own key.
+
+### Call an endpoint as yourself
+
+Omit `x-flux-act-as-space`. The request authenticates as the owner's own account, with no impersonation.
+
+```bash
+curl https://api.example.com/user/me \
+  -H "api-key: FLUX_MASTER_9f2b3c4a...dddd"
+```
+
+### Find the target space id
+
+The `SPACE_ID` is the id of the customer's space (the same UUID used for `spaceId` in the Integrations and Memory Pods APIs). Locate it from the customer's space — for example through the [`list folders`](/main-api/specific-features/integrations-api/list-folders) response, or by querying the database with the [db-investigator agent](/ai-workflows/internal-developer-workflows/agents/db-investigator).
+
+## Rejections
+
+Requests carrying the master key are rejected with **401 Unauthorized** in these cases:
+
+| Situation | Outcome |
+| --- | --- |
+| `x-flux-act-as-space` names a space that does not exist or has no owner | Rejected. Verify the space id. |
+| The presented key does not match the active key (for example, an old key after rotation) | Rejected. Use the current key. |
+| The stored key's owner no longer matches the configured owner email | Rejected. |
+| Per-minute rate limit exceeded | Rejected. Retry after the window. |
+| Source IP not in the allowlist (only when an allowlist is configured) | Rejected. |
+
+Every rejection is recorded in the audit log alongside accepted requests.
+
+## Rate limiting
+
+Master-key traffic is capped at a default of **60 requests per minute** across all master-key calls. Requests over the limit are rejected until the rolling one-minute window clears.
+
+<Note>
+An optional IP allowlist can be enabled later to restrict which source IPs may present the master key. It is currently open (no allowlist enforced). When configured, requests from IPs outside the list are rejected and audited.
+</Note>
+
+## Auditing
+
+Every master-key request is logged server-side — both accepted and rejected. Assume all of your master-key usage is recorded. Each entry captures:
+
+- The operator (owner) account
+- The target space and company being acted upon
+- HTTP method and path
+- Response status code
+- Outcome (accepted, or the specific rejection reason)
+- Source IP
+- Timestamp
+
+## Security and best practices
+
+<Warning>
+Treat the master key like a production secret. It grants full access to every customer's data through impersonation. Store it in a secret manager, never in source control, and never paste it into a shared channel.
+</Warning>
+
+- **Rotate on exposure.** If the key is ever leaked or you are unsure, rotate it immediately. Rotation invalidates the previous key instantly.
+- **One active key at a time.** There is never more than one valid master key. Rotating replaces it.
+- **The secret is shown once.** Capture it at rotation; it cannot be retrieved afterward.
+- **Impersonation is explicit.** You only act as a customer when you send `x-flux-act-as-space`. Double-check the `SPACE_ID` — you get that customer's full access.
+- **All use is audited.** Both successful and rejected attempts are logged with operator, target, path, status, IP, and timestamp.
+
+## Related
+
+<Columns cols={2}>
+  <Card title="Integrations API" icon="plug" href="/main-api/specific-features/integrations-api/overview">
+    Endpoints commonly called on a customer's behalf with the act-as header.
+  </Card>
+  <Card title="Memory Pods API" icon="database" href="/main-api/specific-features/memory-pods-api/overview">
+    Manage a customer's memory pods programmatically.
+  </Card>
+  <Card title="db-investigator agent" icon="magnifying-glass" href="/ai-workflows/internal-developer-workflows/agents/db-investigator">
+    Find a customer's space id and diagnose data issues.
+  </Card>
+</Columns>
