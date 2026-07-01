@@ -155,6 +155,20 @@ Examples below use `https://api.example.com` as a placeholder — substitute the
 
 ## Manage the key
 
+You manage the key while logged in as the owner — either from the app (recommended) or directly via the API. Either way, only the owner's account email is allowed; every other user is refused.
+
+### From the app (recommended)
+
+Log in as the owner and open **Admin Dashboard → Master API Key** (`/admin/master-api-key`). The page shows the current key status (prefix, whether it's active, when it was last rotated) and a single button:
+
+1. Click **Generate key** (first time) or **Rotate key**.
+2. Confirm in the dialog — rotating immediately invalidates the previous key.
+3. The new secret appears **once** in a dialog with show/hide and a copy button. Copy it and store it safely — it can't be retrieved again.
+
+No `curl` or Postman needed. The link is only visible to the master key owner.
+
+### From the API
+
 The two management endpoints are internal and require the owner to be logged in with a **normal JWT session** (a `Bearer` token, not the master key itself). They are guarded so that only the owner's account email passes; every other authenticated user receives **403 Forbidden**.
 
 | Method | Path | Purpose |
