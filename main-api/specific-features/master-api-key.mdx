@@ -11,6 +11,14 @@ There is exactly **one** master key at a time, and only the designated owner (id
 This is an internal support and engineering feature. Customers never see or use the master key. If you are integrating a customer-facing application, use a regular user-level or space-level `api-key` instead — see the [Integrations API](/main-api/specific-features/integrations-api/overview) or [Memory Pods API](/main-api/specific-features/memory-pods-api/overview).
 </Info>
 
+## Postman collection
+
+Prefer a ready-to-run request package? Download the Postman collection below, import it into Postman, set the `baseUrl`, `jwtToken` and `targetSpaceId` variables, and run **Rotate (create) master key** — it auto-saves the returned secret so the impersonation requests are ready to go.
+
+<Card title="Download the Postman collection" icon="download" href="/main-api/specific-features/master-api-key.postman_collection.json">
+  Management calls (rotate / status) plus impersonation examples, in one importable file.
+</Card>
+
 ## How it works
 
 - The key is a long random secret with the prefix `FLUX_MASTER_`.
