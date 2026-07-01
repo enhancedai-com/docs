@@ -162,6 +162,7 @@
                         ]
                       },
                       "main-api/specific-features/local-development",
+                      "main-api/specific-features/master-api-key",
                       "main-api/specific-features/output-controller-stall-incident"
                     ]
                   }
@@ -440,6 +441,7 @@
                         ]
                       },
                       "main-api/specific-features/local-development",
+                      "main-api/specific-features/master-api-key",
                       "main-api/specific-features/output-controller-stall-incident"
                     ]
                   }
