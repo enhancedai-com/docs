@@ -1,0 +1,211 @@
+---
+title: "Variáveis de Ambiente"
+---
+
+156 env vars no `back/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+
+## Database
+
+| Var | Obrigatória? | Propósito |
+|---|---|---|
+| TYPEORM_HOST | Obrigatória | host do banco |
+| TYPEORM_PORT | Obrigatória | porta do banco |
+| TYPEORM_USERNAME | Obrigatória | usuário do banco |
+| TYPEORM_PASSWORD | Obrigatória | senha do banco |
+| TYPEORM_DATABASE | Obrigatória | nome do banco |
+| TYPEORM_POOL_MAX | Opcional | tamanho do pool de conexões (default 30) |
+
+## Redis / Queue / Temporal
+
+| Var | Obrigatória? | Propósito |
+|---|---|---|
+| REDIS_HOST | Obrigatória | host do Redis (BullMQ/cache) |
+| REDIS_PORT | Obrigatória | porta do Redis |
+| RABBITMQ_URL | Obrigatória | conexão AMQP |
+| RABBITMQ_QUEUE | Obrigatória | fila do summarize |
+| RABBITMQ_QUEUE_VECTOR_DB | Obrigatória | fila de ingestão vector DB |
+| RABBITMQ_QUEUE_VECTOR_DB_SEARCH | Obrigatória | fila de busca vector DB |
+| RABBIT_RESPONSE_QUEUE | Obrigatória | fila de resposta do summarize |
+| RABBIT_RESPONSE_QUEUE_VECTOR_DB | Obrigatória | fila de resposta vector DB |
+| RABBIT_RESPONSE_QUEUE_VECTOR_DB_SEARCH | Obrigatória | fila de resposta vector DB search |
+| TEMPORAL_ADDRESS | Obrigatória | endereço do cluster Temporal |
+| TEMPORAL_TASK_QUEUE | Obrigatória | nome da task queue Temporal |
+
+## Auth / OAuth / Integrações
+
+| Var | Obrigatória? | Propósito |
+|---|---|---|
+| JWT_SECRET | Obrigatória | assinatura de JWT |
+| GOOGLE_LOGIN_CLIENT_ID | Obrigatória | login OAuth Google |
+| GOOGLE_LOGIN_CLIENT_SECRECT | Obrigatória | secret do login Google (typo no nome — não corrigir de leve, é breaking change) |
+| APPLE_CLIENT_ID | Obrigatória | Sign in with Apple |
+| APPLE_TEAM_ID | Obrigatória | Sign in with Apple |
+| APPLE_KEY_ID | Obrigatória | Sign in with Apple |
+| APPLE_CALLBACK | Obrigatória | callback URL do Apple |
+| APPLE_KEYFILE_PATH | Obrigatória | caminho do keyfile .p8 |
+| FACEBOOK_APP_ID | Obrigatória | login Facebook |
+| FACEBOOK_APP_SECRET | Obrigatória | login Facebook |
+| MICROSOFT_CLIENT_ID | Obrigatória | integração Microsoft/O365 |
+| MICROSOFT_CLIENT_SECRET | Obrigatória | integração Microsoft/O365 |
+| MICROSOFT_REDIRECT_URI | Obrigatória | redirect OAuth Microsoft |
+| MICROSOFT_SCOPES | Obrigatória | scopes OAuth Microsoft |
+| MICROSOFT_TENANT_ID | Obrigatória | tenant Microsoft |
+| SLACK_CLIENT_ID | Obrigatória | integração Slack |
+| SLACK_CLIENT_SECRET | Obrigatória | integração Slack |
+| SLACK_SCOPES | Obrigatória | scopes Slack |
+| NOTION_CLIENT_ID | Obrigatória | integração Notion |
+| NOTION_CLIENT_SECRET | Obrigatória | integração Notion |
+| HUBSPOT_CLIENT_ID | Obrigatória | integração HubSpot |
+| HUBSPOT_CLIENT_SECRET_ID | Obrigatória | integração HubSpot |
+| HUBSPOT_REDIRECT_URI | Obrigatória | redirect OAuth HubSpot |
+| HUBSPOT_SCOPES | Obrigatória | scopes HubSpot |
+| HUBSPOT_OPTIONAL_SCOPES | Opcional | scopes extras HubSpot |
+| HUBSPOT_STRIPE_KEY | Obrigatória | chave Stripe usada no billing via HubSpot |
+| SHOPIFY_CLIENT_ID | Obrigatória | integração Shopify |
+| SHOPIFY_CLIENT_SECRET_ID | Obrigatória | integração Shopify |
+| GOOGLE_SHEET_CLIENT_ID | Obrigatória | OAuth Google Sheets |
+| GOOGLE_SHEET_CLIENT_SECRET | Obrigatória | OAuth Google Sheets |
+| GOOGLE_SHEET_REDIRECT_URL | Obrigatória | redirect OAuth Google Sheets |
+| FRONTEND_OAUTH_CALLBACK_BASE | Obrigatória | base de callback (Zapier/WordPress/MCP) |
+| INTEGRATIONS_ENCRYPTION_KEY | Obrigatória | criptografa credenciais de integrações salvas |
+| INTERNAL_API_KEY | Obrigatória | chamadas internas entre serviços |
+| MASTER_KEY_IP_ALLOWLIST | Opcional | allowlist de IP para master API key |
+| MASTER_KEY_OWNER_EMAIL | Obrigatória | email do dono da master key |
+| MASTER_KEY_RATE_LIMIT_PER_MIN | Opcional | rate limit da master key (tem fallback) |
+| MCP_INTERNAL_SECRET | Obrigatória | guard interno das chamadas MCP — precisa bater com o valor no `mcp-server` |
+| MCP_OAUTH_CONSENT_SECRET | Obrigatória | assinatura do consentimento OAuth MCP — precisa bater com o valor no `mcp-server` |
+| MCP_RESOURCE_METADATA_URL | Obrigatória | URL de metadados do recurso MCP |
+| MCP_RUN_QUOTA_PER_DAY | Opcional | quota diária de execuções MCP (tem fallback) |
+| MCP_SERVER_INTERNAL_URL | Obrigatória | URL interna do servidor MCP |
+| MCP_THIRDPARTY_ALLOWLIST | Opcional | domínios terceiros permitidos no MCP |
+| MCP_TOKEN_EXPIRED_GRACE_DAYS | Opcional | dias de graça antes de expurgar tokens expirados |
+| MCP_TOKEN_PURGE_BATCH_SIZE | Opcional | tamanho de lote no expurgo de tokens MCP |
+| MCP_TOKEN_REVOKED_RETENTION_DAYS | Opcional | retenção de tokens MCP revogados |
+
+## AWS / GCS
+
+| Var | Obrigatória? | Propósito |
+|---|---|---|
+| AWS_S3_BUCKET_NAME | Obrigatória | bucket S3 para uploads/logs |
+| AWS_S3_REGION | Obrigatória | região S3 |
+| AWS_S3_ACCESS_KEY_ID | Obrigatória | credencial de acesso S3 |
+| AWS_S3_SECRET_ACCESS_KEY | Obrigatória | credencial secreta S3 |
+| CLOUDFRONT_ASSETS_URL | Obrigatória | URL base de assets via CloudFront |
+| GOOGLE_APPLICATION_CREDENTIALS | Obrigatória | caminho das credenciais GCP (ADC) |
+| GOOGLE_PROJECT | Obrigatória | projeto GCP (OCR) |
+| GOOGLE_PROJECT_ID | Obrigatória | projeto GCP (Gemini) |
+| GOOGLE_PROCESSOR_ID | Obrigatória | processor do Document AI |
+| GOOGLE_FORM_PARSER_PROCESSOR_ID | Obrigatória | processor de parsing de formulários |
+| GOOGLE_PROJECT_OCR_ID | Obrigatória | projeto GCP dedicado a OCR |
+| GOOGLE_BUCKET_NAME | Obrigatória | bucket GCS usado pelo Gemini |
+| GOOGLE_CRED_PATH | Obrigatória | caminho alternativo de credenciais (Gemini) |
+| GOOGLE_SHEETS_MODEL_PRICES_ID | Obrigatória | planilha de preços de modelos (cron) |
+
+## AI Providers
+
+| Var | Obrigatória? | Propósito |
+|---|---|---|
+| OPENAI_API_KEY | Obrigatória | OpenAI |
+| ANTHROPIC_API_KEY | Obrigatória | Anthropic (Claude) |
+| AZURE_API_KEY | Obrigatória | Azure OpenAI |
+| MISTRAL_API_KEY | Obrigatória | Mistral |
+| GROQ_API_KEY | Obrigatória | Groq |
+| XAI_API_KEY | Obrigatória | xAI (Grok) |
+| PPLX_API_KEY | Obrigatória | Perplexity |
+| GENAI_API_KEY | Obrigatória | Gemini/GenAI |
+| PALM_2_API_KEY | Obrigatória | PaLM 2 (legado) |
+| BARD_URL | Obrigatória | serviço Bard (legado) |
+| BARD_SCOPES | Obrigatória | scopes Bard (legado) |
+| REPLICATE_API_KEY | Obrigatória | Replicate |
+| STABILITY_AI_API_KEY | Obrigatória | Stability AI |
+| IDEOGRAM_API_KEY | Obrigatória | Ideogram |
+| CLIP_DROP_API_KEY | Obrigatória | ClipDrop |
+| LUMA_API_KEY | Obrigatória | Luma Labs (vídeo) |
+| FAL_KEY | Obrigatória | fal.ai |
+| RUNAWAY_ML_KEY | Obrigatória | RunwayML |
+| PLAY_AI_KEY | Obrigatória | PlayAI (voz) |
+| PLAY_AI_USER_ID | Obrigatória | user id PlayAI |
+| EVEN_LAB_API | Obrigatória | ElevenLabs (voz) |
+| VOYAGE_API_KEY | Obrigatória | Voyage (embeddings) |
+| PINECONE_API_KEY | Obrigatória | Pinecone (vector DB) |
+| VOICE_ACCEPT | Obrigatória | header Accept nas chamadas de voz |
+| VOICE_AUTHORIZATION | Obrigatória | header Authorization nas chamadas de voz |
+| VOICE_URL | Obrigatória | endpoint do serviço de voz |
+| VOICE_USER | Obrigatória | usuário do serviço de voz |
+
+## Email
+
+| Var | Obrigatória? | Propósito |
+|---|---|---|
+| EMAIL_FROM_ADDRESS | Obrigatória | endereço "de" |
+| EMAIL_HOST | Obrigatória | host SMTP |
+| EMAIL_PORT | Obrigatória | porta SMTP |
+| EMAIL_USER | Obrigatória | usuário SMTP |
+| EMAIL_PASSWORD | Obrigatória | senha SMTP |
+| EMAIL_SERVICE | Obrigatória | provedor usado pelo nodemailer (ex: gmail) |
+| POP3_HOSTNAME | Obrigatória | host de emails entrantes |
+| POP3_PORT | Obrigatória | porta de emails entrantes |
+| POP3_USERNAME | Obrigatória | usuário de emails entrantes |
+| POP3_PASSWORD | Obrigatória | senha de emails entrantes |
+
+## Billing / Marketing / Scraping
+
+| Var | Obrigatória? | Propósito |
+|---|---|---|
+| STRIPE_KEY | Obrigatória | billing Stripe |
+| KLAVIJO_API_KEY | Obrigatória | Klaviyo (email marketing) |
+| KLAVIJO_LIST_ID | Obrigatória | lista Klaviyo alvo |
+| SEC_API | Obrigatória | API SEC (dados financeiros) |
+| SEM_RUSH_API_KEY | Obrigatória | SEMrush |
+| SERP_API_KEY | Obrigatória | busca via SerpApi |
+| SEARCH_API_KEY | Obrigatória | busca web (node de transcrição do YouTube) |
+| SCRAPINGBEE_KEY | Obrigatória | ScrapingBee |
+| SBR_WS_ENDPOINT | Obrigatória | endpoint WS do Bright Data (scraping browser) |
+| OXYLAB_KEY | Obrigatória | Oxylabs |
+| OXYLAB_AMAZON_KEY | Obrigatória | Oxylabs (Amazon) |
+| DOCRAPTOR_API_KEY | Obrigatória | DocRaptor (geração de PDF) |
+
+## Sistema / Flags / Observabilidade
+
+| Var | Obrigatória? | Propósito |
+|---|---|---|
+| DD_API_KEY | Obrigatória | logging Datadog |
+| DD_SITE | Obrigatória | site/região Datadog |
+| ENVIRONMENT | Obrigatória | ambiente da app (dev/staging/production) |
+| FRONTEND_URL | Obrigatória | URL do frontend (links, CORS, emails) |
+| RUNNING_PORT | Obrigatória | porta do servidor HTTP |
+| API_URL | Obrigatória | URL pública da API |
+| SWAGGER_USERNAME | Opcional | usuário do basic-auth do Swagger |
+| SWAGGER_PASSWORD | Opcional | senha do basic-auth do Swagger |
+| NODE_ENV | Obrigatória | ambiente Node |
+| DISABLE_CRONS | Opcional | desliga todos os cron jobs |
+| FLOW_SNAPSHOT_ENABLED | Opcional | feature flag de snapshot de flow |
+| CLAIM_CHECK_THRESHOLD_BYTES | Opcional | limiar do padrão claim-check (default 262144) |
+| CANCEL_DATA_RETENTION_DAYS | Opcional | retenção de dados de cancelamento (default 30) |
+| CANCEL_PURGE_DRY_RUN | Opcional | modo dry-run no expurgo de cancelamento |
+| NODE_EXEC_DELETE_AFTER_DAYS | Opcional | retenção de execuções de node (default 30) |
+| NODE_EXEC_MAX_PER_NODE | Opcional | máx. de execuções mantidas por node |
+| NODE_EXEC_SLIM_AFTER_DAYS | Opcional | dias até compactar ("slim") execuções |
+| ID_OF_AGENT_TO_BUILD_FORM | Obrigatória | agente interno que constrói formulários |
+| ID_OF_AGENT_TO_GENERATE_SUMMARY | Obrigatória | agente interno que gera resumos |
+| WEBHOOK_DB | Obrigatória | índice do Redis para webhooks de usuário |
+| FILE_PATH | Obrigatória | diretório local de arquivos temporários |
+| LOG_PROVIDER_OPTIONS | Opcional | flag de debug, loga opções do provider de IA |
+| BUILD_TIME | Opcional | metadado de build |
+| BUILD_WITH_API_KEY | Obrigatória | chave do fluxo "build with API" |
+| BACKEND_VERSION | Opcional | metadado de versão |
+| COMMIT_SHA | Opcional | metadado de build |
+| GIT_COMMIT | Opcional | metadado de build |
+| GIT_BRANCH | Opcional | metadado de build |
+
+## Obsoletas
+
+Estão no `.env.example` mas sem uso, pode remover: `TYPEORM_SYNCHRONIZE`, `EMAIL_SSL`, `EMAIL_TLS`, `STRIPE_ACCOUNT_ID`.
+
+## Pegadinha cross-repo
+
+`MCP_INTERNAL_SECRET` e `MCP_OAUTH_CONSENT_SECRET` precisam ser idênticas ao valor no `mcp-server` — mesmo parâmetro SSM em todo ambiente, senão as chamadas MCP dão 500 / o consentimento OAuth falha silenciosamente.
+
+## CI/CD
+
+As vars de runtime não são injetadas na imagem Docker em tempo de build/CI — elas vivem na task definition do ECS (respaldada por SSM), buscada fresh a cada deploy. O workflow do GitHub Actions em si só precisa de 2 secrets do repo: `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY`, ambos confirmados presentes.

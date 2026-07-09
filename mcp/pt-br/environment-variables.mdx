@@ -1,0 +1,51 @@
+---
+title: "Variáveis de Ambiente"
+---
+
+23 env vars no `mcp-server/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+
+| Var | Obrigatória? | Propósito |
+|---|---|---|
+| PORT | Opcional | porta HTTP (default 3100) |
+| NODE_ENV | Opcional | ambiente Node (passthrough, não é lida no código) |
+| MCP_HTTP_LOG | Opcional | log verboso de requisições HTTP |
+| MCP_PUBLIC_URL | Opcional | URL pública (metadata OAuth) |
+| MCP_FRONT_CONSENT_URL | Opcional | URL da tela de consentimento do FluxPrompt |
+| MCP_OAUTH_CONSENT_SECRET | Obrigatória | valida a assinatura do consentimento — precisa bater com o valor no `back` |
+| MCP_OAUTH_TOKEN_TTL | Opcional | TTL do access token |
+| MCP_DCR_CLIENT_TTL | Opcional | TTL de clientes via Dynamic Client Registration |
+| MCP_TOKEN_CACHE_TTL | Opcional | TTL do cache do resolver de tokens (default 30) |
+| BACK_BASE_URL | Opcional | URL base do `back` (default localhost:3000) |
+| MCP_INTERNAL_SECRET | Obrigatória | segredo pra chamar o `back` — precisa bater com o valor no `back` |
+| MCP_BACK_RETRY_MAX | Opcional | número de retries nas chamadas ao `back` |
+| MCP_BACK_RETRY_BASE_MS | Opcional | base do backoff (ms) entre retries |
+| MCP_RATE_LIMIT_PER_MINUTE | Opcional | rate limit por minuto (default 60) |
+| MCP_RATE_LIMIT_PER_DAY | Opcional | rate limit por dia (default 5000) |
+| MCP_KILL_SWITCH | Opcional | interruptor global on/off |
+| MCP_CB_WINDOW_MS | Opcional | janela de amostragem do circuit breaker (default 60000) |
+| MCP_CB_COOLDOWN_MS | Opcional | cooldown do circuit breaker (default 60000) |
+| MCP_CB_ERROR_THRESHOLD | Opcional | limiar de erro do circuit breaker (default 0.5) |
+| MCP_CB_MIN_SAMPLES | Opcional | amostras mínimas antes de avaliar o circuito (default 5) |
+| DATADOG_API_KEY | Opcional | chave do audit log no Datadog |
+| INSPECTOR_CLIENT_PORT | Opcional | porta da UI do MCP Inspector (dev only) |
+| INSPECTOR_PROXY_PORT | Opcional | porta do proxy do MCP Inspector (dev only) |
+
+## Corrigido nesta auditoria
+
+O `.env.example`/`docker-compose.yml` antigos tinham nomes que não batiam com o que o código realmente lê — essas configs eram no-op silencioso:
+
+- `BACK_API_URL` → o código lê `BACK_BASE_URL`
+- `MCP_CIRCUIT_ERROR_RATE_THRESHOLD` / `MCP_CIRCUIT_WINDOW_SECONDS` / `MCP_CIRCUIT_COOLDOWN_SECONDS` → o código lê `MCP_CB_ERROR_THRESHOLD` / `MCP_CB_WINDOW_MS` / `MCP_CB_COOLDOWN_MS` (e nota: é ms, não segundos)
+- `DD_API_KEY` / `DD_SITE` / `DD_AUDIT_INDEX` → o código lê `DATADOG_API_KEY` (`DD_SITE`/`DD_AUDIT_INDEX` não são lidas em lugar nenhum)
+
+Tudo renomeado pra bater com o código nesta passada.
+
+## Pegadinha cross-repo
+
+`MCP_INTERNAL_SECRET` e `MCP_OAUTH_CONSENT_SECRET` precisam ser idênticas ao valor no `back` — mesmo parâmetro SSM em todo ambiente, senão as chamadas MCP dão 500 / o consentimento OAuth falha silenciosamente.
+
+## CI/CD
+
+Mesmo padrão de injeção em runtime do `back`/`worker` — as vars vivem na task definition do ECS (respaldada por SSM), não são injetadas em build. Só precisa de `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` como secrets do repo (confirmados presentes).
+
+**Gap:** os workflows de CI/CD (`cicd_dev.yml`, `cicd_staging.yml`, `cicd_prod.yml`) só existem na branch `staging`. A `production` ainda é o commit do scaffold Phase 0 — não tem pipeline de deploy lá ainda.

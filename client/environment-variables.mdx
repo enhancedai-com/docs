@@ -1,0 +1,33 @@
+---
+title: "Environment Variables"
+---
+
+17 env vars in `front/.env.example`. All use the `VITE_*` prefix — Vite only exposes prefixed vars to the client bundle. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+
+| Var | Required? | Purpose |
+|---|---|---|
+| VITE_API_URL | Required | main API base URL |
+| VITE_API_URL_PRODUCTION | Optional | alt. prod URL for assistant chats |
+| VITE_MCP_SERVER_URL | Required (functionally) | mcp-server base URL, consumed in `mcp-authorize.html` (a static asset, not in `src/`) to build the post-consent callback link. Has a `\|\| ''` fallback so the build won't crash without it, but the MCP OAuth consent screen redirects to a broken URL — this is the "OAuth url invalid" bug |
+| VITE_YJS_SIGNALING_URL | Optional | Yjs signaling (Form Builder collab) |
+| VITE_GOOGLE_CLIENT_ID | Optional | Google OAuth login |
+| VITE_APPLE_CLIENT_ID | Optional | Apple Sign-In |
+| VITE_PUBLISHABLE_KEY | Optional | Stripe publishable key |
+| VITE_GA_TRACKING_ID | Optional | Google Analytics 4 |
+| VITE_GTM_CONTAINER_ID | Optional | Google Tag Manager |
+| VITE_TINYMCE_API_KEY | Optional | TinyMCE editor |
+| VITE_FLOW_EMAIL | Required | domain for flow email addresses in webhooks |
+| VITE_QUICK_CHAT_FLOW_ID | Optional | "Prompt Assistant" flow id |
+| VITE_NODE_CHAT_FLOW_ID | Optional | "Node Assistant" flow id |
+| VITE_AUTO_CREATOR_FLOW_ID | Optional | auto-create flow id |
+| VITE_AUTO_MODEL_FLOW_ID | Optional | AI Text Generator flow id |
+| VITE_SUMMARY_FLOW_ID | Optional | summary generation flow id |
+| VITE_ENV | Optional | current environment (Yjs room prefix) |
+
+All 17 vars are actively used — none obsolete.
+
+## CI/CD
+
+Vite bakes `VITE_*` vars into the static bundle at build time. The 3 workflows (`cicd-dev.yaml`, `cicd-staging.yaml`, `cicd-prod.yaml`) hardcode the full var set directly in the YAML per environment, then `aws s3 sync` the build output — no runtime injection like the other 3 repos. All required vars (`VITE_API_URL`, `VITE_FLOW_EMAIL`, `VITE_MCP_SERVER_URL`) are present in all 3 environments.
+
+**Security finding:** `SENTRY_AUTH_TOKEN` (a real Sentry token) is hardcoded in plaintext in all 3 workflow YAMLs instead of being a GitHub Actions secret — anyone with repo read access has it. Recommend moving it to a secret and rotating the exposed value.

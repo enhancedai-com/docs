@@ -1,0 +1,33 @@
+---
+title: "Variáveis de Ambiente"
+---
+
+17 env vars no `front/.env.example`. Todas usam o prefixo `VITE_*` — o Vite só expõe vars com esse prefixo pro bundle do client. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+
+| Var | Obrigatória? | Propósito |
+|---|---|---|
+| VITE_API_URL | Obrigatória | URL base da API principal |
+| VITE_API_URL_PRODUCTION | Opcional | URL alternativa de prod para chats assistentes |
+| VITE_MCP_SERVER_URL | Obrigatória (na prática) | URL base do mcp-server, usada em `mcp-authorize.html` (asset estático, fora do `src/`) pra montar o link de callback pós-consentimento. Tem fallback `\|\| ''` então não quebra o build, mas a tela de consentimento OAuth do MCP redireciona pra uma URL quebrada sem ela — é o bug do "OAuth url invalid" |
+| VITE_YJS_SIGNALING_URL | Opcional | sinalização Yjs (colaboração no Form Builder) |
+| VITE_GOOGLE_CLIENT_ID | Opcional | login OAuth Google |
+| VITE_APPLE_CLIENT_ID | Opcional | Apple Sign-In |
+| VITE_PUBLISHABLE_KEY | Opcional | publishable key do Stripe |
+| VITE_GA_TRACKING_ID | Opcional | Google Analytics 4 |
+| VITE_GTM_CONTAINER_ID | Opcional | Google Tag Manager |
+| VITE_TINYMCE_API_KEY | Opcional | editor TinyMCE |
+| VITE_FLOW_EMAIL | Obrigatória | domínio usado no endereço de email do flow (webhooks) |
+| VITE_QUICK_CHAT_FLOW_ID | Opcional | flow do "Prompt Assistant" |
+| VITE_NODE_CHAT_FLOW_ID | Opcional | flow do "Node Assistant" |
+| VITE_AUTO_CREATOR_FLOW_ID | Opcional | flow de criação automática |
+| VITE_AUTO_MODEL_FLOW_ID | Opcional | flow do AI Text Generator |
+| VITE_SUMMARY_FLOW_ID | Opcional | flow de geração de resumos |
+| VITE_ENV | Opcional | ambiente atual (prefixo de sala no Yjs) |
+
+Todas as 17 vars estão em uso ativo — nenhuma obsoleta.
+
+## CI/CD
+
+O Vite injeta as vars `VITE_*` no bundle estático em tempo de build. Os 3 workflows (`cicd-dev.yaml`, `cicd-staging.yaml`, `cicd-prod.yaml`) hardcodam o conjunto completo direto no YAML por ambiente, e depois fazem `aws s3 sync` do resultado do build — sem injeção em runtime como nos outros 3 repos. Todas as vars obrigatórias (`VITE_API_URL`, `VITE_FLOW_EMAIL`, `VITE_MCP_SERVER_URL`) estão presentes nos 3 ambientes.
+
+**Achado de segurança:** `SENTRY_AUTH_TOKEN` (um token real do Sentry) está hardcoded em texto puro nos 3 YAMLs de workflow, em vez de ser um secret do GitHub Actions — qualquer um com leitura do repo tem esse token. Recomendo mover pra um secret e rotacionar o valor exposto.

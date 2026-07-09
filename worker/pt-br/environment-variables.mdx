@@ -1,0 +1,39 @@
+---
+title: "Variáveis de Ambiente"
+---
+
+25 env vars no `worker/.env.example`, validadas via Zod em `src/env.ts`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+
+| Var | Obrigatória? | Propósito |
+|---|---|---|
+| TEMPORAL_ADDRESS | Opcional | endereço do Temporal server (default localhost:7233) |
+| TEMPORAL_TASK_QUEUE | Opcional | nome da task queue (default enhanced-ai-queue) |
+| TYPEORM_HOST | Obrigatória | host do Postgres |
+| TYPEORM_PORT | Obrigatória | porta do Postgres |
+| TYPEORM_USERNAME | Obrigatória | usuário do Postgres |
+| TYPEORM_PASSWORD | Obrigatória | senha do Postgres |
+| TYPEORM_DATABASE | Obrigatória | nome do banco Postgres |
+| REDIS_HOST | Obrigatória | host do Redis (pub/sub de notificações de status) |
+| REDIS_PORT | Obrigatória | porta do Redis |
+| OPENAI_API_KEY | Obrigatória | cliente OpenAI |
+| ANTHROPIC_API_KEY | Obrigatória | cliente Anthropic |
+| GENAI_API_KEY | Obrigatória | cliente Google GenAI |
+| GROQ_API_KEY | Obrigatória | cliente Groq |
+| PPLX_API_KEY | Obrigatória | cliente Perplexity |
+| XAI_API_KEY | Obrigatória | cliente xAI |
+| SEARCH_API_KEY | Obrigatória | busca web (node audio-transcriber) |
+| AWS_ACCESS_KEY_ID | Opcional | credenciais Lambda (node de scripting) |
+| AWS_SECRET_ACCESS_KEY | Opcional | credenciais Lambda |
+| AWS_REGION | Opcional | região AWS (lida implicitamente pelo SDK) |
+| LAMBDA_ENDPOINT | Opcional | endpoint custom do Lambda (LocalStack/dev) |
+| URL_MAIN_API | Obrigatória | URL base do `back` para chamadas internas |
+| INTERNAL_API_KEY | Obrigatória | auth das chamadas internas ao `back` |
+| CLAIM_CHECK_THRESHOLD_BYTES | Opcional | limiar do padrão claim-check (default 262144) |
+| APICALLER_MAX_RESULT_BYTES | Opcional | limite de tamanho do resultado no node api-caller (default 1_000_000) |
+| LOG_PROVIDER_OPTIONS | Opcional | flag de debug, loga opções do provider de IA |
+
+Todas as 25 vars estão em uso ativo — nenhuma obsoleta. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES` e `LOG_PROVIDER_OPTIONS` são lidas direto via `process.env`, fora do schema Zod — sem type-safety aí, mas é esperado já que todas são opcionais com fallback.
+
+## CI/CD
+
+As vars de runtime não são injetadas na imagem Docker em tempo de build/CI — elas vivem na task definition do ECS (respaldada por SSM), buscada fresh a cada deploy. O workflow do GitHub Actions em si só precisa de 2 secrets do repo: `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY`, ambos confirmados presentes.

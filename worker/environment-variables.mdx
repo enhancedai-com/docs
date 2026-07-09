@@ -1,0 +1,39 @@
+---
+title: "Environment Variables"
+---
+
+25 env vars in `worker/.env.example`, validated via Zod in `src/env.ts`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+
+| Var | Required? | Purpose |
+|---|---|---|
+| TEMPORAL_ADDRESS | Optional | Temporal server address (default localhost:7233) |
+| TEMPORAL_TASK_QUEUE | Optional | task queue name (default enhanced-ai-queue) |
+| TYPEORM_HOST | Required | Postgres host |
+| TYPEORM_PORT | Required | Postgres port |
+| TYPEORM_USERNAME | Required | Postgres user |
+| TYPEORM_PASSWORD | Required | Postgres password |
+| TYPEORM_DATABASE | Required | Postgres db name |
+| REDIS_HOST | Required | Redis host (status notifications pub/sub) |
+| REDIS_PORT | Required | Redis port |
+| OPENAI_API_KEY | Required | OpenAI client |
+| ANTHROPIC_API_KEY | Required | Anthropic client |
+| GENAI_API_KEY | Required | Google GenAI client |
+| GROQ_API_KEY | Required | Groq client |
+| PPLX_API_KEY | Required | Perplexity client |
+| XAI_API_KEY | Required | xAI client |
+| SEARCH_API_KEY | Required | web search (audio-transcriber node) |
+| AWS_ACCESS_KEY_ID | Optional | Lambda credentials (scripting node) |
+| AWS_SECRET_ACCESS_KEY | Optional | Lambda credentials |
+| AWS_REGION | Optional | AWS region (read implicitly by the SDK) |
+| LAMBDA_ENDPOINT | Optional | custom Lambda endpoint (LocalStack/dev) |
+| URL_MAIN_API | Required | `back` base URL for internal calls |
+| INTERNAL_API_KEY | Required | auth for internal calls to `back` |
+| CLAIM_CHECK_THRESHOLD_BYTES | Optional | claim-check pattern threshold (default 262144) |
+| APICALLER_MAX_RESULT_BYTES | Optional | api-caller node result size limit (default 1_000_000) |
+| LOG_PROVIDER_OPTIONS | Optional | debug flag, logs AI provider options |
+
+All 25 vars are actively used — none obsolete. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES` and `LOG_PROVIDER_OPTIONS` are read directly via `process.env`, not through the Zod schema — no type-safety there, but that's expected since they're all optional with fallbacks.
+
+## CI/CD
+
+Runtime vars are not baked into the Docker image at build/CI time — they live in the ECS task definition (backed by SSM), fetched fresh on every deploy. The GitHub Actions workflow itself only needs 2 repo secrets: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, both confirmed present.

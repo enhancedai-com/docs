@@ -1,0 +1,211 @@
+---
+title: "Environment Variables"
+---
+
+156 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+
+## Database
+
+| Var | Required? | Purpose |
+|---|---|---|
+| TYPEORM_HOST | Required | DB host |
+| TYPEORM_PORT | Required | DB port |
+| TYPEORM_USERNAME | Required | DB user |
+| TYPEORM_PASSWORD | Required | DB password |
+| TYPEORM_DATABASE | Required | DB name |
+| TYPEORM_POOL_MAX | Optional | connection pool size (default 30) |
+
+## Redis / Queue / Temporal
+
+| Var | Required? | Purpose |
+|---|---|---|
+| REDIS_HOST | Required | Redis host (BullMQ/cache) |
+| REDIS_PORT | Required | Redis port |
+| RABBITMQ_URL | Required | AMQP connection |
+| RABBITMQ_QUEUE | Required | summarize queue |
+| RABBITMQ_QUEUE_VECTOR_DB | Required | vector DB ingestion queue |
+| RABBITMQ_QUEUE_VECTOR_DB_SEARCH | Required | vector DB search queue |
+| RABBIT_RESPONSE_QUEUE | Required | summarize response queue |
+| RABBIT_RESPONSE_QUEUE_VECTOR_DB | Required | vector DB response queue |
+| RABBIT_RESPONSE_QUEUE_VECTOR_DB_SEARCH | Required | vector DB search response queue |
+| TEMPORAL_ADDRESS | Required | Temporal cluster address |
+| TEMPORAL_TASK_QUEUE | Required | Temporal task queue name |
+
+## Auth / OAuth / Integrations
+
+| Var | Required? | Purpose |
+|---|---|---|
+| JWT_SECRET | Required | JWT signing |
+| GOOGLE_LOGIN_CLIENT_ID | Required | Google OAuth login |
+| GOOGLE_LOGIN_CLIENT_SECRECT | Required | Google OAuth login secret (typo in name — don't fix casually, it's a breaking change) |
+| APPLE_CLIENT_ID | Required | Sign in with Apple |
+| APPLE_TEAM_ID | Required | Sign in with Apple |
+| APPLE_KEY_ID | Required | Sign in with Apple |
+| APPLE_CALLBACK | Required | Sign in with Apple callback URL |
+| APPLE_KEYFILE_PATH | Required | Apple .p8 keyfile path |
+| FACEBOOK_APP_ID | Required | Facebook login |
+| FACEBOOK_APP_SECRET | Required | Facebook login |
+| MICROSOFT_CLIENT_ID | Required | Microsoft/O365 integration |
+| MICROSOFT_CLIENT_SECRET | Required | Microsoft/O365 integration |
+| MICROSOFT_REDIRECT_URI | Required | Microsoft OAuth redirect |
+| MICROSOFT_SCOPES | Required | Microsoft OAuth scopes |
+| MICROSOFT_TENANT_ID | Required | Microsoft tenant |
+| SLACK_CLIENT_ID | Required | Slack integration |
+| SLACK_CLIENT_SECRET | Required | Slack integration |
+| SLACK_SCOPES | Required | Slack scopes |
+| NOTION_CLIENT_ID | Required | Notion integration |
+| NOTION_CLIENT_SECRET | Required | Notion integration |
+| HUBSPOT_CLIENT_ID | Required | HubSpot integration |
+| HUBSPOT_CLIENT_SECRET_ID | Required | HubSpot integration |
+| HUBSPOT_REDIRECT_URI | Required | HubSpot OAuth redirect |
+| HUBSPOT_SCOPES | Required | HubSpot scopes |
+| HUBSPOT_OPTIONAL_SCOPES | Optional | extra HubSpot scopes |
+| HUBSPOT_STRIPE_KEY | Required | Stripe key used in the HubSpot billing flow |
+| SHOPIFY_CLIENT_ID | Required | Shopify integration |
+| SHOPIFY_CLIENT_SECRET_ID | Required | Shopify integration |
+| GOOGLE_SHEET_CLIENT_ID | Required | Google Sheets OAuth |
+| GOOGLE_SHEET_CLIENT_SECRET | Required | Google Sheets OAuth |
+| GOOGLE_SHEET_REDIRECT_URL | Required | Google Sheets OAuth redirect |
+| FRONTEND_OAUTH_CALLBACK_BASE | Required | callback base for Zapier/WordPress/MCP |
+| INTEGRATIONS_ENCRYPTION_KEY | Required | encrypts stored integration credentials |
+| INTERNAL_API_KEY | Required | internal service-to-service calls |
+| MASTER_KEY_IP_ALLOWLIST | Optional | IP allowlist for master API key |
+| MASTER_KEY_OWNER_EMAIL | Required | master API key owner email |
+| MASTER_KEY_RATE_LIMIT_PER_MIN | Optional | master key rate limit (has fallback) |
+| MCP_INTERNAL_SECRET | Required | internal guard for MCP calls — must match `mcp-server`'s value |
+| MCP_OAUTH_CONSENT_SECRET | Required | MCP OAuth consent signing — must match `mcp-server`'s value |
+| MCP_RESOURCE_METADATA_URL | Required | MCP resource metadata URL |
+| MCP_RUN_QUOTA_PER_DAY | Optional | MCP daily run quota (has fallback) |
+| MCP_SERVER_INTERNAL_URL | Required | internal URL of the MCP server |
+| MCP_THIRDPARTY_ALLOWLIST | Optional | allowed third-party domains for MCP |
+| MCP_TOKEN_EXPIRED_GRACE_DAYS | Optional | grace period before purging expired MCP tokens |
+| MCP_TOKEN_PURGE_BATCH_SIZE | Optional | batch size for MCP token purge cron |
+| MCP_TOKEN_REVOKED_RETENTION_DAYS | Optional | retention for revoked MCP tokens |
+
+## AWS / GCS
+
+| Var | Required? | Purpose |
+|---|---|---|
+| AWS_S3_BUCKET_NAME | Required | S3 bucket for uploads/logs |
+| AWS_S3_REGION | Required | S3 region |
+| AWS_S3_ACCESS_KEY_ID | Required | S3 access credential |
+| AWS_S3_SECRET_ACCESS_KEY | Required | S3 secret credential |
+| CLOUDFRONT_ASSETS_URL | Required | asset base URL via CloudFront |
+| GOOGLE_APPLICATION_CREDENTIALS | Required | GCP ADC credentials path |
+| GOOGLE_PROJECT | Required | GCP project (OCR) |
+| GOOGLE_PROJECT_ID | Required | GCP project (Gemini) |
+| GOOGLE_PROCESSOR_ID | Required | Document AI processor |
+| GOOGLE_FORM_PARSER_PROCESSOR_ID | Required | Document AI form parser processor |
+| GOOGLE_PROJECT_OCR_ID | Required | dedicated OCR GCP project |
+| GOOGLE_BUCKET_NAME | Required | GCS bucket used by Gemini |
+| GOOGLE_CRED_PATH | Required | alt. credentials path for Gemini |
+| GOOGLE_SHEETS_MODEL_PRICES_ID | Required | spreadsheet ID for model price sync cron |
+
+## AI Providers
+
+| Var | Required? | Purpose |
+|---|---|---|
+| OPENAI_API_KEY | Required | OpenAI |
+| ANTHROPIC_API_KEY | Required | Anthropic (Claude) |
+| AZURE_API_KEY | Required | Azure OpenAI |
+| MISTRAL_API_KEY | Required | Mistral |
+| GROQ_API_KEY | Required | Groq |
+| XAI_API_KEY | Required | xAI (Grok) |
+| PPLX_API_KEY | Required | Perplexity |
+| GENAI_API_KEY | Required | Gemini/GenAI |
+| PALM_2_API_KEY | Required | PaLM 2 (legacy) |
+| BARD_URL | Required | Bard service (legacy) |
+| BARD_SCOPES | Required | Bard scopes (legacy) |
+| REPLICATE_API_KEY | Required | Replicate |
+| STABILITY_AI_API_KEY | Required | Stability AI |
+| IDEOGRAM_API_KEY | Required | Ideogram |
+| CLIP_DROP_API_KEY | Required | ClipDrop |
+| LUMA_API_KEY | Required | Luma Labs (video) |
+| FAL_KEY | Required | fal.ai |
+| RUNAWAY_ML_KEY | Required | RunwayML |
+| PLAY_AI_KEY | Required | PlayAI (voice) |
+| PLAY_AI_USER_ID | Required | PlayAI user id |
+| EVEN_LAB_API | Required | ElevenLabs (voice) |
+| VOYAGE_API_KEY | Required | Voyage (embeddings) |
+| PINECONE_API_KEY | Required | Pinecone (vector DB) |
+| VOICE_ACCEPT | Required | Accept header for voice calls |
+| VOICE_AUTHORIZATION | Required | Authorization header for voice calls |
+| VOICE_URL | Required | voice service endpoint |
+| VOICE_USER | Required | voice service user |
+
+## Email
+
+| Var | Required? | Purpose |
+|---|---|---|
+| EMAIL_FROM_ADDRESS | Required | "from" address |
+| EMAIL_HOST | Required | SMTP host |
+| EMAIL_PORT | Required | SMTP port |
+| EMAIL_USER | Required | SMTP user |
+| EMAIL_PASSWORD | Required | SMTP password |
+| EMAIL_SERVICE | Required | nodemailer provider (e.g. gmail) |
+| POP3_HOSTNAME | Required | inbound mail host |
+| POP3_PORT | Required | inbound mail port |
+| POP3_USERNAME | Required | inbound mail user |
+| POP3_PASSWORD | Required | inbound mail password |
+
+## Billing / Marketing / Scraping
+
+| Var | Required? | Purpose |
+|---|---|---|
+| STRIPE_KEY | Required | Stripe billing |
+| KLAVIJO_API_KEY | Required | Klaviyo email marketing |
+| KLAVIJO_LIST_ID | Required | target Klaviyo list |
+| SEC_API | Required | SEC financial data API |
+| SEM_RUSH_API_KEY | Required | SEMrush |
+| SERP_API_KEY | Required | SerpApi search |
+| SEARCH_API_KEY | Required | web search (YouTube transcript node) |
+| SCRAPINGBEE_KEY | Required | ScrapingBee |
+| SBR_WS_ENDPOINT | Required | Bright Data scraping browser WS endpoint |
+| OXYLAB_KEY | Required | Oxylabs |
+| OXYLAB_AMAZON_KEY | Required | Oxylabs (Amazon) |
+| DOCRAPTOR_API_KEY | Required | DocRaptor (PDF generation) |
+
+## System / Flags / Observability
+
+| Var | Required? | Purpose |
+|---|---|---|
+| DD_API_KEY | Required | Datadog logging |
+| DD_SITE | Required | Datadog site/region |
+| ENVIRONMENT | Required | app environment (dev/staging/production) |
+| FRONTEND_URL | Required | frontend URL (links, CORS, emails) |
+| RUNNING_PORT | Required | HTTP server port |
+| API_URL | Required | public API URL |
+| SWAGGER_USERNAME | Optional | Swagger basic-auth user |
+| SWAGGER_PASSWORD | Optional | Swagger basic-auth password |
+| NODE_ENV | Required | Node environment |
+| DISABLE_CRONS | Optional | kill switch for all cron jobs |
+| FLOW_SNAPSHOT_ENABLED | Optional | feature flag for flow snapshots |
+| CLAIM_CHECK_THRESHOLD_BYTES | Optional | claim-check pattern threshold (default 262144) |
+| CANCEL_DATA_RETENTION_DAYS | Optional | cancellation data retention (default 30) |
+| CANCEL_PURGE_DRY_RUN | Optional | dry-run mode for cancellation purge |
+| NODE_EXEC_DELETE_AFTER_DAYS | Optional | node execution retention (default 30) |
+| NODE_EXEC_MAX_PER_NODE | Optional | max kept executions per node |
+| NODE_EXEC_SLIM_AFTER_DAYS | Optional | days until execution "slimming" |
+| ID_OF_AGENT_TO_BUILD_FORM | Required | internal agent that builds forms |
+| ID_OF_AGENT_TO_GENERATE_SUMMARY | Required | internal agent that generates summaries |
+| WEBHOOK_DB | Required | Redis DB index for user webhooks |
+| FILE_PATH | Required | local temp file dir |
+| LOG_PROVIDER_OPTIONS | Optional | debug flag, logs AI provider options |
+| BUILD_TIME | Optional | build metadata |
+| BUILD_WITH_API_KEY | Required | "build with API" flow key |
+| BACKEND_VERSION | Optional | version metadata |
+| COMMIT_SHA | Optional | build metadata |
+| GIT_COMMIT | Optional | build metadata |
+| GIT_BRANCH | Optional | build metadata |
+
+## Obsolete
+
+In `.env.example` but unused, safe to remove: `TYPEORM_SYNCHRONIZE`, `EMAIL_SSL`, `EMAIL_TLS`, `STRIPE_ACCOUNT_ID`.
+
+## Cross-repo gotcha
+
+`MCP_INTERNAL_SECRET` and `MCP_OAUTH_CONSENT_SECRET` must be identical to the values in `mcp-server` — same SSM param in every environment, or MCP calls 500 / OAuth consent fails silently.
+
+## CI/CD
+
+Runtime vars are not baked into the Docker image at build/CI time — they live in the ECS task definition (backed by SSM), fetched fresh on every deploy. The GitHub Actions workflow itself only needs 2 repo secrets: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, both confirmed present.

@@ -1,0 +1,51 @@
+---
+title: "Environment Variables"
+---
+
+23 env vars in `mcp-server/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+
+| Var | Required? | Purpose |
+|---|---|---|
+| PORT | Optional | HTTP port (default 3100) |
+| NODE_ENV | Optional | Node environment (passthrough, not read in code) |
+| MCP_HTTP_LOG | Optional | verbose HTTP request logging |
+| MCP_PUBLIC_URL | Optional | public URL (OAuth metadata) |
+| MCP_FRONT_CONSENT_URL | Optional | FluxPrompt consent screen URL |
+| MCP_OAUTH_CONSENT_SECRET | Required | validates consent signature — must match `back`'s value |
+| MCP_OAUTH_TOKEN_TTL | Optional | access token TTL |
+| MCP_DCR_CLIENT_TTL | Optional | Dynamic Client Registration TTL |
+| MCP_TOKEN_CACHE_TTL | Optional | token resolver cache TTL (default 30) |
+| BACK_BASE_URL | Optional | `back` base URL (default localhost:3000) |
+| MCP_INTERNAL_SECRET | Required | secret to call `back` — must match `back`'s value |
+| MCP_BACK_RETRY_MAX | Optional | retry count for `back` calls |
+| MCP_BACK_RETRY_BASE_MS | Optional | retry backoff base (ms) |
+| MCP_RATE_LIMIT_PER_MINUTE | Optional | rate limit per minute (default 60) |
+| MCP_RATE_LIMIT_PER_DAY | Optional | rate limit per day (default 5000) |
+| MCP_KILL_SWITCH | Optional | global on/off switch |
+| MCP_CB_WINDOW_MS | Optional | circuit breaker sampling window (default 60000) |
+| MCP_CB_COOLDOWN_MS | Optional | circuit breaker cooldown (default 60000) |
+| MCP_CB_ERROR_THRESHOLD | Optional | circuit breaker error rate threshold (default 0.5) |
+| MCP_CB_MIN_SAMPLES | Optional | min samples before evaluating circuit (default 5) |
+| DATADOG_API_KEY | Optional | Datadog audit log key |
+| INSPECTOR_CLIENT_PORT | Optional | MCP Inspector UI port (dev only) |
+| INSPECTOR_PROXY_PORT | Optional | MCP Inspector proxy port (dev only) |
+
+## Fixed during this audit
+
+The old `.env.example`/`docker-compose.yml` had names that didn't match what the code actually reads — those configs were silent no-ops:
+
+- `BACK_API_URL` → code reads `BACK_BASE_URL`
+- `MCP_CIRCUIT_ERROR_RATE_THRESHOLD` / `MCP_CIRCUIT_WINDOW_SECONDS` / `MCP_CIRCUIT_COOLDOWN_SECONDS` → code reads `MCP_CB_ERROR_THRESHOLD` / `MCP_CB_WINDOW_MS` / `MCP_CB_COOLDOWN_MS` (also note: ms, not seconds)
+- `DD_API_KEY` / `DD_SITE` / `DD_AUDIT_INDEX` → code reads `DATADOG_API_KEY` (`DD_SITE`/`DD_AUDIT_INDEX` aren't read anywhere)
+
+All renamed to match the code in this pass.
+
+## Cross-repo gotcha
+
+`MCP_INTERNAL_SECRET` and `MCP_OAUTH_CONSENT_SECRET` must be identical to the values in `back` — same SSM param in every environment, or MCP calls 500 / OAuth consent fails silently.
+
+## CI/CD
+
+Same runtime-injection pattern as `back`/`worker` — vars live in the ECS task definition (SSM-backed), not baked at build time. Only `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` are needed as repo secrets (confirmed present).
+
+**Gap:** the CI/CD workflows (`cicd_dev.yml`, `cicd_staging.yml`, `cicd_prod.yml`) only exist on the `staging` branch. `production` is still the Phase 0 scaffold commit — there's no deploy pipeline there yet.
