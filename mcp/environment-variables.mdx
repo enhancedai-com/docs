@@ -32,13 +32,12 @@ title: "Environment Variables"
 
 ## Fixed during this audit
 
-The old `.env.example`/`docker-compose.yml` had names that didn't match what the code actually reads — those configs were silent no-ops:
+The old `.env.example`/`docker-compose.yml` (on `staging`, where the real code lives) had names that didn't match what the code actually reads — those configs were silent no-ops:
 
-- `BACK_API_URL` → code reads `BACK_BASE_URL`
 - `MCP_CIRCUIT_ERROR_RATE_THRESHOLD` / `MCP_CIRCUIT_WINDOW_SECONDS` / `MCP_CIRCUIT_COOLDOWN_SECONDS` → code reads `MCP_CB_ERROR_THRESHOLD` / `MCP_CB_WINDOW_MS` / `MCP_CB_COOLDOWN_MS` (also note: ms, not seconds)
 - `DD_API_KEY` / `DD_SITE` / `DD_AUDIT_INDEX` → code reads `DATADOG_API_KEY` (`DD_SITE`/`DD_AUDIT_INDEX` aren't read anywhere)
 
-All renamed to match the code in this pass.
+All renamed to match the code in this pass. `BACK_BASE_URL` was already correct on `staging` — an earlier draft of this audit compared against `production`'s stale scaffold `.env.example` (which still says `BACK_API_URL`) and wrongly flagged it as a mismatch too. `production` doesn't have the real code at all yet (see the CI/CD gap below), so it's not a valid comparison target.
 
 ## Cross-repo gotcha
 
@@ -48,4 +47,4 @@ All renamed to match the code in this pass.
 
 Same runtime-injection pattern as `back`/`worker` — vars live in the ECS task definition (SSM-backed), not baked at build time. Only `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` are needed as repo secrets (confirmed present).
 
-**Gap:** the CI/CD workflows (`cicd_dev.yml`, `cicd_staging.yml`, `cicd_prod.yml`) only exist on the `staging` branch. `production` is still the Phase 0 scaffold commit — there's no deploy pipeline there yet.
+**Gap:** the CI/CD workflows (`cicd_dev.yml`, `cicd_staging.yml`, `cicd_prod.yml`) only exist on the `staging` branch. `production` is still the Phase 0 scaffold commit — there's no deploy pipeline there yet. The `fix/868k6pydd` PR for this repo targets `staging`, not `production`.

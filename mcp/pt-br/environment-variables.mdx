@@ -32,13 +32,12 @@ title: "Variáveis de Ambiente"
 
 ## Corrigido nesta auditoria
 
-O `.env.example`/`docker-compose.yml` antigos tinham nomes que não batiam com o que o código realmente lê — essas configs eram no-op silencioso:
+O `.env.example`/`docker-compose.yml` antigos (na `staging`, onde o código real vive) tinham nomes que não batiam com o que o código realmente lê — essas configs eram no-op silencioso:
 
-- `BACK_API_URL` → o código lê `BACK_BASE_URL`
 - `MCP_CIRCUIT_ERROR_RATE_THRESHOLD` / `MCP_CIRCUIT_WINDOW_SECONDS` / `MCP_CIRCUIT_COOLDOWN_SECONDS` → o código lê `MCP_CB_ERROR_THRESHOLD` / `MCP_CB_WINDOW_MS` / `MCP_CB_COOLDOWN_MS` (e nota: é ms, não segundos)
 - `DD_API_KEY` / `DD_SITE` / `DD_AUDIT_INDEX` → o código lê `DATADOG_API_KEY` (`DD_SITE`/`DD_AUDIT_INDEX` não são lidas em lugar nenhum)
 
-Tudo renomeado pra bater com o código nesta passada.
+Tudo renomeado pra bater com o código nesta passada. `BACK_BASE_URL` já estava correto na `staging` — uma versão anterior desta auditoria comparou contra o `.env.example` desatualizado da `production` (que ainda diz `BACK_API_URL`) e apontou isso como mismatch por engano. A `production` nem tem o código real ainda (ver o gap de CI/CD abaixo), então não é um alvo válido de comparação.
 
 ## Pegadinha cross-repo
 
@@ -48,4 +47,4 @@ Tudo renomeado pra bater com o código nesta passada.
 
 Mesmo padrão de injeção em runtime do `back`/`worker` — as vars vivem na task definition do ECS (respaldada por SSM), não são injetadas em build. Só precisa de `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` como secrets do repo (confirmados presentes).
 
-**Gap:** os workflows de CI/CD (`cicd_dev.yml`, `cicd_staging.yml`, `cicd_prod.yml`) só existem na branch `staging`. A `production` ainda é o commit do scaffold Phase 0 — não tem pipeline de deploy lá ainda.
+**Gap:** os workflows de CI/CD (`cicd_dev.yml`, `cicd_staging.yml`, `cicd_prod.yml`) só existem na branch `staging`. A `production` ainda é o commit do scaffold Phase 0 — não tem pipeline de deploy lá ainda. O PR de `fix/868k6pydd` deste repo aponta pra `staging`, não pra `production`.
