@@ -82,6 +82,14 @@ Before digging into specific errors, verify these five things:
 
 ---
 
+### `{"error":"invalid_client"}` on `/oauth/authorize` (Claude Code CLI)
+
+**Cause:** Claude Code's official OAuth client metadata declares its loopback `redirect_uris` (`http://localhost/callback`, `http://127.0.0.1/callback`) **without a port**, but the CLI always binds an ephemeral local port when it opens the callback listener (e.g. `http://localhost:56626/callback`). If the deployed `mcp-server` requires an exact `redirect_uri` match, every Claude Code OAuth attempt fails with `invalid_client` — this is not a token, workspace, or env-var problem.
+
+**Fix:** `mcp-server`'s `OauthClientService.resolveClient` must tolerate port variation on loopback redirect URIs per [RFC 8252 §7.3](https://www.rfc-editor.org/rfc/rfc8252#section-7.3) — same protocol, hostname, path and query, any port. This was fixed in `src/oauth/oauth-client.service.ts` (`redirectUriMatches`); if this error resurfaces in an environment, confirm that environment's `mcp-server` deploy includes that fix (check for `redirectUriMatches`/`loopbackHostnames` in `oauth-client.service.ts`) rather than re-diagnosing it as a missing env var or DB registration.
+
+---
+
 ### "Service disabled" / -32005
 
 **Cause:** The FluxPrompt MCP server is temporarily disabled for maintenance.
