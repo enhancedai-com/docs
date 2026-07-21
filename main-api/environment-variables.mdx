@@ -67,7 +67,7 @@ title: "Environment Variables"
 | GOOGLE_SHEET_CLIENT_SECRET | Required | Google Sheets OAuth |
 | GOOGLE_SHEET_REDIRECT_URL | Required | Google Sheets OAuth redirect |
 | FRONTEND_OAUTH_CALLBACK_BASE | Required | callback base for Zapier/WordPress/MCP |
-| INTEGRATIONS_ENCRYPTION_KEY | Required | encrypts stored integration credentials |
+| INTEGRATIONS_ENCRYPTION_KEY | Required | encrypts stored integration credentials — must match `worker`'s value |
 | INTERNAL_API_KEY | Required | internal service-to-service calls |
 | MASTER_KEY_IP_ALLOWLIST | Optional | IP allowlist for master API key |
 | MASTER_KEY_OWNER_EMAIL | Required | master API key owner email |
@@ -205,6 +205,8 @@ In `.env.example` but unused, safe to remove: `TYPEORM_SYNCHRONIZE`, `EMAIL_SSL`
 ## Cross-repo gotcha
 
 `MCP_INTERNAL_SECRET` and `MCP_OAUTH_CONSENT_SECRET` must be identical to the values in `mcp-server` — same SSM param in every environment, or MCP calls 500 / OAuth consent fails silently.
+
+`INTEGRATIONS_ENCRYPTION_KEY` must be identical to `worker`'s value — same SSM param in every environment, and it must never be set to `JWT_SECRET`. The worker decrypts `user_integrations` rows written by `back` (Stripe adapter, P0+Stripe migration `868ke6j3r`) using its own copy of this helper, which has no `JWT_SECRET` fallback.
 
 ## CI/CD
 

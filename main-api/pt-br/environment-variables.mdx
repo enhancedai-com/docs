@@ -67,7 +67,7 @@ title: "Variáveis de Ambiente"
 | GOOGLE_SHEET_CLIENT_SECRET | Obrigatória | OAuth Google Sheets |
 | GOOGLE_SHEET_REDIRECT_URL | Obrigatória | redirect OAuth Google Sheets |
 | FRONTEND_OAUTH_CALLBACK_BASE | Obrigatória | base de callback (Zapier/WordPress/MCP) |
-| INTEGRATIONS_ENCRYPTION_KEY | Obrigatória | criptografa credenciais de integrações salvas |
+| INTEGRATIONS_ENCRYPTION_KEY | Obrigatória | criptografa credenciais de integrações salvas — precisa bater com o valor do `worker` |
 | INTERNAL_API_KEY | Obrigatória | chamadas internas entre serviços |
 | MASTER_KEY_IP_ALLOWLIST | Opcional | allowlist de IP para master API key |
 | MASTER_KEY_OWNER_EMAIL | Obrigatória | email do dono da master key |
@@ -205,6 +205,8 @@ Estão no `.env.example` mas sem uso, pode remover: `TYPEORM_SYNCHRONIZE`, `EMAI
 ## Pegadinha cross-repo
 
 `MCP_INTERNAL_SECRET` e `MCP_OAUTH_CONSENT_SECRET` precisam ser idênticas ao valor no `mcp-server` — mesmo parâmetro SSM em todo ambiente, senão as chamadas MCP dão 500 / o consentimento OAuth falha silenciosamente.
+
+`INTEGRATIONS_ENCRYPTION_KEY` precisa ser idêntica ao valor do `worker` — mesmo parâmetro SSM em todo ambiente, e nunca pode ser `JWT_SECRET`. O worker descriptografa linhas de `user_integrations` gravadas pelo `back` (adapter Stripe, migração P0+Stripe `868ke6j3r`) usando sua própria cópia desse helper, que não tem fallback pro `JWT_SECRET`.
 
 ## CI/CD
 
