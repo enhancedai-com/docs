@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-26 env vars in `worker/.env.example`, validated via Zod in `src/env.ts`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+29 env vars in `worker/.env.example`, validated via Zod in `src/env.ts`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 | Var | Required? | Purpose |
 |---|---|---|
@@ -29,15 +29,20 @@ title: "Environment Variables"
 | URL_MAIN_API | Required | `back` base URL for internal calls |
 | INTERNAL_API_KEY | Required | auth for internal calls to `back` |
 | INTEGRATIONS_ENCRYPTION_KEY | Required | decrypts `user_integrations` credentials (Stripe adapter) — must match `back`'s value |
+| SLACK_CLIENT_ID | Optional | Slack OAuth client ID, used to refresh a rotated access token when executing a Slack integration node — same value as `back` |
+| SLACK_CLIENT_SECRET | Optional | Slack OAuth client secret, same purpose — same value as `back` |
+| SLACK_API_BASE | Optional | Slack API base URL override (default `https://slack.com/api`) — for testing/mocking |
 | CLAIM_CHECK_THRESHOLD_BYTES | Optional | claim-check pattern threshold (default 262144) |
 | APICALLER_MAX_RESULT_BYTES | Optional | api-caller node result size limit (default 1_000_000) |
 | LOG_PROVIDER_OPTIONS | Optional | debug flag, logs AI provider options |
 
-All 26 vars are actively used — none obsolete. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES` and `LOG_PROVIDER_OPTIONS` are read directly via `process.env`, not through the Zod schema — no type-safety there, but that's expected since they're all optional with fallbacks.
+All 29 vars are actively used — none obsolete. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES`, `LOG_PROVIDER_OPTIONS` and `SLACK_API_BASE` are read directly via `process.env`, not through the Zod schema — no type-safety there, but that's expected since they're all optional with fallbacks.
 
 ## Cross-repo gotcha
 
 `INTEGRATIONS_ENCRYPTION_KEY` must be **identical** to `back`'s value — same SSM param in every environment, and it must **never** be set to `JWT_SECRET`. The worker's copy of the credentials-decryption helper (ported from `back/src/common/credentials-encryption.service.ts` for the P0+Stripe migration, `868ke6j3r`) deliberately has no `JWT_SECRET` fallback: a `user_integrations` row encrypted by `back` only decrypts on the worker if the keys match exactly.
+
+`SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET` must be the **same Slack app credentials** as `back`'s — the worker calls Slack's OAuth token endpoint with these to refresh a rotated access token, and that only succeeds if it's the same app that originally issued the token.
 
 ## CI/CD
 
