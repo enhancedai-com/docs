@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-29 env vars no `worker/.env.example`, validadas via Zod em `src/env.ts`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+31 env vars no `worker/.env.example`, validadas via Zod em `src/env.ts`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 | Var | Obrigatória? | Propósito |
 |---|---|---|
@@ -32,17 +32,21 @@ title: "Variáveis de Ambiente"
 | SLACK_CLIENT_ID | Opcional | client ID do OAuth do Slack, usado pra renovar um access token rotacionado ao executar um node de integração Slack — mesmo valor do `back` |
 | SLACK_CLIENT_SECRET | Opcional | client secret do OAuth do Slack, mesmo propósito — mesmo valor do `back` |
 | SLACK_API_BASE | Opcional | URL base da API do Slack, override (default `https://slack.com/api`) — pra teste/mock |
+| NOTION_CLIENT_ID | Opcional | client ID do OAuth do Notion, usado pra renovar um access token rotacionado ao executar um node de integração Notion — mesmo valor do `back` |
+| NOTION_CLIENT_SECRET | Opcional | client secret do OAuth do Notion, mesmo propósito — mesmo valor do `back` |
 | CLAIM_CHECK_THRESHOLD_BYTES | Opcional | limiar do padrão claim-check (default 262144) |
 | APICALLER_MAX_RESULT_BYTES | Opcional | limite de tamanho do resultado no node api-caller (default 1_000_000) |
 | LOG_PROVIDER_OPTIONS | Opcional | flag de debug, loga opções do provider de IA |
 
-Todas as 29 vars estão em uso ativo — nenhuma obsoleta. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES`, `LOG_PROVIDER_OPTIONS` e `SLACK_API_BASE` são lidas direto via `process.env`, fora do schema Zod — sem type-safety aí, mas é esperado já que todas são opcionais com fallback.
+Todas as 31 vars estão em uso ativo — nenhuma obsoleta. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES`, `LOG_PROVIDER_OPTIONS` e `SLACK_API_BASE` são lidas direto via `process.env`, fora do schema Zod — sem type-safety aí, mas é esperado já que todas são opcionais com fallback.
 
 ## Pegadinha cross-repo
 
 `INTEGRATIONS_ENCRYPTION_KEY` precisa ser **idêntica** ao valor do `back` — mesmo parâmetro SSM em todo ambiente, e nunca pode ser `JWT_SECRET`. A cópia do helper de descriptografia de credenciais no worker (portada de `back/src/common/credentials-encryption.service.ts` pra migração P0+Stripe, `868ke6j3r`) propositalmente não tem fallback pro `JWT_SECRET`: uma linha de `user_integrations` criptografada pelo `back` só descriptografa no worker se as chaves baterem exatamente.
 
 `SLACK_CLIENT_ID` e `SLACK_CLIENT_SECRET` precisam ser as **mesmas credenciais do app Slack** do `back` — o worker chama o endpoint OAuth do Slack com esses valores pra renovar um access token rotacionado, e isso só funciona se for o mesmo app que emitiu o token originalmente.
+
+`NOTION_CLIENT_ID` e `NOTION_CLIENT_SECRET` também precisam ser as **mesmas credenciais do app Notion** do `back`, pelo mesmo motivo de renovação de token rotacionado.
 
 ## CI/CD
 
