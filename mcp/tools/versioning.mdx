@@ -1,0 +1,96 @@
+---
+title: "Versioning"
+description: "Snapshot the working copy, list the history, and publish a version to production."
+---
+
+## Description
+
+Edits made through the write tools land on the agent's **live working copy** and stay untracked until
+you snapshot them. Versioning turns those accumulated edits into a named snapshot you can run,
+inspect, or publish.
+
+```
+edits on the working copy  →  create_version  →  publish_version
+        (untracked)            (snapshot)         (live in production)
+```
+
+## `create_version`
+
+Snapshots the current working copy as a new version, capturing every `add_node`, `update_node`,
+`remove_node`, `connect_nodes` and `disconnect_nodes` call made against the working copy (that is,
+with `versionId` omitted) since the last version.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `agentId` | string (UUID) | Yes | Target agent. |
+| `versionName` | string | No | Human-readable name. The server generates one if omitted. |
+| `dryRun` / `idempotencyKey` | | | See [writing safely](/mcp/tools/writing-safely). |
+
+```json
+{ "dryRun": false, "applied": true, "versionId": "8f21…", "versionName": "Add summariser" }
+```
+
+### You choose the granularity
+
+There is no flag for this. Call `create_version` once after several edits to bundle them into one
+version, or after every edit to give each its own. If the user has not said which they want, **ask
+before making unversioned edits** — edits that are never snapshotted stay only on the working copy.
+
+<Warning>
+  Do not call `create_version` before any edits exist on the working copy: there is nothing new to
+  snapshot. And it does **not** deploy anything — that is `publish_version`.
+</Warning>
+
+## `list_versions`
+
+Returns a page of the agent's version history plus `total`, and `nextCursor` when more results exist.
+Pass `nextCursor` back as `cursor`; treat cursors as opaque.
+
+Each item contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `versionId` | string | Use this with the write tools, `run_agent` or `publish_version`. |
+| `versionName` | string | Human-readable name. |
+| `isDeployed` | boolean | Whether this version is live in production. |
+| `isStaging` | boolean | Whether this version is the staging candidate. |
+| `updatedAt` | ISO 8601 | Last change to the snapshot. |
+
+This tool does not return nodes or edges — use [`get_agent`](/mcp/tools/get-agent) for that.
+
+## `publish_version`
+
+Deploys an existing version to production.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `agentId` | string (UUID) | Yes | Target agent. |
+| `versionId` | string | Yes | Version to deploy, from `create_version` or `list_versions`. |
+| `dryRun` / `idempotencyKey` | | | See [writing safely](/mcp/tools/writing-safely). |
+
+```json
+{ "dryRun": false, "applied": true, "versionId": "8f21…", "deployed": true }
+```
+
+<Tip>
+  Publishing changes what real traffic runs. Inspect the dry-run first, and confirm with the user
+  before applying — the same way you would before a deploy.
+</Tip>
+
+## Editing an existing version
+
+Node and edge tools accept `versionId` to edit a snapshot **in place** instead of the working copy.
+That is for correcting a specific historical version; it is not how you create a new one. See
+[which copy am I editing?](/mcp/tools/writing-safely).
+
+## Example prompts
+
+- *"Snapshot my changes to agent d2c2… as 'Add summariser'"*
+- *"Which version of this agent is currently deployed?"*
+- *"Publish version 8f21… to production"*
+
+## Related
+
+- [Writing safely](/mcp/tools/writing-safely) — working copy vs snapshot
+- [Nodes & edges](/mcp/tools/nodes-and-edges) — the edits you are snapshotting
+- [Running agents](/mcp/tools/running-agents) — run a specific `versionId`

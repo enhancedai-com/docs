@@ -1,0 +1,99 @@
+---
+title: "Running agents"
+description: "Dispatch a run, poll it for the result, and cancel one that is still going."
+---
+
+## Description
+
+Running is asynchronous: `run_agent` returns a `runId` immediately and you poll `get_run_status` for
+the outcome. These tools need the `execute` scope, and the workspace toggle `mcp.execute.enabled`
+must be on — see [writing safely](/mcp/tools/writing-safely).
+
+## `run_agent`
+
+Dispatches a run.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `agentId` | string (UUID) | Yes | Agent to run. |
+| `variableInputs` | array | No | Inputs for the run: `[{ inputId, inputText, … }]`. |
+| `sessionId` | string | No | Session id, for session-scoped memory. |
+| `versionId` | string | No | Run that specific snapshot, whatever is currently deployed. |
+| `dryRun` | boolean | No | Default `true` — validate only. |
+| `idempotencyKey` | string | Yes when `dryRun:false` | Prevents a duplicate run on retry. |
+
+**Dry-run here means validate-only:** it checks the workspace flag, your scope and your remaining
+quota, and resolves the inputs, without dispatching anything.
+
+```json
+{ "dryRun": false, "dispatched": true, "runId": "c7f0…", "quotaRemaining": 48 }
+```
+
+### Which version runs
+
+| `versionId` | What runs |
+|-------------|-----------|
+| Provided | That snapshot, regardless of what is deployed. |
+| Omitted | The currently deployed version, if the agent has one (version control enabled **and** a published version). Otherwise the live working copy. |
+
+<Tip>
+  `idempotencyKey` matters more here than anywhere else: without it a retried request bills a second
+  run. Derive the key from the intent of the run, not from the timestamp of the attempt.
+</Tip>
+
+## `get_run_status`
+
+Polls a run.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `runId` | string | Yes | The id returned by `run_agent`. |
+
+Returns:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `runId` | string | The run being reported. |
+| `status` | string | Current state of the run. |
+| `tokens` | number | Tokens consumed. |
+| `cost` | number | Cost attributed to the run. |
+| `durationMs` | number | Wall-clock duration. |
+| `error` | string \| null | Failure reason, or `null` when there is none. |
+
+Poll at a sensible interval — a run that calls several AI models takes seconds to minutes, and every
+poll counts against your rate limit (60 requests/minute, 5 000/day per key).
+
+## `cancel_run`
+
+Requests cancellation of a run that is still in flight.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `runId` | string | Yes | The id returned by `run_agent`. |
+| `dryRun` | boolean | No | Default `true` — reports whether the run *could* be cancelled. |
+| `idempotencyKey` | string | No | Makes a real cancel safe to retry. |
+
+```json
+{ "dryRun": false, "applied": true, "runId": "c7f0…", "cancelled": true, "reason": "requested" }
+```
+
+Work already completed is not rolled back — cancelling stops the run going forward, it does not undo
+side effects a node already produced (a sent email stays sent).
+
+## Run attribution
+
+Runs started through MCP are billed and audited against the **owner of the key that started them**,
+and the triggering key/client name shows up in the agent's execution history — so a run dispatched
+from an AI client is traceable back to it.
+
+## Example prompts
+
+- *"Run agent d2c2… with the input 'about atoms' and tell me the result"*
+- *"Is run c7f0… finished yet?"*
+- *"Cancel the run I just started"*
+
+## Related
+
+- [Writing safely](/mcp/tools/writing-safely) — scopes and workspace toggles
+- [Versioning](/mcp/tools/versioning) — pick which snapshot to run
+- [Troubleshooting](/mcp/troubleshooting) — rate limits, circuit breaker, kill switch

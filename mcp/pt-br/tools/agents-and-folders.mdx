@@ -1,0 +1,98 @@
+---
+title: "Agentes e pastas"
+description: "Crie, renomeie, mova e exclua agentes e as pastas que os contêm."
+---
+
+## Descrição
+
+Agentes ficam dentro de pastas, então criar um agente começa por uma pasta. Todas as ferramentas desta
+página seguem as convenções de escrita — [dry-run por padrão, `idempotencyKey` para aplicar](/mcp/pt-br/tools/writing-safely).
+
+## `create_folder`
+
+Cria uma pasta no workspace.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `name` | string | Sim | Nome da pasta. |
+| `dryRun` | boolean | Não | Padrão `true` — nada é criado. |
+| `idempotencyKey` | string | Sim quando `dryRun:false` | Chave segura para repetição. |
+
+```json
+{ "dryRun": false, "applied": true, "folder": { "id": "30be…", "name": "Sales agents" } }
+```
+
+## `create_agent`
+
+Cria um agente (fluxo) dentro de uma pasta.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `name` | string | Sim | Nome do agente. |
+| `folderId` | string (UUID) | Sim | Pasta de destino — do `create_folder` ou `list_folders`. |
+| `empty` | boolean | Não | `true` começa com canvas em branco. Caso contrário, aplica um template inicial. |
+| `type` | string | Não | `"agent"` (padrão) ou `"chat"`. |
+| `dryRun` / `idempotencyKey` | | | Veja [escrevendo com segurança](/mcp/pt-br/tools/writing-safely). |
+
+```json
+{ "dryRun": false, "applied": true, "agent": { "id": "d2c2…", "name": "Lead Scorer" } }
+```
+
+<Tip>
+  Passe `empty: true` sempre que for construir o fluxo você mesmo com `add_node`. Sem isso você herda
+  o template inicial e acaba com nodes duplicados junto dos que você adicionou.
+</Tip>
+
+## `list_folders`
+
+Retorna uma página de pastas mais `total`, e `nextCursor` quando houver mais resultados. Passe o
+`nextCursor` de volta como `cursor` para a próxima página. Trate cursores como opacos — nunca faça
+parse nem construa um, e nunca passe um cursor de outra ferramenta.
+
+## `update_agent`
+
+Atualiza os metadados do agente. Hoje, apenas o `name`.
+
+| Parâmetro | Tipo | Obrigatório |
+|-----------|------|-------------|
+| `agentId` | string (UUID) | Sim |
+| `name` | string | Sim |
+
+Aceita `expectedVersion`, mas **não** `versionId` — o nome do agente não é versionado.
+
+## `move_agent`
+
+Move o agente para outra pasta.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | string (UUID) | Sim | Agente a mover. |
+| `targetFolderId` | string \| null | Não | Pasta de destino, ou `null` para mover para a raiz. |
+
+## `rename_folder`
+
+| Parâmetro | Tipo | Obrigatório |
+|-----------|------|-------------|
+| `folderId` | string (UUID) | Sim |
+| `name` | string | Sim |
+
+## `remove_agent` / `remove_folder`
+
+Excluem um agente ou uma pasta. Ambos são destrutivos e ambos usam dry-run por padrão.
+
+<Warning>
+  Excluir não é revertido por uma versão: versões pertencem ao agente, então remover o agente remove
+  o histórico dele também. Inspecione o diff do dry-run antes de aplicar.
+</Warning>
+
+## Exemplos de prompts
+
+- *"Crie uma pasta chamada Sales agents e um agente vazio chamado Lead Scorer dentro dela"*
+- *"Renomeie a pasta 30be… para Archive"*
+- *"Mova o agente Lead Scorer para a raiz"*
+
+## Relacionados
+
+- [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely) — dry-run, idempotência, conflitos
+- [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges) — construir o fluxo dentro do agente
+- [`list_agents`](/mcp/pt-br/tools/list-agents) — encontrar ids de agentes existentes

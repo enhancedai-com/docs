@@ -1,0 +1,177 @@
+---
+title: "Nodes & edges"
+description: "Add, patch and remove nodes, and wire them together so data actually flows."
+---
+
+## Description
+
+These tools build the agent itself. Read [writing safely](/mcp/tools/writing-safely) first — every
+tool here is dry-run by default and accepts `expectedVersion` and `versionId`.
+
+Before writing a node, fetch its schema with `get_node_type`. Node data shapes are specific and a
+plausible-looking field that does not exist is stored happily and then ignored at run time.
+
+## `get_node_type`
+
+Returns one node type's `label`, `description`, `category`, `inputSchema` and `outputSchema` — the
+same entry [`list_node_types`](/mcp/tools/list-node-types) returns, without downloading the whole
+catalogue.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `type` | string | Yes | Machine name, e.g. `commandTextNode`. |
+
+<Warning>
+  Respect `enum` when a field declares one, and never guess a value. These fields are not validated
+  on write: an unrecognised value is stored and then matches nothing, leaving the node rendered with
+  nothing selected. See the enum note on [`list_node_types`](/mcp/tools/list-node-types).
+</Warning>
+
+## `list_ai_models`
+
+Returns the AI models available to the workspace, so you can fill an AI node's `aiModel`/`aiSystem`
+with a value that actually exists and is enabled for that workspace — rather than a model name you
+remember from elsewhere.
+
+## `add_node`
+
+Adds a node to an agent.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `agentId` | string (UUID) | Yes | Target agent. |
+| `node` | object | Yes | React-Flow node: a unique `id`, plus `type` and `data` as needed. |
+
+### Do not invent coordinates
+
+`node.position` is **optional and resolved by the server**. The position you send is a *hint*: the
+first free slot at or to the right of it wins, and when you omit it the node continues the flow to
+the right of the rightmost node. Existing nodes are never moved.
+
+- Read `position` back from the response — it is the authoritative placement.
+- `placementAdjusted: true` means the server moved the node off a spot that was already taken.
+- `width`/`height` are filled in from the measured footprint of that node type when you omit them.
+
+Clients that invent round coordinates (`{x:0,y:0}`, `{x:100,y:100}`) with no knowledge of node
+dimensions used to pile every node on the same spot. Omitting `position` is both simpler and better.
+
+```json
+// request — no position
+{ "agentId": "d2c2…", "node": { "id": "textgen_1", "type": "commandTextNode",
+  "data": { "prompt": "Summarise the input", "aiModel": "gpt-4o", "aiSystem": "openai" } },
+  "dryRun": false, "idempotencyKey": "add-textgen-1" }
+
+// response — placement resolved
+{ "dryRun": false, "applied": true, "placementAdjusted": true,
+  "diff": { "added": [ { "id": "textgen_1", "type": "commandTextNode",
+    "position": { "x": 435, "y": -240 }, "width": 825, "height": 789 } ], "updated": [], "removed": [] } }
+```
+
+<Warning>
+  A `globalStarter` node's id **must** contain the literal substring `flow-global-starter` (e.g.
+  `flow-global-starter_main`). The backend resolves the flow's entry point by matching that
+  substring, so any other id is rejected with `validation_error` up front.
+</Warning>
+
+## `update_node`
+
+Merges a patch into an existing node.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `agentId` | string (UUID) | Yes | Target agent. |
+| `nodeId` | string | Yes | Node to patch. |
+| `patch` | object | Yes | Partial node fields. |
+
+- Top-level fields (`type`, `position`, …) are **shallow-merged**.
+- `patch.data` is merged **one level deep**, so data keys you omit are preserved, not deleted.
+- Send the minimum: to change one field, send only that field.
+
+Unlike `add_node`, `update_node` **honours the position you send exactly** — no anti-overlap
+resolution. That is deliberate: it lets a client lay out a flow deterministically, one node at a
+time, without the server second-guessing an intentional move.
+
+## `remove_node`
+
+Removes a node **and every edge touching it**.
+
+| Parameter | Type | Required |
+|-----------|------|----------|
+| `agentId` | string (UUID) | Yes |
+| `nodeId` | string | Yes |
+
+## `connect_nodes`
+
+Creates an edge from a source node to a target node.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `agentId` | string (UUID) | Yes | Target agent. |
+| `source` | string | Yes | Source node id. |
+| `target` | string | Yes | Target node id. |
+| `sourceHandle` | string | No | Source port. Omit for the context-aware default. |
+| `targetHandle` | string | No | Target port. Omit for the context-aware default. |
+| `edgeId` | string | No | Explicit edge id. |
+
+### Execution order vs data — the two-edge model
+
+This is the single most common source of "I connected it but nothing happens":
+
+- An edge from **`outputFlow` → `input`** makes the target **execute** after the source. It carries
+  no data.
+- An edge from **`output` → `<field>In`** (e.g. `contentIn`, `promptIn`, `textIn`) carries the
+  **data**. It does not trigger execution.
+
+Chaining two `commandTextNode`s so B runs after A *and* sees A's text therefore needs **both** edges,
+each with its own `edgeId`. Either one alone is a silent half-connection.
+
+On top of the edge, the target's `data` must reference the source — the companion array
+`<field>Data`, e.g. an `outputObjectNode`'s `data.textData`.
+
+<Tip>
+  **You usually get all of this for free.** When you call `connect_nodes` with both handles omitted
+  and the target has exactly one unambiguous data field, the server adds the companion edge *and*
+  fills the target's `<field>Data` entry for you. Check the returned `diff.edgesAdded` and
+  `diff.updated` to see what it did.
+</Tip>
+
+### Handle defaults
+
+Omit both handles and the server picks based on the node types:
+
+| Situation | `sourceHandle` | `targetHandle` |
+|-----------|----------------|----------------|
+| Source is `globalStarter` | `a` | `input` |
+| Either side is a `mediaBox` | `mediaOutput` | `mediaInput` |
+| Source is `dynamicSettingsNode` | `outputModelTextSettings` | `modelVoiceSettings` for a `voiceBoxNode`, else `modelSettings` |
+| Target is a terminal display node (`outputObjectNode`, `richTextBox`) | `output` | `textIn` |
+| Anything else | `outputFlow` | `input` |
+
+<Warning>
+  Two cases have **no** safe default and are rejected unless you are explicit:
+
+  - From a `conditionNode` you must pass `sourceHandle` — `conditionHandle-T{n}`/`conditionHandle-F{n}`
+    for SWITCH conditions, or `outputHandle-0`/`outputHandle-1` for boolean ones.
+  - Into a `nodesAdd` node you must pass `targetHandle` — `nodesInput` (node-list payload) or
+    `edgesInput` (edge-list payload).
+</Warning>
+
+## `disconnect_nodes`
+
+Removes an edge. Identify it either by `edgeId`, or by `source` + `target`.
+
+Returns `diff.edgesRemoved` — an array of edge ids. This removes **only the edge**; to delete a node
+use `remove_node`.
+
+## Example prompts
+
+- *"Add an AI text generator and an output node to agent d2c2… and connect them"*
+- *"What fields does the webSearch node accept?"*
+- *"Disconnect the edge between textgen_1 and output_1"*
+
+## Related
+
+- [Writing safely](/mcp/tools/writing-safely) — dry-run, idempotency, `versionId`
+- [`list_node_types`](/mcp/tools/list-node-types) — the full catalogue and the enum contract
+- [`get_agent`](/mcp/tools/get-agent) — read the nodes and edges you just wrote
+- [Versioning](/mcp/tools/versioning) — snapshot the working copy once you are happy
