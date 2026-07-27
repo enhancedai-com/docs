@@ -1,0 +1,58 @@
+---
+title: "Prompts & resources"
+description: "Ready-made recipes your AI client can load, and read-only catalogues it can attach as context."
+---
+
+## Description
+
+Besides tools, the FluxPrompt MCP server exposes two other MCP primitives. Both are read-only and cost
+you nothing to list — they exist so a client does not have to rediscover how FluxPrompt works on every
+conversation.
+
+- **Prompts** are named recipes: an ordered tool sequence for a common task, filled in with your
+  arguments.
+- **Resources** are catalogues you can attach as context instead of calling a tool.
+
+How they surface depends on the client. Claude Desktop lists prompts as slash-commands and resources as
+attachable context; other clients may expose them differently or not at all.
+
+## Prompts
+
+| Prompt | Arguments | What it walks through |
+|--------|-----------|-----------------------|
+| `build_flow` | `goal` | Create a folder and an empty agent, then build a text-gen node wired to a data output — both the edge **and** the data reference. |
+| `edit_agent` | `agentId` | Inspect an agent, then add/update/remove nodes safely with optimistic concurrency (`expectedVersion`). |
+| `organize_workspace` | — | Create folders and move agents into them, or back to the root. |
+| `run_agent_recipe` | `agentId` | Validate a run with dry-run, dispatch it, then poll `get_run_status` until it finishes. |
+
+These encode the ordering that is easy to get wrong: fetching a node's real schema **before** writing
+it, creating both edges when chaining nodes, and passing `empty: true` so a new agent does not arrive
+with starter-template nodes.
+
+<Tip>
+  Prompts are guidance, not enforcement. They still perform each mutation as a dry-run first, so you
+  see the diff before anything is applied.
+</Tip>
+
+## Resources
+
+| URI | Contents |
+|-----|----------|
+| `fluxprompt://models` | The AI models available to this workspace: `provider`, `modelName`, `displayName`, `description`, `modelType`, `contextWindow`, `supportsVision`, `supportsReasoning`. |
+| `fluxprompt://node-types` | The node type catalogue: `type`, `label`, `description`, `category`, `inputSchema`, `outputSchema`. |
+
+Both mirror what `list_ai_models` and `list_node_types` return. Reach for the resource when you want
+the catalogue sitting in context for a whole conversation, and for the tool when you want one lookup
+mid-task.
+
+<Warning>
+  `fluxprompt://models` is workspace-specific: it lists what your workspace has enabled, not every
+  model FluxPrompt supports. Fill a node's `aiModel`/`aiSystem` from this list rather than from a model
+  name you remember.
+</Warning>
+
+## Related
+
+- [Writing safely](/mcp/tools/writing-safely) — the conventions every recipe follows
+- [Nodes & edges](/mcp/tools/nodes-and-edges) — what `build_flow` and `edit_agent` automate
+- [`list_node_types`](/mcp/tools/list-node-types) — the tool form of `fluxprompt://node-types`

@@ -64,21 +64,47 @@ Se você acredita que um service token foi exposto:
 2. Gere um novo.
 3. Atualize seus arquivos de configuração do cliente com o novo token.
 
-## Escopos (Fase 1)
+## Escopos
 
-Ambos os métodos de autenticação concedem atualmente acesso **somente leitura**. Eles podem:
+Uma chave carrega um ou mais de três escopos:
 
-- ✅ Listar agentes no seu workspace
-- ✅ Buscar a estrutura completa de qualquer agente
-- ✅ Listar todos os tipos de node disponíveis
+| Escopo | Concede |
+|--------|---------|
+| `read` | Listar agentes e pastas, buscar a estrutura completa de um agente, navegar tipos de node e modelos de IA. |
+| `write` | Criar e editar agentes, pastas, nodes e edges; criar snapshots e publicar versões. |
+| `execute` | Executar um agente, acompanhar uma execução, cancelar uma execução. |
 
-Eles não podem:
+Nenhum escopo dá acesso a faturamento, usuários ou configurações do workspace — isso nunca é exposto
+via MCP.
 
-- ❌ Criar ou editar agentes
-- ❌ Executar agentes ou iniciar execuções
-- ❌ Acessar faturamento, usuários ou configurações do workspace
+### Uma chave é vinculada a um workspace
 
-O acesso de escrita (`add_node`, `update_node`, `remove_node`) estará disponível na Fase 2 com um escopo separado.
+Cada chave é emitida para **uma** organização, escolhida na tela de consentimento (OAuth) ou pelo
+workspace em que o token foi criado. Para atuar em outra organização, você autoriza de novo e mantém
+uma segunda chave.
+
+### Os escopos são reduzidos pelo seu papel
+
+Se você não é admin da organização selecionada, pedir `write`/`execute` gera uma chave reduzida a
+`read`, em vez de um erro. Um admin do workspace pode liberar isso com o toggle
+**Allow non-admin write/execute keys** em
+[Settings → MCP Tokens](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) — desligado por
+padrão.
+
+### Chaves no nível do workspace
+
+Mesmo com o escopo correto, dois interruptores do workspace precisam estar ligados:
+
+| Interruptor | Desliga |
+|-------------|---------|
+| `mcp.writes.enabled` | Todas as ferramentas de escrita deste workspace. |
+| `mcp.execute.enabled` | O `run_agent` deste workspace. |
+
+Uma chamada negada retorna `-32401` insufficient scope. Seja pelos escopos da chave ou pelo interruptor
+do workspace, a correção está no mesmo lugar: **Settings → MCP Tokens**.
+
+Execuções iniciadas via MCP são cobradas e auditadas no **dono da chave** que as iniciou, e o nome da
+chave/cliente que disparou aparece no histórico de execuções do agente.
 
 ## Perguntas frequentes
 

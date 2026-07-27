@@ -260,7 +260,8 @@
                       "mcp/tools/agents-and-folders",
                       "mcp/tools/nodes-and-edges",
                       "mcp/tools/versioning",
-                      "mcp/tools/running-agents"
+                      "mcp/tools/running-agents",
+                      "mcp/tools/prompts-and-resources"
                     ]
                   },
                   "mcp/troubleshooting",
@@ -548,7 +549,8 @@
                       "mcp/pt-br/tools/agents-and-folders",
                       "mcp/pt-br/tools/nodes-and-edges",
                       "mcp/pt-br/tools/versioning",
-                      "mcp/pt-br/tools/running-agents"
+                      "mcp/pt-br/tools/running-agents",
+                      "mcp/pt-br/tools/prompts-and-resources"
                     ]
                   },
                   "mcp/pt-br/troubleshooting",
