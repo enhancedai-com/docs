@@ -3,6 +3,48 @@ title: "Changelog"
 description: "Novidades na integração MCP do FluxPrompt."
 ---
 
+## Não lançado — Phase 2 (autoria)
+
+<Note>
+  A Phase 2 está mergeada e rodando no ambiente de desenvolvimento; **ainda não está em produção**.
+  Quando entrar, troque este título pela data do release. Tudo abaixo já está documentado na
+  [referência de ferramentas](/mcp/pt-br/tools/writing-safely).
+</Note>
+
+**Seu cliente de IA agora pode construir e executar agentes, não apenas lê-los.**
+
+### Novas ferramentas — autoria
+- **`create_agent`**, **`update_agent`**, **`remove_agent`**, **`move_agent`** — gerenciam agentes; `empty: true` cria o agente com canvas em branco em vez do template inicial.
+- **`create_folder`**, **`rename_folder`**, **`remove_folder`**, **`list_folders`** — gerenciam as pastas onde os agentes ficam.
+- **`add_node`**, **`update_node`**, **`remove_node`** — constroem o fluxo. O `patch.data` mescla um nível de profundidade, então chaves omitidas são preservadas.
+- **`connect_nodes`**, **`disconnect_nodes`** — ligam nodes. Os handles têm padrão conforme os tipos conectados; o `connect_nodes` também preenche automaticamente a edge de dados companheira e a entrada `<campo>Data` do destino quando ele tem um único campo de dado inequívoco.
+- **`get_node_type`**, **`list_ai_models`** — schema de um tipo de node, ou os modelos habilitados no workspace.
+
+### Novas ferramentas — versionamento e execução
+- **`create_version`**, **`list_versions`**, **`publish_version`** — snapshot da cópia de trabalho, histórico, publicação de uma versão.
+- **`run_agent`**, **`get_run_status`**, **`cancel_run`** — disparar uma execução, acompanhar, cancelar uma em andamento.
+
+### Novas primitivas
+- **Prompts** — `build_flow`, `edit_agent`, `organize_workspace`, `run_agent_recipe`: sequências de ferramentas prontas para as tarefas comuns.
+- **Resources** — `fluxprompt://models` e `fluxprompt://node-types`, anexáveis como contexto da conversa.
+
+### Modelo de segurança
+- **Toda ferramenta de escrita é dry-run por padrão.** Aplicar exige `dryRun: false` **e** um `idempotencyKey`; uma repetição com a mesma chave e payload retorna o resultado em cache em vez de agir duas vezes.
+- **`expectedVersion`** recusa a escrita com `version_conflict` se alguém alterou o agente depois da sua leitura.
+- **Dois escopos novos** — `write` e `execute`, junto do `read`. Chaves de membros não-admin são reduzidas a `read`, a menos que um admin do workspace libere chaves privilegiadas para não-admins. Dois interruptores de workspace (`mcp.writes.enabled`, `mcp.execute.enabled`) barram escrita e execução independentemente da chave.
+- Execuções iniciadas via MCP são cobradas e auditadas no dono da chave que as iniciou, e o cliente que disparou aparece no histórico de execuções do agente.
+
+### Posicionamento de nodes
+- **O `add_node` posiciona o node por você.** O `position` é opcional: o servidor escolhe o primeiro slot livre na sua dica ou à direita dela, e continua o fluxo à direita do node mais à direita quando você omite. Nodes existentes nunca são movidos; `placementAdjusted: true` avisa que o seu foi movido. Os tamanhos vêm de medições reais por tipo de node, então o espaçamento corresponde ao tamanho em que o node realmente renderiza. Clientes não precisam mais inventar coordenadas — e não devem.
+
+### Paginação
+- As ferramentas de listagem passaram para **paginação por cursor** (MCP 2025-11-25): passe o `nextCursor` da resposta anterior como `cursor`. Cursores são opacos — não faça parse, não construa, não reutilize entre ferramentas.
+
+### Correções
+- **O `webSearch` expõe `queryData`**, então uma variável ligada por edge chega de fato ao node. Antes ele anunciava apenas um `query` simples (mais um campo `maxResults` que não existia).
+- **Campos de opção fixa agora declaram `enum`.** `dynamicSettingsNode.selectedOption` (`text` | `voice`) e `fluxObject.selectedType` eram strings livres; um valor não reconhecido é gravado sem reclamar e depois não casa com nada, deixando o node renderizado sem painel selecionado.
+- **`create_version`/`publish_version` ativam o controle de versão** no agente. Leituras, escritas e execuções com escopo de versão ficavam quebradas silenciosamente até existir uma versão.
+
 ## 2026-06-24 — Correções
 
 **A paginação do `list_agents` agora é aplicada no servidor.**

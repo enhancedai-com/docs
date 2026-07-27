@@ -3,6 +3,48 @@ title: "Changelog"
 description: "What's new in the FluxPrompt MCP integration."
 ---
 
+## Unreleased — Phase 2 (authoring)
+
+<Note>
+  Phase 2 is merged and running in the development environment; it is **not yet live in production**.
+  When it deploys, replace this heading with the release date. Everything below is already documented
+  in the [tool reference](/mcp/tools/writing-safely).
+</Note>
+
+**Your AI client can now build and run agents, not just read them.**
+
+### New tools — authoring
+- **`create_agent`**, **`update_agent`**, **`remove_agent`**, **`move_agent`** — manage agents; `empty: true` starts an agent with a blank canvas instead of the starter template.
+- **`create_folder`**, **`rename_folder`**, **`remove_folder`**, **`list_folders`** — manage the folders agents live in.
+- **`add_node`**, **`update_node`**, **`remove_node`** — build the flow. `patch.data` merges one level deep, so keys you omit are preserved.
+- **`connect_nodes`**, **`disconnect_nodes`** — wire nodes. Handles default from the node types being connected; `connect_nodes` also auto-fills the companion data edge and the target's `<field>Data` entry when the target has one unambiguous data field.
+- **`get_node_type`**, **`list_ai_models`** — fetch one node type's schema, or the models this workspace has enabled.
+
+### New tools — versioning and running
+- **`create_version`**, **`list_versions`**, **`publish_version`** — snapshot the working copy, browse history, deploy a version.
+- **`run_agent`**, **`get_run_status`**, **`cancel_run`** — dispatch a run, poll it, cancel one in flight.
+
+### New primitives
+- **Prompts** — `build_flow`, `edit_agent`, `organize_workspace`, `run_agent_recipe`: ready-made tool sequences for the common tasks.
+- **Resources** — `fluxprompt://models` and `fluxprompt://node-types`, attachable as conversation context.
+
+### Safety model
+- **Every write tool is dry-run by default.** Applying requires both `dryRun: false` and an `idempotencyKey`; a replay with the same key and payload returns the cached result instead of acting twice.
+- **`expectedVersion`** rejects a write with `version_conflict` if someone changed the agent since you read it.
+- **Two new scopes** — `write` and `execute`, alongside `read`. Non-admin members' keys are clamped to `read` unless a workspace admin allows non-admin privileged keys. Two workspace switches (`mcp.writes.enabled`, `mcp.execute.enabled`) gate writes and runs independently of the key.
+- Runs started over MCP are billed and audited against the owner of the key that started them, and the triggering client appears in the agent's execution history.
+
+### Node placement
+- **`add_node` places nodes itself.** `position` is optional: the server picks the first free slot at or to the right of your hint, and continues the flow to the right of the rightmost node when you omit it. Existing nodes are never moved; `placementAdjusted: true` tells you it moved yours. Node footprints come from measured sizes per node type, so spacing matches how big the node actually renders. Clients no longer need to invent coordinates — and should not.
+
+### Pagination
+- List tools moved to **cursor-based pagination** (MCP 2025-11-25): pass the previous response's `nextCursor` as `cursor`. Cursors are opaque — do not parse, build, or reuse one across tools.
+
+### Fixes
+- **`webSearch` exposes `queryData`**, so an edge-linked variable actually reaches the node. It previously advertised only a plain `query` (plus a `maxResults` field that did not exist).
+- **Option-only fields now declare an `enum`.** `dynamicSettingsNode.selectedOption` (`text` | `voice`) and `fluxObject.selectedType` were typed as free strings; an unrecognised value is stored without complaint and then matches nothing, leaving the node rendered with no panel selected.
+- **`create_version`/`publish_version` activate version control** on the agent. Version-scoped reads, writes and runs were silently broken until a version existed.
+
 ## 2026-06-24 — Fixes
 
 **`list_agents` pagination is now enforced server-side.**
