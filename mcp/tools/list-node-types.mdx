@@ -19,15 +19,16 @@ No parameters required.
     {
       "type": "commandTextNode",
       "label": "Command Text Node",
-      "description": "Executes a text command or prompt and passes it downstream.",
+      "description": "Runs a prompt against an AI text model and passes the result downstream.",
       "category": "AI",
       "inputSchema": {
         "type": "object",
         "properties": {
-          "model": { "type": "string", "description": "AI model to use" },
-          "command": { "type": "string", "description": "Text command or prompt to execute" }
+          "prompt": { "type": "string", "description": "The prompt to run" },
+          "aiModel": { "type": "string", "description": "AI model name, e.g. \"gemini-2.5-flash-lite\"" },
+          "aiSystem": { "type": "string", "description": "AI provider, e.g. \"gemini\", \"anthropic\", \"openAi\"" }
         },
-        "required": ["command"]
+        "required": ["prompt", "aiModel", "aiSystem"]
       },
       "outputSchema": {
         "type": "object",
@@ -59,6 +60,16 @@ No parameters required.
 | `nodeTypes[].category` | string | Grouping: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. |
 | `nodeTypes[].inputSchema` | JSON Schema | The configuration this node accepts. |
 | `nodeTypes[].outputSchema` | JSON Schema | The data this node produces for downstream nodes. |
+
+<Warning>
+  **Respect `enum` when a field declares one.** Several node fields only accept a fixed set of
+  values — for example `dynamicSettingsNode.selectedOption` is `"text"` or `"voice"`, and
+  `fluxObject.selectedType` is one of six exact strings such as `"Load All Entries"`. These fields
+  are **not** validated on write: a value outside the list is stored happily and then matches no
+  branch at render time, so the node ends up with no panel selected and does nothing. Always read
+  the field's `enum` from `inputSchema` before writing it, and never guess a plausible-looking
+  value like `"default"`.
+</Warning>
 
 ## Example prompts
 
