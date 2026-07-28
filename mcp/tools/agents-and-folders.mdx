@@ -58,6 +58,7 @@ pass a cursor from a different tool. Folders come back in the order the product 
 | `scope` | `"space"` \| `"personal"` | Whether the folder belongs to a space or to a member personally. |
 | `spaceId` | string (UUID) \| null | The owning space, when `scope` is `"space"`. |
 | `spaceName` | string \| null | That space's name, for display. |
+| `createdAt` | ISO 8601 \| null | When the folder was created — the tiebreaker when scope and space match too. |
 
 ### Two folders can share a name
 
@@ -67,6 +68,10 @@ called `Chatbot` and two called `Shared`.
 
 Use `scope` and `spaceName` to tell them apart, and **say which one you acted on** when you report
 back: "added it to the *Design* space's `Chatbot`" rather than just "added it to `Chatbot`".
+
+Nothing stops two folders in the **same** scope from sharing a name either — `create_folder` accepts a
+name that is already taken. When `scope` and `spaceName` match, fall back to `createdAt`; the `id` is the
+only field guaranteed to differ.
 
 <Tip>
   You can still work from a name. `list_agents` accepts `folderName` and resolves it whenever exactly

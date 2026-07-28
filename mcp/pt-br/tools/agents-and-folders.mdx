@@ -59,6 +59,7 @@ em que o produto as exibe.
 | `scope` | `"space"` \| `"personal"` | Se a pasta pertence a um space ou a um membro, pessoalmente. |
 | `spaceId` | string (UUID) \| null | O space dono, quando o `scope` é `"space"`. |
 | `spaceName` | string \| null | O nome desse space, para exibição. |
+| `createdAt` | ISO 8601 \| null | Quando a pasta foi criada — o critério de desempate quando escopo e space também coincidem. |
 
 ### Duas pastas podem ter o mesmo nome
 
@@ -68,6 +69,10 @@ ter duas pastas chamadas `Chatbot` e duas chamadas `Shared`.
 
 Use `scope` e `spaceName` para diferenciá-las, e **diga em qual você agiu** ao responder: "adicionei
 no `Chatbot` do space *Design*", em vez de só "adicionei no `Chatbot`".
+
+Nada impede que duas pastas do **mesmo** escopo tenham o mesmo nome — o `create_folder` aceita um nome
+já usado. Quando `scope` e `spaceName` coincidem, use o `createdAt`; o `id` é o único campo garantidamente
+diferente.
 
 <Tip>
   Você ainda pode partir do nome. O `list_agents` aceita `folderName` e resolve sempre que exatamente
