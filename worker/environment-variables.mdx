@@ -34,6 +34,8 @@ title: "Environment Variables"
 | SLACK_API_BASE | Optional | Slack API base URL override (default `https://slack.com/api`) — for testing/mocking |
 | NOTION_CLIENT_ID | Optional | Notion OAuth client ID, used to refresh a rotated access token when executing a Notion integration node — same value as `back` |
 | NOTION_CLIENT_SECRET | Optional | Notion OAuth client secret, same purpose — same value as `back` |
+| HUBSPOT_CLIENT_ID | Optional | HubSpot OAuth client ID, used to refresh the short-lived access token when executing a HubSpot integration node — same value as `back` |
+| HUBSPOT_CLIENT_SECRET_ID | Optional | HubSpot OAuth client secret, same purpose — same value as `back`. Note the `_ID` suffix: that is the existing project name, not a typo |
 | CLAIM_CHECK_THRESHOLD_BYTES | Optional | claim-check pattern threshold (default 262144) |
 | APICALLER_MAX_RESULT_BYTES | Optional | api-caller node result size limit (default 1_000_000) |
 | LOG_PROVIDER_OPTIONS | Optional | debug flag, logs AI provider options |
@@ -47,6 +49,8 @@ All 31 vars are actively used — none obsolete. `LAMBDA_ENDPOINT`, `CLAIM_CHECK
 `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET` must be the **same Slack app credentials** as `back`'s — the worker calls Slack's OAuth token endpoint with these to refresh a rotated access token, and that only succeeds if it's the same app that originally issued the token.
 
 `NOTION_CLIENT_ID` and `NOTION_CLIENT_SECRET` must likewise be the **same Notion OAuth app credentials** as `back`'s, for the same rotating-token-refresh reason.
+
+`HUBSPOT_CLIENT_ID` and `HUBSPOT_CLIENT_SECRET_ID` must be the **same HubSpot app credentials** as `back`'s. HubSpot access tokens live roughly 30 minutes, so unlike Slack and Notion the worker refreshes these routinely rather than occasionally — if the pair is missing from the task definition, every HubSpot node fails with a "not configured" error.
 
 ## CI/CD
 
