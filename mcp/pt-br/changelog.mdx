@@ -37,8 +37,16 @@ description: "Novidades na integração MCP do FluxPrompt."
 ### Posicionamento de nodes
 - **O `add_node` posiciona o node por você.** O `position` é opcional: o servidor escolhe o primeiro slot livre na sua dica ou à direita dela, e continua o fluxo à direita do node mais à direita quando você omite. Nodes existentes nunca são movidos; `placementAdjusted: true` avisa que o seu foi movido. Os tamanhos vêm de medições reais por tipo de node, então o espaçamento corresponde ao tamanho em que o node realmente renderiza. Clientes não precisam mais inventar coordenadas — e não devem.
 
+### Pastas
+- **O `list_agents` pode ser restrito a uma pasta.** Passe `folderId`, ou `folderName` quando apenas uma pasta tem aquele nome. Antes, um cliente conseguia criar um agente *dentro* de uma pasta, mas nunca listar o que estava *nela*.
+- **Todo agente diz onde mora.** Os itens do `list_agents` e o retorno do `get_agent` agora trazem `folderId` e `folderName`.
+- **Pastas de mesmo nome agora são distinguíveis.** O `list_folders` retorna `scope` (`space` ou `personal`), `spaceId` e `spaceName`. Um workspace legitimamente tem várias pastas com o mesmo nome — cada membro tem pastas pessoais e cada space tem as suas, semeadas com os mesmos nomes iniciais — e nada na resposta permitia diferenciá-las. A resolução por `folderName` falha com `folder_name_ambiguous` e nomeia as candidatas, em vez de adivinhar.
+- Um `folderId` de outro workspace retorna `folder_not_found` em vez de página vazia, então resultado vazio sempre significa que a pasta está vazia.
+
 ### Paginação
 - As ferramentas de listagem passaram para **paginação por cursor** (MCP 2025-11-25): passe o `nextCursor` da resposta anterior como `cursor`. Cursores são opacos — não faça parse, não construa, não reutilize entre ferramentas.
+- **O cursor agora está amarrado aos filtros que o geraram.** Reutilizar um cursor do `list_agents` após mudar `folderId`, `folderName` ou `search` é recusado com um erro dizendo que a consulta mudou. Antes ele carregava apenas um offset, então o mesmo erro pulava ou repetia registros silenciosamente. Reenvie os mesmos filtros junto do cursor, ou comece de novo sem ele.
+- **As listagens têm ordem determinística**, seguindo a ordem de exibição do próprio produto com um critério de desempate estável, então a paginação não embaralha mais registros de mesmo nome entre páginas.
 
 ### Correções
 - **O `webSearch` expõe `queryData`**, então uma variável ligada por edge chega de fato ao node. Antes ele anunciava apenas um `query` simples (mais um campo `maxResults` que não existia).

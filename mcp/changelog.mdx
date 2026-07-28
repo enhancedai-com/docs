@@ -37,8 +37,16 @@ description: "What's new in the FluxPrompt MCP integration."
 ### Node placement
 - **`add_node` places nodes itself.** `position` is optional: the server picks the first free slot at or to the right of your hint, and continues the flow to the right of the rightmost node when you omit it. Existing nodes are never moved; `placementAdjusted: true` tells you it moved yours. Node footprints come from measured sizes per node type, so spacing matches how big the node actually renders. Clients no longer need to invent coordinates — and should not.
 
+### Folders
+- **`list_agents` can be scoped to a folder.** Pass `folderId`, or `folderName` when only one folder carries that name. Previously a client could create an agent *into* a folder but never list what was *in* one.
+- **Every agent says where it lives.** `list_agents` items and the `get_agent` payload now carry `folderId` and `folderName`.
+- **Same-named folders are distinguishable.** `list_folders` now returns `scope` (`space` or `personal`), `spaceId` and `spaceName`. A workspace legitimately holds several folders sharing a name — each member has personal folders and each space has its own, seeded with the same starter names — and nothing in the response used to tell them apart. `folderName` resolution fails with `folder_name_ambiguous` and names the candidates rather than guessing.
+- A `folderId` from another workspace returns `folder_not_found` instead of an empty page, so an empty result always means the folder is empty.
+
 ### Pagination
 - List tools moved to **cursor-based pagination** (MCP 2025-11-25): pass the previous response's `nextCursor` as `cursor`. Cursors are opaque — do not parse, build, or reuse one across tools.
+- **A cursor is now bound to the filters that produced it.** Reusing a `list_agents` cursor after changing `folderId`, `folderName` or `search` is rejected with an error saying the query changed. It previously carried only an offset, so the same mistake silently skipped or repeated rows. Resend the same filters alongside the cursor, or start again without one.
+- **Listings are ordered deterministically** by the product's own display order with a stable tiebreaker, so paging can no longer shuffle same-named rows between pages.
 
 ### Fixes
 - **`webSearch` exposes `queryData`**, so an edge-linked variable actually reaches the node. It previously advertised only a plain `query` (plus a `maxResults` field that did not exist).

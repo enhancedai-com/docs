@@ -47,7 +47,33 @@ Creates an agent (flow) inside a folder.
 
 Returns a page of folders plus `total`, and `nextCursor` when more results exist. Pass `nextCursor`
 back as `cursor` for the next page. Treat cursors as opaque — never parse or build one, and never
-pass a cursor from a different tool.
+pass a cursor from a different tool. Folders come back in the order the product displays them.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string (UUID) | Pass this to `create_agent`, `move_agent` or `list_agents`. |
+| `name` | string | Display name. **Not unique** — see below. |
+| `parentId` | string (UUID) \| null | Parent folder, or `null` at the root. |
+| `agentCount` | number | Agents directly inside. Matches `list_agents({ folderId })`'s `total`. |
+| `scope` | `"space"` \| `"personal"` | Whether the folder belongs to a space or to a member personally. |
+| `spaceId` | string (UUID) \| null | The owning space, when `scope` is `"space"`. |
+| `spaceName` | string \| null | That space's name, for display. |
+
+### Two folders can share a name
+
+This is by design, not corruption. Every member gets personal folders and every space gets its own,
+and FluxPrompt seeds the same starter names into both — so a workspace commonly holds two folders
+called `Chatbot` and two called `Shared`.
+
+Use `scope` and `spaceName` to tell them apart, and **say which one you acted on** when you report
+back: "added it to the *Design* space's `Chatbot`" rather than just "added it to `Chatbot`".
+
+<Tip>
+  You can still work from a name. `list_agents` accepts `folderName` and resolves it whenever exactly
+  one folder carries it; if several match it fails with `folder_name_ambiguous` and lists the
+  candidates. For everything else, pass the `id`. When a user's wording is ambiguous, ask — do not
+  pick the first match.
+</Tip>
 
 ## `update_agent`
 

@@ -47,7 +47,34 @@ Cria um agente (fluxo) dentro de uma pasta.
 
 Retorna uma página de pastas mais `total`, e `nextCursor` quando houver mais resultados. Passe o
 `nextCursor` de volta como `cursor` para a próxima página. Trate cursores como opacos — nunca faça
-parse nem construa um, e nunca passe um cursor de outra ferramenta.
+parse nem construa um, e nunca passe um cursor de outra ferramenta. As pastas voltam na mesma ordem
+em que o produto as exibe.
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | string (UUID) | Passe para o `create_agent`, `move_agent` ou `list_agents`. |
+| `name` | string | Nome de exibição. **Não é único** — veja abaixo. |
+| `parentId` | string (UUID) \| null | Pasta pai, ou `null` na raiz. |
+| `agentCount` | number | Agentes diretamente dentro. Igual ao `total` do `list_agents({ folderId })`. |
+| `scope` | `"space"` \| `"personal"` | Se a pasta pertence a um space ou a um membro, pessoalmente. |
+| `spaceId` | string (UUID) \| null | O space dono, quando o `scope` é `"space"`. |
+| `spaceName` | string \| null | O nome desse space, para exibição. |
+
+### Duas pastas podem ter o mesmo nome
+
+Isso é por design, não corrupção de dado. Cada membro ganha pastas pessoais e cada space ganha as
+suas, e o FluxPrompt semeia os mesmos nomes iniciais nos dois lugares — então é comum um workspace
+ter duas pastas chamadas `Chatbot` e duas chamadas `Shared`.
+
+Use `scope` e `spaceName` para diferenciá-las, e **diga em qual você agiu** ao responder: "adicionei
+no `Chatbot` do space *Design*", em vez de só "adicionei no `Chatbot`".
+
+<Tip>
+  Você ainda pode partir do nome. O `list_agents` aceita `folderName` e resolve sempre que exatamente
+  uma pasta tem aquele nome; se várias casarem, ele falha com `folder_name_ambiguous` e lista as
+  candidatas. Para o resto, passe o `id`. Quando o pedido da pessoa for ambíguo, pergunte — não
+  escolha a primeira que aparecer.
+</Tip>
 
 ## `update_agent`
 
