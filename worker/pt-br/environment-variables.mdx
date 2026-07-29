@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-26 env vars no `worker/.env.example`, validadas via Zod em `src/env.ts`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+27 env vars no `worker/.env.example`, validadas via Zod em `src/env.ts`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 | Var | Obrigatória? | Propósito |
 |---|---|---|
@@ -26,6 +26,7 @@ title: "Variáveis de Ambiente"
 | AWS_SECRET_ACCESS_KEY | Opcional | credenciais Lambda |
 | AWS_REGION | Opcional | região AWS (lida implicitamente pelo SDK) |
 | LAMBDA_ENDPOINT | Opcional | endpoint custom do Lambda (LocalStack/dev) |
+| LAMBDA_PYTHON_ALIAS | Obrigatória | alias do Lambda `code-executor-python` (`non-prod`/`prod`) invocado como `Qualifier`, pra dev/staging/prod baterem em aliases isolados da mesma função — sem default, falha fechado se não definida |
 | URL_MAIN_API | Obrigatória | URL base do `back` para chamadas internas |
 | INTERNAL_API_KEY | Obrigatória | auth das chamadas internas ao `back` |
 | INTEGRATIONS_ENCRYPTION_KEY | Obrigatória | descriptografa credenciais de `user_integrations` (adapter Stripe) — precisa bater com o valor do `back` |
@@ -33,7 +34,7 @@ title: "Variáveis de Ambiente"
 | APICALLER_MAX_RESULT_BYTES | Opcional | limite de tamanho do resultado no node api-caller (default 1_000_000) |
 | LOG_PROVIDER_OPTIONS | Opcional | flag de debug, loga opções do provider de IA |
 
-Todas as 26 vars estão em uso ativo — nenhuma obsoleta. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES` e `LOG_PROVIDER_OPTIONS` são lidas direto via `process.env`, fora do schema Zod — sem type-safety aí, mas é esperado já que todas são opcionais com fallback.
+Todas as 27 vars estão em uso ativo — nenhuma obsoleta. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES` e `LOG_PROVIDER_OPTIONS` são lidas direto via `process.env`, fora do schema Zod — sem type-safety aí, mas é esperado já que todas são opcionais com fallback.
 
 ## Pegadinha cross-repo
 

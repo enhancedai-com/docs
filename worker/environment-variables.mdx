@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-26 env vars in `worker/.env.example`, validated via Zod in `src/env.ts`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+27 env vars in `worker/.env.example`, validated via Zod in `src/env.ts`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 | Var | Required? | Purpose |
 |---|---|---|
@@ -26,6 +26,7 @@ title: "Environment Variables"
 | AWS_SECRET_ACCESS_KEY | Optional | Lambda credentials |
 | AWS_REGION | Optional | AWS region (read implicitly by the SDK) |
 | LAMBDA_ENDPOINT | Optional | custom Lambda endpoint (LocalStack/dev) |
+| LAMBDA_PYTHON_ALIAS | Required | `code-executor-python` Lambda alias (`non-prod`/`prod`) invoked as the `Qualifier`, so dev/staging/prod hit isolated aliases of the same function — no default, fails closed if unset |
 | URL_MAIN_API | Required | `back` base URL for internal calls |
 | INTERNAL_API_KEY | Required | auth for internal calls to `back` |
 | INTEGRATIONS_ENCRYPTION_KEY | Required | decrypts `user_integrations` credentials (Stripe adapter) — must match `back`'s value |
@@ -33,7 +34,7 @@ title: "Environment Variables"
 | APICALLER_MAX_RESULT_BYTES | Optional | api-caller node result size limit (default 1_000_000) |
 | LOG_PROVIDER_OPTIONS | Optional | debug flag, logs AI provider options |
 
-All 26 vars are actively used — none obsolete. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES` and `LOG_PROVIDER_OPTIONS` are read directly via `process.env`, not through the Zod schema — no type-safety there, but that's expected since they're all optional with fallbacks.
+All 27 vars are actively used — none obsolete. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES` and `LOG_PROVIDER_OPTIONS` are read directly via `process.env`, not through the Zod schema — no type-safety there, but that's expected since they're all optional with fallbacks.
 
 ## Cross-repo gotcha
 
