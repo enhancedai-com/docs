@@ -14,7 +14,7 @@ title: "Variáveis de Ambiente"
 | MCP_OAUTH_CONSENT_SECRET | Obrigatória | valida a assinatura do consentimento — precisa bater com o valor no `back` |
 | MCP_OAUTH_TOKEN_TTL | Opcional | TTL do access token |
 | MCP_DCR_CLIENT_TTL | Opcional | TTL de clientes via Dynamic Client Registration |
-| MCP_TOKEN_CACHE_TTL | Opcional | TTL do cache do resolver de tokens (default 30) |
+| MCP_TOKEN_CACHE_TTL | Opcional | TTL do cache do resolver de tokens, em segundos (default 10). Limita por quanto tempo uma chave revogada ainda pode ser aceita na borda, então mantenha bem abaixo do SLA de revogação de 30s. |
 | BACK_BASE_URL | Opcional | URL base do `back` (default localhost:3000) |
 | MCP_INTERNAL_SECRET | Obrigatória | segredo pra chamar o `back` — precisa bater com o valor no `back` |
 | MCP_BACK_RETRY_MAX | Opcional | número de retries nas chamadas ao `back` |
