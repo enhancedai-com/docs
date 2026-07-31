@@ -1,1 +1,5 @@
 node_modules
+
+# Agent worktrees — created inside the repo, never shareable
+.claude/worktrees/
+.worktrees/
