@@ -1,0 +1,294 @@
+---
+title: "Supabase integration"
+description: "Read and write rows in your Supabase tables from a flow — select with filters and ordering, insert, update, upsert, or delete."
+---
+
+## Overview
+
+The Supabase integration turns a Supabase project into a data source and a write target inside a flow. It talks to the project's auto-generated [PostgREST](https://postgrest.org) API, so every table you have exposed in the API schema is reachable without writing SQL. You connect once with the project URL and a service role key.
+
+| Property | Value |
+|---|---|
+| Integration ID | `supabase` |
+| Category | Developer, storage |
+| Authentication | Project URL + service role key (no OAuth) |
+| Pull support | Yes — rows, row count |
+| Push support | Yes — insert, update, upsert, delete rows |
+| Sharing | Yes — teammates run your connection without seeing the key |
+
+| Feature | Mode | Description |
+|---|---|---|
+| Read rows | Pull | Select columns from a table with filters, ordering, limit, and offset |
+| Count rows | Pull | Exact row count for a table, with the same filters |
+| Insert rows | Push | Insert one or many rows from JSON or from a connected node |
+| Upsert rows | Push | Insert, merging duplicates on a chosen conflict column |
+| Update rows | Push | Patch the rows matched by your filters |
+| Delete rows | Push | Delete the rows matched by your filters |
+
+## How it works under the hood
+
+### Connecting
+
+The connection mode is `credentials` — there is no OAuth flow, so the code-exchange and token-refresh paths are not implemented and throw if called. Supabase API keys do not expire; if a key is rotated you reconnect the project.
+
+You supply two values. The project URL is normalized first (trailing slashes removed, `https://` added when the scheme is missing), then the REST base is built as `{projectUrl}/rest/v1`. The connection is validated by fetching the project's OpenAPI document from the PostgREST root:
+
+```http
+GET https://<project-ref>.supabase.co/rest/v1/
+apikey: <serviceKey>
+Authorization: Bearer <serviceKey>
+```
+
+A successful response confirms both the URL and the key, and the same document is what populates the **Table**, **Columns**, **Order by**, and **Conflict column** dropdowns — table names come from its `paths` (excluding `rpc/` entries), and column names from `definitions[<table>].properties`.
+
+FluxPrompt then stores an encrypted JSON object containing `projectUrl` and `serviceKey`. The provider account ID is the project ref (the first hostname label, e.g. `abcdefgh` for `abcdefgh.supabase.co`), and `metadata` records `projectUrl` and `projectRef`.
+
+<Note>
+Credentials are stored encrypted in `user_integrations.apiCredentialsEncrypted` using AES-256-GCM and are decrypted only at request time inside the adapter.
+</Note>
+
+### API access
+
+Every call goes to `{projectUrl}/rest/v1` with a 20-second timeout and these headers:
+
+```text
+apikey: <serviceKey>
+Authorization: Bearer <serviceKey>
+Content-Type: application/json
+```
+
+Some operations add a `Prefer` header — `count=exact` for the row count, `return=representation` so writes echo back the affected rows, and `resolution=merge-duplicates` for upserts.
+
+### How pull works
+
+| Object type | Supabase call | Notes |
+|---|---|---|
+| Rows | `GET /rest/v1/{table}?select=…` | `select` is your chosen columns joined by commas, or `*` when none are chosen. Filters become query parameters, ordering becomes `order={column}.{direction}`, and `limit`/`offset` are applied. |
+| Row count | `GET /rest/v1/{table}?select=*&limit=1` with `Prefer: count=exact` | Returns `{ table, count }`. The total is read from the `content-range` response header (`0-0/137` → `137`), not from the body. |
+
+The limit defaults to 50 and is capped at 1000. An offset is applied only when it is a finite number greater than zero, and it is truncated to an integer.
+
+### How push works
+
+| Action | Supabase call | Notes |
+|---|---|---|
+| Insert rows | `POST /rest/v1/{table}` | Returns `{ success, table, inserted, rows }`. |
+| Upsert rows | `POST /rest/v1/{table}?on_conflict={column}` with `Prefer: resolution=merge-duplicates` | The `on_conflict` parameter is omitted when no conflict column is chosen, in which case Supabase resolves against the primary key. Returns `{ success, table, upserted, rows }`. |
+| Update rows | `PATCH /rest/v1/{table}?{filters}` | The **first** object in Rows is the patch body; any further objects are ignored. Returns `{ success, table, updated, rows }`. |
+| Delete rows | `DELETE /rest/v1/{table}?{filters}` | Returns `{ success, table, deleted, rows }`. |
+
+<Warning>
+**Update and delete refuse to run without at least one filter.** This is deliberate: an unfiltered PostgREST `PATCH` or `DELETE` affects every row in the table. The node fails before any request is sent, with a message naming the action, so a flow cannot rewrite or wipe a table by omitting a condition.
+</Warning>
+
+### Rows with different key sets
+
+PostgREST rejects a single `POST` whose objects do not all share the same keys, with `PGRST102 "All object keys must match"`. That is the normal case when the JSON comes from an upstream node — an LLM or an API Caller rarely emits a perfectly uniform array.
+
+FluxPrompt handles this in the adapter: rows are grouped by their key signature and **one request is sent per distinct key set**, then the responses are concatenated. Up to 20 distinct key sets are allowed; beyond that the node fails and asks you to normalize the payload.
+
+<Note>
+The documented PostgREST remedy for this, `Prefer: missing=default`, is ignored by Supabase's PostgREST build. Filling the missing keys with `null` instead would be worse than grouping, because a `null` overrides a column `DEFAULT` — a row that omits `status` gets its default value, while a row that sends `status: null` gets `null`.
+</Note>
+
+### Where it executes
+
+The runtime `pull`/`push` paths are being moved into the Temporal worker, provider by provider, so an integration node gets Temporal's retries and timeouts. Editor-time work stays in the main API: connecting, the dropdown options, and the schema lookup all read the OpenAPI document, which is only needed while you are building the flow.
+
+The split matters for failures. Configuration problems — a bad key, a missing table, an invalid filter, a missing required filter, malformed Rows JSON — are **not** retried, because retrying cannot change the outcome. Transient problems — a timeout, a network error, HTTP 429, or a Supabase `5xx` — are retried.
+
+## Prerequisites and credentials
+
+You need a Supabase project and its service role key.
+
+<Steps>
+<Step title="Open your project's API settings">
+In the Supabase dashboard, select your project, then go to **Settings → API**.
+</Step>
+<Step title="Copy the Project URL">
+Copy the **Project URL**. It looks like `https://<project-ref>.supabase.co`.
+</Step>
+<Step title="Copy the service role key">
+Under **Project API keys**, reveal and copy the **`service_role`** key — not the `anon` key.
+</Step>
+<Step title="Confirm the tables are exposed">
+In **Settings → API → Exposed schemas**, make sure the schema holding your tables is listed (`public` by default). A table in a schema that is not exposed is invisible to the API, so it will not appear in the Table dropdown.
+</Step>
+</Steps>
+
+<Warning>
+The `service_role` key **bypasses Row Level Security** and can read and write every exposed table. Treat it as a full-access database credential: connect a project you are willing to expose to the flow, and prefer a dedicated project for testing over a production one.
+</Warning>
+
+<Tip>
+Newer Supabase projects issue keys in the `sb_secret_…` format alongside the classic long-lived JWT `service_role` key. Either works — the adapter sends whatever you paste as both the `apikey` header and the `Bearer` token. What does **not** work is the `anon` key, which is subject to RLS and will usually read zero rows rather than fail outright.
+</Tip>
+
+## Connecting in FluxPrompt
+
+<Steps>
+  <Step title="Open the Supabase connection card">
+    Add a **Third Party Integration** node to your flow, open its panel, and select **Supabase** from the provider list. The connection card shows the current state.
+  </Step>
+  <Step title="Enter the project URL and service role key">
+    Paste the **Project URL** and the **Service role key**. Both are required.
+  </Step>
+  <Step title="Save the connection">
+    FluxPrompt validates the pair against the project's REST root before saving. If the URL or the key is wrong, the error names which one failed. On success the card shows **Connected**.
+  </Step>
+  <Step title="Pick a table">
+    The **Table** dropdown loads from your project. Selecting a table is what lets the **Columns**, **Order by**, and **Conflict column** dropdowns load — they are scoped to the chosen table.
+  </Step>
+</Steps>
+
+## Filter syntax
+
+Filters are the same in pull and push. Write **one filter per line** as `column=operator.value`:
+
+```text
+status=eq.active
+age=gte.18
+name=ilike.*ada*
+```
+
+Each line becomes one PostgREST query parameter, and multiple lines are combined with AND. The operator is validated against an allowlist before the request is built, so a typo fails the node with a clear message instead of being sent to Supabase.
+
+| Operator | Meaning |
+|---|---|
+| `eq`, `neq` | Equals, not equals |
+| `gt`, `gte`, `lt`, `lte` | Greater than, greater or equal, less than, less or equal |
+| `like`, `ilike` | Pattern match (`ilike` is case-insensitive); use `*` as the wildcard |
+| `is` | `is.null`, `is.true`, `is.false` |
+| `in` | `in.(a,b,c)` |
+| `cs`, `cd` | Contains, contained by (arrays, ranges, JSON) |
+| `fts`, `plfts`, `phfts`, `wfts` | Full-text search variants |
+
+<Note>
+The helper text under the field lists an abbreviated set. All operators in the table above are accepted.
+</Note>
+
+## Pull reference
+
+### Rows
+
+Select rows from a table.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Table | Select (dynamic, searchable) | Yes | The table to read from. Options come from your project's exposed schema. |
+| Columns | Multi-select (dynamic, searchable) | No | Columns to return. Leave empty for every column. |
+| Filters | Textarea (accepts a connection) | No | One `column=operator.value` per line. |
+| Order by | Select (dynamic, searchable) | No | Column to sort by. No ordering when empty. |
+| Direction | Select | No | Descending or Ascending. Default descending. |
+| Limit | Number | No | Default 50. Maximum 1000. |
+| Offset | Number | No | Rows to skip. Applied only when greater than zero. |
+
+Returns the array of row objects as the node output.
+
+### Row count
+
+Count the rows a filter matches, without transferring them.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Table | Select (dynamic, searchable) | Yes | The table to count. |
+| Filters | Textarea (accepts a connection) | No | One `column=operator.value` per line. Omit for the whole table. |
+
+Returns `{ "table": "<name>", "count": <number> }`.
+
+## Push reference
+
+### Insert rows
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Table | Select (dynamic, searchable) | Yes | The table to insert into. |
+| Rows (JSON) | Textarea (accepts a connection) | No* | A JSON object or an array of objects. |
+
+\* Either type the JSON or connect a node that outputs it. If the field is empty, the connected node's output is used. With neither, the node fails with `No rows to send.`
+
+### Upsert rows
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Table | Select (dynamic, searchable) | Yes | The table to write to. |
+| Rows (JSON) | Textarea (accepts a connection) | No* | Same as insert. |
+| Conflict column | Select (dynamic, searchable) | No | Column used to detect duplicates. Defaults to the table's primary key. |
+
+An existing row is **merged**, not replaced: only the keys present in your JSON are written.
+
+### Update rows
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Table | Select (dynamic, searchable) | Yes | The table to update. |
+| Rows (JSON) | Textarea (accepts a connection) | No* | The new values. Only the **first** object is used as the patch body. |
+| Filters | Textarea (accepts a connection) | **Yes** | Which rows to update, e.g. `id=eq.42`. At least one filter is required. |
+
+### Delete rows
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Table | Select (dynamic, searchable) | Yes | The table to delete from. |
+| Filters | Textarea (accepts a connection) | **Yes** | Which rows to delete, e.g. `id=eq.42`. At least one filter is required. |
+
+## Example: write an LLM's output into a table
+
+A common shape is *generate structured data → store it*. Point a text-generation node at a JSON schema, connect it to the Supabase node's **Rows** connection point, and pick **Insert rows**.
+
+```json
+[
+  { "name": "Ada Lovelace", "email": "ada@example.com", "status": "active" },
+  { "name": "Grace Hopper", "email": "grace@example.com" }
+]
+```
+
+Those two objects have different keys, so they are written as two requests. The second row omits `status` and therefore takes the column's `DEFAULT`, which is usually what you want.
+
+<Tip>
+Leave **Rows (JSON)** empty when a node is connected. A value typed into the field takes precedence over the connected output.
+</Tip>
+
+## Troubleshooting
+
+<Accordion title="Supabase rejected the API key">
+You are almost certainly using the `anon` key or a stale one. Copy the **`service_role`** key from **Settings → API**, then reconnect. If the key was rotated in Supabase, the stored copy is dead — reconnecting is the only fix, since API keys are not refreshable.
+
+This also appears as a `403` when Row Level Security blocks the request, which happens with the `anon` key but not with `service_role`.
+</Accordion>
+
+<Accordion title="Host not found for the project URL">
+The project ref in the URL is wrong, or the project was deleted. Copy the **Project URL** verbatim from **Settings → API** — it must be `https://<project-ref>.supabase.co`, with no path after the host.
+
+A paused project surfaces differently, as a request timeout rather than an unknown host. Resume it from the dashboard.
+</Accordion>
+
+<Accordion title="The Table dropdown is empty, or my table is missing">
+Only tables in an **exposed schema** are visible. Check **Settings → API → Exposed schemas** and add the schema holding your table (`public` is exposed by default).
+
+Views appear in the list alongside tables, since PostgREST exposes them the same way. Database functions do not: they live under `rpc/` and are filtered out, so they cannot be selected as a table.
+</Accordion>
+
+<Accordion title="The Columns dropdown is disabled or empty">
+Pick a **Table** first. Columns, **Order by**, and **Conflict column** are all scoped to the selected table and cannot load before one is chosen.
+</Accordion>
+
+<Accordion title="Invalid filter, or invalid filter operator">
+The line is not in `column=operator.value` form, or the operator is not in the allowlist. Two frequent mistakes: writing a bare value (`status=active` instead of `status=eq.active`), and using SQL syntax (`status = 'active'`). Use `*` rather than `%` as the wildcard for `like` and `ilike`.
+</Accordion>
+
+<Accordion title="update_rows or delete_rows requires at least one filter">
+This is the safety guard, not a bug. Add a filter that identifies the rows, such as `id=eq.42`. If you genuinely need to affect every row, do it in the Supabase SQL editor, where the intent is explicit.
+</Accordion>
+
+<Accordion title="Rows must be a JSON object or an array of JSON objects">
+The Rows field, or the connected node's output, is not valid JSON. A frequent cause is an upstream model wrapping its answer in prose or a markdown code fence. Constrain the upstream node to emit raw JSON, or insert a node that extracts it.
+</Accordion>
+
+<Accordion title="The rows have N different key sets">
+More than 20 distinct key combinations arrived in a single push. Normalize the payload upstream so the objects share a shape, or split the write across runs.
+</Accordion>
+
+<Accordion title="A duplicate key error on insert">
+The rows violate a unique constraint. Use **Upsert rows** with the conflicting column as the **Conflict column** to merge into the existing row instead of failing.
+</Accordion>
