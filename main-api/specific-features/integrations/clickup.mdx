@@ -1,0 +1,253 @@
+---
+title: "ClickUp integration"
+description: "Read ClickUp tasks, lists, spaces, and comments from a flow, and create or update tasks and comments."
+---
+
+## Overview
+
+The ClickUp integration connects a ClickUp workspace to a flow so you can read work items in pull mode and write them in push mode. You authorize it once through OAuth and then navigate your workspace hierarchy with dropdowns that load live from your account.
+
+| Property | Value |
+|---|---|
+| Integration ID | `clickup` |
+| Category | Productivity, project management |
+| Authentication | OAuth2 |
+| Pull support | Yes — tasks, a single task, spaces, lists, comments |
+| Push support | Yes — create task, update task, add comment |
+| Sharing | Yes — teammates run your connection without seeing the token |
+
+| Feature | Mode | Description |
+|---|---|---|
+| Read tasks | Pull | List a List's tasks with status, assignee, date, and ordering filters |
+| Read one task | Pull | Fetch a single task by id, optionally with its subtasks |
+| Read spaces | Pull | List the spaces of a workspace |
+| Read lists | Pull | List the Lists of a space, or of a folder |
+| Read comments | Pull | Fetch a task's comments |
+| Create task | Push | Create a task in a List, optionally as a subtask |
+| Update task | Push | Change a task's name, description, status, priority, or due date |
+| Add comment | Push | Post a comment on a task, optionally notifying assignees |
+
+## How it works under the hood
+
+### OAuth mechanics
+
+The connection uses a standard OAuth2 authorization-code flow. When you start it, FluxPrompt builds an install URL against `https://app.clickup.com/api` carrying the server-side `client_id`, a `redirect_uri` pointing at the FluxPrompt `/clickup` callback, and a `state` value that encodes your user id as base64url.
+
+After you approve access, ClickUp redirects back with a code, which FluxPrompt exchanges for a token. Unlike Notion, the credentials go in the request body rather than an HTTP Basic header:
+
+```http
+POST https://api.clickup.com/api/v2/oauth/token
+Content-Type: application/json
+
+{ "client_id": "<id>", "client_secret": "<secret>", "code": "<code>" }
+```
+
+The response yields an `access_token`. FluxPrompt then calls `GET /user` and `GET /team` to record who you are and which workspaces you can reach: the provider account id is your ClickUp user id (falling back to the first workspace id), and the connection metadata stores your username, email, and the list of workspaces.
+
+<Note>
+**ClickUp access tokens do not expire.** There is no refresh flow to speak of — the refresh path simply re-validates the stored token against `GET /user` and returns it unchanged. If a token is ever revoked on the ClickUp side, reconnect the integration; nothing can renew it automatically.
+</Note>
+
+### API access
+
+All calls go to `https://api.clickup.com/api/v2` with an `Authorization: Bearer <token>` header and a 20-second timeout. Responses are checked explicitly, and a failure surfaces ClickUp's own `err` message together with its `ECODE` error code, so a message like `Team not authorized (OAUTH_027)` reaches you intact rather than as a generic failure.
+
+### The workspace hierarchy
+
+Every dropdown after the first is scoped by the one above it, mirroring how ClickUp itself is organised:
+
+```
+Workspace  →  Space  →  Folder (optional)  →  List  →  Status
+                                     ↘ Assignees come from the Workspace
+```
+
+Picking a Workspace loads its Spaces; picking a Space loads its Folders and, if you skip the Folder, that Space's Lists directly; picking a List loads that List's statuses. Assignees come from the chosen Workspace's members.
+
+<Tip>
+The Folder step is genuinely optional. ClickUp allows Lists to live directly under a Space, so if your List is not inside a Folder, leave Folder empty and the List dropdown will read from the Space instead.
+</Tip>
+
+### How pull works
+
+| Object type | ClickUp call | Requires | Notes |
+|---|---|---|---|
+| Tasks | `GET /list/{listId}/task` | List | Filters become query parameters. Paged with a 0-based `page`; the page size is ClickUp's own default and is not configurable here. |
+| Task (by id) | `GET /task/{taskId}` | Task ID | Optionally requests subtasks. |
+| Spaces | `GET /team/{teamId}/space?archived=false` | Workspace | Archived spaces are excluded. |
+| Lists | `GET /folder/{folderId}/list` or `GET /space/{spaceId}/list` | Space or Folder | Uses the Folder when one is chosen, otherwise the Space. |
+| Comments | `GET /task/{taskId}/comment` | Task ID | |
+
+For tasks, the filters map as follows: statuses and assignees are sent as indexed array parameters (`statuses[0]`, `assignees[0]`, …), the created-date bounds become `date_created_gt` / `date_created_lt` in epoch milliseconds, and the toggles become `include_closed`, `subtasks`, and `archived`.
+
+### How push works
+
+| Action | ClickUp call | Requires | Notes |
+|---|---|---|---|
+| Create task | `POST /list/{listId}/task` | List, task name | Returns the new task's id, url, and name. |
+| Update task | `PUT /task/{taskId}` | Task ID | Only the fields you fill are sent, so a blank field leaves the current value alone. |
+| Add comment | `POST /task/{taskId}/comment` | Task ID, comment text | Optionally notifies all assignees. |
+
+The task body is assembled the same way for create and update: the name falls back to the connected node's output if you leave the field empty, the description accepts either the Description field or upstream content, priority is sent as ClickUp's numeric scale, and a due date is converted to epoch milliseconds and flagged as time-aware.
+
+| Priority | Value sent |
+|---|---|
+| Urgent | 1 |
+| High | 2 |
+| Normal | 3 |
+| Low | 4 |
+
+### Credential storage
+
+The connection is stored in the `user_integrations` table as an OAuth record, encrypted at rest. The server holds `CLICKUP_CLIENT_ID` and `CLICKUP_CLIENT_SECRET` as environment variables and never exposes them to the flow.
+
+## Prerequisites and credentials
+
+This integration uses one-click OAuth, so there are no API keys to paste. What it does require is that the FluxPrompt ClickUp OAuth application be configured for the environment you are using, since the client id and secret live on the server.
+
+You also need enough permission in ClickUp itself: the account you authorize must be able to see the Spaces and Lists you intend to read, and to create or edit tasks in the Lists you intend to write to. A token can never reach more than the authorizing user can.
+
+## Connecting in FluxPrompt
+
+<Steps>
+  <Step title="Open the ClickUp connection card">
+    Add a **Third Party Integration** node to your flow, open its panel, and select **ClickUp** from the provider list.
+  </Step>
+  <Step title="Start the OAuth flow">
+    Select connect. A ClickUp authorization window opens.
+  </Step>
+  <Step title="Pick the workspace to authorize">
+    Choose which ClickUp workspace FluxPrompt may access, then approve.
+  </Step>
+  <Step title="Navigate down to a List">
+    Back in the node, select the **Workspace** first — the Space, Folder, and List dropdowns fill in as you go, and Status and Assignees only load once a List and Workspace are chosen.
+  </Step>
+</Steps>
+
+## Pull reference
+
+### Tasks
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Workspace | Select (dynamic, searchable) | Yes | The ClickUp workspace to read from. |
+| Space | Select (dynamic, searchable) | No | Scopes the Folder and List dropdowns. |
+| Folder | Select (dynamic, searchable) | No | Optional. Skip it for Lists that sit directly under a Space. |
+| List | Select (dynamic, searchable) | **Yes** | The List whose tasks to read. |
+| Status | Multi-select (dynamic) | No | Loads the chosen List's statuses. Empty means any status. |
+| Assignees | Multi-select (dynamic) | No | Loads the workspace members. Empty means any assignee. |
+| Include closed | Toggle | No | Default off. |
+| Include subtasks | Toggle | No | Default off. |
+| Order by | Select | No | Created, Updated, Due date, or ID. Default Created. |
+| Created from | Date | No | Lower bound on the creation date. |
+| Created to | Date | No | Upper bound on the creation date. |
+
+<Note>
+**Created from** and **Created to** currently render as plain text inputs rather than date pickers. Type an unambiguous date — `2026-07-31`, or a full ISO timestamp — and it is parsed and sent as an epoch bound. An unparseable value is ignored rather than reported, so double-check the format if a date filter appears to have no effect.
+</Note>
+
+### Task (by id)
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Task ID | Text (accepts a connection) | Yes | The ClickUp task id. Can be fed from an upstream node. |
+| Include subtasks | Toggle | No | Default off. |
+
+### Spaces
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Workspace | Select (dynamic, searchable) | Yes | The workspace whose spaces to list. |
+
+### Lists
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Workspace | Select (dynamic, searchable) | Yes | The workspace to read from. |
+| Space | Select (dynamic, searchable) | No* | The space whose Lists to return. |
+| Folder | Select (dynamic, searchable) | No* | Narrows to a single folder's Lists. |
+
+\* One of Space or Folder is required — with neither, the node fails asking for a space or folder.
+
+### Comments
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Task ID | Text (accepts a connection) | Yes | The task whose comments to read. |
+
+## Push reference
+
+### Create task
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Workspace / Space / Folder | Select (dynamic, searchable) | Workspace yes | Navigate down to the target List. |
+| List | Select (dynamic, searchable) | **Yes** | Where the task is created. |
+| Task name | Text (accepts a connection) | Yes* | The task title. |
+| Description | Textarea (accepts a connection) | No | Task description. |
+| Status | Select (dynamic) | No | Defaults to the List's own default status. |
+| Priority | Select | No | Urgent, High, Normal, or Low. |
+| Assignees | Multi-select (dynamic) | No | Workspace members. |
+| Due date | Datetime | No | Sent as a time-aware due date. |
+| Tags | Text | No | Comma-separated tag names. |
+| Parent task ID | Text | No | Creates the task as a subtask of this task. |
+
+\* If the field is empty, the connected node's output is used as the name. With neither, the node fails asking for a task name.
+
+### Update task
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Task ID | Text (accepts a connection) | Yes | The task to update. |
+| New task name | Text (accepts a connection) | No | Leave empty to keep the current name. |
+| Description | Textarea (accepts a connection) | No | Leave empty to keep the current description. |
+| Status | Text | No | The status name, typed exactly as it appears in ClickUp. |
+| Priority | Select | No | Leave empty to keep the current priority. |
+| Due date | Datetime | No | Leave empty to keep the current due date. |
+
+<Tip>
+Update sends only the fields you fill, so it is safe to use as a targeted patch — setting just the status will not blank out the description.
+</Tip>
+
+### Add comment
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Task ID | Text (accepts a connection) | Yes | The task to comment on. |
+| Comment | Textarea (accepts a connection) | Yes* | The comment body. |
+| Notify all assignees | Toggle | No | Default off. |
+
+\* Falls back to the connected node's output when the field is empty.
+
+## Example: turn a summary into a ClickUp task
+
+A common shape is *analyse something → file it*. Point a text-generation node at whatever needs triaging, connect its output to the ClickUp node's **Task name** or **Description** connection point, and pick **Create task**.
+
+Because both fields fall back to the upstream output, you can leave the one you want populated empty and let the connected node fill it. Feed **Description** from the model and type a fixed **Task name** when you want every run to file under the same title, or the other way round when the title should be generated.
+
+## Troubleshooting
+
+<Accordion title="The Space, List, Status, or Assignees dropdown is empty">
+These dropdowns are scoped by the level above them. Select the **Workspace** first, then the Space; Status only loads once a List is chosen, and Assignees only once a Workspace is chosen.
+
+If your List is not inside a Folder, leave **Folder** empty — the List dropdown then reads directly from the Space.
+</Accordion>
+
+<Accordion title="A call fails with an OAUTH error code">
+ClickUp's error code comes through in the message. `OAUTH_027` and its neighbours generally mean the token cannot reach that workspace: either it was authorized for a different workspace, or your access in ClickUp changed after connecting. Reconnect the integration and authorize the workspace you actually need.
+</Accordion>
+
+<Accordion title="Creating a task fails asking for a task name">
+Either type a **Task name** or connect a node whose output can serve as one. The name falls back to the upstream output only when the field is left empty — and if both are empty the node stops before calling ClickUp.
+</Accordion>
+
+<Accordion title="Updating a task did not change the status">
+Status on update is a free-text field, not a dropdown, and ClickUp matches it against the List's configured status names. Type it exactly as it appears in ClickUp, including case and spacing.
+</Accordion>
+
+<Accordion title="A date filter seems to be ignored">
+**Created from** and **Created to** are parsed leniently and silently dropped when unparseable. Use `YYYY-MM-DD` or a full ISO timestamp.
+</Accordion>
+
+<Accordion title="Tasks are missing from a pull">
+By default closed tasks and subtasks are excluded. Turn on **Include closed** and **Include subtasks** as needed. Results are also paged from a 0-based `page` parameter with ClickUp's default page size, so a large List needs more than one run to walk through entirely.
+</Accordion>
