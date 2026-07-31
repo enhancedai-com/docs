@@ -14,7 +14,7 @@ title: "Environment Variables"
 | MCP_OAUTH_CONSENT_SECRET | Required | validates consent signature — must match `back`'s value |
 | MCP_OAUTH_TOKEN_TTL | Optional | access token TTL |
 | MCP_DCR_CLIENT_TTL | Optional | Dynamic Client Registration TTL |
-| MCP_TOKEN_CACHE_TTL | Optional | token resolver cache TTL (default 30) |
+| MCP_TOKEN_CACHE_TTL | Optional | token resolver cache TTL in seconds (default 10). Caps how long a revoked key can still be accepted at the edge, so keep it well under the 30s revocation SLA. |
 | BACK_BASE_URL | Optional | `back` base URL (default localhost:3000) |
 | MCP_INTERNAL_SECRET | Required | secret to call `back` — must match `back`'s value |
 | MCP_BACK_RETRY_MAX | Optional | retry count for `back` calls |

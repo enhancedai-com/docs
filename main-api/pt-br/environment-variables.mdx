@@ -72,6 +72,7 @@ title: "Variáveis de Ambiente"
 | MASTER_KEY_IP_ALLOWLIST | Opcional | allowlist de IP para master API key |
 | MASTER_KEY_OWNER_EMAIL | Obrigatória | email do dono da master key |
 | MASTER_KEY_RATE_LIMIT_PER_MIN | Opcional | rate limit da master key (tem fallback) |
+| MCP_IDEMPOTENCY_KEY_PURGE_BATCH_SIZE | Opcional | tamanho de lote no expurgo de chaves de idempotência do MCP (padrão 500; valores inválidos/não positivos caem no padrão em vez de desabilitar o expurgo silenciosamente com `LIMIT NaN`) |
 | MCP_INTERNAL_SECRET | Obrigatória | guard interno das chamadas MCP — precisa bater com o valor no `mcp-server` |
 | MCP_OAUTH_CONSENT_SECRET | Obrigatória | assinatura do consentimento OAuth MCP — precisa bater com o valor no `mcp-server` |
 | MCP_RESOURCE_METADATA_URL | Obrigatória | URL de metadados do recurso MCP |

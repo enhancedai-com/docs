@@ -72,6 +72,7 @@ title: "Environment Variables"
 | MASTER_KEY_IP_ALLOWLIST | Optional | IP allowlist for master API key |
 | MASTER_KEY_OWNER_EMAIL | Required | master API key owner email |
 | MASTER_KEY_RATE_LIMIT_PER_MIN | Optional | master key rate limit (has fallback) |
+| MCP_IDEMPOTENCY_KEY_PURGE_BATCH_SIZE | Optional | batch size for the MCP idempotency-key purge cron (default 500; invalid/non-positive values fall back to the default rather than silently disabling the purge with a `LIMIT NaN`) |
 | MCP_INTERNAL_SECRET | Required | internal guard for MCP calls — must match `mcp-server`'s value |
 | MCP_OAUTH_CONSENT_SECRET | Required | MCP OAuth consent signing — must match `mcp-server`'s value |
 | MCP_RESOURCE_METADATA_URL | Required | MCP resource metadata URL |
