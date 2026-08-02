@@ -255,9 +255,6 @@
                   {
                     "group": "Tool reference",
                     "pages": [
-                      "mcp/tools/list-agents",
-                      "mcp/tools/get-agent",
-                      "mcp/tools/list-node-types",
                       "mcp/tools/writing-safely",
                       "mcp/tools/agents-and-folders",
                       "mcp/tools/nodes-and-edges",
@@ -546,9 +543,6 @@
                   {
                     "group": "Referência de ferramentas",
                     "pages": [
-                      "mcp/pt-br/tools/list-agents",
-                      "mcp/pt-br/tools/get-agent",
-                      "mcp/pt-br/tools/list-node-types",
                       "mcp/pt-br/tools/writing-safely",
                       "mcp/pt-br/tools/agents-and-folders",
                       "mcp/pt-br/tools/nodes-and-edges",
@@ -631,6 +625,12 @@
     }
   },
   "redirects": [
+    { "source": "/mcp/tools/list-agents", "destination": "/mcp/tools/agents-and-folders" },
+    { "source": "/mcp/tools/get-agent", "destination": "/mcp/tools/agents-and-folders" },
+    { "source": "/mcp/tools/list-node-types", "destination": "/mcp/tools/nodes-and-edges" },
+    { "source": "/mcp/pt-br/tools/list-agents", "destination": "/mcp/pt-br/tools/agents-and-folders" },
+    { "source": "/mcp/pt-br/tools/get-agent", "destination": "/mcp/pt-br/tools/agents-and-folders" },
+    { "source": "/mcp/pt-br/tools/list-node-types", "destination": "/mcp/pt-br/tools/nodes-and-edges" },
     {
       "source": "/worker/activities/scripting",
       "destination": "/worker/node/scripting"

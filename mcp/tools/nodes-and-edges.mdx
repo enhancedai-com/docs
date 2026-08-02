@@ -11,10 +11,78 @@ tool here is dry-run by default and accepts `expectedVersion` and `versionId`.
 Before writing a node, fetch its schema with `get_node_type`. Node data shapes are specific and a
 plausible-looking field that does not exist is stored happily and then ignored at run time.
 
+## `list_node_types`
+
+The full catalogue: every node type with its schemas and handles. Fetch it once, then use [`get_node_type`](#get_node_type) for the one you are about to build.
+
+### Input
+
+No parameters required.
+
+### Output
+
+```json
+{
+  "nodeTypes": [
+    {
+      "type": "commandTextNode",
+      "label": "Command Text Node",
+      "description": "Runs a prompt against an AI text model and passes the result downstream.",
+      "category": "AI",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "prompt": { "type": "string", "description": "The prompt to run" },
+          "aiModel": { "type": "string", "description": "AI model name, e.g. \"gemini-2.5-flash-lite\"" },
+          "aiSystem": { "type": "string", "description": "AI provider, e.g. \"gemini\", \"anthropic\", \"openAi\"" }
+        },
+        "required": ["prompt", "aiModel", "aiSystem"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string", "description": "Generated text output" }
+        }
+      }
+    },
+    {
+      "type": "conditionNode",
+      "label": "Condition Node",
+      "description": "Evaluates a condition and routes flow execution along the true or false branch.",
+      "category": "Logic",
+      "inputSchema": { "..." : "..." },
+      "outputSchema": { "..." : "..." }
+    }
+  ]
+}
+```
+
+#### Output fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `nodeTypes` | array | Full list of node types. |
+| `nodeTypes[].type` | string | Machine-readable identifier (camelCase, e.g. `commandTextNode`). Matches the `type` field in `get_agent` node objects. |
+| `nodeTypes[].label` | string | Human-readable name as shown in the FluxPrompt canvas. |
+| `nodeTypes[].description` | string | What this node does. |
+| `nodeTypes[].category` | string | Grouping: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. |
+| `nodeTypes[].inputSchema` | JSON Schema | The configuration this node accepts. |
+| `nodeTypes[].outputSchema` | JSON Schema | The data this node produces for downstream nodes. |
+
+<Warning>
+  **Respect `enum` when a field declares one.** Several node fields only accept a fixed set of
+  values — for example `dynamicSettingsNode.selectedOption` is `"text"` or `"voice"`, and
+  `fluxObject.selectedType` is one of six exact strings such as `"Load All Entries"`. These fields
+  are **not** validated on write: a value outside the list is stored happily and then matches no
+  branch at render time, so the node ends up with no panel selected and does nothing. Always read
+  the field's `enum` from `inputSchema` before writing it, and never guess a plausible-looking
+  value like `"default"`.
+</Warning>
+
 ## `get_node_type`
 
 Returns one node type's `label`, `description`, `category`, `inputSchema` and `outputSchema` — the
-same entry [`list_node_types`](/mcp/tools/list-node-types) returns, without downloading the whole
+same entry [`list_node_types`](/mcp/tools/nodes-and-edges#list_node_types) returns, without downloading the whole
 catalogue.
 
 | Parameter | Type | Required | Description |
@@ -24,7 +92,7 @@ catalogue.
 <Warning>
   Respect `enum` when a field declares one, and never guess a value. These fields are not validated
   on write: an unrecognised value is stored and then matches nothing, leaving the node rendered with
-  nothing selected. See the enum note on [`list_node_types`](/mcp/tools/list-node-types).
+  nothing selected. See the enum note on [`list_node_types`](/mcp/tools/nodes-and-edges#list_node_types).
 </Warning>
 
 ## `list_ai_models`
@@ -172,6 +240,6 @@ use `remove_node`.
 ## Related
 
 - [Writing safely](/mcp/tools/writing-safely) — dry-run, idempotency, `versionId`
-- [`list_node_types`](/mcp/tools/list-node-types) — the full catalogue and the enum contract
-- [`get_agent`](/mcp/tools/get-agent) — read the nodes and edges you just wrote
+- [`list_node_types`](/mcp/tools/nodes-and-edges#list_node_types) — the full catalogue and the enum contract
+- [`get_agent`](/mcp/tools/agents-and-folders#get_agent) — read the nodes and edges you just wrote
 - [Versioning](/mcp/tools/versioning) — snapshot the working copy once you are happy

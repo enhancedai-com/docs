@@ -81,6 +81,226 @@ diferente.
   escolha a primeira que aparecer.
 </Tip>
 
+## `list_agents`
+
+Retorna os agentes do workspace que seu token alcança. Cada item traz id, nome, descrição, contagem de nodes, visibilidade e **em qual pasta o agente está**, então você sabe onde ele fica sem uma segunda chamada.
+
+### Entrada
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `folderId` | string (UUID) | Não | Lista apenas os agentes diretamente dentro dessa pasta. Pegue o id no [`list_folders`](/mcp/pt-br/tools/agents-and-folders). Tem precedência sobre o `folderName`. |
+| `folderName` | string | Não | Seleciona a pasta pelo nome, sem diferenciar maiúsculas. Funciona sempre que exatamente uma pasta tem esse nome. Ignorado quando o `folderId` é informado. |
+| `search` | string | Não | Filtro de substring sobre o nome do agente, sem diferenciar maiúsculas. |
+| `cursor` | string | Não | Cursor opaco vindo do `nextCursor` da resposta anterior. Omita para a primeira página. |
+
+Chamar o `list_agents` sem nenhum parâmetro retorna a primeira página de todos os agentes do workspace.
+
+<Note>
+  O tamanho da página é decidido pelo servidor (50). Não existem os parâmetros `limit` e `offset` — veja [Paginação](#paginação).
+</Note>
+
+### Saída
+
+```json
+{
+  "agents": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Lead Scorer",
+      "description": "Pontua leads recebidos pelo tamanho da empresa e stack",
+      "updatedAt": "2026-05-31T14:22:00Z",
+      "nodeCount": 12,
+      "isPublic": false,
+      "folderId": "3023e5f4-9099-4a56-bc28-538eb517a47f",
+      "folderName": "Tasks"
+    },
+    {
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "name": "Invoice Parser",
+      "description": null,
+      "updatedAt": "2026-06-01T09:45:00Z",
+      "nodeCount": 7,
+      "isPublic": true,
+      "folderId": null,
+      "folderName": null
+    }
+  ],
+  "total": 19,
+  "nextCursor": "NTAuX2FJUkY2V2EyNA"
+}
+```
+
+#### Campos da saída
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `agents[].id` | string (UUID) | Identificador único. Use com o `get_agent`. |
+| `agents[].name` | string | Nome de exibição do agente, igual ao da interface. |
+| `agents[].description` | string \| null | Descrição do agente, ou `null` se não houver. |
+| `agents[].updatedAt` | string ISO 8601 | Quando o agente foi alterado por último. |
+| `agents[].nodeCount` | number | Quantidade de nodes na cópia de trabalho. |
+| `agents[].isPublic` | boolean | Se o agente tem endpoint público. |
+| `agents[].folderId` | string (UUID) \| null | A pasta em que o agente está. |
+| `agents[].folderName` | string \| null | O nome dessa pasta, para exibição. |
+| `total` | number | Total de agentes que casam com a consulta, para você saber quanto falta. |
+| `nextCursor` | string | Presente **apenas** quando existem mais resultados. Ausente na última página. |
+
+Os agentes voltam na mesma ordem em que o produto os exibe, então a listagem corresponde ao que a pessoa vê no canvas.
+
+### Restringindo a uma pasta
+
+Duas formas de indicar a pasta:
+
+```
+list_agents({ folderId: "3023e5f4-9099-4a56-bc28-538eb517a47f" })
+list_agents({ folderName: "Tasks" })
+```
+
+O `folderName` é o caminho conveniente quando você só sabe como a pessoa chamou a pasta. Ele resolve sempre que **exatamente uma** pasta tem aquele nome:
+
+| Correspondências | Resultado |
+|---|---|
+| Exatamente uma | Resolvido — a listagem fica restrita a essa pasta. |
+| Nenhuma | `folder_not_found` |
+| Várias | `folder_name_ambiguous`, listando os ids candidatos com o escopo de cada um |
+
+<Warning>
+  **Pastas com nomes iguais são normais no FluxPrompt, não um erro.** Uma pasta pertence ou a um **space** (compartilhada com o time) ou a um **membro, de forma pessoal** — e os mesmos nomes iniciais, `Chatbot` e `Shared`, são criados nos dois lugares. É comum um workspace ter duas pastas chamadas `Chatbot`.
+
+  Quando o `folderName` é ambíguo, o erro nomeia cada candidata com seu escopo, por exemplo `folder-a (personal), folder-b (space "Design")`. Escolha uma e passe como `folderId`, ou pergunte à pessoa qual ela quis dizer — não adivinhe.
+</Warning>
+
+Um `folderId` de outro workspace é recusado com `folder_not_found` em vez de retornar página vazia. Assim, resultado vazio sempre significa "esta pasta não tem agentes", e nunca "você pediu a pasta errada".
+
+### Paginação
+
+O `list_agents` usa **paginação por cursor**. Leia o `nextCursor` da resposta e devolva no `cursor`. Quando o `nextCursor` não vem, você está na última página.
+
+```
+Chamada 1: list_agents({ folderId: "3023e…" })                  → 50 agentes,   nextCursor: "NTAu…"
+Chamada 2: list_agents({ folderId: "3023e…", cursor: "NTAu…" })  → 50 seguintes, nextCursor: "MTAw…"
+Chamada 3: list_agents({ folderId: "3023e…", cursor: "MTAw…" })  → o restante,   sem nextCursor
+```
+
+<Warning>
+  **O cursor está amarrado aos argumentos que o geraram.** Reenvie o *mesmo* `folderId`, `folderName` e `search` junto com ele. Se você mudar um filtro — ou removê-lo — o cursor é recusado, com um erro dizendo que a consulta mudou; comece de novo sem cursor.
+
+  Isso é intencional. Um cursor é uma posição opaca em **um** conjunto de resultados específico, então reutilizá-lo com outro filtro pularia ou repetiria agentes silenciosamente, em vez de falhar. Nunca faça parse, nunca construa nem edite um cursor, e nunca leve um cursor de uma ferramenta para outra.
+</Warning>
+
+## `get_agent`
+
+Busca um agente. Use depois do `list_agents` para ler os nodes e arestas que você vai alterar.
+
+### Entrada
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | string (UUID) | Sim | O identificador único do agente. Obtenha este valor a partir de `list_agents`. |
+| `includeNodes` | boolean | Não | Se deve incluir os arrays `nodes` e `edges`. Padrão: `true`. Defina como `false` para uma resposta leve, apenas com metadados. |
+
+### Saída
+
+```json
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "name": "Lead Scorer",
+  "description": "Scores inbound leads based on company size and tech stack",
+  "updatedAt": "2026-05-31T14:22:00Z",
+  "nodeCount": 2,
+  "isPublic": false,
+  "nodes": [
+    {
+      "id": "flow-global-starter_0.689",
+      "type": "globalStarter",
+      "data": { "myId": "flow-global-starter_0.689", "label": "Flow Global Node" },
+      "position": { "x": 250, "y": 25 },
+      "width": 402,
+      "height": 206
+    },
+    {
+      "id": "commandTextNode_0.628",
+      "type": "commandTextNode",
+      "data": { "label": "Score generator", "model": "claude-3-5-sonnet" },
+      "position": { "x": 400, "y": 200 },
+      "width": 320,
+      "height": 180
+    }
+  ],
+  "edges": [
+    {
+      "id": "reactflow__edge-flow-global-starter_0.689a-commandTextNode_0.628input",
+      "source": "flow-global-starter_0.689",
+      "sourceHandle": "a",
+      "target": "commandTextNode_0.628",
+      "targetHandle": "input",
+      "type": "custom",
+      "style": { "stroke": "#6e75ff", "strokeWidth": 1 },
+      "animated": true,
+      "markerEnd": { "type": "arrowclosed", "color": "red", "width": 25, "height": 25 }
+    }
+  ]
+}
+```
+
+Quando `includeNodes` é `false`, os arrays `nodes` e `edges` são omitidos e apenas os campos de metadados são retornados.
+
+#### Campos da saída
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | string | UUID do agente. |
+| `name` | string | Nome de exibição do agente. |
+| `description` | string \| null | Descrição do agente. |
+| `updatedAt` | string ISO 8601 | Hora da última modificação. |
+| `nodeCount` | number | Número de nodes na versão atual do agente. |
+| `isPublic` | boolean | Se o agente tem um endpoint público. |
+| `nodes` | array | Todos os nodes do agente (omitido quando `includeNodes` é `false`). Veja abaixo. |
+| `edges` | array | Todas as conexões entre os nodes (omitido quando `includeNodes` é `false`). |
+
+#### Campos de node
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | string | ID do node (único dentro deste agente). |
+| `type` | string | Tipo do node (ex.: `globalStarter`, `commandTextNode`, `conditionNode`). Veja `list_node_types` para a lista completa. |
+| `data` | object | Configuração e dados de exibição específicos do node (inclui o `label` do node). O formato depende do `type`. |
+| `position` | object | Coordenadas `{ x, y }` no canvas. |
+| `width` | number | Largura do node no canvas. |
+| `height` | number | Altura do node no canvas. |
+
+#### Campos de edge
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | string | ID do edge. |
+| `source` | string | ID do node de origem. |
+| `sourceHandle` | string | Qual handle de saída no node de origem este edge parte. |
+| `target` | string | ID do node de destino. |
+| `targetHandle` | string | Qual handle de entrada no node de destino este edge se conecta. |
+| `type` | string | Tipo de renderização do edge (ex.: `custom`). |
+| `style` | object | Estilo visual (cor e espessura do traço). |
+| `animated` | boolean | Se o edge é animado no canvas. |
+| `markerEnd` | object | Configuração da ponta da seta. |
+
+### Erro: agente não encontrado
+
+Se o `agentId` não existir no seu workspace, a chamada retorna um **erro de tool** (não um erro de protocolo) — uma resposta JSON-RPC bem-sucedida cujo `result` tem `isError: true`:
+
+```json
+{
+  "result": {
+    "content": [
+      { "type": "text", "text": "Agent \"a1b2c3d4-...\" not found in this workspace." }
+    ],
+    "isError": true
+  }
+}
+```
+
+Isso também é retornado se o agente existir mas pertencer a um workspace diferente. Por segurança, a resposta não revela se o agente existe fora do seu workspace.
+
 ## `update_agent`
 
 Atualiza os metadados do agente. Hoje, apenas o `name`.
@@ -127,4 +347,4 @@ Excluem um agente ou uma pasta. Ambos são destrutivos e ambos usam dry-run por 
 
 - [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely) — dry-run, idempotência, conflitos
 - [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges) — construir o fluxo dentro do agente
-- [`list_agents`](/mcp/pt-br/tools/list-agents) — encontrar ids de agentes existentes
+- [`list_agents`](/mcp/pt-br/tools/agents-and-folders#list_agents) — encontrar ids de agentes existentes
