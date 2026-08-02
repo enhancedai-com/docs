@@ -1,0 +1,100 @@
+---
+title: "Executando agentes"
+description: "Dispare uma execução, acompanhe o resultado e cancele uma que ainda está em andamento."
+---
+
+## Descrição
+
+Executar é assíncrono: o `run_agent` retorna um `runId` imediatamente e você consulta o
+`get_run_status` para o resultado. Estas ferramentas exigem o escopo `execute`, e o toggle do
+workspace `mcp.execute.enabled` precisa estar ligado — veja
+[escrevendo com segurança](/mcp/pt-br/tools/writing-safely).
+
+## `run_agent`
+
+Dispara uma execução.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | string (UUID) | Sim | Agente a executar. |
+| `variableInputs` | array | Não | Entradas da execução: `[{ inputId, inputText, … }]`. |
+| `sessionId` | string | Não | Id de sessão, para memória com escopo de sessão. |
+| `versionId` | string | Não | Executa aquele snapshot, independente do que está publicado. |
+| `dryRun` | boolean | Não | Padrão `true` — apenas valida. |
+| `idempotencyKey` | string | Sim quando `dryRun:false` | Evita execução duplicada em retry. |
+
+**Dry-run aqui significa apenas validar:** verifica o flag do workspace, seu escopo e sua cota
+restante, e resolve as entradas, sem disparar nada.
+
+```json
+{ "dryRun": false, "dispatched": true, "runId": "c7f0…", "quotaRemaining": 48 }
+```
+
+### Qual versão é executada
+
+| `versionId` | O que executa |
+|-------------|---------------|
+| Informado | Aquele snapshot, independente do que está publicado. |
+| Omitido | A versão publicada, se o agente tiver uma (controle de versão habilitado **e** uma versão publicada). Caso contrário, a cópia de trabalho ativa. |
+
+<Tip>
+  O `idempotencyKey` importa mais aqui do que em qualquer outro lugar: sem ele, uma requisição repetida
+  cobra uma segunda execução. Derive a chave da intenção da execução, não do timestamp da tentativa.
+</Tip>
+
+## `get_run_status`
+
+Consulta uma execução.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `runId` | string | Sim | O id retornado pelo `run_agent`. |
+
+Retorna:
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `runId` | string | A execução informada. |
+| `status` | string | Estado atual da execução. |
+| `tokens` | number | Tokens consumidos. |
+| `cost` | number | Custo atribuído à execução. |
+| `durationMs` | number | Duração real. |
+| `error` | string \| null | Motivo da falha, ou `null` quando não houver. |
+
+Consulte em intervalos razoáveis — uma execução que chama vários modelos de IA leva de segundos a
+minutos, e cada consulta conta no seu rate limit (60 requisições/minuto, 5.000/dia por chave).
+
+## `cancel_run`
+
+Solicita o cancelamento de uma execução ainda em andamento.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `runId` | string | Sim | O id retornado pelo `run_agent`. |
+| `dryRun` | boolean | Não | Padrão `true` — informa se a execução *poderia* ser cancelada. |
+| `idempotencyKey` | string | Não | Torna um cancelamento real seguro para repetir. |
+
+```json
+{ "dryRun": false, "applied": true, "runId": "c7f0…", "cancelled": true, "reason": "requested" }
+```
+
+Trabalho já concluído não é revertido — cancelar interrompe a execução daqui para frente, não desfaz
+efeitos colaterais que um node já produziu (um e-mail enviado continua enviado).
+
+## Atribuição da execução
+
+Execuções iniciadas via MCP são cobradas e auditadas no **dono da chave que as iniciou**, e o nome da
+chave/cliente que disparou aparece no histórico de execuções do agente — então uma execução disparada
+por um cliente de IA é rastreável até ele.
+
+## Exemplos de prompts
+
+- *"Execute o agente d2c2… com a entrada 'about atoms' e me diga o resultado"*
+- *"A execução c7f0… já terminou?"*
+- *"Cancele a execução que acabei de iniciar"*
+
+## Relacionados
+
+- [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely) — escopos e toggles de workspace
+- [Versionamento](/mcp/pt-br/tools/versioning) — escolher qual snapshot executar
+- [Troubleshooting](/mcp/pt-br/troubleshooting) — rate limits, circuit breaker, kill switch

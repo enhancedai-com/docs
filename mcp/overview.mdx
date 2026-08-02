@@ -45,6 +45,36 @@ See [Authentication](/mcp/authentication) for the full details.
   </Card>
 </CardGroup>
 
+## Phase 2 — Authoring and running
+
+Phase 2 adds the write surface: your AI client can build agents, wire nodes, snapshot versions and run
+flows. Every write tool is **dry-run by default** and needs an explicit `idempotencyKey` to apply, so
+nothing changes until you say so.
+
+<CardGroup cols={2}>
+  <Card title="Writing safely" icon="shield-check" href="/mcp/tools/writing-safely">
+    Start here: dry-run, idempotency keys, version conflicts, and which copy of the agent you edit.
+  </Card>
+  <Card title="Agents & folders" icon="folder-tree" href="/mcp/tools/agents-and-folders">
+    Create, rename, move and delete agents and the folders that hold them.
+  </Card>
+  <Card title="Nodes & edges" icon="diagram-project" href="/mcp/tools/nodes-and-edges">
+    Add and patch nodes, and wire them so data actually flows — including the two-edge model.
+  </Card>
+  <Card title="Versioning" icon="code-branch" href="/mcp/tools/versioning">
+    Snapshot the working copy, list the history, publish a version to production.
+  </Card>
+  <Card title="Running agents" icon="play" href="/mcp/tools/running-agents">
+    Dispatch a run, poll it for the result, cancel one in flight.
+  </Card>
+</CardGroup>
+
+<Note>
+  Write and execute tools require a key with the `write`/`execute` scopes **and** the matching
+  workspace toggles (`mcp.writes.enabled`, `mcp.execute.enabled`). A workspace admin controls both in
+  **Settings → MCP Tokens**.
+</Note>
+
 ## How it works
 
 ```

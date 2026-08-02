@@ -1,0 +1,110 @@
+---
+title: "Writing safely"
+description: "The rules every write tool shares: dry-run, idempotency keys, version conflicts, and which copy of the agent you are editing."
+---
+
+## Description
+
+Every tool that changes something — agents, folders, nodes, edges, versions, runs — follows the same
+four conventions. Learn them once and every write tool behaves predictably.
+
+## Dry-run is the default
+
+**Every write tool defaults to `dryRun: true` and changes nothing.** It returns the diff of what
+*would* happen so you can inspect it first. To actually apply the change you must pass **both**
+`dryRun: false` **and** an `idempotencyKey`.
+
+```json
+// 1. Inspect
+{ "agentId": "a1b2…", "nodeId": "textBox_1", "patch": { "data": { "text": "hi" } } }
+
+// 2. Apply
+{ "agentId": "a1b2…", "nodeId": "textBox_1", "patch": { "data": { "text": "hi" } },
+  "dryRun": false, "idempotencyKey": "set-greeting-2026-07-27-1" }
+```
+
+The response always tells you which mode you got:
+
+| Field | Meaning |
+|-------|---------|
+| `dryRun` | `true` when nothing was applied. |
+| `applied` | `true` when the change was persisted. |
+| `diff` | What changed (or would change): `added`, `updated`, `removed`, `edgesAdded`, `edgesRemoved`. |
+
+<Tip>
+  Read the diff, don't assume it. `add_node` returns the node **as stored**, including the
+  `position`, `width` and `height` the server resolved — which may differ from what you sent.
+</Tip>
+
+## Idempotency keys
+
+`idempotencyKey` is required whenever `dryRun` is `false`. A replay with the **same key and the same
+payload** returns the cached result instead of applying the change twice — so a network timeout or a
+client retry cannot duplicate a node or dispatch a second run.
+
+Use a key that describes the intent and is unique per change, e.g. `add-summary-node-2026-07-27-1`.
+Reusing a key for a *different* payload is a mistake: it will not do what you expect.
+
+## Version conflicts (`expectedVersion`)
+
+Pass the `updatedAt` you got from `get_agent` as `expectedVersion`. If anyone else changed the agent
+in the meantime, the write is refused with `version_conflict` instead of silently overwriting their
+work. Re-read the agent, re-decide, and retry.
+
+This is optional but strongly recommended whenever a human might be editing the same flow in the
+canvas at the same time.
+
+## Which copy am I editing? (`versionId`)
+
+Node and edge tools accept `versionId`, and it decides *what* you are editing:
+
+| `versionId` | You are editing |
+|-------------|-----------------|
+| **Omitted** (default) | The **live working copy**. Edits accumulate untracked until you call [`create_version`](/mcp/tools/versioning). |
+| A version id | That **existing version snapshot**, in place. |
+
+<Warning>
+  `versionId` does **not** start a new version. It targets a snapshot that already exists. To create
+  one, call [`create_version`](/mcp/tools/versioning). Passing a `versionId` hoping to "begin a new
+  version" edits that old snapshot instead.
+</Warning>
+
+## Permissions
+
+Write tools require the `write` scope on your key; running agents requires `execute`. Both are also
+gated **per workspace** by the workspace owner:
+
+- `mcp.writes.enabled` — turns all write tools off for the workspace.
+- `mcp.execute.enabled` — turns `run_agent` off for the workspace.
+
+If your key was issued to a non-admin member, its scopes may have been clamped to `read` only. A
+workspace admin can allow non-admin write/execute keys in **Settings → MCP Tokens**. See
+[Authentication](/mcp/authentication).
+
+## Errors you should expect
+
+| Error | Why | What to do |
+|-------|-----|------------|
+| `-32401` insufficient scope | Key lacks `write`/`execute`, or the workspace toggle is off. | Re-authorize with the needed scopes, or ask an admin to enable them. |
+| `version_conflict` | The agent changed since your `expectedVersion`. | Re-read with `get_agent` and retry. |
+| `validation_error` | The payload breaks a rule (e.g. a `globalStarter` id without `flow-global-starter`). | Fix the payload; the write did **not** partially apply. |
+| `-32006` rate limited | 60 requests/minute or 5 000/day per key. | Honour `retryAfterMs`. |
+| `-32602` invalid params | A required parameter was omitted. `data.missing` names them. | Send the parameter; the schema for each tool lists what is required. |
+
+## What the response tells you beyond the diff
+
+A write can succeed and still not do what you meant. These fields say so — read them.
+
+| Field | Meaning |
+|-------|---------|
+| `unknownArguments` | Arguments you sent that the tool does not declare. They were **ignored**, so the tool did something other than what you asked. |
+| `invalidEnumValues` | A node field whose value is outside the declared enum. The write applied, but the executor will not recognise the value and the node will do nothing at run time. |
+| `missingRequiredFields` | On `check_agent_integrity`: a required node field left empty. Reported rather than refused, because some declared-required fields are not needed at run time. |
+| `placementAdjusted` | The server moved your node so it would not overlap another. |
+
+## Related
+
+- [Agents & folders](/mcp/tools/agents-and-folders) — create, rename, move, delete
+- [Nodes & edges](/mcp/tools/nodes-and-edges) — build the flow itself
+- [Versioning](/mcp/tools/versioning) — snapshot and publish
+- [Running agents](/mcp/tools/running-agents) — dispatch and poll a run

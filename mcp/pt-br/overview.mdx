@@ -45,6 +45,36 @@ Veja [Autenticação](/mcp/pt-br/authentication) para todos os detalhes.
   </Card>
 </CardGroup>
 
+## Phase 2 — Autoria e execução
+
+A Phase 2 adiciona a superfície de escrita: seu cliente de IA pode construir agentes, ligar nodes,
+criar snapshots de versão e executar fluxos. Toda ferramenta de escrita é **dry-run por padrão** e
+exige um `idempotencyKey` explícito para aplicar, então nada muda até você mandar.
+
+<CardGroup cols={2}>
+  <Card title="Escrevendo com segurança" icon="shield-check" href="/mcp/pt-br/tools/writing-safely">
+    Comece aqui: dry-run, chaves de idempotência, conflitos de versão e qual cópia do agente você edita.
+  </Card>
+  <Card title="Agentes e pastas" icon="folder-tree" href="/mcp/pt-br/tools/agents-and-folders">
+    Crie, renomeie, mova e exclua agentes e as pastas que os contêm.
+  </Card>
+  <Card title="Nodes e edges" icon="diagram-project" href="/mcp/pt-br/tools/nodes-and-edges">
+    Adicione e altere nodes, e ligue-os para os dados realmente fluírem — incluindo o modelo de duas edges.
+  </Card>
+  <Card title="Versionamento" icon="code-branch" href="/mcp/pt-br/tools/versioning">
+    Snapshot da cópia de trabalho, listagem do histórico e publicação de uma versão em produção.
+  </Card>
+  <Card title="Executando agentes" icon="play" href="/mcp/pt-br/tools/running-agents">
+    Dispare uma execução, acompanhe o resultado, cancele uma em andamento.
+  </Card>
+</CardGroup>
+
+<Note>
+  Ferramentas de escrita e execução exigem uma chave com os escopos `write`/`execute` **e** os toggles
+  correspondentes do workspace (`mcp.writes.enabled`, `mcp.execute.enabled`). Um admin do workspace
+  controla os dois em **Settings → MCP Tokens**.
+</Note>
+
 ## Como funciona
 
 ```
