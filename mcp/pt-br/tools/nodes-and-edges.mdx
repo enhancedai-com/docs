@@ -1,0 +1,181 @@
+---
+title: "Nodes e edges"
+description: "Adicione, altere e remova nodes, e ligue-os de forma que os dados realmente fluam."
+---
+
+## Descrição
+
+Estas ferramentas constroem o agente em si. Leia [escrevendo com segurança](/mcp/pt-br/tools/writing-safely)
+primeiro — tudo aqui é dry-run por padrão e aceita `expectedVersion` e `versionId`.
+
+Antes de escrever um node, busque o schema dele com `get_node_type`. O formato de `data` é específico
+por tipo, e um campo que *parece* plausível mas não existe é gravado sem erro e depois ignorado na
+execução.
+
+## `get_node_type`
+
+Retorna `label`, `description`, `category`, `inputSchema` e `outputSchema` de um tipo de node — a
+mesma entrada que o [`list_node_types`](/mcp/pt-br/tools/list-node-types) devolve, sem baixar o
+catálogo inteiro.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `type` | string | Sim | Nome de máquina, ex.: `commandTextNode`. |
+
+<Warning>
+  Respeite o `enum` quando o campo declarar um, e nunca chute um valor. Esses campos não são validados
+  na escrita: um valor não reconhecido é gravado e depois não casa com nada, deixando o node
+  renderizado sem nada selecionado. Veja a nota sobre enum em
+  [`list_node_types`](/mcp/pt-br/tools/list-node-types).
+</Warning>
+
+## `list_ai_models`
+
+Retorna os modelos de IA disponíveis para o workspace, para você preencher `aiModel`/`aiSystem` de um
+node de IA com um valor que existe de fato e está habilitado naquele workspace — em vez de um nome de
+modelo lembrado de outro lugar.
+
+## `add_node`
+
+Adiciona um node ao agente.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | string (UUID) | Sim | Agente de destino. |
+| `node` | object | Sim | Node do React-Flow: um `id` único, mais `type` e `data` conforme necessário. |
+
+### Não invente coordenadas
+
+`node.position` é **opcional e resolvido pelo servidor**. A posição que você envia é uma *dica*: vence
+o primeiro slot livre nela ou à direita dela, e quando você omite, o node continua o fluxo à direita
+do node mais à direita. Nodes existentes nunca são movidos.
+
+- Leia o `position` de volta na resposta — é a posição autoritativa.
+- `placementAdjusted: true` significa que o servidor desviou o node de um lugar já ocupado.
+- `width`/`height` são preenchidos com o tamanho medido daquele tipo de node quando você os omite.
+
+Clientes que inventavam coordenadas redondas (`{x:0,y:0}`, `{x:100,y:100}`) sem saber as dimensões dos
+nodes empilhavam todos no mesmo ponto. Omitir `position` é mais simples e melhor.
+
+```json
+// requisição — sem position
+{ "agentId": "d2c2…", "node": { "id": "textgen_1", "type": "commandTextNode",
+  "data": { "prompt": "Summarise the input", "aiModel": "gpt-4o", "aiSystem": "openai" } },
+  "dryRun": false, "idempotencyKey": "add-textgen-1" }
+
+// resposta — posição resolvida
+{ "dryRun": false, "applied": true, "placementAdjusted": true,
+  "diff": { "added": [ { "id": "textgen_1", "type": "commandTextNode",
+    "position": { "x": 435, "y": -240 }, "width": 825, "height": 789 } ], "updated": [], "removed": [] } }
+```
+
+<Warning>
+  O id de um node `globalStarter` **precisa** conter a substring literal `flow-global-starter` (ex.:
+  `flow-global-starter_main`). O backend resolve o ponto de entrada do fluxo casando essa substring,
+  então qualquer outro id é rejeitado com `validation_error` de saída.
+</Warning>
+
+## `update_node`
+
+Mescla um patch em um node existente.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | string (UUID) | Sim | Agente de destino. |
+| `nodeId` | string | Sim | Node a alterar. |
+| `patch` | object | Sim | Campos parciais do node. |
+
+- Campos de topo (`type`, `position`, …) são mesclados **superficialmente**.
+- `patch.data` é mesclado **um nível de profundidade**, então chaves de data omitidas são preservadas,
+  não apagadas.
+- Envie o mínimo: para mudar um campo, envie só aquele campo.
+
+Diferente do `add_node`, o `update_node` **respeita exatamente a posição enviada** — sem resolução
+anti-sobreposição. Isso é deliberado: permite que um cliente organize o fluxo de forma determinística,
+node por node, sem o servidor questionar um movimento intencional.
+
+## `remove_node`
+
+Remove um node **e todas as edges que o tocam**.
+
+| Parâmetro | Tipo | Obrigatório |
+|-----------|------|-------------|
+| `agentId` | string (UUID) | Sim |
+| `nodeId` | string | Sim |
+
+## `connect_nodes`
+
+Cria uma edge de um node de origem para um node de destino.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | string (UUID) | Sim | Agente de destino. |
+| `source` | string | Sim | Id do node de origem. |
+| `target` | string | Sim | Id do node de destino. |
+| `sourceHandle` | string | Não | Porta de origem. Omita para o padrão contextual. |
+| `targetHandle` | string | Não | Porta de destino. Omita para o padrão contextual. |
+| `edgeId` | string | Não | Id explícito da edge. |
+
+### Ordem de execução vs dados — o modelo de duas edges
+
+Esta é a maior causa de "eu conectei, mas nada acontece":
+
+- Uma edge de **`outputFlow` → `input`** faz o destino **executar** depois da origem. Não carrega
+  dado.
+- Uma edge de **`output` → `<campo>In`** (ex.: `contentIn`, `promptIn`, `textIn`) carrega o **dado**.
+  Não dispara execução.
+
+Encadear dois `commandTextNode` para que B rode depois de A *e* veja o texto de A exige, portanto,
+**as duas** edges, cada uma com seu `edgeId`. Qualquer uma sozinha é uma meia-conexão silenciosa.
+
+Além da edge, o `data` do destino precisa referenciar a origem — o array companheiro `<campo>Data`,
+ex.: o `data.textData` de um `outputObjectNode`.
+
+<Tip>
+  **Normalmente você ganha tudo isso de graça.** Quando você chama `connect_nodes` com os dois handles
+  omitidos e o destino tem exatamente um campo de dado inequívoco, o servidor adiciona a edge
+  companheira *e* preenche a entrada `<campo>Data` do destino por você. Confira `diff.edgesAdded` e
+  `diff.updated` na resposta para ver o que ele fez.
+</Tip>
+
+### Padrões de handle
+
+Omitindo os dois handles, o servidor escolhe conforme os tipos de node:
+
+| Situação | `sourceHandle` | `targetHandle` |
+|----------|----------------|----------------|
+| Origem é `globalStarter` | `a` | `input` |
+| Um dos lados é `mediaBox` | `mediaOutput` | `mediaInput` |
+| Origem é `dynamicSettingsNode` | `outputModelTextSettings` | `modelVoiceSettings` para `voiceBoxNode`, senão `modelSettings` |
+| Destino é node terminal de exibição (`outputObjectNode`, `richTextBox`) | `output` | `textIn` |
+| Qualquer outro caso | `outputFlow` | `input` |
+
+<Warning>
+  Dois casos **não** têm padrão seguro e são rejeitados se você não for explícito:
+
+  - A partir de um `conditionNode` você precisa passar `sourceHandle` —
+    `conditionHandle-T{n}`/`conditionHandle-F{n}` para condições SWITCH, ou
+    `outputHandle-0`/`outputHandle-1` para condições booleanas.
+  - Para dentro de um node `nodesAdd` você precisa passar `targetHandle` — `nodesInput` (payload de
+    lista de nodes) ou `edgesInput` (payload de lista de edges).
+</Warning>
+
+## `disconnect_nodes`
+
+Remove uma edge. Identifique-a por `edgeId`, ou por `source` + `target`.
+
+Retorna `diff.edgesRemoved` — um array de ids de edge. Isso remove **apenas a edge**; para excluir um
+node use `remove_node`.
+
+## Exemplos de prompts
+
+- *"Adicione um gerador de texto de IA e um node de output no agente d2c2… e conecte os dois"*
+- *"Quais campos o node webSearch aceita?"*
+- *"Desconecte a edge entre textgen_1 e output_1"*
+
+## Relacionados
+
+- [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely) — dry-run, idempotência, `versionId`
+- [`list_node_types`](/mcp/pt-br/tools/list-node-types) — o catálogo completo e o contrato de enum
+- [`get_agent`](/mcp/pt-br/tools/get-agent) — ler os nodes e edges que você acabou de escrever
+- [Versionamento](/mcp/pt-br/tools/versioning) — snapshot da cópia de trabalho quando estiver satisfeito

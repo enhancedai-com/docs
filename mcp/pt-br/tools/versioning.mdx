@@ -1,0 +1,102 @@
+---
+title: "Versionamento"
+description: "Faça snapshot da cópia de trabalho, liste o histórico e publique uma versão em produção."
+---
+
+## Descrição
+
+Edições feitas pelas ferramentas de escrita caem na **cópia de trabalho ativa** do agente e ficam sem
+rastreio até você fazer o snapshot. O versionamento transforma essas edições acumuladas em um snapshot
+nomeado que você pode executar, inspecionar ou publicar.
+
+```
+edições na cópia de trabalho  →  create_version  →  publish_version
+        (sem rastreio)            (snapshot)        (ativo em produção)
+```
+
+## `create_version`
+
+Faz o snapshot da cópia de trabalho atual como uma nova versão, capturando todas as chamadas de
+`add_node`, `update_node`, `remove_node`, `connect_nodes` e `disconnect_nodes` feitas contra a cópia de
+trabalho (isto é, com `versionId` omitido) desde a última versão.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | string (UUID) | Sim | Agente de destino. |
+| `versionName` | string | Não | Nome legível. O servidor gera um se omitido. |
+| `dryRun` / `idempotencyKey` | | | Veja [escrevendo com segurança](/mcp/pt-br/tools/writing-safely). |
+
+```json
+{ "dryRun": false, "applied": true, "versionId": "8f21…", "versionName": "Add summariser" }
+```
+
+### A granularidade é sua escolha
+
+Não existe flag para isso. Chame `create_version` uma vez depois de várias edições para agrupá-las em
+uma versão, ou depois de cada edição para dar uma versão a cada uma. Se o usuário não disse qual
+prefere, **pergunte antes de fazer edições não versionadas** — edições que nunca entram em snapshot
+ficam só na cópia de trabalho.
+
+<Warning>
+  Não chame `create_version` antes de existir qualquer edição na cópia de trabalho: não há nada novo
+  para capturar. E ele **não** publica nada — isso é o `publish_version`.
+</Warning>
+
+## `list_versions`
+
+Retorna uma página do histórico de versões do agente mais `total`, e `nextCursor` quando houver mais
+resultados. Passe o `nextCursor` de volta como `cursor`; trate cursores como opacos.
+
+Cada item contém:
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `versionId` | string | Use com as ferramentas de escrita, `run_agent` ou `publish_version`. |
+| `versionName` | string | Nome legível. |
+| `isDeployed` | boolean | Se esta versão está ativa em produção. |
+| `isStaging` | boolean | Se esta versão é a candidata de staging. |
+| `updatedAt` | ISO 8601 | Última alteração no snapshot. |
+
+Esta ferramenta não retorna nodes nem edges — use [`get_agent`](/mcp/pt-br/tools/get-agent) para isso.
+
+## `publish_version`
+
+Publica em produção uma versão existente.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | string (UUID) | Sim | Agente de destino. |
+| `versionId` | string | Sim | Versão a publicar, do `create_version` ou `list_versions`. |
+| `dryRun` / `idempotencyKey` | | | Veja [escrevendo com segurança](/mcp/pt-br/tools/writing-safely). |
+
+```json
+{ "dryRun": false, "applied": true, "versionId": "8f21…", "deployed": true }
+```
+
+<Tip>
+  Publicar muda o que o tráfego real executa. Inspecione o dry-run primeiro e confirme com o usuário
+  antes de aplicar — do mesmo jeito que você faria antes de um deploy.
+</Tip>
+
+
+<Warning>
+  O `publish_version` publica **em produção**. Não existe alvo de staging nem parâmetro `target` — um argumento extra como `target: "staging"` é descartado e devolvido em `unknownArguments`, enquanto a versão vai ao ar.
+</Warning>
+
+## Editando uma versão existente
+
+As ferramentas de node e edge aceitam `versionId` para editar um snapshot **no lugar**, em vez da cópia
+de trabalho. Isso serve para corrigir uma versão histórica específica; não é como se cria uma nova.
+Veja [qual cópia estou editando?](/mcp/pt-br/tools/writing-safely).
+
+## Exemplos de prompts
+
+- *"Faça um snapshot das minhas mudanças no agente d2c2… como 'Add summariser'"*
+- *"Qual versão deste agente está publicada?"*
+- *"Publique a versão 8f21… em produção"*
+
+## Relacionados
+
+- [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely) — cópia de trabalho vs snapshot
+- [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges) — as edições que você está capturando
+- [Executando agentes](/mcp/pt-br/tools/running-agents) — executar um `versionId` específico

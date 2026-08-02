@@ -1,0 +1,58 @@
+---
+title: "Prompts e resources"
+description: "Receitas prontas que seu cliente de IA pode carregar, e catálogos somente leitura que ele pode anexar como contexto."
+---
+
+## Descrição
+
+Além das ferramentas, o servidor MCP do FluxPrompt expõe outras duas primitivas do MCP. As duas são
+somente leitura e listá-las não custa nada — elas existem para o cliente não ter que redescobrir como o
+FluxPrompt funciona em cada conversa.
+
+- **Prompts** são receitas nomeadas: uma sequência ordenada de ferramentas para uma tarefa comum,
+  preenchida com os seus argumentos.
+- **Resources** são catálogos que você pode anexar como contexto em vez de chamar uma ferramenta.
+
+Como isso aparece depende do cliente. O Claude Desktop lista prompts como slash-commands e resources
+como contexto anexável; outros clientes podem expor de outra forma, ou não expor.
+
+## Prompts
+
+| Prompt | Argumentos | O que ele conduz |
+|--------|------------|------------------|
+| `build_flow` | `goal` | Cria uma pasta e um agente vazio, depois monta um node de geração de texto ligado a um output de dados — a edge **e** a referência de dado. |
+| `edit_agent` | `agentId` | Inspeciona um agente, depois adiciona/altera/remove nodes com segurança usando concorrência otimista (`expectedVersion`). |
+| `organize_workspace` | — | Cria pastas e move agentes para dentro delas, ou de volta para a raiz. |
+| `run_agent_recipe` | `agentId` | Valida uma execução com dry-run, dispara, e consulta o `get_run_status` até terminar. |
+
+Eles codificam a ordem que é fácil de errar: buscar o schema real do node **antes** de escrevê-lo,
+criar as duas edges ao encadear nodes, e passar `empty: true` para um agente novo não vir com os nodes
+do template inicial.
+
+<Tip>
+  Prompts são orientação, não imposição. Eles ainda executam cada mutação como dry-run primeiro, então
+  você vê o diff antes de qualquer coisa ser aplicada.
+</Tip>
+
+## Resources
+
+| URI | Conteúdo |
+|-----|----------|
+| `fluxprompt://models` | Os modelos de IA disponíveis para este workspace: `provider`, `modelName`, `displayName`, `description`, `modelType`, `contextWindow`, `supportsVision`, `supportsReasoning`. |
+| `fluxprompt://node-types` | O catálogo de tipos de node: `type`, `label`, `description`, `category`, `inputSchema`, `outputSchema`. |
+
+Os dois espelham o que `list_ai_models` e `list_node_types` retornam. Use o resource quando quiser o
+catálogo em contexto durante toda a conversa, e a ferramenta quando quiser uma consulta pontual no meio
+da tarefa.
+
+<Warning>
+  `fluxprompt://models` é específico do workspace: lista o que o seu workspace tem habilitado, não todo
+  modelo que o FluxPrompt suporta. Preencha `aiModel`/`aiSystem` de um node a partir dessa lista, não a
+  partir de um nome de modelo que você lembra.
+</Warning>
+
+## Relacionados
+
+- [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely) — as convenções que toda receita segue
+- [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges) — o que `build_flow` e `edit_agent` automatizam
+- [`list_node_types`](/mcp/pt-br/tools/list-node-types) — a forma-ferramenta do `fluxprompt://node-types`

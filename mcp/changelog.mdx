@@ -3,6 +3,72 @@ title: "Changelog"
 description: "What's new in the FluxPrompt MCP integration."
 ---
 
+## 2026-08-02 — Phase 2 GA (authoring and running)
+
+**Your AI client can now build and run agents, not just read them.**
+
+### New tools — authoring
+- **`create_agent`**, **`update_agent`**, **`remove_agent`**, **`move_agent`** — manage agents; `empty: true` starts an agent with a blank canvas instead of the starter template.
+- **`create_folder`**, **`rename_folder`**, **`remove_folder`**, **`list_folders`** — manage the folders agents live in.
+- **`add_node`**, **`update_node`**, **`remove_node`** — build the flow. `patch.data` merges one level deep, so keys you omit are preserved.
+- **`connect_nodes`**, **`disconnect_nodes`** — wire nodes. Handles default from the node types being connected; `connect_nodes` also auto-fills the companion data edge and the target's `<field>Data` entry when the target has one unambiguous data field.
+- **`get_node_type`**, **`list_ai_models`** — fetch one node type's schema, or the models this workspace has enabled.
+
+### New tools — versioning and running
+- **`create_version`**, **`list_versions`**, **`publish_version`** — snapshot the working copy, browse history, deploy a version.
+- **`run_agent`**, **`get_run_status`**, **`cancel_run`** — dispatch a run, poll it, cancel one in flight.
+
+### New primitives
+- **Prompts** — `build_flow`, `edit_agent`, `organize_workspace`, `run_agent_recipe`: ready-made tool sequences for the common tasks.
+- **Resources** — `fluxprompt://models` and `fluxprompt://node-types`, attachable as conversation context.
+
+### Safety model
+- **Every write tool is dry-run by default.** Applying requires both `dryRun: false` and an `idempotencyKey`; a replay with the same key and payload returns the cached result instead of acting twice.
+- **`expectedVersion`** rejects a write with `version_conflict` if someone changed the agent since you read it.
+- **Two new scopes** — `write` and `execute`, alongside `read`. Non-admin members' keys are clamped to `read` unless a workspace admin allows non-admin privileged keys. Two workspace switches (`mcp.writes.enabled`, `mcp.execute.enabled`) gate writes and runs independently of the key.
+- Runs started over MCP are billed and audited against the owner of the key that started them, and the triggering client appears in the agent's execution history.
+
+### Node placement
+- **`add_node` places nodes itself.** `position` is optional: the server picks the first free slot at or to the right of your hint, and continues the flow to the right of the rightmost node when you omit it. Existing nodes are never moved; `placementAdjusted: true` tells you it moved yours. Node footprints come from measured sizes per node type, so spacing matches how big the node actually renders. Clients no longer need to invent coordinates — and should not.
+
+### Folders
+- **`list_agents` can be scoped to a folder.** Pass `folderId`, or `folderName` when only one folder carries that name. Previously a client could create an agent *into* a folder but never list what was *in* one.
+- **Every agent says where it lives.** `list_agents` items and the `get_agent` payload now carry `folderId` and `folderName`.
+- **Same-named folders are distinguishable.** `list_folders` now returns `scope` (`space` or `personal`), `spaceId` and `spaceName`. A workspace legitimately holds several folders sharing a name — each member has personal folders and each space has its own, seeded with the same starter names — and nothing in the response used to tell them apart. `folderName` resolution fails with `folder_name_ambiguous` and names the candidates rather than guessing.
+- A `folderId` from another workspace returns `folder_not_found` instead of an empty page, so an empty result always means the folder is empty.
+
+### Pagination
+- List tools moved to **cursor-based pagination** (MCP 2025-11-25): pass the previous response's `nextCursor` as `cursor`. Cursors are opaque — do not parse, build, or reuse one across tools.
+- **A cursor is now bound to the filters that produced it.** Reusing a `list_agents` cursor after changing `folderId`, `folderName` or `search` is rejected with an error saying the query changed. It previously carried only an offset, so the same mistake silently skipped or repeated rows. Resend the same filters alongside the cursor, or start again without one.
+- **Listings are ordered deterministically** by the product's own display order with a stable tiebreaker, so paging can no longer shuffle same-named rows between pages.
+
+### Fixes
+- **`webSearch` exposes `queryData`**, so an edge-linked variable actually reaches the node. It previously advertised only a plain `query` (plus a `maxResults` field that did not exist).
+- **Option-only fields now declare an `enum`.** `dynamicSettingsNode.selectedOption` (`text` | `voice`) and `fluxObject.selectedType` were typed as free strings; an unrecognised value is stored without complaint and then matches nothing, leaving the node rendered with no panel selected.
+- **`create_version`/`publish_version` activate version control** on the agent. Version-scoped reads, writes and runs were silently broken until a version existed.
+
+### Corrections after end-to-end validation
+
+**The node catalogue now describes what the executor actually does.** Every node type was authored and run through the MCP against a real stack, and the catalogue was corrected where it disagreed with reality.
+
+#### Write tools report two new things
+- **`invalidEnumValues`** — naming a value you sent that is outside the declared enum, and the values that are allowed. Previously such a value was accepted silently and the node became a no-op: it saved, the run reported `completed`, and it produced nothing.
+- **`missingRequiredFields`** (on `check_agent_integrity`) — naming a required field left empty. Reported, not refused: some declared-required fields are not needed at run time.
+
+#### Catalogue corrections
+- **`fileSave.files`** entries are objects (`{ id, value, fileName }`), not strings. A string was destructured by the executor and the file was lost, with no error raised.
+- **`commandContentNode.nameSpace`** is the namespace object (`{ id, name }`), not its name. A plain string made every run fail with `id or nameSpace is required`.
+- **`arrayNode`** now declares **`processorArray`**, the field the executor actually iterates. Setting only `content` produced a node that completed without iterating anything.
+- **Enums extended** with values real flows use: `Raw Files` (`pushData`/`pullData`), `Shop`/`Shopping`/`Lens`/`Patent Details` (`webSearch`), `brightData` (`webCrawling`).
+- **`required` corrected** where the run does not need the field: `counterNode.counterMode`, `conditionNode.conditions`, `arrayNode.content`.
+- **Eleven node types now warn that they produce no output during a run** (`imageReaderNode`, `animationNode`, `commandMusicNode`, `storedDataCaller`, `deepRefNode`, `documentSummarizer`, `webAmazon`, `webTrends`, `usCensusNode`, `secApiNode`, `hubSpotCRM`). Their work happens in the builder, not in a flow execution.
+
+#### Fixes
+- **`connect_nodes`** wires the data edge for every type whose handle declares a field — previously some types received only the control edge, so the upstream value never arrived.
+- **`connect_nodes`** accepts a second edge between the same pair when you pass explicit handles, which is required to wire `promptIn`/`instructionIn`/`personaIn` alongside the execution edge.
+- **`create_agent`** works with folders that belong to a space. It previously refused them with a message naming a parameter the tool did not accept.
+- **`get_run_nodes`** now returns nodes executed by the worker. They were previously absent, which made a completed AI node look like it never started.
+
 ## 2026-06-24 — Fixes
 
 **`list_agents` pagination is now enforced server-side.**

@@ -64,21 +64,45 @@ If you believe a service token has been exposed:
 2. Generate a new one.
 3. Update your client config files with the new token.
 
-## Scopes (Phase 1)
+## Scopes
 
-Both authentication methods currently grant **read-only** access. They can:
+A key carries one or more of three scopes:
 
-- ✅ List agents in your workspace
-- ✅ Fetch the full structure of any agent
-- ✅ List all available node types
+| Scope | Grants |
+|-------|--------|
+| `read` | List agents and folders, fetch an agent's full structure, browse node types and AI models. |
+| `write` | Create and edit agents, folders, nodes and edges; snapshot and publish versions. |
+| `execute` | Run an agent, poll a run, cancel a run. |
 
-They cannot:
+No scope grants access to billing, users, or workspace settings — those are never exposed over MCP.
 
-- ❌ Create or edit agents
-- ❌ Run agents or start executions
-- ❌ Access billing, users, or workspace settings
+### A key is bound to one workspace
 
-Write access (`add_node`, `update_node`, `remove_node`) will be available in Phase 2 with a separate scope.
+Each key is issued for **one** organization, chosen on the consent screen (OAuth) or by the workspace
+the token was created in. To act on another organization you authorize again and hold a second key.
+
+### Scopes are clamped by your role
+
+If you are not an admin of the selected organization, requesting `write`/`execute` yields a key
+clamped to `read` instead of an error. A workspace admin can lift this with the
+**Allow non-admin write/execute keys** toggle in
+[Settings → MCP Tokens](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) — it is off by
+default.
+
+### Workspace-level switches
+
+Even with the right scope, two workspace switches must be on:
+
+| Switch | Turns off |
+|--------|-----------|
+| `mcp.writes.enabled` | Every write tool for this workspace. |
+| `mcp.execute.enabled` | `run_agent` for this workspace. |
+
+A denied call returns `-32401` insufficient scope. Whether it was the key's scopes or the workspace
+switch, the fix is in the same place: **Settings → MCP Tokens**.
+
+Runs started through MCP are billed and audited against the **owner of the key** that started them, and
+the triggering key/client name appears in the agent's execution history.
 
 ## FAQ
 

@@ -1,0 +1,129 @@
+---
+title: "Agents & folders"
+description: "Create, rename, move and delete agents and the folders that hold them."
+---
+
+## Description
+
+Agents live inside folders, so creating an agent starts with a folder. All tools on this page follow
+the shared write conventions — [dry-run by default, `idempotencyKey` to apply](/mcp/tools/writing-safely).
+
+## `create_folder`
+
+Creates a folder in the workspace.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Folder name. |
+| `dryRun` | boolean | No | Default `true` — nothing is created. |
+| `idempotencyKey` | string | Yes when `dryRun:false` | Replay-safe key. |
+
+```json
+{ "dryRun": false, "applied": true, "folder": { "id": "30be…", "name": "Sales agents" } }
+```
+
+## `create_agent`
+
+Creates an agent (flow) inside a folder.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Agent name. |
+| `folderId` | string (UUID) | Yes | Destination folder — from `create_folder` or `list_folders`. |
+| `empty` | boolean | No | `true` starts with a blank canvas. Otherwise a starter template is applied. |
+| `type` | string | No | `"agent"` (default) or `"chat"`. |
+| `dryRun` / `idempotencyKey` | | | See [writing safely](/mcp/tools/writing-safely). |
+
+```json
+{ "dryRun": false, "applied": true, "agent": { "id": "d2c2…", "name": "Lead Scorer" } }
+```
+
+<Tip>
+  Pass `empty: true` whenever you intend to build the flow yourself with `add_node`. Without it you
+  inherit the starter template and end up with duplicate nodes alongside the ones you add.
+</Tip>
+
+## `list_folders`
+
+Returns a page of folders plus `total`, and `nextCursor` when more results exist. Pass `nextCursor`
+back as `cursor` for the next page. Treat cursors as opaque — never parse or build one, and never
+pass a cursor from a different tool. Folders come back in the order the product displays them.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string (UUID) | Pass this to `create_agent`, `move_agent` or `list_agents`. |
+| `name` | string | Display name. **Not unique** — see below. |
+| `parentId` | string (UUID) \| null | Parent folder, or `null` at the root. |
+| `agentCount` | number | Agents directly inside. Matches `list_agents({ folderId })`'s `total`. |
+| `scope` | `"space"` \| `"personal"` | Whether the folder belongs to a space or to a member personally. |
+| `spaceId` | string (UUID) \| null | The owning space, when `scope` is `"space"`. |
+| `spaceName` | string \| null | That space's name, for display. |
+| `createdAt` | ISO 8601 \| null | When the folder was created — the tiebreaker when scope and space match too. |
+
+### Two folders can share a name
+
+This is by design, not corruption. Every member gets personal folders and every space gets its own,
+and FluxPrompt seeds the same starter names into both — so a workspace commonly holds two folders
+called `Chatbot` and two called `Shared`.
+
+Use `scope` and `spaceName` to tell them apart, and **say which one you acted on** when you report
+back: "added it to the *Design* space's `Chatbot`" rather than just "added it to `Chatbot`".
+
+Nothing stops two folders in the **same** scope from sharing a name either — `create_folder` accepts a
+name that is already taken. When `scope` and `spaceName` match, fall back to `createdAt`; the `id` is the
+only field guaranteed to differ.
+
+<Tip>
+  You can still work from a name. `list_agents` accepts `folderName` and resolves it whenever exactly
+  one folder carries it; if several match it fails with `folder_name_ambiguous` and lists the
+  candidates. For everything else, pass the `id`. When a user's wording is ambiguous, ask — do not
+  pick the first match.
+</Tip>
+
+## `update_agent`
+
+Updates an agent's metadata. Currently only its `name`.
+
+| Parameter | Type | Required |
+|-----------|------|----------|
+| `agentId` | string (UUID) | Yes |
+| `name` | string | Yes |
+
+Accepts `expectedVersion` but **not** `versionId` — an agent's name is not version-scoped.
+
+## `move_agent`
+
+Moves an agent to another folder.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `agentId` | string (UUID) | Yes | Agent to move. |
+| `targetFolderId` | string \| null | No | Destination folder, or `null` to move it to the root. |
+
+## `rename_folder`
+
+| Parameter | Type | Required |
+|-----------|------|----------|
+| `folderId` | string (UUID) | Yes |
+| `name` | string | Yes |
+
+## `remove_agent` / `remove_folder`
+
+Delete an agent or a folder. Both are destructive and both default to dry-run.
+
+<Warning>
+  Deleting is not undone by a version: versions belong to the agent, so removing the agent removes
+  its history too. Inspect the dry-run diff before applying.
+</Warning>
+
+## Example prompts
+
+- *"Create a folder called Sales agents and an empty agent called Lead Scorer inside it"*
+- *"Rename the folder 30be… to Archive"*
+- *"Move my Lead Scorer agent to the root"*
+
+## Related
+
+- [Writing safely](/mcp/tools/writing-safely) — dry-run, idempotency, conflicts
+- [Nodes & edges](/mcp/tools/nodes-and-edges) — build the flow inside the agent
+- [`list_agents`](/mcp/tools/list-agents) — find existing agent ids

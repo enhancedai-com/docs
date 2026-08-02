@@ -1,0 +1,111 @@
+---
+title: "Escrevendo com segurança"
+description: "As regras que todas as ferramentas de escrita compartilham: dry-run, chaves de idempotência, conflitos de versão e qual cópia do agente você está editando."
+---
+
+## Descrição
+
+Toda ferramenta que altera algo — agentes, pastas, nodes, edges, versões, execuções — segue as mesmas
+quatro convenções. Aprenda uma vez e todas as ferramentas de escrita passam a ser previsíveis.
+
+## Dry-run é o padrão
+
+**Toda ferramenta de escrita usa `dryRun: true` por padrão e não altera nada.** Ela retorna o diff do
+que *aconteceria*, para você inspecionar antes. Para aplicar de verdade, você precisa passar
+`dryRun: false` **e** um `idempotencyKey`.
+
+```json
+// 1. Inspecionar
+{ "agentId": "a1b2…", "nodeId": "textBox_1", "patch": { "data": { "text": "hi" } } }
+
+// 2. Aplicar
+{ "agentId": "a1b2…", "nodeId": "textBox_1", "patch": { "data": { "text": "hi" } },
+  "dryRun": false, "idempotencyKey": "set-greeting-2026-07-27-1" }
+```
+
+A resposta sempre diz em qual modo você está:
+
+| Campo | Significado |
+|-------|-------------|
+| `dryRun` | `true` quando nada foi aplicado. |
+| `applied` | `true` quando a mudança foi persistida. |
+| `diff` | O que mudou (ou mudaria): `added`, `updated`, `removed`, `edgesAdded`, `edgesRemoved`. |
+
+<Tip>
+  Leia o diff, não presuma. O `add_node` retorna o node **como foi gravado**, incluindo `position`,
+  `width` e `height` resolvidos pelo servidor — que podem ser diferentes do que você enviou.
+</Tip>
+
+## Chaves de idempotência
+
+`idempotencyKey` é obrigatório sempre que `dryRun` for `false`. Uma repetição com a **mesma chave e o
+mesmo payload** retorna o resultado em cache em vez de aplicar a mudança duas vezes — então um
+timeout de rede ou um retry do cliente não consegue duplicar um node nem disparar uma segunda
+execução.
+
+Use uma chave que descreva a intenção e seja única por mudança, ex.: `add-summary-node-2026-07-27-1`.
+Reutilizar a chave com um payload **diferente** é um erro: não vai fazer o que você espera.
+
+## Conflitos de versão (`expectedVersion`)
+
+Passe o `updatedAt` obtido no `get_agent` como `expectedVersion`. Se outra pessoa alterou o agente
+nesse meio-tempo, a escrita é recusada com `version_conflict` em vez de sobrescrever o trabalho dela
+silenciosamente. Releia o agente, reavalie e tente de novo.
+
+É opcional, mas fortemente recomendado sempre que alguém possa estar editando o mesmo fluxo no canvas
+ao mesmo tempo.
+
+## Qual cópia estou editando? (`versionId`)
+
+As ferramentas de node e edge aceitam `versionId`, e ele decide *o que* você está editando:
+
+| `versionId` | Você está editando |
+|-------------|--------------------|
+| **Omitido** (padrão) | A **cópia de trabalho ativa**. As edições acumulam sem rastreio até você chamar [`create_version`](/mcp/pt-br/tools/versioning). |
+| Um id de versão | Aquele **snapshot de versão existente**, no lugar. |
+
+<Warning>
+  `versionId` **não** inicia uma nova versão. Ele aponta para um snapshot que já existe. Para criar
+  um, chame [`create_version`](/mcp/pt-br/tools/versioning). Passar um `versionId` esperando "começar
+  uma nova versão" edita aquele snapshot antigo.
+</Warning>
+
+## Permissões
+
+As ferramentas de escrita exigem o escopo `write` na sua chave; executar agentes exige `execute`. Os
+dois também são controlados **por workspace** pelo dono do workspace:
+
+- `mcp.writes.enabled` — desliga todas as ferramentas de escrita do workspace.
+- `mcp.execute.enabled` — desliga o `run_agent` do workspace.
+
+Se sua chave foi emitida por um membro não-admin, os escopos podem ter sido reduzidos para apenas
+`read`. Um admin do workspace pode liberar chaves de write/execute para não-admins em
+**Settings → MCP Tokens**. Veja [Autenticação](/mcp/pt-br/authentication).
+
+## Erros que você deve esperar
+
+| Erro | Por que | O que fazer |
+|------|---------|-------------|
+| `-32401` insufficient scope | A chave não tem `write`/`execute`, ou o toggle do workspace está desligado. | Reautorize com os escopos necessários, ou peça a um admin para habilitá-los. |
+| `version_conflict` | O agente mudou depois do seu `expectedVersion`. | Releia com `get_agent` e repita. |
+| `validation_error` | O payload quebra uma regra (ex.: id de `globalStarter` sem `flow-global-starter`). | Corrija o payload; a escrita **não** foi parcialmente aplicada. |
+| `-32006` rate limited | 60 requisições/minuto ou 5.000/dia por chave. | Respeite o `retryAfterMs`. |
+| `-32602` invalid params | Um parâmetro obrigatório foi omitido. `data.missing` os nomeia. | Envie o parâmetro; o schema de cada ferramenta lista os obrigatórios. |
+
+## O que a resposta diz além do diff
+
+Uma escrita pode ter sucesso e ainda assim não fazer o que você queria. Estes campos avisam — leia-os.
+
+| Campo | Significado |
+|-------|-------------|
+| `unknownArguments` | Argumentos enviados que a ferramenta não declara. Foram **ignorados**, então ela fez algo diferente do que você pediu. |
+| `invalidEnumValues` | Campo de node com valor fora do enum declarado. A escrita foi aplicada, mas o executor não reconhece o valor e o node não fará nada em execução. |
+| `missingRequiredFields` | No `check_agent_integrity`: campo obrigatório do node deixado vazio. É aviso, não recusa, porque alguns campos declarados como obrigatórios não são necessários em execução. |
+| `placementAdjusted` | O servidor moveu seu node para não sobrepor outro. |
+
+## Relacionados
+
+- [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders) — criar, renomear, mover, excluir
+- [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges) — construir o fluxo em si
+- [Versionamento](/mcp/pt-br/tools/versioning) — snapshot e publicação
+- [Executando agentes](/mcp/pt-br/tools/running-agents) — disparar e acompanhar uma execução

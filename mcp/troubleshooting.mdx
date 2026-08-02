@@ -54,6 +54,20 @@ Before digging into specific errors, verify these five things:
 
 ---
 
+### "Upstream rejected this server" / 502 `upstream_auth_rejected`
+
+**Cause:** The MCP server reached the core API, and the core API refused *its* credential — not yours. Your token is fine. This happens when `MCP_INTERNAL_SECRET` differs between the two services, typically after one of them is redeployed with a new value.
+
+**Fix:** Set `MCP_INTERNAL_SECRET` to the identical value on both `back` and `mcp-server`, then restart the MCP server.
+
+<Note>
+Earlier builds returned a bare `500 Internal server error` here, which gave no hint about where to look. If you are on an older build and see a persistent, unexplained `500` on every call, this is the first thing to check.
+</Note>
+
+Do **not** re-run the OAuth flow to resolve this — the failure is on the server side and re-authorizing cannot fix it.
+
+---
+
 ### "Agent not found" (`isError: true`)
 
 **Cause:** The `agentId` you passed doesn't exist in your workspace, or belongs to a different workspace. `get_agent` reports this as a tool error (`result.isError: true`) rather than a protocol-level error code.

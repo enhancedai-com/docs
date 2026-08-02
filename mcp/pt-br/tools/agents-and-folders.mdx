@@ -1,0 +1,130 @@
+---
+title: "Agentes e pastas"
+description: "Crie, renomeie, mova e exclua agentes e as pastas que os contêm."
+---
+
+## Descrição
+
+Agentes ficam dentro de pastas, então criar um agente começa por uma pasta. Todas as ferramentas desta
+página seguem as convenções de escrita — [dry-run por padrão, `idempotencyKey` para aplicar](/mcp/pt-br/tools/writing-safely).
+
+## `create_folder`
+
+Cria uma pasta no workspace.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `name` | string | Sim | Nome da pasta. |
+| `dryRun` | boolean | Não | Padrão `true` — nada é criado. |
+| `idempotencyKey` | string | Sim quando `dryRun:false` | Chave segura para repetição. |
+
+```json
+{ "dryRun": false, "applied": true, "folder": { "id": "30be…", "name": "Sales agents" } }
+```
+
+## `create_agent`
+
+Cria um agente (fluxo) dentro de uma pasta.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `name` | string | Sim | Nome do agente. |
+| `folderId` | string (UUID) | Sim | Pasta de destino — do `create_folder` ou `list_folders`. |
+| `empty` | boolean | Não | `true` começa com canvas em branco. Caso contrário, aplica um template inicial. |
+| `type` | string | Não | `"agent"` (padrão) ou `"chat"`. |
+| `dryRun` / `idempotencyKey` | | | Veja [escrevendo com segurança](/mcp/pt-br/tools/writing-safely). |
+
+```json
+{ "dryRun": false, "applied": true, "agent": { "id": "d2c2…", "name": "Lead Scorer" } }
+```
+
+<Tip>
+  Passe `empty: true` sempre que for construir o fluxo você mesmo com `add_node`. Sem isso você herda
+  o template inicial e acaba com nodes duplicados junto dos que você adicionou.
+</Tip>
+
+## `list_folders`
+
+Retorna uma página de pastas mais `total`, e `nextCursor` quando houver mais resultados. Passe o
+`nextCursor` de volta como `cursor` para a próxima página. Trate cursores como opacos — nunca faça
+parse nem construa um, e nunca passe um cursor de outra ferramenta. As pastas voltam na mesma ordem
+em que o produto as exibe.
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | string (UUID) | Passe para o `create_agent`, `move_agent` ou `list_agents`. |
+| `name` | string | Nome de exibição. **Não é único** — veja abaixo. |
+| `parentId` | string (UUID) \| null | Pasta pai, ou `null` na raiz. |
+| `agentCount` | number | Agentes diretamente dentro. Igual ao `total` do `list_agents({ folderId })`. |
+| `scope` | `"space"` \| `"personal"` | Se a pasta pertence a um space ou a um membro, pessoalmente. |
+| `spaceId` | string (UUID) \| null | O space dono, quando o `scope` é `"space"`. |
+| `spaceName` | string \| null | O nome desse space, para exibição. |
+| `createdAt` | ISO 8601 \| null | Quando a pasta foi criada — o critério de desempate quando escopo e space também coincidem. |
+
+### Duas pastas podem ter o mesmo nome
+
+Isso é por design, não corrupção de dado. Cada membro ganha pastas pessoais e cada space ganha as
+suas, e o FluxPrompt semeia os mesmos nomes iniciais nos dois lugares — então é comum um workspace
+ter duas pastas chamadas `Chatbot` e duas chamadas `Shared`.
+
+Use `scope` e `spaceName` para diferenciá-las, e **diga em qual você agiu** ao responder: "adicionei
+no `Chatbot` do space *Design*", em vez de só "adicionei no `Chatbot`".
+
+Nada impede que duas pastas do **mesmo** escopo tenham o mesmo nome — o `create_folder` aceita um nome
+já usado. Quando `scope` e `spaceName` coincidem, use o `createdAt`; o `id` é o único campo garantidamente
+diferente.
+
+<Tip>
+  Você ainda pode partir do nome. O `list_agents` aceita `folderName` e resolve sempre que exatamente
+  uma pasta tem aquele nome; se várias casarem, ele falha com `folder_name_ambiguous` e lista as
+  candidatas. Para o resto, passe o `id`. Quando o pedido da pessoa for ambíguo, pergunte — não
+  escolha a primeira que aparecer.
+</Tip>
+
+## `update_agent`
+
+Atualiza os metadados do agente. Hoje, apenas o `name`.
+
+| Parâmetro | Tipo | Obrigatório |
+|-----------|------|-------------|
+| `agentId` | string (UUID) | Sim |
+| `name` | string | Sim |
+
+Aceita `expectedVersion`, mas **não** `versionId` — o nome do agente não é versionado.
+
+## `move_agent`
+
+Move o agente para outra pasta.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | string (UUID) | Sim | Agente a mover. |
+| `targetFolderId` | string \| null | Não | Pasta de destino, ou `null` para mover para a raiz. |
+
+## `rename_folder`
+
+| Parâmetro | Tipo | Obrigatório |
+|-----------|------|-------------|
+| `folderId` | string (UUID) | Sim |
+| `name` | string | Sim |
+
+## `remove_agent` / `remove_folder`
+
+Excluem um agente ou uma pasta. Ambos são destrutivos e ambos usam dry-run por padrão.
+
+<Warning>
+  Excluir não é revertido por uma versão: versões pertencem ao agente, então remover o agente remove
+  o histórico dele também. Inspecione o diff do dry-run antes de aplicar.
+</Warning>
+
+## Exemplos de prompts
+
+- *"Crie uma pasta chamada Sales agents e um agente vazio chamado Lead Scorer dentro dela"*
+- *"Renomeie a pasta 30be… para Archive"*
+- *"Mova o agente Lead Scorer para a raiz"*
+
+## Relacionados
+
+- [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely) — dry-run, idempotência, conflitos
+- [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges) — construir o fluxo dentro do agente
+- [`list_agents`](/mcp/pt-br/tools/list-agents) — encontrar ids de agentes existentes
