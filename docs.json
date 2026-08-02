@@ -253,6 +253,7 @@
                   {
                     "group": "Tool reference",
                     "pages": [
+                      "mcp/tools/reference",
                       "mcp/tools/list-agents",
                       "mcp/tools/get-agent",
                       "mcp/tools/list-node-types"
@@ -536,6 +537,7 @@
                   {
                     "group": "Referência de ferramentas",
                     "pages": [
+                      "mcp/pt-br/tools/reference",
                       "mcp/pt-br/tools/list-agents",
                       "mcp/pt-br/tools/get-agent",
                       "mcp/pt-br/tools/list-node-types"

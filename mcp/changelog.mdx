@@ -3,6 +3,28 @@ title: "Changelog"
 description: "What's new in the FluxPrompt MCP integration."
 ---
 
+## 2026-08-02 — Node authoring corrections
+
+**The node catalogue now describes what the executor actually does.** Every node type was authored and run through the MCP against a real stack, and the catalogue was corrected where it disagreed with reality.
+
+### Write tools report two new things
+- **`invalidEnumValues`** — naming a value you sent that is outside the declared enum, and the values that are allowed. Previously such a value was accepted silently and the node became a no-op: it saved, the run reported `completed`, and it produced nothing.
+- **`missingRequiredFields`** (on `check_agent_integrity`) — naming a required field left empty. Reported, not refused: some declared-required fields are not needed at run time.
+
+### Catalogue corrections
+- **`fileSave.files`** entries are objects (`{ id, value, fileName }`), not strings. A string was destructured by the executor and the file was lost, with no error raised.
+- **`commandContentNode.nameSpace`** is the namespace object (`{ id, name }`), not its name. A plain string made every run fail with `id or nameSpace is required`.
+- **`arrayNode`** now declares **`processorArray`**, the field the executor actually iterates. Setting only `content` produced a node that completed without iterating anything.
+- **Enums extended** with values real flows use: `Raw Files` (`pushData`/`pullData`), `Shop`/`Shopping`/`Lens`/`Patent Details` (`webSearch`), `brightData` (`webCrawling`).
+- **`required` corrected** where the run does not need the field: `counterNode.counterMode`, `conditionNode.conditions`, `arrayNode.content`.
+- **Eleven node types now warn that they produce no output during a run** (`imageReaderNode`, `animationNode`, `commandMusicNode`, `storedDataCaller`, `deepRefNode`, `documentSummarizer`, `webAmazon`, `webTrends`, `usCensusNode`, `secApiNode`, `hubSpotCRM`). Their work happens in the builder, not in a flow execution.
+
+### Fixes
+- **`connect_nodes`** wires the data edge for every type whose handle declares a field — previously some types received only the control edge, so the upstream value never arrived.
+- **`connect_nodes`** accepts a second edge between the same pair when you pass explicit handles, which is required to wire `promptIn`/`instructionIn`/`personaIn` alongside the execution edge.
+- **`create_agent`** works with folders that belong to a space. It previously refused them with a message naming a parameter the tool did not accept.
+- **`get_run_nodes`** now returns nodes executed by the worker. They were previously absent, which made a completed AI node look like it never started.
+
 ## 2026-06-24 — Fixes
 
 **`list_agents` pagination is now enforced server-side.**
