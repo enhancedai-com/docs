@@ -54,6 +54,20 @@ Antes de investigar erros específicos, verifique estas cinco coisas:
 
 ---
 
+### "Upstream rejected this server" / 502 `upstream_auth_rejected`
+
+**Causa:** O servidor MCP alcançou a API principal, e ela recusou a credencial *dele* — não a sua. Seu token está correto. Isso acontece quando o `MCP_INTERNAL_SECRET` está diferente entre os dois serviços, normalmente depois de um deles ser reimplantado com outro valor.
+
+**Solução:** Defina `MCP_INTERNAL_SECRET` com o mesmo valor em `back` e `mcp-server` e reinicie o servidor MCP.
+
+<Note>
+Builds anteriores devolviam um `500 Internal server error` seco aqui, sem indicar onde olhar. Se você está numa build antiga e vê um `500` persistente e inexplicado em toda chamada, verifique isso primeiro.
+</Note>
+
+**Não** refaça o fluxo OAuth para resolver — a falha é do lado do servidor, e reautorizar não corrige.
+
+---
+
 ### "Agent not found" (`isError: true`)
 
 **Causa:** O `agentId` passado não existe no seu workspace, ou pertence a um workspace diferente. O `get_agent` reporta isso como erro de tool (`result.isError: true`), e não como um código de erro de protocolo.

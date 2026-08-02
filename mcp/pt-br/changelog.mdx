@@ -3,6 +3,28 @@ title: "Changelog"
 description: "Novidades na integração MCP do FluxPrompt."
 ---
 
+## 2026-08-02 — Correções na autoria de nodes
+
+**O catálogo de nodes agora descreve o que o executor realmente faz.** Todos os tipos de node foram criados e executados via MCP contra um ambiente real, e o catálogo foi corrigido onde divergia da realidade.
+
+### As ferramentas de escrita reportam duas coisas novas
+- **`invalidEnumValues`** — indica um valor enviado fora do enum declarado, e quais são os aceitos. Antes esse valor era aceito em silêncio e o node virava um no-op: salvava, a execução reportava `completed` e nada era produzido.
+- **`missingRequiredFields`** (no `check_agent_integrity`) — indica um campo obrigatório vazio. É um aviso, não uma recusa: alguns campos declarados como obrigatórios não são necessários em execução.
+
+### Correções de catálogo
+- **`fileSave.files`** recebe objetos (`{ id, value, fileName }`), não strings. Uma string era desestruturada pelo executor e o arquivo se perdia, sem erro algum.
+- **`commandContentNode.nameSpace`** é o objeto do namespace (`{ id, name }`), não o nome. Uma string simples fazia toda execução falhar com `id or nameSpace is required`.
+- **`arrayNode`** passa a declarar **`processorArray`**, o campo que o executor de fato itera. Preencher só `content` produzia um node que completava sem iterar nada.
+- **Enums ampliados** com valores usados por fluxos reais: `Raw Files` (`pushData`/`pullData`), `Shop`/`Shopping`/`Lens`/`Patent Details` (`webSearch`), `brightData` (`webCrawling`).
+- **`required` corrigido** onde a execução não precisa do campo: `counterNode.counterMode`, `conditionNode.conditions`, `arrayNode.content`.
+- **Onze tipos de node agora avisam que não produzem saída durante a execução** (`imageReaderNode`, `animationNode`, `commandMusicNode`, `storedDataCaller`, `deepRefNode`, `documentSummarizer`, `webAmazon`, `webTrends`, `usCensusNode`, `secApiNode`, `hubSpotCRM`). O trabalho deles acontece no builder, não numa execução de fluxo.
+
+### Correções
+- **`connect_nodes`** cria a aresta de dados para todo tipo cujo handle declara um campo — antes alguns tipos recebiam só a aresta de controle, e o valor do node anterior nunca chegava.
+- **`connect_nodes`** aceita uma segunda aresta entre o mesmo par quando você informa os handles explicitamente, necessário para ligar `promptIn`/`instructionIn`/`personaIn` junto da aresta de execução.
+- **`create_agent`** funciona com pastas que pertencem a um space. Antes recusava essas pastas citando um parâmetro que a ferramenta não aceitava.
+- **`get_run_nodes`** passa a retornar os nodes executados pelo worker. Antes eles ficavam ausentes, o que fazia um node de IA concluído parecer que nunca iniciou.
+
 ## 2026-06-24 — Correções
 
 **A paginação do `list_agents` agora é aplicada no servidor.**
