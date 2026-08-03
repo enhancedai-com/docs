@@ -1,0 +1,118 @@
+---
+title: "FluxPrompt for Slack"
+description: "Install FluxPrompt in your Slack workspace to read channels and post AI-generated updates from your workflows."
+---
+
+FluxPrompt is a no-code AI workflow platform. You build a workflow on a visual canvas — data sources, AI models, and business apps wired together — and FluxPrompt runs it on demand, on a schedule, or from an API call.
+
+This app connects your Slack workspace to those workflows: it reads the channels you invite it to, and posts results back where your team already works.
+
+<CardGroup cols={2}>
+  <Card title="Add to Slack" icon="slack" href="https://api.fluxprompt.ai/integrations/slack/install/direct">
+    Start the install and pick the workspace to connect.
+  </Card>
+  <Card title="Open FluxPrompt" icon="arrow-up-right-from-square" href="https://app.fluxprompt.ai">
+    Sign in to build the workflow that posts to Slack.
+  </Card>
+</CardGroup>
+
+## What you can do in Slack
+
+| In Slack | What FluxPrompt does |
+|---|---|
+| Read a channel | Pull messages and thread replies from any channel the app was invited to, and use them as workflow input |
+| List channels, members, files | Populate pickers and let a workflow process an attachment posted in Slack |
+| Post a message | Send the workflow result to a channel or as a thread reply, in plain text or Block Kit |
+| Schedule a message | Publish a result at a time you choose |
+| Update or delete a message | Keep a status message current, or remove one the app posted |
+| Upload a file | Deliver a report, PDF, or image into a channel |
+| Set a channel topic | Reflect live state, such as the current on-call or pipeline status |
+| Add a reaction | Mark a message as processed or approved by the workflow |
+
+Common uses:
+
+- Summarize a support channel every morning and post the digest to your team channel.
+- Turn a customer message into a structured ticket in your CRM, then reply in the thread.
+- Post AI-generated release notes, on-call reports, or KPI updates on a schedule.
+- Route a Slack thread through an AI agent that drafts a reply for a human to approve.
+
+## Before you start
+
+<Info>
+You need a FluxPrompt account and permission to install apps in your Slack workspace.
+</Info>
+
+## Install
+
+<Steps>
+<Step title="Start the install">
+Click **Add to Slack** above, or open **Settings → Integrations** in FluxPrompt and click **Connect** on the Slack card.
+</Step>
+<Step title="Approve the permissions">
+Slack shows the consent screen. Pick the workspace to connect and approve the requested permissions. You are returned to FluxPrompt.
+</Step>
+<Step title="Confirm the connection">
+The Slack card shows **Connected**. This is the confirmation that the install finished — no further setup is required in Slack.
+
+<Frame caption="Settings → Integrations, with Slack connected">
+  <img src="/images/integrations/slack/integrations-catalog.png" alt="The FluxPrompt integrations catalog with the Slack card showing an active connection" />
+</Frame>
+
+<Frame caption="The Slack connection, ready to use in any workflow">
+  <img src="/images/integrations/slack/slack-connection.png" alt="The Slack integration detail view in FluxPrompt showing a connected workspace" />
+</Frame>
+</Step>
+<Step title="Invite the app to a channel">
+In Slack, run `/invite @FluxPrompt` in each channel the app should read from or post to. Slack only lets an app see channels it has been invited to; without this step, reading history or posting returns a clear "add the app to this channel" error.
+</Step>
+<Step title="Use Slack in a workflow">
+In FluxPrompt, add a Slack node to a workflow, choose **Read messages** or **Post message**, and pick the channel from the dropdown. Wire it to the rest of your workflow and run it.
+
+<Frame caption="A Slack step in a workflow: pick the connection, the mode, and the channel">
+  <img src="/images/integrations/slack/slack-node-in-flow.png" alt="A Slack node on the FluxPrompt canvas, set to pull messages from a channel" />
+</Frame>
+</Step>
+</Steps>
+
+## What FluxPrompt accesses, and why
+
+Every Slack read and write is a step you added and configured. The app does no background polling and never posts on its own.
+
+| Permission | Why it is needed |
+|---|---|
+| Send messages | Post, update, delete, and schedule the messages your workflow produces |
+| Read public and private channel history | Only for the channel a Read-messages step points at, so a workflow can use those messages as input |
+| View channels and members | Fill the channel and user pickers, and resolve user IDs to names |
+| Manage channel topics | Only for the Set-topic step |
+| Add reactions, view emoji | Only for the Add-reaction step, and to list valid emoji shortcodes |
+| View and upload files | List files in a selected channel, and upload workflow output |
+
+FluxPrompt cannot read channels it has not been invited to, and requests no admin-level Slack permissions.
+
+## Your data
+
+- Slack content that a workflow reads or posts is kept in FluxPrompt execution logs for troubleshooting and pruned after roughly 30 days. There is no message archive, search index, or export feature.
+- Slack access tokens are encrypted before storage, never returned by any API response, and never shown to end users.
+- Slack data is never used to train AI models. When a workflow sends Slack content to an AI model, it goes to the provider you selected for that step, through that provider's API.
+- AI output can be inaccurate — review AI-generated content before it is treated as final.
+
+See [How FluxPrompt handles your data](https://help.enhanced.ai/en/articles/13909637-how-fluxprompt-handles-your-data) for the full description of what is sent to which provider.
+
+## Uninstall
+
+<Steps>
+<Step title="Disconnect in FluxPrompt">
+Open **Settings → Integrations → Slack** and click **Disconnect**. The stored token is deleted immediately.
+</Step>
+<Step title="Or remove the app in Slack">
+In Slack, open **Settings & administration → Manage apps → FluxPrompt** and remove the app. Slack revokes the token and FluxPrompt deletes the workspace's stored credentials automatically.
+</Step>
+</Steps>
+
+After either action, workflow steps that target Slack stop running and report that Slack is not connected.
+
+## Support
+
+Questions, problems, or a permission you want explained: [FluxPrompt Help Center](https://help.enhanced.ai/) or `contact@enhanced.ai`. We reply within two business days.
+
+For the full field-by-field reference of every Slack pull object and push action, see the [Slack integration reference](/main-api/specific-features/integrations/slack).
