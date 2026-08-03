@@ -1,0 +1,261 @@
+---
+title: "QuickBooks integration"
+description: "Read invoices, customers, payments, expenses and financial reports from QuickBooks Online, and create invoices, customers, payments, expenses and journal entries from your flows."
+---
+
+## Overview
+
+The QuickBooks integration connects a flow to a QuickBooks Online company. Pull mode queries accounting records and reports and brings them into the flow. Push mode writes transactions back into QuickBooks.
+
+| Feature | Mode | Description |
+|---|---|---|
+| Invoices | Pull | Query invoices, optionally by customer, date range and derived status |
+| Customers | Pull | Query the customer list |
+| Payments | Pull | Query received payments, optionally by customer |
+| Expenses | Pull | Query expense transactions (the QuickBooks `Purchase` entity) |
+| Accounts | Pull | Query the chart of accounts |
+| Vendors | Pull | Query the vendor list |
+| Profit & Loss report | Pull | Run the Profit and Loss report for a period |
+| Balance sheet report | Pull | Run the Balance Sheet report for a period |
+| Create invoice | Push | Create an invoice for a customer, with line items |
+| Update invoice | Push | Update an existing invoice |
+| Create customer | Push | Create a customer |
+| Create journal entry | Push | Create a balanced journal entry |
+| Create payment | Push | Record a customer payment, optionally applied to an invoice |
+| Create expense | Push | Record an expense paid from a bank or credit card account |
+
+<Warning>
+This integration is not usable yet. It requires an Intuit developer app that has not been created for FluxPrompt, so no QuickBooks connection can be established in any environment. See **Prerequisites and credentials** below.
+</Warning>
+
+## How it works under the hood
+
+### OAuth mechanics
+
+QuickBooks uses OAuth 2.0 with the `com.intuit.quickbooks.accounting` scope. The install URL points at `appcenter.intuit.com/connect/oauth2` and carries a base64url `state` holding your user id. Tokens are exchanged and refreshed at `oauth.platform.intuit.com/oauth2/v1/tokens/bearer` using HTTP Basic authentication with the app's client id and secret, and a form-encoded body — not JSON.
+
+Two properties of Intuit's tokens shape everything else:
+
+- **The access token lives one hour.** Unlike Slack or Notion, refresh is not a rare path. Any flow running against a connection older than an hour refreshes first.
+- **The refresh token rotates on every use** and itself expires after roughly 100 days. Each refresh returns a new refresh token that replaces the stored one. A connection left unused past that window must be reconnected by hand.
+
+### The company id (realmId)
+
+Every QuickBooks API call is scoped to a company: the base path is `/v3/company/{realmId}`. Intuit returns that `realmId` as a **separate query parameter on the OAuth callback**, not inside the token response, so the authorization code alone is not enough to complete a connection. FluxPrompt forwards the callback's extra parameters to the adapter, which stores the realm as the connection's provider account id and in connection metadata.
+
+### Sandbox and production are different hosts
+
+Intuit serves sandbox companies from `sandbox-quickbooks.api.intuit.com` and real companies from `quickbooks.api.intuit.com`. The environment is captured in connection metadata when you connect and is read from there at run time, ahead of the server's own setting. A connection made against a sandbox company keeps talking to the sandbox host even if the server is later pointed at production, because that sandbox company does not exist in production.
+
+### How pull works
+
+The six record types are read through the QuickBooks query endpoint using its SQL-like syntax. Filters are composed server-side:
+
+- **Date range** applies to `TxnDate` for transactions (invoices, payments, expenses) and to `MetaData.LastUpdatedTime` for name lists (customers, vendors, accounts), because name-list records have no transaction date.
+- **Customer filter** applies only to invoices and payments, the two entities that carry a `CustomerRef`. Expenses reference a vendor instead.
+- **Limit** defaults to 100 and is capped at 1000.
+
+The two reports use the dedicated report endpoints and accept either an explicit date range or a period macro such as `This Fiscal Year-to-date`. An explicit range wins when both are set. Report responses are nested row structures, not record lists, so they have a different output shape from the six record types.
+
+<Note>
+QuickBooks has no invoice status field. **Paid**, **Open** and **Overdue** are derived from the invoice balance and due date: paid means a zero balance, open means a positive balance, overdue means a positive balance with a due date in the past. **Voided** cannot be queried at all — QuickBooks zeroes a voided invoice rather than flagging it — so it is matched after the fact by a zero total and zero balance. A legitimately zero-value invoice will also match that test.
+</Note>
+
+### How push works
+
+Each action validates its required fields, builds the QuickBooks entity body, and posts it. Three details are worth knowing:
+
+- **Amounts are in dollars, not cents.** QuickBooks works in currency units, so no conversion happens. This differs from Stripe, where amounts entered in dollars are converted to cents.
+- **Line items are typed per action.** Invoice lines are sales lines and can reference a product or service item, with quantity converted into a unit price. Expense lines are account-based and require an expense account. Journal entry lines require an account and a debit or credit posting type.
+- **A journal entry must balance.** Debits and credits are summed before the request and a mismatch is rejected locally, with the two totals in the message, rather than being sent to QuickBooks to fail.
+
+**Update invoice fetches the `SyncToken` for you.** QuickBooks requires the record's current version token on any update. The adapter reads the invoice immediately before writing and uses the token it finds, so the field never appears in the node. By default the update is sparse, changing only the fields you filled in; supplying line items switches it to a full update that replaces the existing lines.
+
+### Credential storage
+
+Access and refresh tokens are stored on the connection row, and the realm and environment in its metadata. There are no separate API-key credentials — QuickBooks is OAuth-only.
+
+## Prerequisites and credentials
+
+QuickBooks requires an app registered on Intuit's developer portal. This app does not exist for FluxPrompt yet, and until an administrator creates it and configures the server, the connect flow cannot start.
+
+<Steps>
+<Step title="Create an Intuit developer account">
+Sign in at [developer.intuit.com](https://developer.intuit.com).
+</Step>
+<Step title="Create an app with the accounting scope">
+Create an app and enable the **com.intuit.quickbooks.accounting** scope. Accounting is the only scope this integration uses.
+</Step>
+<Step title="Register the redirect URI">
+Add the FluxPrompt integration callback for QuickBooks as a redirect URI. It must match exactly, including the scheme and any trailing path segment.
+</Step>
+<Step title="Copy the client id and secret">
+Each app has separate development and production keys. Copy the pair for the environment you intend to use and note which one it is.
+</Step>
+<Step title="Hand the keys to an administrator">
+The client id, the client secret and the environment have to be configured on the API and on the worker. Both need them: the worker refreshes tokens during flow runs.
+</Step>
+</Steps>
+
+<Warning>
+Sandbox and production keys are not interchangeable, and neither are the companies. A sandbox key can only reach a sandbox company. Connect against the environment you actually intend to use, because switching later means reconnecting.
+</Warning>
+
+## Connecting in FluxPrompt
+
+<Steps>
+<Step title="Add the Third Party Integration node">
+Open the node picker in your flow and add the **Third Party Integration** node.
+</Step>
+<Step title="Select QuickBooks">
+Choose QuickBooks as the provider. The connection card appears.
+</Step>
+<Step title="Authorize with Intuit">
+Start the connection. Intuit asks you to sign in and to pick which company to connect. The company you choose is the one every request will use.
+</Step>
+<Step title="Confirm the connected state">
+The card shows a connected state once the callback completes. Pull and push fields become available.
+</Step>
+</Steps>
+
+## Pull reference
+
+Select an **Object** and fill the filters. All filters are optional unless noted.
+
+### Invoices
+
+| Field | Type | Notes |
+|---|---|---|
+| Date from / Date to | Date | Filters on the transaction date |
+| Status | Select | Open, Overdue, Paid, Voided — derived, see the note above |
+| Customer | Search picker | Restricts to one customer |
+| Limit | Number | Default 100, maximum 1000 |
+
+### Customers
+
+| Field | Type | Notes |
+|---|---|---|
+| Date from / Date to | Date | Filters on the last-updated time |
+| Limit | Number | Default 100, maximum 1000 |
+
+### Payments
+
+| Field | Type | Notes |
+|---|---|---|
+| Date from / Date to | Date | Filters on the transaction date |
+| Customer | Search picker | Restricts to one customer |
+| Limit | Number | Default 100, maximum 1000 |
+
+### Expenses
+
+Reads the QuickBooks `Purchase` entity. Filters on the transaction date, with a limit. Expenses reference a vendor rather than a customer, so the customer filter is not offered.
+
+### Accounts
+
+Reads the chart of accounts. Filters on the last-updated time, with a limit.
+
+### Vendors
+
+Reads the vendor list. Filters on the last-updated time, with a limit.
+
+### Profit & Loss report
+
+| Field | Type | Notes |
+|---|---|---|
+| Report period | Select | A period macro such as `This Fiscal Year-to-date` |
+| Date from / Date to | Date | An explicit range; overrides the period macro |
+
+### Balance sheet report
+
+Same fields as the Profit & Loss report.
+
+## Push reference
+
+Select an **Action** and fill its fields.
+
+### Create invoice
+
+| Field | Required | Notes |
+|---|---|---|
+| Customer | Yes | Search picker |
+| Line items | -- | Description, amount in dollars, quantity, and an optional item |
+| Amount (dollars) | -- | Used only when no line items are set |
+| Description | -- | Used only when no line items are set |
+| Due date | -- | -- |
+| Transaction date | -- | Defaults to today in QuickBooks |
+| Memo | -- | Stored as the customer memo |
+
+Either line items or an amount is required.
+
+### Update invoice
+
+| Field | Required | Notes |
+|---|---|---|
+| Invoice | Yes | Search picker, searches by invoice number |
+| Customer | -- | Reassigns the invoice |
+| Due date | -- | -- |
+| Transaction date | -- | -- |
+| Memo | -- | -- |
+| Line items | -- | Supplying them replaces the existing lines |
+
+The version token is fetched automatically. Leaving line items empty changes only the fields you filled in.
+
+### Create customer
+
+| Field | Required | Notes |
+|---|---|---|
+| Customer name | Yes | Must be unique in QuickBooks |
+| Email | -- | -- |
+| Phone | -- | -- |
+| Company name | -- | -- |
+
+### Create journal entry
+
+| Field | Required | Notes |
+|---|---|---|
+| Line items | Yes | At least two lines, each with an account, an amount and a debit or credit type |
+| Transaction date | -- | -- |
+| Memo | -- | Stored as a private note |
+
+Debits must equal credits. The editor shows the running imbalance while you fill the lines.
+
+### Create payment
+
+| Field | Required | Notes |
+|---|---|---|
+| Customer | Yes | Search picker |
+| Payment amount (dollars) | Yes | -- |
+| Apply to invoice | -- | Links the payment to one invoice |
+| Payment method | -- | Search picker |
+| Deposit to account | -- | Search picker, bank and credit card accounts |
+| Transaction date | -- | -- |
+| Memo | -- | -- |
+
+Leaving the invoice empty records an unapplied payment against the customer.
+
+### Create expense
+
+| Field | Required | Notes |
+|---|---|---|
+| Paid from account | Yes | Search picker, bank and credit card accounts |
+| Payment type | -- | Cash, Check or Credit card |
+| Vendor | -- | Search picker |
+| Line items | -- | Each line needs an amount and an expense account |
+| Transaction date | -- | -- |
+| Memo | -- | Stored as a private note |
+
+## Troubleshooting
+
+**"QuickBooks authorization expired. Reconnect the integration."** The refresh token was rejected. Either it passed its roughly 100-day lifetime unused, or the connection was revoked in QuickBooks. Reconnect from the node.
+
+**"QuickBooks company id (realmId) is missing."** The connection was stored without a company. Disconnect and connect again, completing the Intuit company-selection step.
+
+**Pull returns nothing for a date range you expect to match.** Check which date the object filters on. Invoices, payments and expenses filter on the transaction date; customers, vendors and accounts filter on the last-updated time, which is not the creation date.
+
+**An invoice you consider void does not appear under Voided.** Voided status is inferred from a zero total and zero balance, because QuickBooks does not expose it as a queryable field. An invoice voided in a way that leaves a non-zero total will not match.
+
+**"Journal entry is out of balance."** The debit and credit totals differ. The message carries both figures. This is rejected before the request reaches QuickBooks.
+
+**An update fails with a stale-object error.** The invoice changed between the version token being read and the update being written, which means something else edited it at the same time. This is not retried automatically, because retrying would overwrite the other change. Re-run the node.
+
+**Amounts are wrong by a factor of 100.** QuickBooks works in dollars, not cents. Do not pre-multiply amounts as you would for Stripe.
