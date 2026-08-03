@@ -5,7 +5,7 @@ description: "Adapter pattern, credential storage, and provider extensibility fo
 
 ## Overview
 
-The third-party integrations system acts as a bridge between your FluxPrompt flows and external services such as WordPress, Slack, Notion, Zapier, and Stripe. Every integration operates in one of two modes:
+The third-party integrations system acts as a bridge between your FluxPrompt flows and external services — WordPress, Slack, Notion, Stripe, QuickBooks, ClickUp, Supabase, Zapier and MCP servers. Every integration operates in one of two modes:
 
 - **Pull mode** — fetch data from an external service into your flow (e.g., read Notion pages, list Slack channels).
 - **Push mode** — send data from your flow to an external service (e.g., post a Slack message, create a Stripe product).
@@ -36,12 +36,13 @@ Every integration node can be in one of three states from the perspective of the
 |---|---|---|---|
 | WordPress | Credentials (URL + app password) | Yes | Yes |
 | Slack | OAuth | Yes | Yes |
-| Zapier | Webhook URL | No | Yes |
+| Zapier | Webhook URL | Yes | Yes |
 | Stripe | Secret API key | Yes | Yes |
 | Notion | OAuth | Yes | Yes |
 | ClickUp | OAuth | Yes | Yes |
 | Supabase | Credentials (project URL + service role key) | Yes | Yes |
 | QuickBooks | OAuth (company selected at consent; `realmId` scopes every call) | Yes | Yes |
+| MCP | Credentials (API key or token, per transport) | Yes (list tools) | No |
 
 ## Adapter pattern
 
@@ -53,31 +54,80 @@ The adapter pattern means you can add a new provider without modifying any exist
 
 ```typescript
 export interface IIntegrationProviderAdapter {
-  /** Whether this provider uses OAuth, credentials, or webhook. */
-  connectionMode(): ConnectionMode;
+  /** 'oauth' | 'credentials' | 'webhook'. A readonly property, not a method. */
+  readonly connectionMode: IntegrationConnectionMode;
 
-  /** Return the OAuth authorization URL (OAuth providers only). */
-  getInstallUrl(state: string): string;
+  /** Opt in to CSRF state verification on the OAuth callback. */
+  readonly requiresStateVerification?: boolean;
 
-  /** Exchange an OAuth authorization code for tokens. */
-  exchangeCode(code: string): Promise<TokenSet>;
+  /** Build the provider's authorization URL. */
+  getInstallUrl(userId: string, state?: string): Promise<string>;
 
-  /** Refresh an expired access token. */
-  refreshAccessToken(refreshToken: string): Promise<TokenSet>;
+  /** Exchange an authorization code for tokens. */
+  exchangeCode(code: string): Promise<OAuthTokenResult>;
 
-  /** Store user-supplied credentials (non-OAuth providers). */
-  connectWithCredentials(credentials: Record<string, string>): Promise<void>;
+  /** Refresh an access token. Receives the whole row, not just the token. */
+  refreshAccessToken(integration: UserIntegration): Promise<OAuthTokenResult>;
 
-  /** Pull data from the external service. */
-  pull(params: PullParams): Promise<PullResult>;
+  /** Store user-supplied credentials. Credentials-mode providers only. */
+  connectWithCredentials?(
+    userId: string,
+    credentials: Record<string, unknown>,
+  ): Promise<CredentialsConnectResult>;
 
-  /** Push data to the external service. */
-  push(params: PushParams): Promise<PushResult>;
+  pull(
+    integration: UserIntegration,
+    payload: Record<string, unknown>,
+    context?: Record<string, unknown>,
+  ): Promise<unknown>;
 
-  /** Return dynamic option lists for the node UI (e.g., channels, databases). */
-  getOptions(optionType: string, query?: string): Promise<Option[]>;
+  push(
+    integration: UserIntegration,
+    payload: Record<string, unknown>,
+  ): Promise<unknown>;
+
+  /** Dynamic dropdown options. `context` carries the other form values,
+   *  plus `search` for type-ahead and `ids` to resolve stored ids to labels. */
+  getOptions?(
+    integration: UserIntegration,
+    fieldName: string,
+    context?: Record<string, string>,
+  ): Promise<Array<{ label: string; value: string }>>;
+
+  /** Schema for filter builders and property editors. Notion and Supabase use these. */
+  getDatabaseSchema?(integration: UserIntegration, databaseId: string): Promise<Schema>;
+  getDatabaseSchemaFromRecordId?(integration: UserIntegration, recordId: string): Promise<Schema>;
+
+  testConnection?(identity: ConnectionTestIdentity): Promise<ConnectionTestResult>;
 }
 ```
+
+Three things about this interface are easy to get wrong:
+
+- **Every method receives the whole `UserIntegration` row**, not a loose token or a params bag. `refreshAccessToken` in particular needs the row, because a rotating refresh token has to be read from and written back to it.
+- **Only `connectionMode`, `getInstallUrl`, `exchangeCode`, `refreshAccessToken`, `pull` and `push` are required.** Everything else is optional and exists because some provider needed it: `getOptions` for dropdowns, `getDatabaseSchema*` for Notion's filter builder and Supabase's table columns, `connectWithCredentials` for the non-OAuth providers, `testConnection` for the connection card.
+- **`getOptions` must honour both `context.search` and `context.ids`.** `search` powers type-ahead; `ids` resolves an already-stored id back to its human label, which is what stops a saved flow from showing a raw provider id to the user. A picker that ignores `ids` looks fine when you build it and shows a UUID after a page reload.
+
+<Note>
+QuickBooks adds an optional second parameter to `exchangeCode` (`oauthParams`), because Intuit returns the company id as its own callback query parameter rather than inside the token response. It is optional, so existing adapters are unaffected. See the [QuickBooks page](/main-api/specific-features/integrations/quickbooks).
+</Note>
+
+## Where a node executes
+
+A Third Party Integration node does not always run in the same process, and the difference matters when you are debugging one.
+
+**Editor-time operations always run in the API.** Connecting, refreshing a token, loading a dropdown (`getOptions`), fetching a schema, testing a connection — all of these are API endpoints, for every provider, always.
+
+**Execution — `pull` and `push` during a flow run — is being moved into the Temporal worker, one provider at a time.** The back keeps a set of migrated providers; when a node's provider is in that set, the back stops executing it inline and dispatches to the worker instead, which holds its own copy of the adapter's runtime path. The provenance of each ported adapter is recorded in `PORTED_FROM.md` in the worker's `third-party-integration` module.
+
+Two consequences worth knowing:
+
+- **The worker needs the provider's OAuth client credentials too**, not just the API. It refreshes access tokens during a run, so a worker missing `<PROVIDER>_CLIENT_ID`/`_SECRET` fails every node on a connection whose token has expired — while the same node works fine in the editor, because the editor path never leaves the API.
+- **The rollout is per environment.** An environment that has not received the worker routing still executes every provider inline in the back. A provider can therefore behave correctly in one environment and fail in another with the same flow, and the difference is where it ran.
+
+<Warning>
+When a provider is migrated, **deploy the worker before the back**. The back's routing flag is what stops inline execution; if it ships first, the worker's registry does not yet contain the adapter and every node for that provider fails with "this integration provider is not supported by the worker yet".
+</Warning>
 
 ## Adding a new provider (backend)
 
@@ -92,8 +142,11 @@ export interface IIntegrationProviderAdapter {
     this.adapters.set(IntegrationProvider.NEW_PROVIDER, new NewProviderAdapter());
     ```
   </Step>
-  <Step title="Add to the provider enum">
-    Add a new entry to the `IntegrationProvider` enum so the value is available across the codebase:
+  <Step title="Register the adapter as a NestJS provider">
+    Add the adapter class to the providers array in `AppApiModule`, and inject `HttpModule` if it makes HTTP calls. Registering it in the service map is not enough — without this, Nest cannot construct it.
+  </Step>
+  <Step title="Add to the provider enum, with a migration">
+    Add a new entry to the `IntegrationProvider` enum:
 
     ```typescript
     export enum IntegrationProvider {
@@ -101,8 +154,23 @@ export interface IIntegrationProviderAdapter {
       NEW_PROVIDER = 'new_provider',
     }
     ```
+
+    The enum is backed by a Postgres enum type, so **the code change alone is not enough** — a migration has to extend the database type or every insert for the new provider fails:
+
+    ```typescript
+    await queryRunner.query(
+      `ALTER TYPE "user_integrations_provider_enum" ADD VALUE IF NOT EXISTS 'new_provider'`,
+    );
+    ```
+  </Step>
+  <Step title="Port the runtime path to the worker">
+    A new provider is delivered with its worker adapter in the same change, not handed off to be migrated later. That means the runtime `pull`/`push` subset, its own HTTP helper (global `fetch`, not `@nestjs/axios`), its own error classification, an entry in the worker's adapter registry, and the provider string added to the back's migrated-providers set. Editor-time operations stay in the API and are deliberately not ported.
   </Step>
 </Steps>
+
+<Tip>
+Every value a user could not reasonably know by heart — a customer id, an invoice number, a channel, a database, a table — must be a searchable picker backed by `getOptions`, never a free-text field. This is a hard rule for the node, not a preference: the Third Party Integration node is used by non-technical people, and asking them to paste a provider's internal id means asking them to leave FluxPrompt to find it.
+</Tip>
 
 ## Adding a new provider (frontend)
 
@@ -123,17 +191,21 @@ Integration credentials are stored in the `user_integrations` table:
 |---|---|---|
 | `id` | UUID | Primary key |
 | `userId` | UUID | Owner of the connection |
-| `provider` | enum | Provider identifier |
-| `providerAccountId` | text | External account ID (nullable) |
-| `accessToken` | text | OAuth access token (encrypted at rest) |
-| `refreshToken` | text | OAuth refresh token (encrypted at rest) |
-| `expiresAt` | timestamp | Token expiry |
+| `name` | varchar(255) | User-facing connection label (nullable) |
+| `provider` | enum | Provider identifier — backed by a Postgres enum type, so adding one needs a migration |
+| `providerAccountId` | text | External account id (nullable). QuickBooks stores the `realmId` here |
+| `accessToken` | text | OAuth access token |
+| `refreshToken` | text | OAuth refresh token |
+| `expiresAt` | timestamp | Access-token expiry, used to decide when to refresh |
 | `apiCredentialsEncrypted` | text | Non-OAuth credentials, AES-256-GCM encrypted |
-| `metadata` | JSONB | Provider-specific extra data |
+| `metadata` | JSONB | Provider-specific extra data (workspace id, realm, environment, MSAL cache…) |
+| `isSharedWithOrg` | boolean | Whether teammates may use this connection |
 
-A **UNIQUE constraint** on `(userId, provider)` ensures each user has at most one connection per provider.
+**A user can hold several connections to the same provider.** There was a `UNIQUE (userId, provider)` constraint originally; it was dropped and replaced by a plain index so a user could connect, for example, two Slack workspaces. This is what the connection picker and `integrationId` on the node exist for — code that assumes one row per `(userId, provider)` is wrong.
 
-All sensitive fields are encrypted with **AES-256-GCM** before being written to the database. Tokens are decrypted only at request time inside the adapter.
+<Warning>
+**Only `apiCredentialsEncrypted` is encrypted.** OAuth `accessToken` and `refreshToken` are written to the database in plaintext — `encryptCredentials` is applied exclusively to the credentials blob used by the non-OAuth providers (WordPress, Stripe, Supabase, MCP). Do not assume tokens are protected at rest.
+</Warning>
 
 ## Credential sharing
 
@@ -144,13 +216,36 @@ When a flow is shared or collaboratively edited, the integration node stores a `
 3. If the provider is webhook-based, fall back to a **webhook stub** (Zapier).
 4. If no credentials can be resolved, return an **error** prompting the user to connect.
 
-## NestJS module structure
+### Sharing a connection with the organization
 
-The integrations system is organized as a standard NestJS module:
+Separate from that per-node fallback, a connection can be offered to the whole company by setting `isSharedWithOrg`. The connection picker then lists, for a given provider:
 
-- **IntegrationsModule** — declares the controller, service, and adapter providers.
-- **IntegrationsController** — exposes REST endpoints for connecting, disconnecting, pulling, and pushing.
-- **IntegrationsService** — resolves the correct adapter, manages credential CRUD, and orchestrates pull/push calls.
-- **Individual adapters** — injected via the DI container and resolved by provider key.
+- every connection **owned by the current user**, and
+- connections owned by **other active members of the same company**, but only those with `isSharedWithOrg = true`.
 
-This structure lets you unit-test each adapter in isolation and swap implementations without touching the controller or service layers.
+Company membership is read from `company_user` with `status = 'active'`, so revoking someone's membership immediately removes their shared connections from everyone else's picker. With no company in context, only the user's own connections are listed.
+
+This is why a teammate can run a flow whose integration they never connected — and why the node shows **Connected by another user** rather than prompting them to authenticate.
+
+## Module structure
+
+There is **no dedicated `IntegrationsModule`**. The controllers, the service and every adapter are declared in `AppApiModule`, which is why adding a provider means editing that file — registering the adapter in the service's map alone leaves Nest unable to construct it.
+
+`src/app-api/integrations/` holds:
+
+| File | Role |
+|---|---|
+| `integrations.controller.ts` | The editor-facing REST surface, behind `JwtAuthGuard` — connect, disconnect, status, pull, push, `getOptions`, schema |
+| `integrations-api.controller.ts` | The same domain exposed to external callers behind `ApiKeyGuard` |
+| `slack-public.controller.ts` | Unauthenticated by design — receives Slack's event callbacks, which arrive from Slack rather than from a logged-in user |
+| `integrations.service.ts` | Resolves the adapter by provider key, owns credential CRUD, and orchestrates pull/push |
+| `oauth-state.service.ts` | Issues and verifies the OAuth `state` value, for adapters that set `requiresStateVerification` |
+| `slack-events.service.ts` | Handles the Slack Events API payloads |
+| `zapier-webhook-*.service.ts` | The shared store, archive and trigger path for inbound Zapier webhooks |
+| `adapters/*.adapter.ts` | One per provider, injected through the DI container |
+
+Each adapter is unit-testable in isolation — mock its HTTP helper and assert the request it builds — which is how the provider suites are written.
+
+<Note>
+OAuth `state` is verified only for adapters that opt in via `requiresStateVerification`. It is not applied uniformly across providers, so do not assume a callback was CSRF-checked without looking at the adapter.
+</Note>
