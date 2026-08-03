@@ -23,7 +23,9 @@ The Slack integration lets you read from and write to a connected Slack workspac
 
 ## How it works under the hood
 
-Slack uses true OAuth2. When you connect, FluxPrompt builds an authorization URL at `https://slack.com/oauth/v2/authorize` with the platform `client_id` (server-side `SLACK_CLIENT_ID`), a redirect URI of `{base}/slack`, the requested scopes, and a `state` value that encodes your user ID as base64url.
+Slack uses true OAuth2. When you connect, FluxPrompt builds an authorization URL at `https://slack.com/oauth/v2/authorize` with the platform `client_id` (server-side `SLACK_CLIENT_ID`), a redirect URI of `{base}/slack`, the requested scopes, and a `state` value.
+
+`state` is a 32-byte random, single-use nonce stored in Redis for 10 minutes and bound to the FluxPrompt user who started the flow. The callback validates and deletes it before the code is exchanged, so a replayed or foreign `state` is rejected. The Marketplace direct-install entry point (`GET /integrations/slack/install/direct`) issues an unbound nonce and returns an HTTP 302 to Slack's authorization URL; the code is then exchanged against whichever FluxPrompt account completes the callback.
 
 After you approve the consent screen, Slack redirects back with a code that FluxPrompt exchanges for tokens:
 
@@ -51,11 +53,27 @@ emoji:read, files:read, files:write
 
 Channel and user dropdowns are populated dynamically. Channels come from a paginated `conversations.list` (labeled `# name`), users come from `users.list` (bots and deleted users filtered out), and the reaction picker merges a curated static emoji list with the workspace's `emoji.list` (loaded only for the add-reaction action).
 
-Credentials are stored in `user_integrations` as encrypted OAuth access and refresh tokens.
+Credentials are stored in `user_integrations` as encrypted OAuth access and refresh tokens. Encryption is AES-256-GCM with a key derived once via HKDF-SHA256 from `INTEGRATIONS_ENCRYPTION_KEY` (falling back to `JWT_SECRET`), applied transparently by a TypeORM column transformer. Ciphertext carries an `enc:v1:` prefix, so rows written before encryption was introduced are still read as plaintext and get encrypted on their next write.
+
+## Inbound events and App Home
+
+`POST /integrations/slack/events` is the Slack Events API request URL. Every request is verified against `SLACK_SIGNING_SECRET` — HMAC-SHA256 over `v0:{timestamp}:{raw body}`, constant-time compared, and rejected when the timestamp is older than 5 minutes. The raw body is captured only for this path so large uploads elsewhere are not duplicated in memory.
+
+| Event | Effect |
+|---|---|
+| `url_verification` | Replies with the challenge to complete the handshake |
+| `app_home_opened` | Publishes the App Home view with connection status, next steps, and support links via `views.publish` |
+| `app_uninstalled`, `tokens_revoked` | Deletes every `user_integrations` row for that `team_id` |
+
+The App Home view uses markdown links rather than buttons, so the app needs no interactivity request URL.
 
 ## Prerequisites and credentials
 
-Slack is a one-click OAuth integration. You do not provide any manual keys or tokens. The Slack app's `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET` are platform server-side environment variables, and the integration config defines no `authFields`.
+Slack is a one-click OAuth integration. You do not provide any manual keys or tokens. The Slack app's `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, and `SLACK_SIGNING_SECRET` are platform server-side environment variables, and the integration config defines no `authFields`.
+
+<Note>
+End users should follow [FluxPrompt for Slack](/integrations/slack) instead of this page — it covers installing, inviting the app to a channel, and uninstalling.
+</Note>
 
 <Info>
 Connection starts from the Slack connection card, not from a field form. During the OAuth consent screen you authorize the target workspace and grant the requested scopes.
