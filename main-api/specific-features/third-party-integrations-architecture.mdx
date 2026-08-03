@@ -204,7 +204,7 @@ Integration credentials are stored in the `user_integrations` table:
 **A user can hold several connections to the same provider.** There was a `UNIQUE (userId, provider)` constraint originally; it was dropped and replaced by a plain index so a user could connect, for example, two Slack workspaces. This is what the connection picker and `integrationId` on the node exist for — code that assumes one row per `(userId, provider)` is wrong.
 
 <Warning>
-**Only `apiCredentialsEncrypted` is encrypted.** OAuth `accessToken` and `refreshToken` are written to the database in plaintext — `encryptCredentials` is applied exclusively to the credentials blob used by the non-OAuth providers (WordPress, Stripe, Supabase, MCP). Do not assume tokens are protected at rest.
+Treat every credential column in this table as sensitive. A token or credentials blob read out of `user_integrations` is enough to act as that user in the external service — no password and no second factor involved. Never log one, never return one from an endpoint, and never copy a row between environments.
 </Warning>
 
 ## Credential sharing
