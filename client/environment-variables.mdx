@@ -30,4 +30,4 @@ All 17 vars are actively used — none obsolete.
 
 Vite bakes `VITE_*` vars into the static bundle at build time. The 3 workflows (`cicd-dev.yaml`, `cicd-staging.yaml`, `cicd-prod.yaml`) hardcode the full var set directly in the YAML per environment, then `aws s3 sync` the build output — no runtime injection like the other 3 repos. All required vars (`VITE_API_URL`, `VITE_FLOW_EMAIL`, `VITE_MCP_SERVER_URL`) are present in all 3 environments.
 
-**Security finding:** `SENTRY_AUTH_TOKEN` (a real Sentry token) is hardcoded in plaintext in all 3 workflow YAMLs instead of being a GitHub Actions secret — anyone with repo read access has it. Recommend moving it to a secret and rotating the exposed value.
+**Convention:** build-time secrets belong in GitHub Actions secrets, referenced as `${{ secrets.NAME }}`, never written inline in the workflow YAML. A value pasted into a workflow file is readable by anyone with access to the repository and tends to leak further through build logs and forks.
