@@ -5,13 +5,13 @@ description: "Read ClickUp tasks, lists, spaces, and comments from a flow, and c
 
 ## Overview
 
-The ClickUp integration connects a ClickUp workspace to a flow so you can read work items in pull mode and write them in push mode. You authorize it once through OAuth and then navigate your workspace hierarchy with dropdowns that load live from your account.
+The ClickUp integration connects a ClickUp workspace to a flow so you can read work items in pull mode and write them in push mode. You connect it once — through FluxPrompt's OAuth app, a personal API token, or your own OAuth app — and then navigate your workspace hierarchy with dropdowns that load live from your account.
 
 | Property | Value |
 |---|---|
 | Integration ID | `clickup` |
 | Category | Productivity, project management |
-| Authentication | OAuth2 |
+| Authentication | OAuth2 (FluxPrompt's app or your own), or a personal API token |
 | Pull support | Yes — tasks, a single task, spaces, lists, comments |
 | Push support | Yes — create task, update task, add comment |
 | Sharing | Yes — teammates run your connection without seeing the token |
@@ -31,7 +31,9 @@ The ClickUp integration connects a ClickUp workspace to a flow so you can read w
 
 ### OAuth mechanics
 
-The connection uses a standard OAuth2 authorization-code flow. When you start it, FluxPrompt builds an install URL against `https://app.clickup.com/api` carrying the server-side `client_id`, a `redirect_uri` pointing at the FluxPrompt `/clickup` callback, and a `state` value that encodes your user id as base64url.
+The connection uses a standard OAuth2 authorization-code flow. When you start it, FluxPrompt builds an install URL against `https://app.clickup.com/api` carrying a `client_id`, a `redirect_uri` pointing at the FluxPrompt `/clickup` callback, and a single-use `state` value. The state is issued and stored server-side, bound to your account and to this provider, and it expires in ten minutes — a callback carrying anything else is rejected before a token is ever requested. Note there is no `scope` parameter: ClickUp has none.
+
+Which `client_id` is used is the only difference between the two OAuth methods. FluxPrompt's app reads it from the server configuration; your own app supplies it at connect time, and its client secret rides along inside that server-side state rather than through your browser.
 
 After you approve access, ClickUp redirects back with a code, which FluxPrompt exchanges for a token. Unlike Notion, the credentials go in the request body rather than an HTTP Basic header:
 
@@ -50,7 +52,7 @@ The response yields an `access_token`. FluxPrompt then calls `GET /user` and `GE
 
 ### API access
 
-All calls go to `https://api.clickup.com/api/v2` with an `Authorization: Bearer <token>` header and a 20-second timeout. Responses are checked explicitly, and a failure surfaces ClickUp's own `err` message together with its `ECODE` error code, so a message like `Team not authorized (OAUTH_027)` reaches you intact rather than as a generic failure.
+All calls go to `https://api.clickup.com/api/v2` with a 20-second timeout. The `Authorization` header depends on how the connection was made: an OAuth access token — from either app — is sent as `Bearer <token>`, while a personal API token is sent as the bare `pk_…` value, which is the form ClickUp documents for it. Responses are checked explicitly, and a failure surfaces ClickUp's own `err` message together with its `ECODE` error code, so a message like `Team not authorized (OAUTH_027)` reaches you intact rather than as a generic failure.
 
 ### The workspace hierarchy
 
@@ -98,13 +100,25 @@ The task body is assembled the same way for create and update: the name falls ba
 
 ### Credential storage
 
-The connection is stored in the `user_integrations` table as an OAuth record, encrypted at rest. The server holds `CLICKUP_CLIENT_ID` and `CLICKUP_CLIENT_SECRET` as environment variables and never exposes them to the flow.
+The connection is stored in the `user_integrations` table, encrypted at rest, and the connection records which kind of credential it holds so the server knows how to authenticate with it. Nothing a flow can read ever contains a credential.
+
+FluxPrompt's own app keeps its `CLICKUP_CLIENT_ID` and `CLICKUP_CLIENT_SECRET` as server environment variables, never exposed to the flow. A personal API token is stored as an encrypted credential. Your own app's client id and secret are stored the same way, alongside the access token they produced — kept so the connection can be re-established, not to authenticate individual calls.
 
 ## Prerequisites and credentials
 
-This integration uses one-click OAuth, so there are no API keys to paste. What it does require is that the FluxPrompt ClickUp OAuth application be configured for the environment you are using, since the client id and secret live on the server.
+ClickUp can be connected three ways. The connection card shows the choice, and every method produces a connection that behaves identically once created — the same dropdowns, the same pull and push actions.
 
-You also need enough permission in ClickUp itself: the account you authorize must be able to see the Spaces and Lists you intend to read, and to create or edit tasks in the Lists you intend to write to. A token can never reach more than the authorizing user can.
+| Method | What you provide | When to use it |
+|---|---|---|
+| **FluxPrompt app** | Nothing | The default. One click, nothing to create in ClickUp. |
+| **Personal API token** | A personal token from your ClickUp settings | You want a credential you can revoke yourself, or the FluxPrompt app is not available in your environment. |
+| **Your own OAuth app** | The client id and secret of an OAuth app you registered in ClickUp | You want the consent screen, the audit trail, and the revocation to belong to an app your organization owns. |
+
+Whichever you pick, you also need enough permission in ClickUp itself: the account behind the credential must be able to see the Spaces and Lists you intend to read, and to create or edit tasks in the Lists you intend to write to. A token can never reach more than its owner can.
+
+<Note>
+  ClickUp has no OAuth scopes and its access tokens do not expire. There is nothing to scope at connect time — the authorizing user decides the reach by choosing which Workspaces to approve — and there is no automatic refresh. If a token is revoked in ClickUp, the connection has to be re-established.
+</Note>
 
 ## Connecting in FluxPrompt
 
@@ -112,16 +126,45 @@ You also need enough permission in ClickUp itself: the account you authorize mus
   <Step title="Open the ClickUp connection card">
     Add a **Third Party Integration** node to your flow, open its panel, and select **ClickUp** from the provider list.
   </Step>
-  <Step title="Start the OAuth flow">
-    Select connect. A ClickUp authorization window opens.
+  <Step title="Choose how to connect">
+    Pick one of the three methods. **FluxPrompt app** needs nothing from you; the other two are described below.
   </Step>
-  <Step title="Pick the workspace to authorize">
-    Choose which ClickUp workspace FluxPrompt may access, then approve.
+  <Step title="Authorize, or paste your credential">
+    **FluxPrompt app** and **Your own OAuth app** open a ClickUp authorization window — choose which Workspaces to approve, then confirm. **Personal API token** validates the token against ClickUp immediately and reports a bad token on the spot.
   </Step>
   <Step title="Navigate down to a List">
     Back in the node, select the **Workspace** first — the Space, Folder, and List dropdowns fill in as you go, and Status and Assignees only load once a List and Workspace are chosen.
   </Step>
 </Steps>
+
+### Connecting with a personal API token
+
+<Steps>
+  <Step title="Copy the token from ClickUp">
+    In ClickUp, open your avatar, then **Settings**, then **Apps**. Copy the personal API token — it starts with `pk_`.
+  </Step>
+  <Step title="Paste it into the connection card">
+    Choose **Personal API token**, paste the value, name the connection, and save.
+  </Step>
+</Steps>
+
+A personal token acts as you, with everything your account can reach, and it does not expire until you regenerate it in ClickUp. Regenerating it invalidates the connection.
+
+### Connecting with your own OAuth app
+
+<Steps>
+  <Step title="Create the app in ClickUp">
+    In ClickUp, open your avatar, then **Settings**, then **Apps**, then create an app. Register the redirect URL exactly as shown in the connection card, with no trailing slash — the card prints the URL for the environment you are in, and ClickUp compares it character for character.
+  </Step>
+  <Step title="Paste the client id and secret">
+    Choose **Your own OAuth app** in the connection card, paste both values, and save. A ClickUp authorization window opens against your app.
+  </Step>
+  <Step title="Approve the workspaces">
+    Choose which Workspaces the app may access, then confirm.
+  </Step>
+</Steps>
+
+If the authorization window shows a ClickUp error after you approve, the redirect URL registered on your app does not match the one in the card. That is the only thing this step usually gets wrong.
 
 ## Pull reference
 
@@ -234,6 +277,14 @@ If your List is not inside a Folder, leave **Folder** empty — the List dropdow
 
 <Accordion title="A call fails with an OAUTH error code">
 ClickUp's error code comes through in the message. `OAUTH_027` and its neighbours generally mean the token cannot reach that workspace: either it was authorized for a different workspace, or your access in ClickUp changed after connecting. Reconnect the integration and authorize the workspace you actually need.
+</Accordion>
+
+<Accordion title="Connecting with your own OAuth app fails after you approve it">
+The redirect URL registered on your ClickUp app does not match the one FluxPrompt sends. Compare it character for character with the URL printed in the connection card: `https` rather than `http`, no trailing slash, and the environment you are actually using in the hostname. ClickUp matches the whole string, and it only fails at this point — after approval, before any code is issued.
+</Accordion>
+
+<Accordion title="A personal API token is rejected at connect time">
+The token is validated against ClickUp before it is stored, so the message you see is ClickUp's own. Copy the token again from your avatar, then **Settings**, then **Apps** — regenerating it there invalidates the previous value, including any connection still using it.
 </Accordion>
 
 <Accordion title="Creating a task fails asking for a task name">
