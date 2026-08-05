@@ -29,7 +29,7 @@ title: "Variáveis de Ambiente"
 | LAMBDA_PYTHON_ALIAS | Obrigatória | alias do Lambda `code-executor-python` (`non-prod`/`prod`) invocado como `Qualifier`, pra dev/staging/prod baterem em aliases isolados da mesma função — sem default, falha fechado se não definida |
 | URL_MAIN_API | Obrigatória | URL base do `back` para chamadas internas |
 | INTERNAL_API_KEY | Obrigatória | auth das chamadas internas ao `back` |
-| INTEGRATIONS_ENCRYPTION_KEY | Obrigatória | descriptografa credenciais de `user_integrations` (adapter Stripe) — precisa bater com o valor do `back` |
+| INTEGRATIONS_ENCRYPTION_KEY | Obrigatória | descriptografa credenciais de `user_integrations` (adapters Stripe, WordPress, HubSpot, além das colunas `accessToken`/`refreshToken` criptografadas via `token-encryption.ts`) — precisa bater com o valor do `back` |
 | CLAIM_CHECK_THRESHOLD_BYTES | Opcional | limiar do padrão claim-check (default 262144) |
 | APICALLER_MAX_RESULT_BYTES | Opcional | limite de tamanho do resultado no node api-caller (default 1_000_000) |
 | MCP_MAX_RESULT_BYTES | Opcional | limite de tamanho do resultado da tool no node mcpNode (default 1_800_000) |
@@ -55,6 +55,8 @@ O worker **não tem esse fallback** (`z.string().min(32)`, validado com `envSche
 <Warning>
 Revisões anteriores desta página diziam que o worker **nunca** pode receber o `JWT_SECRET`. Isso só vale depois que o `back` tiver a própria `INTEGRATIONS_ENCRYPTION_KEY` preenchida. Enquanto o `back` estiver no fallback, qualquer outro valor faz todas as linhas de `user_integrations` falharem na descriptografia — e isso falha **silenciosamente em tempo de execução**, depois de um deploy verde, não na subida. Confirme o ambiente real do back antes de subir o worker.
 </Warning>
+
+O parâmetro SSM existir não é a mesma coisa que a task definition do worker referenciá-lo. Staging e prod foram encontrados (durante o rollout do P6 HubSpot, `868ke6jb7`) rodando revisões que nunca declararam esse secret, mesmo já rodando Stripe/WordPress. `.specs/features/worker-thirdparty-integration-migration/p6-hubspot/verify-worker-hubspot-secrets.sh` valida (e corrige) isso por ambiente — rode antes de qualquer deploy que toque um adapter migrado.
 
 ## CI/CD
 
