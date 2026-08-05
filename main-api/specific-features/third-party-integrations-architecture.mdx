@@ -5,7 +5,7 @@ description: "Adapter pattern, credential storage, and provider extensibility fo
 
 ## Overview
 
-The third-party integrations system acts as a bridge between your FluxPrompt flows and external services — WordPress, Slack, Notion, Stripe, QuickBooks, ClickUp, Supabase, Zapier and MCP servers. Every integration operates in one of two modes:
+The third-party integrations system acts as a bridge between your FluxPrompt flows and external services — WordPress, Slack, Notion, Stripe, QuickBooks, ClickUp, Supabase, Pinecone, Zapier and MCP servers. Every integration operates in one of two modes:
 
 - **Pull mode** — fetch data from an external service into your flow (e.g., read Notion pages, list Slack channels).
 - **Push mode** — send data from your flow to an external service (e.g., post a Slack message, create a Stripe product).
@@ -41,6 +41,7 @@ Every integration node can be in one of three states from the perspective of the
 | Notion | OAuth | Yes | Yes |
 | ClickUp | OAuth | Yes | Yes |
 | Supabase | Credentials (project URL + service role key) | Yes | Yes |
+| Pinecone | Credentials (project API key) | Yes | Yes |
 | QuickBooks | OAuth (company selected at consent; `realmId` scopes every call) | Yes | Yes |
 | MCP | Credentials (API key or token, per transport) | Yes (list tools) | No |
 

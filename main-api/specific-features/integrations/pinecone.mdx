@@ -1,0 +1,383 @@
+---
+title: "Pinecone integration"
+description: "Search your own Pinecone indexes with plain text or a vector, and upsert, update, or delete records from a flow."
+---
+
+## Overview
+
+The Pinecone integration turns your own Pinecone project into a vector store a flow can read from and write to. You connect once with a project API key, then search with plain text — the integration works out whether your index embeds text itself or needs the embedding generated first, so you never have to hand it a float array unless you want to.
+
+<Note>
+This is **your** Pinecone project. FluxPrompt also uses Pinecone internally for the Large Memory feature, but that is a separate, FluxPrompt-owned index. Nothing you do here touches it, and nothing it does touches your data.
+</Note>
+
+| Property | Value |
+|---|---|
+| Integration ID | `pinecone` |
+| Category | Developer, storage |
+| Authentication | Project API key (no OAuth) |
+| Pull support | Yes — search, fetch records, list record IDs, index stats, search by vector |
+| Push support | Yes — upsert text records, update metadata, delete records, upsert raw vectors |
+| Sharing | Yes — teammates run your connection without seeing the key |
+
+| Feature | Mode | Description |
+|---|---|---|
+| Search | Pull | Semantic search from plain text, with an optional metadata filter |
+| Fetch records | Pull | Fetch specific records by ID |
+| List record IDs | Pull | Page through record IDs, optionally by ID prefix |
+| Index stats | Pull | Dimension, metric, namespaces, and record counts |
+| Search by vector | Pull | Search with a vector you already have, or by an existing record ID |
+| Upsert text records | Push | Store text as one record, or split it into chunks |
+| Update metadata | Push | Change metadata on a record without touching its vector |
+| Delete records | Push | Delete by ID, by metadata filter, or the whole namespace |
+| Upsert raw vectors | Push | Write records whose vectors you produced yourself |
+
+## How it works under the hood
+
+### Connecting
+
+Pinecone has no OAuth flow for connecting an end user's account, so the connection mode is always credentials. There are two ways to hand over the key, and both store exactly the same thing:
+
+- **Connect to Pinecone** — opens Pinecone in a popup. You sign in, pick the organization and project you want, and Pinecone generates a key and returns it to FluxPrompt. This button only appears if the FluxPrompt deployment you are on has been registered as a Pinecone integration.
+- **Paste an API key** — take a key from the Pinecone console under **API keys** and paste it.
+
+The key is validated at connect time with a single call:
+
+```http
+GET https://api.pinecone.io/indexes
+Api-Key: <your key>
+X-Pinecone-Api-Version: 2025-10
+```
+
+A project with no indexes yet connects successfully — you can create indexes later.
+
+<Note>
+Pinecone API keys are **project-scoped**. A key can only see the indexes in the project it belongs to, so connect one key per project and give each connection a name you will recognise. The key is encrypted at rest with AES-256-GCM and is never returned by any API response.
+</Note>
+
+### API access
+
+Two hosts are involved. The control plane is fixed; the data plane is per-index and has to be looked up.
+
+```text
+Control plane   https://api.pinecone.io
+Data plane      https://{index_host}
+Headers         Api-Key: <key>
+                X-Pinecone-Api-Version: 2025-10
+Timeout         20 seconds per request
+```
+
+The index host is resolved from the control plane and cached for 10 minutes, keyed by a hash of your API key so the key itself is never held in a cache key. The hosts of the indexes that existed at connect time are also stored on the connection, which means a normal run usually makes no control-plane call at all. If an index is deleted and recreated it gets a new host; the integration detects the stale host on the first failure, re-resolves it once, and retries.
+
+### How pull works
+
+| Object type | Provider call | Notes |
+|---|---|---|
+| Search | `POST /records/namespaces/{ns}/search` or `POST /embed` then `POST /query` | Which one depends on the index — see below |
+| Fetch records | `GET /vectors/fetch` | Up to 100 IDs per run; missing IDs are reported, not an error |
+| List record IDs | `GET /vectors/list` | Up to 100 per page; returns `nextPageToken` for the next run |
+| Index stats | `GET /indexes/{name}` + `POST /describe_index_stats` | Dimension, metric, namespaces, counts, fullness |
+| Search by vector | `POST /query` | Give a vector **or** a record ID, not both |
+
+Results are normalised to one shape regardless of which path ran, so a downstream node always sees prose rather than numbers:
+
+```json
+{
+  "index": "handbook",
+  "namespace": "policies",
+  "matchCount": 2,
+  "embeddedBy": "index:llama-text-embed-v2",
+  "matches": [
+    { "id": "doc-12#0", "score": 0.91, "text": "Refunds are accepted within 30 days...", "metadata": { "category": "returns" } }
+  ]
+}
+```
+
+Set **Output format** to *Plain text* and the node returns just the passages instead, separated by a rule and prefixed with the score — ready to drop straight into a prompt.
+
+### How push works
+
+| Action | Provider call | Notes |
+|---|---|---|
+| Upsert text records | `POST /records/namespaces/{ns}/upsert` or `POST /embed` then `POST /vectors/upsert` | Which one depends on the index |
+| Update metadata | `POST /vectors/update` | Only the keys you send change |
+| Delete records | `POST /vectors/delete` | Guarded — see below |
+| Upsert raw vectors | `POST /vectors/upsert` | Vector length must equal the index dimension |
+
+<Warning>
+**Delete is guarded, deliberately.** Deleting by ID needs at least one ID. Deleting by metadata filter needs a filter with at least one condition, so a filter that happens to be empty cannot match everything. Deleting a whole namespace needs both an explicitly chosen namespace and the words `DELETE ALL` typed into a confirmation field — and the default namespace cannot be wiped from this node at all. Every one of these is checked before any request leaves FluxPrompt.
+</Warning>
+
+### Text indexes and vector indexes
+
+This is the part worth understanding, because it decides what you have to supply.
+
+An index created with **integrated embedding** stores a model and a field name in its own configuration. You give it text; it embeds the text itself. A **classic** index has no model — it only accepts vectors.
+
+The integration reads the index configuration and picks the path for you:
+
+| | Integrated embedding | Classic |
+|---|---|---|
+| Search | Sends your text to the index | Embeds your text with Pinecone Inference, then searches with the result |
+| Upsert text records | Sends your text to the index | Embeds your text with Pinecone Inference, then writes the vector, keeping the text in metadata |
+
+Either way you type text and the node handles the rest. The **Embedding model** dropdown only matters on a classic index; on an integrated one it just shows which model the index already uses. Its options are filtered to models that produce vectors of your index's dimension, because anything else would be rejected by Pinecone.
+
+<Note>
+On a classic index, embedding runs through **your** Pinecone account and is billed to you, exactly like the search itself. If your index has a dimension that no Pinecone-hosted model produces (1536, for example, which is an OpenAI size), the dropdown will be empty and the run will tell you to use **Search by vector** and **Upsert raw vectors** instead, supplying vectors from whatever produced them originally.
+</Note>
+
+### Chunking
+
+**Upsert text records** takes a **Chunk size (characters)**. Leave it at `0` and the text is stored as a single record under the ID you gave. Set it to a number and the text is split, with IDs becoming `<Record ID>#0`, `<Record ID>#1`, and so on.
+
+Because chunk IDs share a prefix, **List record IDs** with an ID prefix of `doc-42#` lists exactly the chunks of that one document — which is how you find or delete everything derived from a single source.
+
+<Note>
+The split is by character count, with no overlap and no sentence awareness. If you need smarter chunking, split the text upstream and send each chunk to its own run with its own record ID.
+</Note>
+
+### Namespaces
+
+Namespaces partition an index. There are two fields because they do different jobs:
+
+- **Namespace** is a dropdown of the namespaces that exist right now. Use it when the namespace is fixed.
+- **Namespace (dynamic)** is a text field that accepts a connection from another node, and it overrides the dropdown at run time. Use it when the namespace depends on the run — one namespace per tenant, per customer, per document set.
+
+If both are empty, Pinecone's default namespace is used.
+
+### Where it executes
+
+Pinecone nodes run in the Temporal worker. A failure that is your configuration — a rejected key, a missing index or namespace, a vector of the wrong length, a malformed filter, a delete guard — is reported once and **not** retried, because retrying it would fail identically. A failure that is transient — a rate limit, a Pinecone server error, a timeout — **is** retried automatically.
+
+## Prerequisites and credentials
+
+<Steps>
+  <Step title="Create or choose a Pinecone project">
+    An index lives inside a project, and an API key is scoped to one project. Decide which project the flow should read and write.
+  </Step>
+  <Step title="Create an index, if you have not already">
+    For the simplest setup, create it **with integrated embedding** — then FluxPrompt can send text straight through and you never think about vectors or dimensions.
+  </Step>
+  <Step title="Get an API key">
+    In the Pinecone console, open **API keys** and create one. Copy it immediately; Pinecone will not show it again.
+  </Step>
+</Steps>
+
+<Warning>
+A Pinecone API key can read and delete everything in its project. Treat it like a database password: use a separate project for anything you would not want a flow to be able to delete, and rotate the key if it may have been exposed. Rotating the key means reconnecting the integration — Pinecone keys do not expire on their own, so FluxPrompt never refreshes them.
+</Warning>
+
+## Connecting in FluxPrompt
+
+<Steps>
+  <Step title="Add the node">
+    Drag a **Third Party Integration** node onto the canvas and select **Pinecone**.
+  </Step>
+  <Step title="Connect">
+    Either press **Connect to Pinecone** and complete the popup, or choose **Paste an API key** and enter one. Give the connection a name — you will want it if you connect more than one project.
+  </Step>
+  <Step title="Choose an index">
+    Pick your index from the dropdown. Each entry shows whether the index takes text or its dimension and metric.
+  </Step>
+  <Step title="Pick a mode and an operation">
+    Switch between **Pull** and **Push**, then choose the object type or action. The fields change to match.
+  </Step>
+</Steps>
+
+## Filter syntax
+
+Metadata filters are JSON and use Pinecone's operators:
+
+```json
+{ "$and": [{ "category": { "$eq": "returns" } }, { "year": { "$gte": 2024 } }] }
+```
+
+| Operator | Meaning |
+|---|---|
+| `$eq`, `$ne` | Equal, not equal |
+| `$gt`, `$gte`, `$lt`, `$lte` | Numeric comparison |
+| `$in`, `$nin` | Value in / not in a list |
+| `$exists` | Field is present |
+| `$and`, `$or` | Combine conditions |
+
+<Note>
+Only metadata you stored is filterable. If you plan to filter on something, put it in the metadata when you upsert — you cannot filter on the record text itself.
+</Note>
+
+## Pull reference
+
+### Search
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Index | Select (dynamic, searchable) | Yes | Index to search |
+| Namespace | Select (dynamic, searchable) | No | Namespace to search; empty means the default |
+| Namespace (dynamic) | Text (accepts a connection) | No | Overrides the namespace at run time |
+| Query | Textarea (accepts a connection) | Yes | The text to search for |
+| Results | Number | No | How many matches, 1–10000. Defaults to 5 |
+| Metadata filter | Textarea (accepts a connection) | No | JSON filter |
+| Include raw embeddings | Toggle | No | Off by default; the numbers are large |
+| Embedding model | Select (dynamic) | No | Only used on a classic index |
+| Output format | Select | No | `JSON` or `Plain text`. Defaults to JSON |
+
+Returns the normalised match list described above.
+
+### Fetch records
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Index | Select (dynamic, searchable) | Yes | |
+| Namespace / Namespace (dynamic) | Select / Text (accepts a connection) | No | |
+| Record IDs | Text (accepts a connection) | Yes | Comma-separated, up to 100 |
+| Include raw embeddings | Toggle | No | |
+| Output format | Select | No | |
+
+Returns the records found, plus `missingIds` for anything that did not exist.
+
+### List record IDs
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Index | Select (dynamic, searchable) | Yes | |
+| Namespace / Namespace (dynamic) | Select / Text (accepts a connection) | No | |
+| ID prefix | Text (accepts a connection) | No | Lists one document's chunks, e.g. `doc-42#` |
+| Page size | Number | No | Up to 100. Defaults to 100 |
+| Page token | Text (accepts a connection) | No | From a previous run's `nextPageToken` |
+
+Returns the IDs and `nextPageToken`.
+
+### Index stats
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Index | Select (dynamic, searchable) | Yes | |
+
+Returns dimension, metric, the integrated embedding model if any, total record count, fullness, and per-namespace counts.
+
+### Search by vector
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Index | Select (dynamic, searchable) | Yes | |
+| Namespace / Namespace (dynamic) | Select / Text (accepts a connection) | No | |
+| Query vector (JSON) | Textarea (accepts a connection) | * | JSON array of floats, index dimension long |
+| Query by record ID | Text (accepts a connection) | * | Use an existing record as the query |
+| Results | Number | No | Defaults to 5 |
+| Metadata filter | Textarea (accepts a connection) | No | |
+| Include metadata | Toggle | No | On by default |
+| Include raw embeddings | Toggle | No | Off by default |
+
+\* Provide **either** a query vector or a record ID. Providing both, or neither, is rejected.
+
+## Push reference
+
+### Upsert text records
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Index | Select (dynamic, searchable) | Yes | |
+| Namespace / Namespace (dynamic) | Select / Text (accepts a connection) | No | |
+| Text | Textarea (accepts a connection) | * | The text to store and embed |
+| Record ID | Text (accepts a connection) | No | Reuse an ID to overwrite. Generated if empty |
+| Chunk size (characters) | Number | No | `0` stores one record. Otherwise IDs become `<Record ID>#0`, `#1`, … |
+| Metadata (JSON) | Textarea (accepts a connection) | No | Stored with the record, filterable later |
+| Embedding model | Select (dynamic) | No | Only used on a classic index |
+
+\* Either type the text or connect a node that outputs text. The metadata field also has a key/value editor beneath the action so you do not have to write JSON by hand.
+
+### Update metadata
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Index | Select (dynamic, searchable) | Yes | |
+| Namespace / Namespace (dynamic) | Select / Text (accepts a connection) | No | |
+| Record ID | Text (accepts a connection) | Yes | |
+| Metadata to set (JSON) | Textarea (accepts a connection) | Yes | At least one key |
+
+### Delete records
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Index | Select (dynamic, searchable) | Yes | |
+| Namespace / Namespace (dynamic) | Select / Text (accepts a connection) | No | |
+| What to delete | Select | Yes | Record IDs, metadata filter, or the whole namespace |
+| Record IDs | Text (accepts a connection) | When deleting by ID | Comma-separated, up to 1000 |
+| Metadata filter | Textarea (accepts a connection) | When deleting by filter | Must have at least one condition |
+| Type DELETE ALL to confirm | Text | When deleting a namespace | Must be exactly `DELETE ALL` |
+
+### Upsert raw vectors
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| Index | Select (dynamic, searchable) | Yes | |
+| Namespace / Namespace (dynamic) | Select / Text (accepts a connection) | No | |
+| Vectors (JSON) | Textarea (accepts a connection) | Yes | Array of `{ id, values, metadata? }` |
+
+## Example: answer questions from your own documents
+
+Store a handbook, then answer questions from it.
+
+To load it, use one flow with a **Push** node set to **Upsert text records**: connect whatever produces the document text, set **Record ID** to something like `handbook`, and set **Chunk size** to `1000` so it is split into searchable pieces.
+
+To answer questions, use a **Pull** node set to **Search**: connect the user's question to **Query**, set **Output format** to *Plain text*, and feed the node's output into a prompt.
+
+```json
+{
+  "mode": "pull",
+  "pullObjectType": "search",
+  "indexName": "handbook",
+  "namespace": "policies",
+  "queryText": "how long do I have to return something",
+  "topK": 3,
+  "outputFormat": "text"
+}
+```
+
+<Tip>
+Put a `source` in the metadata when you upsert. Then the same index can hold several documents and you can narrow a search with `{"source":{"$eq":"handbook"}}` instead of building an index per document.
+</Tip>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Pinecone rejected the API key. Reconnect the integration with a current project API key (Pinecone console → API keys).">
+    The key was deleted or rotated in Pinecone. Create a new one and reconnect. Pinecone keys never expire on their own, so FluxPrompt does not refresh them — a rejection always means the key itself changed.
+  </Accordion>
+  <Accordion title="This Pinecone API key cannot access that project. Reconnect with a key from the project that owns the index.">
+    Keys are scoped to one project. The index you selected belongs to a different project than the key. Create a key inside the right project, or add a second connection for it.
+  </Accordion>
+  <Accordion title="Index or namespace not found. Check the index and namespace, and that they belong to the same project as the API key.">
+    The index was deleted or renamed, or the namespace does not exist. A namespace comes into existence when its first record is written, so searching a namespace you have not written to yet gives this. Re-pick from the dropdowns to see what is really there.
+  </Accordion>
+  <Accordion title="indexName is required. Select an index from the dropdown.">
+    No index was selected. If the dropdown is empty, the key's project has no indexes yet — create one in Pinecone.
+  </Accordion>
+  <Accordion title="queryText is required. Type a query or connect a node that outputs text.">
+    Search ran with nothing to search for. Either type a query or connect a node to the **Query** field.
+  </Accordion>
+  <Accordion title="Vector dimension does not match the index dimension">
+    Pinecone's own message, passed through. The vector you supplied is not as long as the index expects. Check the index dimension with **Index stats**, and remember every vector in an index must be the same length.
+  </Accordion>
+  <Accordion title="Index &quot;...&quot; is N-dimensional and no Pinecone-hosted embedding model produces that size. Use the &quot;Upsert raw vectors&quot; action instead.">
+    Your classic index was built with vectors from somewhere else — commonly OpenAI's 1536 dimensions. Pinecone cannot generate matching vectors, so embed the text with the same model you originally used and use **Upsert raw vectors** and **Search by vector**.
+  </Accordion>
+  <Accordion title="A metadata filter with at least one condition is required">
+    A filtered delete was run with an empty filter. This is a guard, not a bug: an empty filter would match every record. Add a condition, or choose a different delete scope if you really do want everything.
+  </Accordion>
+  <Accordion title="Type &quot;DELETE ALL&quot; in the confirmation field to delete every record in this namespace.">
+    Deleting a whole namespace needs the words typed out. This is the only irreversible operation the node offers.
+  </Accordion>
+  <Accordion title="Select a namespace before deleting everything in it. The default namespace cannot be wiped from this node.">
+    A namespace-wide delete needs an explicitly chosen namespace. Wiping the default namespace is not offered here — delete by ID or by filter instead, or delete the index in the Pinecone console.
+  </Accordion>
+  <Accordion title="Too many record IDs">
+    Pinecone accepts at most 100 IDs per fetch and 1000 per delete. Split the work across runs, or use a metadata filter instead of a long list.
+  </Accordion>
+  <Accordion title="metadataFilter must be valid JSON">
+    The filter is not parseable. A common cause is single quotes — JSON needs double quotes: `{"category":{"$eq":"returns"}}`.
+  </Accordion>
+  <Accordion title="The Connect to Pinecone button is not there">
+    That button only appears when the FluxPrompt environment has been registered as a Pinecone integration. Use **Paste an API key** — it stores exactly the same credential and works identically.
+  </Accordion>
+</AccordionGroup>
