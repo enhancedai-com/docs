@@ -3,6 +3,22 @@ title: "Changelog"
 description: "What's new in the FluxPrompt MCP integration."
 ---
 
+## 2026-08-12 — Integration nodes are authorable
+
+**The third-party nodes migrated to the execution worker are now fully described, and connections are discoverable.**
+
+### New tool
+- **`list_integrations`** — the third-party connections the authorizing user may use, which is what an integration node's `integrationId` must be set to. Returns the user's own connections plus those shared with the organisation by an active member, and never a credential. A key without a user behind it is refused rather than widened to the whole workspace.
+
+### Complete node catalogue
+- `thirdPartyIntegration` no longer declares itself incomplete. All six executing providers are described — `hubspot`, `notion`, `slack`, `stripe`, `wordpress`, `zapier` — with the pull object types, the write actions and the fields each one names.
+- `hubSpotCRM` gained the write fields it never had and lost `filter`, which no panel has offered since the panels were unified. Its legacy `selectedObjectType` / `selectedResponseType` rules are now documented as the runtime actually applies them.
+- Every field that accepts an incoming edge now declares its `<field>Data` companion, and the companion reaches the executor — previously only `text` and `blobConfig` did, so an edge landed in any other field was silently ignored at run time.
+
+### Safety
+- `add_node` and `update_node` refuse an `integrationId` the authorizing user cannot reach.
+- A run that resolves a connection outside that rule is now recorded, ahead of refusing it.
+
 ## 2026-08-02 — Phase 2 GA (authoring and running)
 
 **Your AI client can now build and run agents, not just read them.**

@@ -3,6 +3,22 @@ title: "Changelog"
 description: "Novidades na integração MCP do FluxPrompt."
 ---
 
+## 2026-08-12 — Nós de integração agora são autoráveis
+
+**Os nós de terceiros migrados para o worker de execução estão totalmente descritos, e as conexões são descobríveis.**
+
+### Nova tool
+- **`list_integrations`** — as conexões de terceiros que o usuário autorizador pode usar, que é o que o `integrationId` de um nó de integração precisa receber. Retorna as conexões próprias do usuário mais as compartilhadas com a organização por um membro ativo, e nunca uma credencial. Uma chave sem usuário por trás é recusada, não ampliada para o workspace inteiro.
+
+### Catálogo de nós completo
+- O `thirdPartyIntegration` não se declara mais incompleto. Os seis providers que executam estão descritos — `hubspot`, `notion`, `slack`, `stripe`, `wordpress`, `zapier` — com os tipos de objeto de leitura, as ações de escrita e os campos que cada um nomeia.
+- O `hubSpotCRM` ganhou os campos de escrita que nunca teve e perdeu o `filter`, que nenhum painel oferece desde a unificação. As regras legadas de `selectedObjectType` / `selectedResponseType` agora estão documentadas como o runtime realmente as aplica.
+- Todo campo que aceita aresta de entrada declara seu companheiro `<campo>Data`, e o companheiro chega ao executor — antes só `text` e `blobConfig` chegavam, então uma aresta ligada a qualquer outro campo era silenciosamente ignorada na execução.
+
+### Segurança
+- `add_node` e `update_node` recusam um `integrationId` que o usuário autorizador não alcança.
+- Uma execução que resolve uma conexão fora dessa regra passa a ser registrada, antes de ser recusada.
+
 ## 2026-08-02 — Phase 2 GA (autoria e execução)
 
 **Seu cliente de IA agora pode construir e executar agentes, não apenas lê-los.**

@@ -89,6 +89,8 @@ Se sua chave foi emitida por um membro não-admin, os escopos podem ter sido red
 | `-32401` insufficient scope | A chave não tem `write`/`execute`, ou o toggle do workspace está desligado. | Reautorize com os escopos necessários, ou peça a um admin para habilitá-los. |
 | `version_conflict` | O agente mudou depois do seu `expectedVersion`. | Releia com `get_agent` e repita. |
 | `validation_error` | O payload quebra uma regra (ex.: id de `globalStarter` sem `flow-global-starter`). | Corrija o payload; a escrita **não** foi parcialmente aplicada. |
+| `integrationId` inalcançável | O nó nomeia uma conexão de terceiro que este usuário não possui nem recebeu por compartilhamento da organização. | Chame o [`list_integrations`](/mcp/pt-br/tools/nodes-and-edges#list_integrations) e use um id daquela lista. |
+| `provider_not_ready` | O provider não está habilitado para escritas via MCP neste ambiente. | Peça a um admin; o allowlist é por ambiente. |
 | `-32006` rate limited | 60 requisições/minuto ou 5.000/dia por chave. | Respeite o `retryAfterMs`. |
 | `-32602` invalid params | Um parâmetro obrigatório foi omitido. `data.missing` os nomeia. | Envie o parâmetro; o schema de cada ferramenta lista os obrigatórios. |
 

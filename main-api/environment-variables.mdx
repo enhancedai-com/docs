@@ -77,7 +77,7 @@ title: "Environment Variables"
 | MCP_RESOURCE_METADATA_URL | Required | MCP resource metadata URL |
 | MCP_RUN_QUOTA_PER_DAY | Optional | MCP daily run quota (has fallback) |
 | MCP_SERVER_INTERNAL_URL | Required | internal URL of the MCP server |
-| MCP_THIRDPARTY_ALLOWLIST | Optional | allowed third-party domains for MCP |
+| MCP_THIRDPARTY_ALLOWLIST | Optional | integration providers an MCP client may write to; empty means the six released ones, "none" blocks all |
 | MCP_TOKEN_EXPIRED_GRACE_DAYS | Optional | grace period before purging expired MCP tokens |
 | MCP_TOKEN_PURGE_BATCH_SIZE | Optional | batch size for MCP token purge cron |
 | MCP_TOKEN_REVOKED_RETENTION_DAYS | Optional | retention for revoked MCP tokens |

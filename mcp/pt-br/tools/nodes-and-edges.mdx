@@ -103,6 +103,66 @@ Retorna os modelos de IA disponíveis para o workspace, para você preencher `ai
 node de IA com um valor que existe de fato e está habilitado naquele workspace — em vez de um nome de
 modelo lembrado de outro lugar.
 
+## `list_integrations`
+
+Retorna as conexões de terceiros que o usuário autorizador pode usar, para você preencher o
+`integrationId` de um nó de integração com uma que existe **e** que esse usuário tem permissão de
+alcançar — em vez de um id copiado de outro lugar.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `provider` | string | Não | Restringe a um provider, ex. `hubspot`. Omita para listar todos. Um nome desconhecido retorna lista vazia. |
+| `cursor` | string | Não | Cursor opaco do `nextCursor` de uma resposta anterior. |
+
+Cada item traz `id` (o valor que o `integrationId` recebe), `name`, `provider`, `ownerUserId`,
+`ownerUserName`, `isOwn`, `isSharedWithOrg` e `createdAt`. Credenciais nunca são retornadas — uma
+conexão é referenciada apenas pelo id.
+
+A lista são as conexões **próprias** do usuário mais as que um membro ativo do workspace compartilhou
+com a organização. Nada além disso aparece, e uma chave que não foi concedida via OAuth não tem
+usuário por trás e portanto não tem conexão alcançável: a chamada é recusada, não ampliada para o
+workspace inteiro.
+
+<Warning>
+  Escrever um `integrationId` que não está nessa lista é recusado por `add_node` e `update_node`.
+  Chame esta tool primeiro em vez de reaproveitar um id visto em outro lugar — um id da conexão de
+  outro usuário não é utilizável, mesmo sendo válido.
+</Warning>
+
+## Autorando um nó de integração
+
+`thirdPartyIntegration` fala com um serviço configurado, e `hubSpotCRM` é o mesmo nó com o provider
+fixo em `hubspot` — mesmos campos, mesmo motor de execução, intercambiáveis para leitura e escrita.
+Seis providers executam hoje: `hubspot`, `notion`, `slack`, `stripe`, `wordpress`, `zapier`.
+
+A ordem que funciona:
+
+1. Escolha o `provider`.
+2. Escolha o `mode` — `pull` para ler, `push` para escrever. Ausente significa pull.
+3. Para um pull defina `pullObjectType`; para um push, `pushAction`. Os dois são específicos do
+   provider e decidem quais dos campos restantes se aplicam, então leia-os do
+   [`get_node_type`](/mcp/pt-br/tools/nodes-and-edges#get_node_type) em vez de adivinhar.
+4. Defina o `integrationId` a partir do `list_integrations`.
+5. Defina os campos que aquele provider e aquele objeto ou ação nomeiam.
+
+Duas coisas que os clientes erram:
+
+- **`providerEntry`** — só o `zapier` oferece mais de uma configuração (`zapier_pull`,
+  `zapier_push`, `zapier_poll`). Vazio, o produto resolve a entrada por heurística; defina
+  explicitamente para o zapier.
+- **`<campo>Data`** — todo campo que aceita uma aresta de entrada tem um array companheiro com o
+  mesmo nome mais `Data`, e o array **vence** o valor digitado. Deixar a referência da aresta só no
+  escalar faz o valor nunca chegar. O `connect_nodes` preenche o companheiro para você.
+
+O `blobConfig` é a saída de emergência: um objeto JSON, como string, mesclado sobre os dados do nó em
+tempo de execução. Ele precisa carregar a chave `provider` ou é ignorado por completo. Prefira os
+campos nomeados quando existirem.
+
+<Note>
+  Credenciais nunca são dados do nó. A conexão vive na integração salva e é selecionada pelo
+  `integrationId`; nenhum segredo, URL de site ou chave de API pertence a um nó.
+</Note>
+
 ## `add_node`
 
 Adiciona um node ao agente.
