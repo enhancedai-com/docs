@@ -98,6 +98,8 @@ workspace admin can allow non-admin write/execute keys in **Settings → MCP Tok
 | `feature_disabled` (tool error) | The workspace switch is off. It arrives as a tool result with `isError: true`, reading `Tool execution failed: ERROR <id>: feature_disabled: mcp.writes.enabled is off for this workspace` — not as a JSON-RPC error. The `<id>` changes on every call, so match on `feature_disabled:`. | Ask a workspace admin to turn the switch back on. Re-authorizing changes nothing. |
 | `version_conflict` | The agent changed since your `expectedVersion`. | Re-read with `get_agent` and retry. |
 | `validation_error` | The payload breaks a rule (e.g. a `globalStarter` id without `flow-global-starter`). | Fix the payload; the write did **not** partially apply. |
+| `integrationId` not reachable | The node names a third-party connection this user neither owns nor received through an organisation share. | Call [`list_integrations`](/mcp/tools/nodes-and-edges#list_integrations) and use an id from that list. |
+| `provider_not_ready` | The provider is not enabled for MCP writes in this environment. | Ask an admin; the allowlist is per environment. |
 | `-32006` rate limited | 60 requests/minute or 5 000/day per key. | Honour `retryAfterMs`. |
 | `-32602` invalid params | A required parameter was omitted. `data.missing` names them. | Send the parameter; the schema for each tool lists what is required. |
 

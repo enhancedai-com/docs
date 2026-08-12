@@ -101,6 +101,65 @@ Returns the AI models available to the workspace, so you can fill an AI node's `
 with a value that actually exists and is enabled for that workspace — rather than a model name you
 remember from elsewhere.
 
+## `list_integrations`
+
+Returns the third-party connections the authorizing user may use, so you can fill an integration
+node's `integrationId` with one that exists **and** that this user is allowed to reach — rather than
+an id copied from somewhere else.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `provider` | string | No | Restrict to one provider, e.g. `hubspot`. Omit to list every provider. An unknown name returns an empty list. |
+| `cursor` | string | No | Opaque cursor from a previous response's `nextCursor`. |
+
+Each item carries `id` (the value `integrationId` takes), `name`, `provider`, `ownerUserId`,
+`ownerUserName`, `isOwn`, `isSharedWithOrg` and `createdAt`. Credentials are never returned — a
+connection is referenced only by its id.
+
+The list is the user's **own** connections plus those an active member of the workspace shared with
+the organisation. Nothing else appears, and a key that was not granted through OAuth has no user
+behind it and therefore no reachable connections: the call is refused rather than widened to the
+whole workspace.
+
+<Warning>
+  Writing an `integrationId` that is not in this list is refused by `add_node` and `update_node`.
+  Call this tool first instead of reusing an id you have seen elsewhere — an id from another user's
+  connection is not usable even when it is valid.
+</Warning>
+
+## Authoring an integration node
+
+`thirdPartyIntegration` talks to a configured service, and `hubSpotCRM` is the same node with the
+provider fixed to `hubspot` — same fields, same execution engine, interchangeable for reads and
+writes. Six providers execute today: `hubspot`, `notion`, `slack`, `stripe`, `wordpress`, `zapier`.
+
+The order that works:
+
+1. Pick `provider`.
+2. Pick `mode` — `pull` to read, `push` to write. Absent means pull.
+3. For a pull set `pullObjectType`; for a push set `pushAction`. Both are provider-specific and both
+   decide which of the remaining fields apply, so read them from
+   [`get_node_type`](/mcp/tools/nodes-and-edges#get_node_type) rather than guessing.
+4. Set `integrationId` from `list_integrations`.
+5. Set the fields that provider and that object type or action names.
+
+Two things clients get wrong:
+
+- **`providerEntry`** — only `zapier` offers more than one configuration (`zapier_pull`,
+  `zapier_push`, `zapier_poll`). Leave it empty and the product resolves the entry by heuristic; set
+  it explicitly for zapier.
+- **`<field>Data`** — any field that accepts an incoming edge has a companion array of the same name
+  plus `Data`, and the array **wins over** the typed value. Landing an edge reference in the scalar
+  alone means the value never arrives. `connect_nodes` fills the companion for you.
+
+`blobConfig` is the escape hatch: a JSON object, as a string, merged over the node data at run time.
+It must carry a `provider` key or it is ignored entirely. Prefer the named fields when they exist.
+
+<Note>
+  Credentials are never node data. The connection lives in the saved integration and is selected by
+  `integrationId`; no secret, site URL or API key belongs in a node.
+</Note>
+
 ## `add_node`
 
 Adds a node to an agent.
