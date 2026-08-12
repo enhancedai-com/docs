@@ -128,7 +128,10 @@ off. The two refusals read differently, which tells you which one to fix:
 | Refusal | What it means |
 |---------|---------------|
 | `-32401 Insufficient scope`, with `data.required` naming the scope that was missing | The key does not carry that scope. Edit the key's scopes. |
-| `Tool execution failed: feature_disabled: mcp.writes.enabled is off for this workspace` (or `mcp.execute.enabled`) | The key's scopes are fine — the workspace switch is off. Turn the switch on. |
+| `Tool execution failed: ERROR <id>: feature_disabled: mcp.writes.enabled is off for this workspace` (or `mcp.execute.enabled`) | The key's scopes are fine — the workspace switch is off. Turn the switch on. |
+
+The `<id>` in the second one is a different value on every call, so search your logs for
+`feature_disabled:` rather than for the whole line.
 
 Either way, the fix is in the same place: **Settings → MCP Tokens**.
 
@@ -155,7 +158,7 @@ the triggering key/client name appears in the agent's execution history.
   </Accordion>
   <Accordion title="I granted someone write access but their client still only has read">
     Check these in order:
-    1. **The workspace switches.** `mcp.writes.enabled` and `mcp.execute.enabled` are an independent gate from the key's scopes — a key that carries `write` is still refused while the switch is off. A switch refusal reads `Tool execution failed: feature_disabled: ...`, not `Insufficient scope`.
+    1. **The workspace switches.** `mcp.writes.enabled` and `mcp.execute.enabled` are an independent gate from the key's scopes — a key that carries `write` is still refused while the switch is off. A switch refusal contains `feature_disabled:`, not `Insufficient scope`.
     2. **Give it a few seconds.** The MCP server caches resolved keys for `MCP_TOKEN_CACHE_TTL` seconds (10 by default), so a newly added scope can take that long to apply. Retry after ~10 seconds, or reconnect the client.
     3. **Confirm the change saved.** Reopen [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) and check that the key's scopes cell shows the scopes you expect.
     4. **Confirm the client is not holding an old session.** Some clients only re-read the available tools and permissions when they reconnect.
