@@ -84,7 +84,7 @@ gated **per workspace** by the workspace owner:
 
 These switches are an independent gate, not part of your key's scope, and the two failures look
 different: a missing scope is the JSON-RPC error `-32401`, while a switch that is off comes back as a
-tool result with `isError: true` whose text begins `Tool execution failed: feature_disabled:`.
+tool result with `isError: true` whose text contains `feature_disabled:`.
 
 If your key was issued to a non-admin member, its scopes may have been clamped to `read` only. A
 workspace admin can allow non-admin write/execute keys in **Settings → MCP Tokens**. See
@@ -95,7 +95,7 @@ workspace admin can allow non-admin write/execute keys in **Settings → MCP Tok
 | Error | Why | What to do |
 |-------|-----|------------|
 | `-32401` insufficient scope | Your key lacks `write`/`execute`. `data.required` names the scope that was missing. | Re-authorize with the needed scopes, or ask an admin to raise the key's scope. |
-| `feature_disabled` (tool error) | The workspace switch is off. It arrives as a tool result with `isError: true`, reading `Tool execution failed: feature_disabled: mcp.writes.enabled is off for this workspace` — not as a JSON-RPC error. | Ask a workspace admin to turn the switch back on. Re-authorizing changes nothing. |
+| `feature_disabled` (tool error) | The workspace switch is off. It arrives as a tool result with `isError: true`, reading `Tool execution failed: ERROR <id>: feature_disabled: mcp.writes.enabled is off for this workspace` — not as a JSON-RPC error. The `<id>` changes on every call, so match on `feature_disabled:`. | Ask a workspace admin to turn the switch back on. Re-authorizing changes nothing. |
 | `version_conflict` | The agent changed since your `expectedVersion`. | Re-read with `get_agent` and retry. |
 | `validation_error` | The payload breaks a rule (e.g. a `globalStarter` id without `flow-global-starter`). | Fix the payload; the write did **not** partially apply. |
 | `-32006` rate limited | 60 requests/minute or 5 000/day per key. | Honour `retryAfterMs`. |
