@@ -89,6 +89,30 @@ clamped to `read` instead of an error. A workspace admin can lift this with the
 [Settings → MCP Tokens](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) — it is off by
 default.
 
+### Change a key's scopes
+
+A workspace admin can change the scopes of an existing key at any time — there is no need to revoke it
+and issue a new one. In [Settings → MCP Tokens](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens),
+the scopes cell of each key in the **MCP Keys** table shows the current scopes as chips with an edit
+(pencil) icon next to them. Click either the chips or the icon, tick the scopes you want, and save.
+Non-admins see the same chips as read-only.
+
+How long the change takes to reach the client depends on the direction:
+
+| Change | When it takes effect |
+|--------|----------------------|
+| Removing a scope (for example `read` + `write` → `read`) | Immediately — the core API reads the key's current scopes on every call. |
+| Adding a scope (for example `read` → `read` + `write`) | Within `MCP_TOKEN_CACHE_TTL` seconds — **10 by default**. |
+
+The MCP server caches the resolved key, scopes included, for `MCP_TOKEN_CACHE_TTL` seconds to avoid a
+round-trip to the core API on every call. So right after an admin grants `write`, the client can keep
+being refused for a few seconds. Retry after ~10 seconds, or reconnect the client.
+
+<Note>
+The cache can only delay a grant — it can never hand out more access than the key currently carries,
+because the core API validates every call against the key's current scopes.
+</Note>
+
 ### Workspace-level switches
 
 Even with the right scope, two workspace switches must be on:
@@ -98,8 +122,15 @@ Even with the right scope, two workspace switches must be on:
 | `mcp.writes.enabled` | Every write tool for this workspace. |
 | `mcp.execute.enabled` | `run_agent` for this workspace. |
 
-A denied call returns `-32401` insufficient scope. Whether it was the key's scopes or the workspace
-switch, the fix is in the same place: **Settings → MCP Tokens**.
+These switches are an **independent** gate: the right scope on the key is not enough while the switch is
+off. The two refusals read differently, which tells you which one to fix:
+
+| Refusal | What it means |
+|---------|---------------|
+| `-32401 Insufficient scope`, with `data.required` naming the scope that was missing | The key does not carry that scope. Edit the key's scopes. |
+| `Tool execution failed: feature_disabled: mcp.writes.enabled is off for this workspace` (or `mcp.execute.enabled`) | The key's scopes are fine — the workspace switch is off. Turn the switch on. |
+
+Either way, the fix is in the same place: **Settings → MCP Tokens**.
 
 Runs started through MCP are billed and audited against the **owner of the key** that started them, and
 the triggering key/client name appears in the agent's execution history.
@@ -121,5 +152,12 @@ the triggering key/client name appears in the agent's execution history.
   </Accordion>
   <Accordion title="What does the MCP server see about my workspace?">
     It sees the same agents and structure that the authenticated user can see inside the FluxPrompt UI. It does not have access to credentials, billing, or user management.
+  </Accordion>
+  <Accordion title="I granted someone write access but their client still only has read">
+    Check these in order:
+    1. **The workspace switches.** `mcp.writes.enabled` and `mcp.execute.enabled` are an independent gate from the key's scopes — a key that carries `write` is still refused while the switch is off. A switch refusal reads `Tool execution failed: feature_disabled: ...`, not `Insufficient scope`.
+    2. **Give it a few seconds.** The MCP server caches resolved keys for `MCP_TOKEN_CACHE_TTL` seconds (10 by default), so a newly added scope can take that long to apply. Retry after ~10 seconds, or reconnect the client.
+    3. **Confirm the change saved.** Reopen [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) and check that the key's scopes cell shows the scopes you expect.
+    4. **Confirm the client is not holding an old session.** Some clients only re-read the available tools and permissions when they reconnect.
   </Accordion>
 </AccordionGroup>

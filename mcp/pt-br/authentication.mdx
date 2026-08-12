@@ -91,7 +91,32 @@ Se você não é admin da organização selecionada, pedir `write`/`execute` ger
 [Settings → MCP Tokens](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) — desligado por
 padrão.
 
-### Chaves no nível do workspace
+### Alterar os escopos de uma chave
+
+Um admin do workspace pode alterar os escopos de uma chave existente a qualquer momento — não é preciso
+revogá-la e emitir outra. Em [Settings → MCP Tokens](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens),
+a célula de escopos de cada chave na tabela **MCP Keys** mostra os escopos atuais como chips, com um
+ícone de edição (lápis) ao lado. Clique nos chips ou no ícone, marque os escopos desejados e salve.
+Quem não é admin vê os mesmos chips apenas como leitura.
+
+Quanto tempo a mudança leva para chegar ao cliente depende da direção:
+
+| Mudança | Quando passa a valer |
+|---------|----------------------|
+| Remover um escopo (ex.: `read` + `write` → `read`) | Imediatamente — a API principal lê os escopos atuais da chave em cada chamada. |
+| Adicionar um escopo (ex.: `read` → `read` + `write`) | Em até `MCP_TOKEN_CACHE_TTL` segundos — **10 por padrão**. |
+
+O servidor MCP mantém em cache a chave resolvida, escopos incluídos, por `MCP_TOKEN_CACHE_TTL` segundos
+para evitar uma ida à API principal em cada chamada. Por isso, logo depois de um admin conceder `write`,
+o cliente pode continuar sendo recusado por alguns segundos. Tente de novo depois de ~10 segundos ou
+reconecte o cliente.
+
+<Note>
+O cache só pode atrasar uma concessão — ele nunca libera mais acesso do que a chave carrega no momento,
+porque a API principal valida cada chamada contra os escopos atuais da chave.
+</Note>
+
+### Interruptores no nível do workspace
 
 Mesmo com o escopo correto, dois interruptores do workspace precisam estar ligados:
 
@@ -100,8 +125,15 @@ Mesmo com o escopo correto, dois interruptores do workspace precisam estar ligad
 | `mcp.writes.enabled` | Todas as ferramentas de escrita deste workspace. |
 | `mcp.execute.enabled` | O `run_agent` deste workspace. |
 
-Uma chamada negada retorna `-32401` insufficient scope. Seja pelos escopos da chave ou pelo interruptor
-do workspace, a correção está no mesmo lugar: **Settings → MCP Tokens**.
+Esses interruptores são um portão **independente**: ter o escopo certo na chave não basta enquanto o
+interruptor estiver desligado. As duas recusas têm textos diferentes, e isso indica qual delas corrigir:
+
+| Recusa | O que significa |
+|--------|-----------------|
+| `-32401 Insufficient scope`, com `data.required` informando o escopo que faltou | A chave não carrega esse escopo. Edite os escopos da chave. |
+| `Tool execution failed: feature_disabled: mcp.writes.enabled is off for this workspace` (ou `mcp.execute.enabled`) | Os escopos da chave estão certos — o interruptor do workspace está desligado. Ligue o interruptor. |
+
+Em qualquer um dos casos, a correção está no mesmo lugar: **Settings → MCP Tokens**.
 
 Execuções iniciadas via MCP são cobradas e auditadas no **dono da chave** que as iniciou, e o nome da
 chave/cliente que disparou aparece no histórico de execuções do agente.
@@ -123,5 +155,12 @@ chave/cliente que disparou aparece no histórico de execuções do agente.
   </Accordion>
   <Accordion title="O que o servidor MCP enxerga do meu workspace?">
     Ele vê os mesmos agentes e estrutura que o usuário autenticado consegue ver dentro da interface do FluxPrompt. Ele não tem acesso a credenciais, faturamento ou gerenciamento de usuários.
+  </Accordion>
+  <Accordion title="Liberei write para alguém, mas o cliente dela continua só com read">
+    Verifique nesta ordem:
+    1. **Os interruptores do workspace.** `mcp.writes.enabled` e `mcp.execute.enabled` são um portão independente dos escopos da chave — uma chave que carrega `write` continua sendo recusada enquanto o interruptor estiver desligado. A recusa do interruptor diz `Tool execution failed: feature_disabled: ...`, não `Insufficient scope`.
+    2. **Dê alguns segundos.** O servidor MCP mantém as chaves resolvidas em cache por `MCP_TOKEN_CACHE_TTL` segundos (10 por padrão), então um escopo recém-adicionado pode levar esse tempo para valer. Tente de novo depois de ~10 segundos ou reconecte o cliente.
+    3. **Confirme que a mudança foi salva.** Reabra [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) e verifique se a célula de escopos da chave mostra os escopos esperados.
+    4. **Confirme que o cliente não está com uma sessão antiga.** Alguns clientes só releem as ferramentas e permissões disponíveis quando reconectam.
   </Accordion>
 </AccordionGroup>
