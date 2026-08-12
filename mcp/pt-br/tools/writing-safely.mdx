@@ -36,6 +36,12 @@ A resposta sempre diz em qual modo você está:
   `width` e `height` resolvidos pelo servidor — que podem ser diferentes do que você enviou.
 </Tip>
 
+**O dry-run recusa o que o apply recusaria.** O `create_agent`, o `create_folder` e o `move_agent`
+executam suas validações e verificações de permissão antes de retornar o dry-run, então um dry-run que
+passa significa que a pasta ou o space de destino aceitou a chamada. Builds anteriores retornavam antes
+e verificavam depois, o que permitia um dry-run dizer que a chamada funcionaria quando o apply teria
+recusado.
+
 ## Chaves de idempotência
 
 `idempotencyKey` é obrigatório sempre que `dryRun` for `false`. Uma repetição com a **mesma chave e o
@@ -78,6 +84,11 @@ dois também são controlados **por workspace** pelo dono do workspace:
 - `mcp.writes.enabled` — desliga todas as ferramentas de escrita do workspace.
 - `mcp.execute.enabled` — desliga o `run_agent` do workspace.
 
+Esses interruptores são um portão independente, não fazem parte do escopo da sua chave, e as duas
+falhas são diferentes: escopo faltando é o erro JSON-RPC `-32401`, enquanto um interruptor desligado
+volta como resultado de tool com `isError: true`, cujo texto começa com
+`Tool execution failed: feature_disabled:`.
+
 Se sua chave foi emitida por um membro não-admin, os escopos podem ter sido reduzidos para apenas
 `read`. Um admin do workspace pode liberar chaves de write/execute para não-admins em
 **Settings → MCP Tokens**. Veja [Autenticação](/mcp/pt-br/authentication).
@@ -86,7 +97,8 @@ Se sua chave foi emitida por um membro não-admin, os escopos podem ter sido red
 
 | Erro | Por que | O que fazer |
 |------|---------|-------------|
-| `-32401` insufficient scope | A chave não tem `write`/`execute`, ou o toggle do workspace está desligado. | Reautorize com os escopos necessários, ou peça a um admin para habilitá-los. |
+| `-32401` insufficient scope | Sua chave não tem `write`/`execute`. O `data.required` nomeia o escopo que faltou. | Reautorize com os escopos necessários, ou peça a um admin para ampliar o escopo da chave. |
+| `feature_disabled` (erro de tool) | O interruptor do workspace está desligado. Chega como resultado de tool com `isError: true`, com o texto `Tool execution failed: feature_disabled: mcp.writes.enabled is off for this workspace` — e não como erro JSON-RPC. | Peça a um admin do workspace para ligar o interruptor de novo. Reautorizar não muda nada. |
 | `version_conflict` | O agente mudou depois do seu `expectedVersion`. | Releia com `get_agent` e repita. |
 | `validation_error` | O payload quebra uma regra (ex.: id de `globalStarter` sem `flow-global-starter`). | Corrija o payload; a escrita **não** foi parcialmente aplicada. |
 | `-32006` rate limited | 60 requisições/minuto ou 5.000/dia por chave. | Respeite o `retryAfterMs`. |

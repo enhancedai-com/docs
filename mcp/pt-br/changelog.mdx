@@ -3,6 +3,31 @@ title: "Changelog"
 description: "Novidades na integração MCP do FluxPrompt."
 ---
 
+## 2026-08-12 — Correções de handshake e de autorização
+
+**Clientes que não são o Claude concluem o handshake, e escritas de pasta verificam o destino.**
+
+### Transporte
+- **Uma notification JSON-RPC é respondida com um `202 Accepted` puro**, sem body, qualquer que seja o header `Accept` do cliente — como exige o transporte streamable-HTTP do MCP. Clientes construídos sobre a biblioteca Rust `rmcp` enviam `Accept: text/event-stream` em toda mensagem, então a notification que encerra o handshake recebia uma stream SSE e a conexão morria com `Transport channel closed, when send initialized notification` e `expect accepted or json, got Sse(None)`. O Codex CLI agora conecta normalmente.
+- **As notifications de cliente da especificação são aceitas como no-op** — `notifications/cancelled`, `notifications/progress`, `notifications/roots/list_changed` e `notifications/tasks/status`, junto de `notifications/initialized` — em vez de receberem "method not found". Notifications também deixaram de contar para o circuit breaker do token, já que o cliente nunca vê o resultado delas e não tem como corrigi-lo.
+- **Uma falha de dependência que pode ser repetida agora é distinguível de um defeito do MCP.** Quando a API principal responde `429` ou um `5xx` a uma chamada interna, a resposta passa a ser `503` com `reason: upstream_dependency_failed`, `retryable: true` e `upstreamStatus` (o status devolvido pela API principal). Antes era um `500 Internal server error` seco, idêntico a uma falha do próprio servidor MCP. Repita a requisição.
+
+### Pastas e agentes
+- **O `create_folder` aceita `parentId`**, criando a pasta dentro de uma pasta existente — inclusive uma que pertence a um space. O space é derivado da pasta-pai, então não há `spaceId` a informar, e o acesso de escrita a esse space é verificado. Ainda não é possível criar uma pasta direto na raiz de um space: aninhe-a sob uma pasta que já existe lá, pegando o id no `list_folders`.
+- **O `move_agent` autoriza o destino** com a regra que o produto aplica na interface: você é dono da pasta, ela é a sua pasta pessoal, ou você é membro do space da pasta. Mover um agente para a pasta pessoal de outra pessoa é recusado — antes esse caminho não tinha verificação.
+- **Os filtros `folderId` e `folderName` do `list_agents` passaram a ser aplicados.** Eles foram anunciados em 2026-08-02 e já eram declarados pela ferramenta, mas o servidor descartava os argumentos e devolvia silenciosamente o workspace inteiro. Nenhuma mudança no cliente é necessária.
+- **As leituras de agente são autorizadas por workspace.** As rotas internas por trás do `list_agents` e do `get_agent` agora exigem o escopo `read` e resolvem o workspace pelo vínculo verificado da chave, em vez de confiar num parâmetro de query. Uma chave que não cobre uma organização não consegue mais ler os agentes dela.
+- **O dry-run recusa o que o apply recusaria.** O `create_agent`, o `create_folder` e o `move_agent` retornavam do dry-run antes de autorizar, então um dry-run podia dizer que a chamada funcionaria quando o apply teria recusado. Agora as duas modalidades fazem as mesmas verificações.
+
+### Tokens
+- **Settings → MCP Tokens** mostra um ícone de edição na célula de escopo, deixando claro que o escopo de uma chave existente pode ser alterado.
+- **Mudanças de escopo propagam de forma assimétrica.** Remover um escopo vale imediatamente; adicionar um pode levar até cerca de 10 segundos — o TTL do cache de token do servidor MCP (`MCP_TOKEN_CACHE_TTL`, padrão `10`).
+
+### API principal
+- **Um `spaceId` obrigatório ausente virou `400`**, nomeando o space que a requisição omitiu, em vez de `403`. Uma pasta que pertence a um space *diferente* do `spaceId` enviado continua sendo `403`.
+
+*Referências: ClickUp `868kpwd91`, `868kpxbcm`.*
+
 ## 2026-08-02 — Phase 2 GA (autoria e execução)
 
 **Seu cliente de IA agora pode construir e executar agentes, não apenas lê-los.**

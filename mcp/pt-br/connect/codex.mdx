@@ -107,8 +107,13 @@ Authorization = "Bearer mcp_xxxxxxxxxxxx"
 
 Use **apenas uma** entrada de autenticação por servidor.
 
+<Tip>
+  Nomeie uma entrada por ambiente — `fluxprompt-dev`, `fluxprompt-staging`, `fluxprompt-prod` — e mantenha uma única entrada por servidor. Várias entradas apontando para a mesma URL (`fluxprompt`, `fluxprompt2`, `fluxprompt-2`) todas conectam, então nada parece quebrado, mas elas poluem seus logs e dificultam o diagnóstico de um problema de conexão.
+</Tip>
+
 ## Solução de problemas
 
+- **O handshake falha logo depois do fluxo no navegador.** O OAuth conclui e então o Codex reporta `handshaking with MCP server failed: ... Transport channel closed, when send initialized notification` — muitas vezes seguido de `worker quit with fatal: unexpected server response: expect accepted or json, got Sse(None)`. O cliente MCP em Rust do Codex envia `Accept: text/event-stream` em toda mensagem, inclusive na notification que encerra o handshake, e o servidor respondia essa notification com uma stream SSE. Agora ele responde uma notification com um `202 Accepted` puro, qualquer que seja o header `Accept`, como exige o transporte streamable-HTTP do MCP — então o Codex conecta. Se você ainda vir isso, atualize o Codex para a versão atual e confirme que a URL é `https://mcp.fluxprompt.ai/mcp`.
 - **401 Unauthorized com header literal.** O valor de `Authorization` precisa incluir o prefixo `Bearer ` — `Authorization = "mcp_xxxxxxxxxxxx"` (sem `Bearer `) falha com 401. Use sempre `Bearer mcp_...`.
 - **Entradas de autenticação conflitantes.** Não combine `bearer_token_env_var` e um `http_headers` Authorization para o mesmo servidor — escolha um. Entradas duplicadas ou conflitantes causam falhas.
 - **`tool_search` não retorna nada.** O `tool_search` interno do Codex não lista as ferramentas de servidores MCP, então buscar por `fluxprompt` retorna 0 — isso é esperado. As ferramentas MCP são expostas como ferramentas chamáveis diretamente (namespaced). Peça ao Codex para chamar `list_agents`, `get_agent` ou `list_node_types` diretamente.

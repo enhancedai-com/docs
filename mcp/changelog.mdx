@@ -3,6 +3,31 @@ title: "Changelog"
 description: "What's new in the FluxPrompt MCP integration."
 ---
 
+## 2026-08-12 — Handshake and authorization fixes
+
+**Clients that are not Claude complete the handshake, and folder writes check the destination.**
+
+### Transport
+- **A JSON-RPC notification is answered with a bare `202 Accepted`**, with no body, whatever the client's `Accept` header says — as the MCP streamable-HTTP transport requires. Clients built on the Rust `rmcp` library send `Accept: text/event-stream` on every message, so the notification that closes the handshake used to receive an SSE stream and the connection died with `Transport channel closed, when send initialized notification` and `expect accepted or json, got Sse(None)`. Codex CLI connects normally now.
+- **The spec's client notifications are accepted as a no-op** — `notifications/cancelled`, `notifications/progress`, `notifications/roots/list_changed` and `notifications/tasks/status`, alongside `notifications/initialized` — instead of being answered "method not found". Notifications also no longer count toward a token's circuit breaker, since the client never sees their outcome and cannot correct it.
+- **A retryable upstream failure is distinguishable from an MCP defect.** When the core API answers `429` or a `5xx` to an internal call, the response is now `503` with `reason: upstream_dependency_failed`, `retryable: true` and `upstreamStatus` (the status the core API returned). It was previously a bare `500 Internal server error`, which looked exactly like a fault in the MCP server itself. Retry the request.
+
+### Folders and agents
+- **`create_folder` accepts `parentId`**, creating the folder inside an existing folder — including one that belongs to a space. The space is derived from the parent, so there is no `spaceId` to pass, and write access to that space is checked. A folder still cannot be created directly at a space's root: nest it under a folder that already exists there, taking the id from `list_folders`.
+- **`move_agent` authorizes the destination** with the rule the product applies in the interface: you own the folder, it is your own personal folder, or you are a member of the folder's space. Moving an agent into another member's personal folder is refused — that path was previously unchecked.
+- **`list_agents`'s `folderId` and `folderName` are now applied.** The filters were announced on 2026-08-02 and declared by the tool, but the server dropped the arguments and quietly returned the whole workspace. No client change is needed.
+- **Agent reads are authorized per workspace.** The internal routes behind `list_agents` and `get_agent` now require the `read` scope and resolve the workspace from the key's verified binding instead of trusting a query parameter. A key that does not cover an organization can no longer read that organization's agents.
+- **A dry-run refuses what the apply would refuse.** `create_agent`, `create_folder` and `move_agent` returned from the dry-run before authorizing, so a dry-run could report that a call would work when the apply would have refused it. They now run the same checks in both modes.
+
+### Tokens
+- **Settings → MCP Tokens** shows an edit icon on the scope cell, so it is clear that an existing key's scope can be changed.
+- **Scope changes propagate asymmetrically.** Removing a scope takes effect immediately; adding one can take up to about 10 seconds — the MCP server's token cache TTL (`MCP_TOKEN_CACHE_TTL`, default `10`).
+
+### Core API
+- **A missing required `spaceId` is a `400`** naming the space the request omitted, instead of a `403`. A folder that belongs to a *different* space than the `spaceId` you sent is still a `403`.
+
+*References: ClickUp `868kpwd91`, `868kpxbcm`.*
+
 ## 2026-08-02 — Phase 2 GA (authoring and running)
 
 **Your AI client can now build and run agents, not just read them.**

@@ -36,6 +36,11 @@ The response always tells you which mode you got:
   `position`, `width` and `height` the server resolved — which may differ from what you sent.
 </Tip>
 
+**A dry-run refuses what the apply would refuse.** `create_agent`, `create_folder` and `move_agent`
+run their validation and permission checks before returning the dry-run, so a dry-run that succeeds
+means the destination folder or space accepted the call. Earlier builds returned first and checked
+later, which let a dry-run report that a call would work when the apply would have refused it.
+
 ## Idempotency keys
 
 `idempotencyKey` is required whenever `dryRun` is `false`. A replay with the **same key and the same
@@ -77,6 +82,10 @@ gated **per workspace** by the workspace owner:
 - `mcp.writes.enabled` — turns all write tools off for the workspace.
 - `mcp.execute.enabled` — turns `run_agent` off for the workspace.
 
+These switches are an independent gate, not part of your key's scope, and the two failures look
+different: a missing scope is the JSON-RPC error `-32401`, while a switch that is off comes back as a
+tool result with `isError: true` whose text begins `Tool execution failed: feature_disabled:`.
+
 If your key was issued to a non-admin member, its scopes may have been clamped to `read` only. A
 workspace admin can allow non-admin write/execute keys in **Settings → MCP Tokens**. See
 [Authentication](/mcp/authentication).
@@ -85,7 +94,8 @@ workspace admin can allow non-admin write/execute keys in **Settings → MCP Tok
 
 | Error | Why | What to do |
 |-------|-----|------------|
-| `-32401` insufficient scope | Key lacks `write`/`execute`, or the workspace toggle is off. | Re-authorize with the needed scopes, or ask an admin to enable them. |
+| `-32401` insufficient scope | Your key lacks `write`/`execute`. `data.required` names the scope that was missing. | Re-authorize with the needed scopes, or ask an admin to raise the key's scope. |
+| `feature_disabled` (tool error) | The workspace switch is off. It arrives as a tool result with `isError: true`, reading `Tool execution failed: feature_disabled: mcp.writes.enabled is off for this workspace` — not as a JSON-RPC error. | Ask a workspace admin to turn the switch back on. Re-authorizing changes nothing. |
 | `version_conflict` | The agent changed since your `expectedVersion`. | Re-read with `get_agent` and retry. |
 | `validation_error` | The payload breaks a rule (e.g. a `globalStarter` id without `flow-global-starter`). | Fix the payload; the write did **not** partially apply. |
 | `-32006` rate limited | 60 requests/minute or 5 000/day per key. | Honour `retryAfterMs`. |
