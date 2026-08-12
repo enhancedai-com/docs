@@ -96,13 +96,17 @@ Fetch recent messages from a channel.
 |---|---|---|---|
 | channel | Select (dynamic) | Yes | Channel to read from |
 | limit | Number | No | Default 20, max 200 |
-| oldest | Text | No | Date from (Unix timestamp) |
-| latest | Text | No | Date to (Unix timestamp) |
+| dateFrom | Date | No | Start of the range, picked as MM/DD/YYYY |
+| dateTo | Date | No | End of the range, picked as MM/DD/YYYY; covers the whole day |
 | threadOnly | Toggle | No | Default false |
 | thread_ts | Text | No | Thread TS (parent message); shown when threadOnly is true |
 
 <Note>
 `threadOnly` and `thread_ts` are frontend-only controls. The backend does not consume them.
+</Note>
+
+<Note>
+Slack's `conversations.history` filters on epoch seconds, so the adapter converts `dateFrom`/`dateTo` into the `oldest`/`latest` timestamps the API expects. Nodes saved before the date picker stored a raw timestamp in `oldest`/`latest` directly — the adapter still reads those keys when the range is empty, so those flows keep working. A value it cannot parse as a date fails with a clear message instead of reaching Slack.
 </Note>
 
 ### Channels
