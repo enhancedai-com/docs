@@ -68,6 +68,29 @@ Builds anteriores devolviam um `500 Internal server error` seco aqui, sem indica
 
 ---
 
+### "Service temporarily unavailable" / 503 `upstream_dependency_failed`
+
+**Causa:** Uma chamada interna do servidor MCP para a API principal falhou com um status que pode ser repetido — a API principal respondeu `429` ou um `5xx`, ou estava inacessível. Seu token, seus escopos e seu payload estão corretos, e o próprio servidor MCP está funcionando.
+
+**Solução:** Repita a requisição. A resposta diz isso explicitamente:
+
+```json
+{
+  "error": "Service temporarily unavailable",
+  "reason": "upstream_dependency_failed",
+  "retryable": true,
+  "upstreamStatus": 503
+}
+```
+
+O `upstreamStatus` é o status devolvido pela API principal, e fica ausente quando a chamada não obteve resposta alguma. Se as tentativas continuarem falhando por vários minutos, verifique a [página de status do FluxPrompt](https://status.fluxprompt.ai).
+
+<Note>
+Builds anteriores devolviam um `500 Internal server error` seco aqui, indistinguível de um defeito do servidor MCP. Um `500` sem `reason` numa chamada que antes funcionava vale uma nova tentativa antes de ser reportado.
+</Note>
+
+---
+
 ### "Agent not found" (`isError: true`)
 
 **Causa:** O `agentId` passado não existe no seu workspace, ou pertence a um workspace diferente. O `get_agent` reporta isso como erro de tool (`result.isError: true`), e não como um código de erro de protocolo.
@@ -101,6 +124,14 @@ Builds anteriores devolviam um `500 Internal server error` seco aqui, sem indica
 **Causa:** Os metadados oficiais do cliente OAuth do Claude Code declaram seus `redirect_uris` de loopback (`http://localhost/callback`, `http://127.0.0.1/callback`) **sem porta**, mas a CLI sempre abre o listener de callback numa porta local efêmera (ex.: `http://localhost:56626/callback`). Se o `mcp-server` implantado exigir correspondência exata de `redirect_uri`, toda tentativa de OAuth via Claude Code falha com `invalid_client` — isso não é problema de token, workspace ou variável de ambiente.
 
 **Solução:** O `OauthClientService.resolveClient` do `mcp-server` precisa tolerar variação de porta em redirect URIs de loopback, conforme [RFC 8252 §7.3](https://www.rfc-editor.org/rfc/rfc8252#section-7.3) — mesmo protocolo, host e path/query, qualquer porta. Isso foi corrigido em `src/oauth/oauth-client.service.ts` (`redirectUriMatches`); se esse erro reaparecer em algum ambiente, confirme que o deploy do `mcp-server` daquele ambiente inclui essa correção (procure por `redirectUriMatches`/`loopbackHostnames` em `oauth-client.service.ts`) em vez de re-diagnosticar como variável de ambiente ausente ou registro de banco faltando.
+
+---
+
+### `Transport channel closed, when send initialized notification`
+
+**Causa:** O cliente terminou de autenticar e então falhou na notification que encerra o handshake, normalmente junto de `unexpected server response: expect accepted or json, got Sse(None)`. Clientes construídos sobre a biblioteca Rust `rmcp` — o Codex CLI entre eles — enviam `Accept: text/event-stream` em toda mensagem, e o servidor respondia essa notification com uma stream SSE em vez de um `202 Accepted` puro.
+
+**Solução:** Uma notification JSON-RPC (mensagem sem `id`) agora é respondida com `202 Accepted` e sem body, qualquer que seja o header `Accept`, conforme a especificação do transporte streamable-HTTP do MCP — então esses clientes concluem o handshake. Se o erro persistir, atualize o cliente para a versão atual e confirme que a URL do servidor é `https://mcp.fluxprompt.ai/mcp`. Refazer o fluxo OAuth não ajuda, já que a autenticação foi concluída com sucesso.
 
 ---
 

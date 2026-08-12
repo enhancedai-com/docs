@@ -15,12 +15,24 @@ Creates a folder in the workspace.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `name` | string | Yes | Folder name. |
+| `parentId` | string (UUID) | No | Nest the new folder inside this folder — an id from `list_folders`. Omit for a root folder in your personal area. |
 | `dryRun` | boolean | No | Default `true` — nothing is created. |
 | `idempotencyKey` | string | Yes when `dryRun:false` | Replay-safe key. |
 
 ```json
 { "dryRun": false, "applied": true, "folder": { "id": "30be…", "name": "Sales agents" } }
 ```
+
+### Creating inside a space
+
+`parentId` is how a folder reaches a space. There is no `spaceId` parameter: the space is derived from
+the parent folder, and the call is refused if you do not have write access to that space.
+
+<Note>
+  A folder cannot be created directly at a space's root. Nest it under a folder that already exists
+  there — take that folder's id from `list_folders`, where `scope` is `"space"` and `spaceName` names
+  the space. Without `parentId` the folder lands at the root of your personal area, never in a space.
+</Note>
 
 ## `create_agent`
 
@@ -318,7 +330,24 @@ Moves an agent to another folder.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `agentId` | string (UUID) | Yes | Agent to move. |
-| `targetFolderId` | string \| null | No | Destination folder, or `null` to move it to the root. |
+| `targetFolderId` | string | Yes | Destination folder. `null` is refused — see the note below. |
+
+The destination is authorized with the same rule the product applies in the interface: the move
+succeeds when you own the folder, when it is your own personal folder, or when you are a member of the
+folder's space.
+
+<Note>
+  Moving an agent into **another member's personal folder** is refused. Check `scope` and `spaceName`
+  on the destination in `list_folders` before you move — two folders can share a name across a space
+  and a personal area, and only one of them is yours to write to.
+</Note>
+
+<Warning>
+  **Do not pass `null` to move an agent to the root.** It is refused with a `validation_error`. An
+  agent's workspace is resolved through its folder, so an agent at the root stops matching every MCP
+  read — it cannot be fetched, listed, or moved back, including by this tool. Always name a
+  destination folder.
+</Warning>
 
 ## `rename_folder`
 

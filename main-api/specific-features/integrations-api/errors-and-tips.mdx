@@ -16,6 +16,7 @@ The request body is missing a required field, or one of the IDs is not a valid U
 - On `POST /integrations/agents`: you sent **neither** `folderId` nor `folderName` — supply at least one.
 - `folderId` is not a UUID, or `folderName` is an empty string.
 - The path `:id` on `GET`/`PATCH /integrations/agents/:id` is not a UUID.
+- The folder you targeted belongs to a space and you sent no `spaceId`. The message names the space the request omitted, so resend the same request with that `spaceId`.
 
 **Fix:** Check that `name`, `type`, and either `folderId` or `folderName` are all present and spelled correctly. UUIDs look like `9f2b3c4a-1111-2222-3333-444455556666`.
 
@@ -30,6 +31,8 @@ Your API key is missing, expired, or wrong.
 You're authenticated, but you don't have permission to do this thing — usually because the space or folder belongs to someone else, or because a folder you targeted by `folderId` lives in a different space than the `spaceId` you sent.
 
 **Fix:** Check that the `spaceId` you sent is one you have access to. The list returned by [`GET /integrations/folders`](/main-api/specific-features/integrations-api/list-folders) only shows folders you can use, so when in doubt, list folders again and pick a fresh ID from there.
+
+Leaving `spaceId` out entirely is a different case: that is a `400`, not a `403`, and the message names the space you need to send.
 
 ### 404 Not Found
 

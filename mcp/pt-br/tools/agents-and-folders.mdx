@@ -15,12 +15,24 @@ Cria uma pasta no workspace.
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |-----------|------|-------------|-----------|
 | `name` | string | Sim | Nome da pasta. |
+| `parentId` | string (UUID) | Não | Cria a nova pasta dentro desta pasta — um id do `list_folders`. Omita para uma pasta na raiz da sua área pessoal. |
 | `dryRun` | boolean | Não | Padrão `true` — nada é criado. |
 | `idempotencyKey` | string | Sim quando `dryRun:false` | Chave segura para repetição. |
 
 ```json
 { "dryRun": false, "applied": true, "folder": { "id": "30be…", "name": "Sales agents" } }
 ```
+
+### Criando dentro de um space
+
+O `parentId` é o caminho para uma pasta chegar a um space. Não existe parâmetro `spaceId`: o space é
+derivado da pasta-pai, e a chamada é recusada se você não tiver acesso de escrita a esse space.
+
+<Note>
+  Não é possível criar uma pasta direto na raiz de um space. Aninhe-a sob uma pasta que já existe lá —
+  pegue o id dessa pasta no `list_folders`, onde o `scope` é `"space"` e o `spaceName` diz qual é o
+  space. Sem `parentId`, a pasta vai para a raiz da sua área pessoal, nunca para dentro de um space.
+</Note>
 
 ## `create_agent`
 
@@ -319,7 +331,23 @@ Move o agente para outra pasta.
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |-----------|------|-------------|-----------|
 | `agentId` | string (UUID) | Sim | Agente a mover. |
-| `targetFolderId` | string \| null | Não | Pasta de destino, ou `null` para mover para a raiz. |
+| `targetFolderId` | string | Sim | Pasta de destino. `null` é recusado — veja a nota abaixo. |
+
+O destino é autorizado com a mesma regra que o produto aplica na interface: o move passa quando você é
+dono da pasta, quando ela é a sua pasta pessoal, ou quando você é membro do space da pasta.
+
+<Note>
+  Mover um agente para a **pasta pessoal de outra pessoa** é recusado. Confira `scope` e `spaceName` do
+  destino no `list_folders` antes de mover — duas pastas podem ter o mesmo nome, uma num space e outra
+  numa área pessoal, e só uma delas é sua para escrever.
+</Note>
+
+<Warning>
+  **Não passe `null` para mover um agente para a raiz.** Isso é recusado com `validation_error`. O
+  workspace de um agente é resolvido através da pasta dele, então um agente na raiz deixa de aparecer em
+  toda leitura via MCP — ele não pode ser buscado, listado nem movido de volta, inclusive por esta
+  ferramenta. Sempre informe uma pasta de destino.
+</Warning>
 
 ## `rename_folder`
 
