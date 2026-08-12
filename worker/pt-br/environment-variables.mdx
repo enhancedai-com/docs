@@ -32,9 +32,10 @@ title: "Variáveis de Ambiente"
 | INTEGRATIONS_ENCRYPTION_KEY | Obrigatória | descriptografa credenciais de `user_integrations` (adapter Stripe) — precisa bater com o valor do `back` |
 | CLAIM_CHECK_THRESHOLD_BYTES | Opcional | limiar do padrão claim-check (default 262144) |
 | APICALLER_MAX_RESULT_BYTES | Opcional | limite de tamanho do resultado no node api-caller (default 1_000_000) |
+| MCP_MAX_RESULT_BYTES | Opcional | limite de tamanho do resultado da tool no node mcpNode (default 1_000_000) |
 | LOG_PROVIDER_OPTIONS | Opcional | flag de debug, loga opções do provider de IA |
 
-Todas as 27 vars estão em uso ativo — nenhuma obsoleta. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES` e `LOG_PROVIDER_OPTIONS` são lidas direto via `process.env`, fora do schema Zod — sem type-safety aí, mas é esperado já que todas são opcionais com fallback.
+Todas as 28 vars estão em uso ativo — nenhuma obsoleta. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES`, `MCP_MAX_RESULT_BYTES` e `LOG_PROVIDER_OPTIONS` são lidas direto via `process.env`, fora do schema Zod — sem type-safety aí, mas é esperado já que todas são opcionais com fallback.
 
 ## Pegadinha cross-repo
 

@@ -1,0 +1,54 @@
+---
+title: "MCP Server"
+sidebarTitle: "MCP Server"
+description: "Temporal activity for the MCP Server node: connects to a customer's MCP server over streamable HTTP or SSE, resolves the tool and its arguments from a natural-language prompt, and calls it."
+---
+
+## Overview
+
+The **MCP Server** node calls a tool on an MCP server the customer operates. The Worker resolves the connection (a URL typed on the node, or a saved connection stored in `user_integrations` with `provider = 'mcp'`), opens a client against it, decides **which** tool to call and **what arguments** to pass, then issues the `tools/call` and stores the result.
+
+Two things the node does are worth stating plainly, because they are easy to assume the other way round:
+
+- The model never talks to the MCP server. It is used only to translate the user's prompt into a tool name and a JSON argument object; the `tools/call` itself is a plain JSON-RPC request.
+- The tool name is optional. When the node leaves it blank, the Worker lists the server's tools and picks one — unless the server exposes exactly one tool, in which case it skips the model call entirely.
+
+[`mcpActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`McpService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/mcp/mcp.service.ts).
+
+## When it runs
+
+`mcpActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **MCP Server** (`NodeType.MCP`, stored value `mcpNode`).
+
+## Execution order
+
+1. **Fetch the node row** and resolve `prompt` — from `promptData` when the field is edge-linked, otherwise from the plain field. An empty prompt is a `UserConfigError` raised before anything is spent.
+2. **Resolve the target.** With an `integrationId`, the Worker reads that `user_integrations` row, checks the caller can reach it, and decrypts the stored credentials; otherwise it uses the `serverUrl` and `authToken` on the node. A `mcp_integrations` bearer token is used when the node names an `integrationResource` and the field is otherwise empty.
+3. **Open the client.** Streamable HTTP first, falling back to SSE for servers that only speak the older transport. The client is built per execution and closed in a `finally` — never pooled across activities.
+4. **Resolve the tool.** An explicitly selected tool is validated against the server's list. A blank one is chosen by the model, constrained to an enum of the names the server actually returned, so an unknown tool cannot come back.
+5. **Resolve the arguments.** The tool's own `inputSchema` is handed to the model as a constraint, so the arguments validate against the tool's real schema rather than being coaxed into shape by prose. A tool that publishes no usable schema falls back to a permissive object rather than failing.
+6. **Call the tool**, format the result (`structuredContent` if present, else the joined text parts, else the raw content), and persist it.
+
+## Transports
+
+Remote MCP servers over `http://` or `https://` only. Connections that run a package locally (`stdio_npx`) are refused with a `UserConfigError` telling the user to re-create the connection against a remote URL — the Worker never spawns a local process for a customer's server.
+
+## Errors
+
+| Condition | Error |
+|---|---|
+| Empty prompt; no server URL; unknown tool name; connection missing or unreachable; local-package connection | `UserConfigError` (non-retryable) |
+| Server returns a JSON-RPC error or an HTTP failure; credentials unreadable | `IntegrationError` |
+| Server does not answer in time | `TimeoutError` |
+| Tool or argument resolution fails | `ProviderError` |
+
+## Timeouts and heartbeat
+
+Tool calls are given 120s and tool listing 30s, inside an activity with a 5-minute `startToCloseTimeout`. The activity emits a keep-alive heartbeat while it works, so a long call is not mistaken for a stalled worker.
+
+## Token accounting
+
+Tool and argument resolution spend model tokens. The Worker charges them through the internal `/worker/charge-tokens` callback in a `finally` — including when the tool call itself fails, since the tokens were spent either way.
+
+## Result size
+
+A tool can return an arbitrarily large payload. The full result is persisted through the standard claim-check path, while the value returned to the workflow is capped (`MCP_MAX_RESULT_BYTES`, default 1 MB) with a truncation marker, so one large response cannot dominate the Worker's memory.
