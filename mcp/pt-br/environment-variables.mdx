@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-23 env vars no `mcp-server/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+26 env vars no `mcp-server/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 | Var | Obrigatória? | Propósito |
 |---|---|---|
@@ -19,6 +19,9 @@ title: "Variáveis de Ambiente"
 | MCP_INTERNAL_SECRET | Obrigatória | segredo pra chamar o `back` — precisa bater com o valor no `back` |
 | MCP_BACK_RETRY_MAX | Opcional | número de retries nas chamadas ao `back` |
 | MCP_BACK_RETRY_BASE_MS | Opcional | base do backoff (ms) entre retries |
+| MCP_MODELS_TTL_MS | Opcional | TTL do cache do catálogo de modelos de IA, em ms (padrão 120000) |
+| MCP_NODE_TYPES_TTL_MS | Opcional | TTL do cache do catálogo de tipos de node, em ms (padrão 600000) |
+| MCP_TASK_TTL_MS | Opcional | por quanto tempo o resultado de uma task fica recuperável, em ms (padrão 3600000) |
 | MCP_RATE_LIMIT_PER_MINUTE | Opcional | rate limit por minuto (default 60) |
 | MCP_RATE_LIMIT_PER_DAY | Opcional | rate limit por dia (default 5000) |
 | MCP_KILL_SWITCH | Opcional | interruptor global on/off |
