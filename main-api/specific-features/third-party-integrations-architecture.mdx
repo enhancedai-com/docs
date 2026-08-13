@@ -131,6 +131,7 @@ Providers reach production one release at a time, each as its own deploy. A prov
 | Stripe | yes | `868ke6j3r` |
 | Slack | yes | `868ke6j6m` |
 | Notion | yes | `868ke6j7t` |
+| Zapier | yes | `868ke6j9d` |
 
 <Note>
 The worker ships **every** ported adapter as soon as the first provider is released, because the module builds its adapter map in one factory. An adapter present in the worker is therefore not evidence that its provider is routed there — only the back's set is. This is deliberate: hand-trimming the registry per release is how an inline-vs-worker behaviour difference would get introduced unnoticed.
