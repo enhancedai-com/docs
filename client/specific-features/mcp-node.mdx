@@ -1,11 +1,11 @@
 ---
-title: "MCP Server node"
-description: "Technical architecture of the MCP Server node for calling tools on Model Context Protocol servers"
+title: "MCP Client node"
+description: "Technical architecture of the MCP Client node for calling tools on Model Context Protocol servers"
 ---
 
 ## Overview
 
-The **MCP Server** node calls tools on a **Model Context Protocol** server. It supports:
+The **MCP Client** node calls tools on a **Model Context Protocol** server. It supports:
 
 - **Remote HTTP(S)** transport (JSON-RPC over HTTP with optional SSE), including saved connections and manual URL or handles
 - **Stdio (npx)** transport for any npm package name, executed on the product backend with environment secrets stored encrypted on `user_integrations`
@@ -33,7 +33,7 @@ The **MCP Server** node calls tools on a **Model Context Protocol** server. It s
 ## Third-party integration provider `mcp`
 
 - **Pull** object type `list_tools` — returns the tool catalog from the saved server (HTTP or stdio)
-- **Push** — not supported for this provider; use the MCP Server node for `tools/call`
+- **Push** — not supported for this provider; use the MCP Client node for `tools/call`
 
 ## Related backend
 

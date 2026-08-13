@@ -1,12 +1,12 @@
 ---
-title: "MCP Server"
-sidebarTitle: "MCP Server"
-description: "Temporal activity for the MCP Server node: connects to a customer's MCP server over streamable HTTP or SSE, resolves the tool and its arguments from a natural-language prompt, and calls it."
+title: "MCP Client"
+sidebarTitle: "MCP Client"
+description: "Temporal activity for the MCP Client node: connects to a customer's MCP server over streamable HTTP or SSE, resolves the tool and its arguments from a natural-language prompt, and calls it."
 ---
 
 ## Overview
 
-The **MCP Server** node calls a tool on an MCP server the customer operates. The Worker resolves the connection (a URL typed on the node, or a saved connection stored in `user_integrations` with `provider = 'mcp'`), opens a client against it, decides **which** tool to call and **what arguments** to pass, then issues the `tools/call` and stores the result.
+The **MCP Client** node calls a tool on an MCP server the customer operates. The Worker resolves the connection (a URL typed on the node, or a saved connection stored in `user_integrations` with `provider = 'mcp'`), opens a client against it, decides **which** tool to call and **what arguments** to pass, then issues the `tools/call` and stores the result.
 
 Two things the node does are worth stating plainly, because they are easy to assume the other way round:
 
@@ -17,7 +17,7 @@ Two things the node does are worth stating plainly, because they are easy to ass
 
 ## When it runs
 
-`mcpActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **MCP Server** (`NodeType.MCP`, stored value `mcpNode`).
+`mcpActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **MCP Client** (`NodeType.MCP`, stored value `mcpNode`).
 
 ## Execution order
 
