@@ -51,4 +51,4 @@ Tool and argument resolution spend model tokens. The Worker charges them through
 
 ## Result size
 
-A tool can return an arbitrarily large payload. The full result is persisted through the standard claim-check path, while the value returned to the workflow is capped (`MCP_MAX_RESULT_BYTES`, default 1 MB) with a truncation marker, so one large response cannot dominate the Worker's memory.
+A tool can return an arbitrarily large payload. The full result is persisted through the standard claim-check path, while the value returned to the workflow is capped (`MCP_MAX_RESULT_BYTES`, default 1.8 MB) with a truncation marker, so one large response cannot dominate the Worker's memory.

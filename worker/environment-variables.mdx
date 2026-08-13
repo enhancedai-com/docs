@@ -32,7 +32,7 @@ title: "Environment Variables"
 | INTEGRATIONS_ENCRYPTION_KEY | Required | decrypts `user_integrations` credentials (Stripe adapter) — must match `back`'s value |
 | CLAIM_CHECK_THRESHOLD_BYTES | Optional | claim-check pattern threshold (default 262144) |
 | APICALLER_MAX_RESULT_BYTES | Optional | api-caller node result size limit (default 1_000_000) |
-| MCP_MAX_RESULT_BYTES | Optional | mcpNode tool-result size limit (default 1_000_000) |
+| MCP_MAX_RESULT_BYTES | Optional | mcpNode tool-result size limit (default 1_800_000) |
 | LOG_PROVIDER_OPTIONS | Optional | debug flag, logs AI provider options |
 
 All 28 vars are actively used — none obsolete. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES`, `MCP_MAX_RESULT_BYTES` and `LOG_PROVIDER_OPTIONS` are read directly via `process.env`, not through the Zod schema — no type-safety there, but that's expected since they're all optional with fallbacks.
