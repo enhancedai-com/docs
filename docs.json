@@ -485,6 +485,7 @@
                       "worker/node/counter",
                       "worker/node/sql-querier",
                       "worker/node/display-box",
+                      "worker/node/mcp",
                       "worker/node/large-memory-dynamic-pod"
                     ]
                   },
