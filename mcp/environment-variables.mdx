@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-23 env vars in `mcp-server/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+26 env vars in `mcp-server/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 | Var | Required? | Purpose |
 |---|---|---|
@@ -19,6 +19,9 @@ title: "Environment Variables"
 | MCP_INTERNAL_SECRET | Required | secret to call `back` — must match `back`'s value |
 | MCP_BACK_RETRY_MAX | Optional | retry count for `back` calls |
 | MCP_BACK_RETRY_BASE_MS | Optional | retry backoff base (ms) |
+| MCP_MODELS_TTL_MS | Optional | AI model catalogue cache TTL in ms (default 120000) |
+| MCP_NODE_TYPES_TTL_MS | Optional | node type catalogue cache TTL in ms (default 600000) |
+| MCP_TASK_TTL_MS | Optional | how long a task result stays retrievable, in ms (default 3600000) |
 | MCP_RATE_LIMIT_PER_MINUTE | Optional | rate limit per minute (default 60) |
 | MCP_RATE_LIMIT_PER_DAY | Optional | rate limit per day (default 5000) |
 | MCP_KILL_SWITCH | Optional | global on/off switch |
