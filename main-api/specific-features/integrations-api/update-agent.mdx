@@ -147,12 +147,17 @@ The PATCH responds with the **same shape as `GET /integrations/agents/:id`** —
   "type": "agent",
   "spaceId": "space-uuid-123",
   "folderId": "1a2b3c4d-aaaa-bbbb-cccc-ddddeeeeffff",
+  "documentation": "## Flow name\nMarketing Helper (v2)\n\n## Purpose\nDrafts campaign copy from a product brief.\n",
   "content": {
     "nodes": [ /* ... */ ],
     "edges": []
   }
 }
 ```
+
+<Note>
+`documentation` is the agent's [companion document](/main-api/specific-features/integrations-api/companion-docs), echoed back for convenience. It is read-only here — sending it in the `PATCH` body does nothing. To change it, use `PUT /integrations/agents/:id/documentation`.
+</Note>
 
 ## Round-trip workflow
 

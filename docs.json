@@ -117,6 +117,7 @@
                       "main-api/specific-features/add-multimodal-model",
                       "main-api/specific-features/memory-pods-architecture",
                       "main-api/specific-features/flow-and-single-node-execution",
+                      "main-api/specific-features/companion-docs",
                       {
                         "group": "Integrations",
                         "pages": [
@@ -145,6 +146,7 @@
                           "main-api/specific-features/integrations-api/create-agent",
                           "main-api/specific-features/integrations-api/get-agent",
                           "main-api/specific-features/integrations-api/update-agent",
+                          "main-api/specific-features/integrations-api/companion-docs",
                           "main-api/specific-features/integrations-api/errors-and-tips"
                         ]
                       },
@@ -172,6 +174,7 @@
                         ]
                       },
                       "main-api/specific-features/local-development",
+                      "main-api/specific-features/external-api-endpoints",
                       "main-api/specific-features/master-api-key",
                       "main-api/specific-features/output-controller-stall-incident"
                     ]
@@ -407,6 +410,7 @@
                       "main-api/specific-features/add-new-model",
                       "main-api/specific-features/add-multimodal-model",
                       "main-api/specific-features/memory-pods-architecture",
+                      "main-api/specific-features/companion-docs",
                       {
                         "group": "Integrations",
                         "pages": [
@@ -435,6 +439,7 @@
                           "main-api/specific-features/integrations-api/create-agent",
                           "main-api/specific-features/integrations-api/get-agent",
                           "main-api/specific-features/integrations-api/update-agent",
+                          "main-api/specific-features/integrations-api/companion-docs",
                           "main-api/specific-features/integrations-api/errors-and-tips"
                         ]
                       },
@@ -462,6 +467,7 @@
                         ]
                       },
                       "main-api/specific-features/local-development",
+                      "main-api/specific-features/external-api-endpoints",
                       "main-api/specific-features/master-api-key",
                       "main-api/specific-features/output-controller-stall-incident"
                     ]

@@ -20,6 +20,11 @@ The request body is missing a required field, or one of the IDs is not a valid U
 
 **Fix:** Check that `name`, `type`, and either `folderId` or `folderName` are all present and spelled correctly. UUIDs look like `9f2b3c4a-1111-2222-3333-444455556666`.
 
+**On the [documentation endpoints](/main-api/specific-features/integrations-api/companion-docs):**
+
+- On `PUT .../documentation`: the body is missing `md`, or `md` is an empty string. It must be your whole document as one string, with line breaks written as `\n`.
+- On `POST .../documentation/regenerate`: the message `Documentation generation already in progress` means a refresh for this exact entity is already running — often one kicked off by a run that just finished, or your own retry. Wait a few seconds and send it again. It is not a validation problem with your request.
+
 ### 401 Unauthorized
 
 Your API key is missing, expired, or wrong.
@@ -34,11 +39,25 @@ You're authenticated, but you don't have permission to do this thing — usually
 
 Leaving `spaceId` out entirely is a different case: that is a `400`, not a `403`, and the message names the space you need to send.
 
+**On the [documentation endpoints](/main-api/specific-features/integrations-api/companion-docs)** the message tells you which rule you hit:
+
+| Message | Meaning | Fix |
+| --- | --- | --- |
+| `You do not have access to this documentation` | You are authenticated, but you cannot see this folder, space, or organization at all. | Confirm the id belongs to something you can open in FluxPrompt. |
+| `Only an admin can change this documentation` | You can *read* the space or organization document, but writing one needs admin. Space documents need a space admin or an org admin; organization documents need an org admin. | Ask an admin to make the change, or to grant you the role. `GET` still works. |
+| `A space-scoped API key cannot change organization documentation` | The key you used is scoped to a single space, and organization documents are out of its reach — regardless of your own role. | Use a user-level API key for organization documents. |
+
+Both `PUT` and `POST .../regenerate` count as writing, so the admin rules apply to both.
+
 ### 404 Not Found
 
 The folder you referenced via `folderId` doesn't exist (or you can't see it). On `GET`/`PATCH /integrations/agents/:id`, the agent ID either doesn't exist or you don't have access to it.
 
 **Fix:** Re-fetch the folder list and copy a current ID. Or use [`GET /integrations/agents`](/main-api/specific-features/integrations-api/list-agents) to confirm the agent exists and is visible to you.
+
+**`This resource has no documentation yet`** is a different situation and the most common surprise on the [documentation endpoints](/main-api/specific-features/integrations-api/companion-docs). Nothing is wrong with your id or your key — the entity is there, you can see it, and there is simply no document stored for it.
+
+**Fix:** Send `POST .../documentation/regenerate` once (or `PUT` your own content). The `GET` works from then on. Agent documents are usually created for you; folder, space, organization, and user documents are created the first time someone asks for one, in the UI or through the API.
 
 ### 422 Unprocessable Entity
 
@@ -92,6 +111,11 @@ You'll use these constantly:
 | Create an agent | `POST` | `{{baseUrl}}/integrations/agents` |
 | Get an agent's full JSON | `GET` | `{{baseUrl}}/integrations/agents/<id>` |
 | Update an agent | `PATCH` | `{{baseUrl}}/integrations/agents/<id>` |
+| Read a companion document | `GET` | `{{baseUrl}}/integrations/agents/<id>/documentation` |
+| Replace a companion document | `PUT` | `{{baseUrl}}/integrations/agents/<id>/documentation` |
+| Refresh a companion document | `POST` | `{{baseUrl}}/integrations/agents/<id>/documentation/regenerate` |
+
+Swap `agents/<id>` for `folders/<id>`, `spaces/<id>`, `organizations/<id>`, or `me` to reach the other four scopes.
 
 ## Frequently asked questions
 
@@ -138,6 +162,10 @@ You'll use these constantly:
 
   <Accordion title="I see flows from other spaces I don't expect. Is that a leak?">
     No — those are spaces you actually have access to. The endpoint only returns what you can already see in the UI. If you want a tighter scope, use a Space-level API key.
+  </Accordion>
+
+  <Accordion title="The documentation response looks empty in Postman. Did the request fail?">
+    Probably not. The documentation endpoints return `text/markdown`, not JSON, and Postman's **Pretty** tab has nothing to prettify. Switch the response panel to **Raw** or **Preview** and the document appears. A real failure always carries a `4xx` status code.
   </Accordion>
 
   <Accordion title="How do I actually call the agent's URL after I have it?">
