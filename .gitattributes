@@ -1,0 +1,9 @@
+# Line endings were never configured here, so every file kept whatever its author's
+# editor produced: 125 of the 181 .mdx files were CRLF and 56 were LF. Any tool that
+# rewrites a file whole then flips its terminators, which turns a one-line edit into a
+# few-hundred-line diff and buries the real change. LF matches the other repos in this
+# workspace (back/.gitattributes, and the .ts sources are LF throughout).
+* text=auto eol=lf
+
+*.png binary
+*.svg text eol=lf
