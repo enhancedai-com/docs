@@ -32,8 +32,21 @@ The **MCP Client** node calls tools on a **Model Context Protocol** server. It s
 
 ## Third-party integration provider `mcp`
 
-- **Pull** object type `list_tools` — returns the tool catalog from the saved server (HTTP or stdio)
-- **Push** — not supported for this provider; use the MCP Client node for `tools/call`
+The provider has a **single operation**: it calls one tool on a saved MCP connection. There is no
+pull/push choice, because a tool catalog carries no dependable read/write signal — `readOnlyHint`
+and `destructiveHint` are optional in the protocol and most servers omit them — so a toggle would
+force a decision that changes nothing.
+
+- **Load tools** sits directly under the connection: nothing else can be configured until the
+  server's catalog is known. It stays visible and disabled when it cannot run, with the reason
+  underneath.
+- Selecting a tool shows what it does and renders its `inputSchema` as fields, **required first,
+  marked with `*`**. A tool that publishes no schema stays callable through the raw JSON field.
+- `mode` is `push` and `pushAction` is `call_tool`; both are stored automatically, since neither
+  offers a choice.
+
+Unlike the MCP Client node, this one takes an **explicit** tool name and arguments — it never asks a
+model to infer them from a prompt.
 
 ## Related backend
 
