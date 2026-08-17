@@ -1,0 +1,373 @@
+---
+title: "Companion documentation (entity docs)"
+description: "Internal architecture of companion documentation — the entity_docs storage model, the provider-per-owner-type collectors, collected vs narrative sections, hash-based auto-refresh, the access model, the internal /entity-docs endpoints, and the migration off flows.agentflow_md."
+---
+
+Every agent, folder, space, organization, and user on the platform now carries a **companion document**: a single markdown file that describes what that entity is, what it is for, and what an AI assistant must not change without asking. The document is readable and editable in the UI, and over the [Integrations API](/main-api/specific-features/integrations-api/companion-docs).
+
+This page is the engineer-facing reference for `back/src/app-api/entity_docs/`. If you are an integrator looking for the HTTP surface, jump to [companion documentation endpoints](/main-api/specific-features/integrations-api/companion-docs).
+
+## Why the feature exists
+
+A flow's nodes tell you *how* it runs, not *why* it exists, which credentials it depends on, or which business rules must survive an edit. Companion docs give the platform — and specifically Super Chat, which reads them before acting on an entity — a stable place for that context. Half of each document is machine-collected facts that are always current; the other half is narrative that humans and AI write and the platform never overwrites.
+
+## Owner types
+
+One enum drives everything (`src/enums/entity_doc_owner_type.enum.ts`):
+
+| Enum value | Entity | Provider | Exposed externally as |
+| --- | --- | --- | --- |
+| `flow` | Agent / flow | `FlowDocProvider` | `agents/:id` |
+| `folder` | Folder | `FolderDocProvider` | `folders/:id` |
+| `space` | Space | `SpaceDocProvider` | `spaces/:id` |
+| `company` | Organization | `CompanyDocProvider` | `organizations/:id` |
+| `user` | User | `UserDocProvider` | `me` |
+
+<Note>
+The public API renames two of them: `company` is exposed as `organizations`, and `user` is exposed as `me` — a caller can only reach their own user doc, so no id appears in the path. The internal `/entity-docs` API uses the raw enum values.
+</Note>
+
+## Storage model
+
+Documents live in their own table, one row per entity, created by `CreateEntityDocsTable1785600000000`:
+
+```sql
+CREATE TABLE "entity_docs" (
+  "id" uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
+  "deletedAt" TIMESTAMP,
+  "owner_type" "entity_docs_owner_type_enum" NOT NULL,
+  "owner_id" uuid NOT NULL,
+  "md" text,
+  "md_hash" text,
+  "auto_update" boolean NOT NULL DEFAULT true,
+  CONSTRAINT "UQ_entity_docs_owner" UNIQUE ("owner_type", "owner_id")
+);
+```
+
+| Column | Purpose |
+| --- | --- |
+| `owner_type` + `owner_id` | The entity this document belongs to. Unique together, and each column is indexed separately. |
+| `md` | The whole document, as markdown. Nullable — a row can exist before any content does. |
+| `md_hash` | SHA-256 of the last collected data set. Drives auto-refresh; see [hash-based refresh](#hash-based-auto-refresh). |
+| `auto_update` | Per-document switch for auto-refresh. Defaults to `true`. |
+
+There is **no foreign key** to the owning entity. `owner_id` is a bare uuid, so the table stays agnostic about which of the five tables it points at — and a deleted entity leaves its document behind rather than cascading. `EntityDoc` extends `BasicEntity`, so it inherits soft deletes.
+
+<Info>
+The unique constraint is load-bearing. `EntityDocService.persistDoc` catches unique-violation `23505`, re-reads the existing row, and copies `md` + `mdHash` onto it — so two concurrent generators converge on one row instead of one of them 500-ing.
+</Info>
+
+## Providers: one collector per owner type
+
+Each owner type has a provider implementing a two-method interface (`entity-doc.types.ts`):
+
+```typescript
+export interface EntityDocProvider {
+  readonly ownerType: EntityDocOwnerType;
+  buildContext(ownerId: string): Promise<EntityDocContext>;
+}
+
+export interface EntityDocContext {
+  collectedSections: EntityDocKnownValues; // Record<sectionTitle, markdownBody>
+}
+```
+
+A provider's only job is to read live platform data and return a `{ 'Section title': 'markdown body' }` map. It never touches the stored document, never merges anything, and never knows about the required-sections list. `EntityDocService.resolveProvider` maps owner type to provider and throws `BadRequestException` for an unsupported type.
+
+What each provider collects:
+
+<AccordionGroup>
+  <Accordion title="FlowDocProvider — the richest one">
+    Loads the flow with nodes, edges, folder, and space, then the flow's recent logs (`FlowLogsService`), and derives:
+
+    - Identity: flow name, id, space (or `_Personal (not in a space)._`), folder.
+    - **Operational status** — `Operational` / `Degraded` / `Broken` / `Unknown`, computed by `resolveOperationalStatus` from the last 20 log statuses: latest failed → `Broken`; latest succeeded but an earlier one failed → `Degraded`; latest succeeded with a clean window → `Operational`.
+    - Last successful run timestamp, and up to 5 recent error messages as **Known failure modes**.
+    - **Trigger / entry point** — detected from `flow.webhook`, `flow.chatbotDataInputNodeId`, `Schedule` rows, `Forms` rows, plus a constant `API / manual run`.
+    - **Required vs optional inputs** — `varInputNode` nodes, split by whether `data.text` holds a saved default.
+    - **Expected outputs** — `outputObjectNode` nodes; output destinations and connected systems come from `agentflow-doc.node-extractor`, which also derives **Required secrets / credentials**.
+    - **Missing configuration** — structural gaps: no input path at all, no output node, edges pointing at deleted nodes, nodes connected by no edge, unlabeled input nodes.
+    - `Summary` only when the `globalStarter` node already has a `data.summary` — the provider never invents one.
+
+    The status/gap logic lives in `providers/flow-doc.deterministic.ts` and is pure, so it is unit-tested without a database (`flow-doc.deterministic.spec.ts`).
+  </Accordion>
+
+  <Accordion title="FolderDocProvider">
+    Folder name, id, section, owner scope, parent folder (or `_Top level._`), and the list of agents the folder contains.
+  </Accordion>
+
+  <Accordion title="SpaceDocProvider">
+    Space name, id, organization, whether logging is enabled, disabled models, members, folders, and the agents in the space.
+  </Accordion>
+
+  <Accordion title="CompanyDocProvider">
+    Organization name, id, domain, disabled models, execution retention days (or `Global default`), spaces (flagging disabled ones and logging state), and members with role + status.
+  </Accordion>
+
+  <Accordion title="UserDocProvider">
+    User name, id, email, account type, role, organizations, accessible spaces, personal space contents, and connected integrations.
+  </Accordion>
+</AccordionGroup>
+
+Empty lists render as `_None detected._` rather than an empty section, so a collected section never comes back blank and never looks like a narrative section waiting to be filled in.
+
+## Collected vs narrative sections
+
+Every document is one flat markdown file, but its sections have two different owners:
+
+| | Collected sections | Narrative sections |
+| --- | --- | --- |
+| Written by | A provider, from live platform data | Humans and AI, through the UI or the API |
+| On regenerate | Overwritten in place | Left untouched |
+| Examples (flow) | `Flow ID`, `Operational status`, `Required inputs` | `Purpose`, `Success criteria`, `Business rules / hard constraints` |
+
+This split is the whole contract: **regenerating is safe.** `upsertSections` only writes the keys a provider returned, so hand-written prose survives every refresh.
+
+## Required-sections contract
+
+Each owner type declares the exact section headers its document must contain (`entity-doc.sections.ts`). Any missing header is appended as an empty `## Title`, which is what makes an unfilled section visible instead of invisible.
+
+<Tabs>
+  <Tab title="flow">
+    `REQUIRED_FLOW_DOC_SECTIONS`:
+
+    Flow name · Flow ID · Space · Folder · Operational status · Last successful run · Last eval result · Summary · Purpose · Trigger / entry point · Required inputs · Optional inputs · Expected outputs · Output destination · Connected systems / dependencies · Required secrets / credentials · Success criteria · Known failure modes · Missing configuration / user input needed · Business rules / hard constraints · Things Super Chat should avoid changing without confirmation
+  </Tab>
+  <Tab title="user">
+    `REQUIRED_USER_DOC_SECTIONS`:
+
+    User name · User ID · Email · Account type · Role · Organizations · Accessible spaces · Personal space contents · Connected integrations · Summary · What this person uses the platform for · Working preferences · Recurring requests / patterns · Things Super Chat should avoid changing without confirmation
+  </Tab>
+  <Tab title="folder">
+    `REQUIRED_FOLDER_DOC_SECTIONS`:
+
+    Folder name · Folder ID · Section · Owner scope · Parent folder · Summary · Purpose · Agents in this folder · Shared inputs / conventions · Business rules / hard constraints · Things Super Chat should avoid changing without confirmation
+  </Tab>
+  <Tab title="space">
+    `REQUIRED_SPACE_DOC_SECTIONS`:
+
+    Space name · Space ID · Organization · Logging enabled · Disabled models · Members · Folders · Agents in this space · Summary · Purpose · Business rules / hard constraints · Style, tone & format · Things Super Chat should avoid changing without confirmation
+  </Tab>
+  <Tab title="company">
+    `REQUIRED_COMPANY_DOC_SECTIONS`:
+
+    Organization name · Organization ID · Domain · Disabled models · Execution retention days · Spaces · Members · Summary · What this organization does · Business rules / hard constraints · Style, tone & format · Compliance / data-handling notes · Things Super Chat should avoid changing without confirmation
+  </Tab>
+</Tabs>
+
+### How headers are matched
+
+Two helpers in `entity-doc.sections.ts` do all the markdown surgery, and both compare **normalized** titles: lowercased, whitespace collapsed, and spaces around a `/` removed. So `## Trigger / Entry Point` and `### trigger/entry point` are the same section, and any heading level from `#` to `######` counts.
+
+<Steps>
+  <Step title="ensureRequiredSections(md, required)">
+    Collects the titles already present, appends `## Title` for each missing one, and returns the result. Used on every write so a hand-authored document still ends up complete.
+  </Step>
+  <Step title="upsertSections(md, values, required)">
+    For each collected value: find the matching header and replace everything between it and the next header; if no header matches, append `## Title` plus the body. Then run `ensureRequiredSections` on the output.
+  </Step>
+</Steps>
+
+<Warning>
+`upsertSections` escapes any `#` heading inside a collected value (`\## …`). Without that, an entity name like `# Prod` in a collected field would register as a real header and swallow the rest of the document on the next pass.
+</Warning>
+
+Sections are never deleted or reordered. An unrecognized section a human added stays where it is, forever.
+
+## Service operations
+
+`EntityDocService` is the only writer. Everything funnels through `generateAndSave`, which holds the in-flight lock, builds the context, upserts, stores the hash, and persists.
+
+| Method | Behavior |
+| --- | --- |
+| `getMd(ownerType, ownerId)` | Returns `md` or `null`. |
+| `getState(...)` | Returns `{ md, autoUpdate }`. `autoUpdate` reads as `true` when the row is missing. |
+| `saveMd({ ownerType, ownerId, md })` | Runs `ensureRequiredSections`, saves, returns the stored markdown. No provider call — the caller's text is the document. |
+| `setAutoUpdate({ ..., enabled })` | Creates the row if needed, flips `auto_update`. |
+| `buildInitial(ownerType, ownerId)` | `generateAndSave` with trigger `creation`. |
+| `regenerate({ ..., actor })` | `generateAndSave` with trigger `manual`. Logs the actor (`api:user:<id>` from the external API, `user:<id>` from the internal one). |
+| `refreshIfChanged(ownerType, ownerId)` | The auto-refresh path; see below. |
+
+Because writes go through `upsertSections`, `regenerate` is an **upsert, not a rebuild**: the stored document is the starting point, collected sections are replaced inside it, and the result is returned.
+
+### In-flight lock
+
+`generateAndSave` keys an in-memory `Set` on `${ownerType}:${ownerId}`. A second generation for the same entity while one is running throws:
+
+```text
+400 Bad Request — Documentation generation already in progress
+```
+
+<Warning>
+The lock is per-process, held in a `Set` on the service instance. With more than one API instance behind the load balancer, two concurrent regenerations on different instances both proceed — which is exactly the case the `23505` recovery in `persistDoc` exists to absorb.
+</Warning>
+
+### Hash-based auto-refresh
+
+`md_hash` is `hashOf(collectedSections)` — SHA-256 over the JSON of the collected map with object keys deep-sorted, so key order can never produce a spurious mismatch. `refreshIfChanged` short-circuits in three places:
+
+<Steps>
+  <Step title="A generation is already in flight">
+    Returns immediately. No error — this is the passive path, not a user request.
+  </Step>
+  <Step title="auto_update is false">
+    Returns. Explicitly opted out.
+  </Step>
+  <Step title="The collected data is unchanged">
+    Builds the context, hashes it, and compares against `md_hash`. Equal → return without writing.
+  </Step>
+</Steps>
+
+Only when all three pass does it call `generateAndSave` with trigger `change`, reusing the context it already built.
+
+### What actually triggers a refresh today
+
+<Warning>
+Auto-refresh is wired for **flows only**. Two call sites exist in the backend:
+
+- `flow.controller.ts` → `seedAgentflowDoc` calls `buildInitial(FLOW, flowId)` after a flow is created.
+- `flux.service.ts` calls `refreshIfChanged(FLOW, flowId)` at the end of `apiV2`, once a run has finished.
+
+Both are fire-and-forget (`void` + `.catch` that logs), so a documentation failure never fails the flow operation that triggered it. No folder, space, organization, or user change calls `refreshIfChanged` yet — those documents materialize on the first regenerate or write, whether that comes from the UI or the API. The providers, the hash column, and the `auto_update` toggle are all in place for them, so wiring a new trigger is a one-line call.
+</Warning>
+
+## Access model
+
+`EntityDocAccessService` answers two questions, and write always implies read.
+
+### Read
+
+`assertCanAccess` resolves per owner type, and platform admins (`UserRole.ADMIN`) bypass the whole check:
+
+| Owner type | Read requires |
+| --- | --- |
+| `flow` | `FlowAccessService.resolveAccessibleAgent` succeeds — the normal agent-visibility rule (folder owner, space member, or org member). |
+| `space` | A `UserSpaces` row, **or** access to the space's company. |
+| `company` | An active `CompanyUser` row, or owning the company. |
+| `folder` | Owning the folder, being its `companyUser`, or access to the folder's space. |
+| `user` | `ownerId === user.id`. Only your own document. |
+
+<Note>
+The failure shape differs by owner type. A flow you cannot see raises `404 Agent not found` from `resolveAccessibleAgent`; everything else raises `403 You do not have access to this documentation`.
+</Note>
+
+### Write
+
+`assertCanWrite` runs the read check, then adds two rules:
+
+| Owner type | Write requires |
+| --- | --- |
+| `flow`, `folder`, `user` | Nothing beyond read access. |
+| `space` | Space admin (`UserSpaceRole.ADMIN`) — or admin of the space's organization. |
+| `company` | Organization admin (`CompanyUserRole.ADMIN` + `ACTIVE`) or the company owner. |
+
+And one guard that runs **before** the admin check, so it applies even to platform admins: `assertNotSpaceScopedOrgWrite`. If the authenticated principal carries an `apiKeySpaceId` — meaning it authenticated with a space-scoped API key — any write to a `company` document is refused with `403 A space-scoped API key cannot change organization documentation`. A key scoped to one space has no business rewriting the organization it sits under.
+
+Every denial is logged with owner type, owner id, and user id before the exception is thrown.
+
+## HTTP surfaces
+
+Two controllers sit on the same services.
+
+### Internal — `/entity-docs` (JWT only)
+
+`EntityDocsController`, guarded by `JwtAuthGuard`. This is what the UI calls; `:ownerType` is the raw enum value.
+
+| Method | Path | Returns |
+| --- | --- | --- |
+| `GET` | `/entity-docs/:ownerType/:ownerId` | `{ md, autoUpdate }` |
+| `PATCH` | `/entity-docs/:ownerType/:ownerId` | `{ md }` — body `{ md }`, min length 1 |
+| `PATCH` | `/entity-docs/:ownerType/:ownerId/auto-update` | `{ autoUpdate }` — body `{ enabled }` |
+| `POST` | `/entity-docs/:ownerType/:ownerId/regenerate` | `{ md }` |
+
+`ownerType` goes through `ParseEnumPipe` and `ownerId` through `ParseUUIDPipe`, so a bad value is a `400` before any service runs. Unlike the external API, `GET` here does **not** 404 on a missing document — it returns `{ md: null, autoUpdate: true }`, which is what lets the UI render an empty state with a Generate button.
+
+<Info>
+The `auto-update` toggle exists **only** on this internal API and in the UI. The external API deliberately has no way to disable auto-refresh.
+</Info>
+
+### External — `/integrations/**/documentation`
+
+`EntityDocsApiController`, guarded by `JwtOrApiKeyGuard`: an `api-key` header or a JWT bearer token both work. Fifteen routes — `GET`, `PUT`, and `POST .../regenerate` for each of `agents/:id`, `folders/:id`, `spaces/:id`, `organizations/:id`, and `me`.
+
+Responses are **raw markdown**, not JSON. Every handler funnels through one private helper:
+
+```typescript
+private async sendMarkdown(res: Response, resolve: () => Promise<string>) {
+  const markdown = await resolve();
+  res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+  res.send(markdown);
+}
+```
+
+`PUT` and `POST` are pinned to `HttpStatus.OK` with `@HttpCode`, so a write returns `200` with the stored document rather than `201`/`204`. `GET` raises `404 This resource has no documentation yet` when the row is missing or `md` is null — the one place where the external API is stricter than the internal one.
+
+Full walkthroughs live in the [companion documentation endpoints](/main-api/specific-features/integrations-api/companion-docs) page.
+
+## UI surfaces
+
+`EntityDocSection` is the single component behind all of them (`front/src/components/EntityDoc/`). It renders the markdown with `react-markdown` + `remark-gfm`, offers edit / save / regenerate, and shows the auto-update switch. `EntityDocModal` is that section in a dialog. Copy per owner type — title, empty state, auto-update label, regenerate confirmation — comes from `entityDocLabels.ts`, which is also where `canHaveEntityDoc` lives: a uuid check that hides the entry point for pseudo-entities whose id is not a real uuid.
+
+| Owner type | Where the user finds it |
+| --- | --- |
+| `flow` | Agent settings panel (`AgentSettingsPanel`), and the Global Node settings section |
+| `folder` | Folder item menu in the agents sidebar |
+| `space` | Space menu in the sidebar, the space list item menu, and space details |
+| `company` | Organization settings modal, and the user menu |
+| `user` | Profile settings modal, and the user menu |
+
+Data access goes through `src/queries/entityDoc.ts` (React Query: one `detail` query with a 60 s stale time, plus save / regenerate / auto-update mutations — the auto-update one updates optimistically and rolls back on error) over `src/service/EntityDocService.ts`.
+
+## Migration off `flows.agentflow_md`
+
+Companion docs generalize an agent-only feature. Before this change, a flow's markdown lived in three columns on `flows`: `agentflow_md`, `agentflow_md_hash`, and `agentflow_doc_auto_update`. `CreateEntityDocsTable1785600000000` moves them out in one pass:
+
+<Steps>
+  <Step title="Create the enum, table, and indexes">
+    `entity_docs_owner_type_enum` with all five values, the table, and indexes on `owner_type` and `owner_id`.
+  </Step>
+  <Step title="Backfill every existing agent document">
+    `INSERT INTO entity_docs (owner_type, owner_id, md) SELECT 'flow', id, agentflow_md FROM flows WHERE agentflow_md IS NOT NULL`. Nothing is lost, and no document is regenerated during the migration.
+  </Step>
+  <Step title="Drop the three legacy columns">
+    `agentflow_md`, `agentflow_md_hash`, and `agentflow_doc_auto_update`, each with `IF EXISTS`.
+  </Step>
+</Steps>
+
+<Warning>
+`down()` is lossy on purpose. It restores `agentflow_md` and copies the markdown back from `entity_docs`, then drops the table — but it does **not** restore `agentflow_md_hash` or `agentflow_doc_auto_update`. A rollback keeps the content and loses the refresh bookkeeping, which then rebuilds on the next generation. It also discards every non-flow document, since those columns never existed.
+</Warning>
+
+Two API-level consequences:
+
+- **`GET /integrations/agents/:id` now embeds `documentation`.** `ApiFlowsService` calls `entityDocService.getMd(FLOW, id)` and `toAgentJson` puts the result in the response as `documentation: string | null` — the same markdown `GET /integrations/agents/:id/documentation` returns, `null` when no document exists. The same field appears on `GET /master/flows/:id`.
+- **The old `GET /integrations/agents/:id/documentation` endpoint moved** out of the api-flows controller into `EntityDocsApiController`, unchanged in path and response type, and gained `PUT` and `POST .../regenerate` siblings plus the four other owner types.
+
+## Tests
+
+| File | Covers |
+| --- | --- |
+| `entity-doc.sections.spec.ts` | Header normalization, appending missing sections, upsert-in-place, heading escaping |
+| `entity-doc.service.spec.ts` | Data collection, the `refreshIfChanged` short-circuits, the in-flight lock |
+| `entity-doc.access.service.spec.ts` | Read/write matrix per owner type, admin bypass, space-scoped-key org write |
+| `providers/flow-doc.deterministic.spec.ts` | Operational status, required vs optional inputs, missing-configuration detection |
+| `api-flows.service.spec.ts` | `documentation` present and `null` on the agent response |
+
+## Related
+
+<Columns cols={2}>
+  <Card title="Companion documentation endpoints" icon="file-text" href="/main-api/specific-features/integrations-api/companion-docs">
+    The 15 external endpoints, step by step, for non-programmers.
+  </Card>
+  <Card title="Get an agent" icon="file-json" href="/main-api/specific-features/integrations-api/get-agent">
+    Where the embedded `documentation` field shows up.
+  </Card>
+  <Card title="External API endpoints" icon="list" href="/main-api/specific-features/external-api-endpoints">
+    Every endpoint an API key can reach, in one index.
+  </Card>
+  <Card title="Integrations API overview" icon="plug" href="/main-api/specific-features/integrations-api/overview">
+    API keys, Postman setup, and the rest of the surface.
+  </Card>
+</Columns>

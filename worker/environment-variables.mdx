@@ -39,7 +39,22 @@ All 28 vars are actively used — none obsolete. `LAMBDA_ENDPOINT`, `CLAIM_CHECK
 
 ## Cross-repo gotcha
 
-`INTEGRATIONS_ENCRYPTION_KEY` must be **identical** to `back`'s value — same SSM param in every environment, and it must **never** be set to `JWT_SECRET`. The worker's copy of the credentials-decryption helper (ported from `back/src/common/credentials-encryption.service.ts` for the P0+Stripe migration, `868ke6j3r`) deliberately has no `JWT_SECRET` fallback: a `user_integrations` row encrypted by `back` only decrypts on the worker if the keys match exactly.
+`INTEGRATIONS_ENCRYPTION_KEY` must be **identical to the key `back` actually encrypted with** — and that is not always `back`'s `INTEGRATIONS_ENCRYPTION_KEY`. The back derives it as:
+
+```ts
+const key = process.env.INTEGRATIONS_ENCRYPTION_KEY || process.env.JWT_SECRET;
+```
+
+The worker has **no such fallback** (`z.string().min(32)`, validated with `envSchema.parse`, so it will not boot without the var). So read the back's environment first and follow whichever branch is true:
+
+| `back`'s `INTEGRATIONS_ENCRYPTION_KEY` | What the worker must be given |
+|---|---|
+| set | that same value |
+| empty / unset | the value of `back`'s `JWT_SECRET` — because that is what the stored rows were encrypted with |
+
+<Warning>
+Earlier revisions of this page said the worker must **never** be set to `JWT_SECRET`. That is only true once `back` has its own `INTEGRATIONS_ENCRYPTION_KEY` set. While `back` is on the fallback, setting the worker to anything else means every `user_integrations` row fails to decrypt — and this fails **silently at run time**, after a green deploy, not at boot. Confirm the back's real environment before deploying the worker.
+</Warning>
 
 ## CI/CD
 

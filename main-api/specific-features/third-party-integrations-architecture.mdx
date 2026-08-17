@@ -120,6 +120,23 @@ A Third Party Integration node does not always run in the same process, and the 
 
 **Execution — `pull` and `push` during a flow run — is being moved into the Temporal worker, one provider at a time.** The back keeps a set of migrated providers; when a node's provider is in that set, the back stops executing it inline and dispatches to the worker instead, which holds its own copy of the adapter's runtime path. The provenance of each ported adapter is recorded in `PORTED_FROM.md` in the worker's `third-party-integration` module.
 
+The set is `MIGRATED_INTEGRATION_PROVIDERS` in `back/src/shared/integration/integration-executable-node.ts`, and it is the **only** thing that decides where a provider runs — no environment flag is involved. Nothing else in the routing code names a provider, so releasing one is a single-line change.
+
+### Rollout to production
+
+Providers reach production one release at a time, each as its own deploy. A provider absent from this table still executes inline in the back on production, even though the worker already carries its adapter.
+
+| Provider | On the worker in production | Release |
+|---|---|---|
+| Stripe | yes | `868ke6j3r` |
+| Slack | yes | `868ke6j6m` |
+| Notion | yes | `868ke6j7t` |
+| Zapier | yes | `868ke6j9d` |
+
+<Note>
+The worker ships **every** ported adapter as soon as the first provider is released, because the module builds its adapter map in one factory. An adapter present in the worker is therefore not evidence that its provider is routed there — only the back's set is. This is deliberate: hand-trimming the registry per release is how an inline-vs-worker behaviour difference would get introduced unnoticed.
+</Note>
+
 Two consequences worth knowing:
 
 - **The worker needs the provider's OAuth client credentials too**, not just the API. It refreshes access tokens during a run, so a worker missing `<PROVIDER>_CLIENT_ID`/`_SECRET` fails every node on a connection whose token has expired — while the same node works fine in the editor, because the editor path never leaves the API.

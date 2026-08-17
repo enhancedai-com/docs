@@ -39,7 +39,22 @@ Todas as 28 vars estão em uso ativo — nenhuma obsoleta. `LAMBDA_ENDPOINT`, `C
 
 ## Pegadinha cross-repo
 
-`INTEGRATIONS_ENCRYPTION_KEY` precisa ser **idêntica** ao valor do `back` — mesmo parâmetro SSM em todo ambiente, e nunca pode ser `JWT_SECRET`. A cópia do helper de descriptografia de credenciais no worker (portada de `back/src/common/credentials-encryption.service.ts` pra migração P0+Stripe, `868ke6j3r`) propositalmente não tem fallback pro `JWT_SECRET`: uma linha de `user_integrations` criptografada pelo `back` só descriptografa no worker se as chaves baterem exatamente.
+`INTEGRATIONS_ENCRYPTION_KEY` precisa ser **idêntica à chave com que o `back` realmente criptografou** — e essa não é sempre a `INTEGRATIONS_ENCRYPTION_KEY` do `back`. O back deriva assim:
+
+```ts
+const key = process.env.INTEGRATIONS_ENCRYPTION_KEY || process.env.JWT_SECRET;
+```
+
+O worker **não tem esse fallback** (`z.string().min(32)`, validado com `envSchema.parse`, então ele não sobe sem a variável). Consulte o ambiente do back primeiro e siga o caso verdadeiro:
+
+| `INTEGRATIONS_ENCRYPTION_KEY` do `back` | O que dar ao worker |
+|---|---|
+| preenchida | esse mesmo valor |
+| vazia / ausente | o valor do `JWT_SECRET` do `back` — foi com ele que as linhas foram criptografadas |
+
+<Warning>
+Revisões anteriores desta página diziam que o worker **nunca** pode receber o `JWT_SECRET`. Isso só vale depois que o `back` tiver a própria `INTEGRATIONS_ENCRYPTION_KEY` preenchida. Enquanto o `back` estiver no fallback, qualquer outro valor faz todas as linhas de `user_integrations` falharem na descriptografia — e isso falha **silenciosamente em tempo de execução**, depois de um deploy verde, não na subida. Confirme o ambiente real do back antes de subir o worker.
+</Warning>
 
 ## CI/CD
 

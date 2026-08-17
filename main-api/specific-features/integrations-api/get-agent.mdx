@@ -60,6 +60,7 @@ Sometimes you want to **inspect** an agent — see exactly which nodes and edges
   "type": "agent",
   "spaceId": "space-uuid-123",
   "folderId": "1a2b3c4d-aaaa-bbbb-cccc-ddddeeeeffff",
+  "documentation": "## Flow name\nMarketing Helper\n\n## Purpose\nDrafts campaign copy from a product brief.\n",
   "content": {
     "nodes": [
       {
@@ -96,6 +97,12 @@ Sometimes you want to **inspect** an agent — see exactly which nodes and edges
 
 <ResponseField name="folderId" type="string (uuid)">
   The folder UUID.
+</ResponseField>
+
+<ResponseField name="documentation" type="string | null">
+  The agent's **companion document**, as markdown — byte-for-byte the same content [`GET /integrations/agents/:id/documentation`](/main-api/specific-features/integrations-api/companion-docs) returns. `null` when the agent has no document yet.
+
+  Part of it is written by the platform and kept current automatically (ids, run status, inputs, outputs, credentials); the rest is narrative your team or an assistant writes. To change it, use `PUT .../documentation` — it is read-only here, and `PATCH /integrations/agents/:id` ignores it.
 </ResponseField>
 
 <ResponseField name="content" type="object">

@@ -24,6 +24,18 @@ This guide is written for users with **no programming experience**. The only too
   </Card>
 </CardGroup>
 
+## What's new in v1.4
+
+<Info>
+Version 1.4 adds companion documentation: a markdown document attached to every agent, folder, space, organization, and to your own user account.
+</Info>
+
+- **Read, replace, and refresh documentation** — 15 new endpoints, five scopes (`agents/:id`, `folders/:id`, `spaces/:id`, `organizations/:id`, `me`) × three verbs (`GET`, `PUT`, `POST .../regenerate`). See [companion documentation](/main-api/specific-features/integrations-api/companion-docs).
+- **Responses are raw markdown** — these endpoints answer with `text/markdown`, not JSON. In Postman, read them on the **Raw** tab.
+- **Refreshing never overwrites your prose** — `regenerate` rewrites only the fact-sheet sections the platform owns (ids, members, inputs, run status) and leaves everything you wrote untouched.
+- **The agent JSON now embeds its document** — `GET /integrations/agents/:id` returns a `documentation` field holding the same markdown, so one call gives you both.
+- **Admin rules on the wider scopes** — writing a space document needs space or org admin; writing an organization document needs org admin, and a space-scoped API key is refused outright.
+
 ## What's new in v1.3
 
 <Info>
@@ -156,8 +168,14 @@ Once Postman is configured, jump into the endpoint pages below in order. Each on
   <Card title="Update an agent" icon="pencil" href="/main-api/specific-features/integrations-api/update-agent">
     `PATCH /integrations/agents/:id` — rename an agent or replace its full nodes+edges content.
   </Card>
+  <Card title="Companion documentation" icon="file-text" href="/main-api/specific-features/integrations-api/companion-docs">
+    Read, replace, and refresh the markdown document attached to an agent, folder, space, organization, or yourself.
+  </Card>
   <Card title="Errors and tips" icon="life-buoy" href="/main-api/specific-features/integrations-api/errors-and-tips">
     Common HTTP errors, troubleshooting, FAQ, and where to get more help.
+  </Card>
+  <Card title="All external endpoints" icon="list" href="/main-api/specific-features/external-api-endpoints">
+    Every endpoint your API key can reach, across the whole platform.
   </Card>
 </CardGroup>
 
@@ -175,7 +193,16 @@ You'll use these constantly:
 | Create an agent | `POST` | `{{baseUrl}}/integrations/agents` |
 | Get an agent's full JSON | `GET` | `{{baseUrl}}/integrations/agents/<id>` |
 | Update an agent | `PATCH` | `{{baseUrl}}/integrations/agents/<id>` |
+| Read an agent's documentation | `GET` | `{{baseUrl}}/integrations/agents/<id>/documentation` |
+| Replace an agent's documentation | `PUT` | `{{baseUrl}}/integrations/agents/<id>/documentation` |
+| Refresh an agent's documentation | `POST` | `{{baseUrl}}/integrations/agents/<id>/documentation/regenerate` |
+| Read a folder's documentation | `GET` | `{{baseUrl}}/integrations/folders/<id>/documentation` |
+| Read a space's documentation | `GET` | `{{baseUrl}}/integrations/spaces/<id>/documentation` |
+| Read an organization's documentation | `GET` | `{{baseUrl}}/integrations/organizations/<id>/documentation` |
+| Read your own documentation | `GET` | `{{baseUrl}}/integrations/me/documentation` |
+
+Folders, spaces, organizations, and `me` each take the same three verbs as agents — the full 15-row table is on the [companion documentation](/main-api/specific-features/integrations-api/companion-docs) page.
 
 <Note>
-Document version: **1.3**. Adds `GET /integrations/agents/:id` and `PATCH /integrations/agents/:id` for round-tripping the agent JSON, and carries forward v1.2 features (optional `spaceId`, `folderName` find-or-create, `?name=` filter on list endpoints, `?search=` kept as deprecated alias).
+Document version: **1.4**. Adds the 15 companion-documentation endpoints (`GET`/`PUT`/`POST .../regenerate` for `agents/:id`, `folders/:id`, `spaces/:id`, `organizations/:id`, and `me`) and the `documentation` field on the agent JSON. Carries forward v1.3 (`GET`/`PATCH /integrations/agents/:id`) and v1.2 (optional `spaceId`, `folderName` find-or-create, `?name=` filter on list endpoints, `?search=` kept as deprecated alias).
 </Note>
