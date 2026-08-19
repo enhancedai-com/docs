@@ -285,7 +285,7 @@ interface notificationPayload {
   userId: string;
   flowId: string;
   nodes: Record<string, {
-    status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+    status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
     userMessage?: string;
     message?: string;
   }>;
