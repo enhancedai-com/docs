@@ -1,0 +1,228 @@
+---
+title: "Cancel a run"
+description: "How a canvas run is cancelled: the request endpoint, the flow_run_states record, the cooperative stop between nodes, and the flag-gated interruption of the step already in flight."
+---
+
+A run started from the canvas can be cancelled while it is still going. Cancelling never rolls anything
+back — the nodes that already finished keep their outputs — it stops the run from scheduling anything
+else and records where it stopped.
+
+There are two levels to it, and they are not the same feature:
+
+| Level | What it does | Availability |
+|---|---|---|
+| **Stop at the node boundary** | The scheduler checks for a cancel request before it picks the next node. The step already running is left alone and finishes normally. | Always on |
+| **Interrupt the step in flight** | The step running right now is aborted mid-work, its partial output is persisted, and the run stops. | Behind the `node_cancel_in_flight` feature flag |
+
+<Note>
+  `node_cancel_in_flight` is seeded **disabled** (migration `SeedNodeCancelInFlightFlag1785530000000`),
+  so on a fresh environment cancelling stops the run at the next boundary and lets the current step
+  run to completion. Enable it per environment from **Admin Dashboard → Feature Flags** once you want
+  the harder stop.
+</Note>
+
+## What can be cancelled
+
+Only runs whose run type is `canvas` — the ones a person started by pressing Run in the editor. The
+allowlist is a single constant:
+
+```ts
+// back/src/app-api/executions_logs/run-cancellation.service.ts
+export const CANCELLABLE_RUN_TYPES = ['canvas'];
+```
+
+A run triggered by the API, a webhook, the chatbot, or a schedule is rejected with `422`. Nested runs
+are a special case: they are *watched* for cancellation even when their own run type is not
+cancellable, so cancelling the parent canvas run also stops the child (`shouldWatchCancellation`).
+
+## Requesting the cancellation
+
+```http
+POST /executions_logs/runs/:runId/cancel
+Authorization: Bearer <jwt>
+```
+
+The endpoint takes no body and answers `202 Accepted`:
+
+```json
+{ "runId": "a1b2c3...", "requestedAt": "2026-08-19T13:41:02.113Z" }
+```
+
+It is idempotent — asking twice returns the existing request rather than creating a second one.
+
+### Failures
+
+| Status | Condition |
+|---|---|
+| `400 Bad Request` | `runId` missing from the path |
+| `403 Forbidden` | The caller is not the person who started the run — *"Only the person who started it can cancel"* |
+| `404 Not Found` | No run with that id, or the caller cannot see the flow it belongs to |
+| `409 Conflict` | The run already finished — *"Run already finished, nothing to cancel"* |
+| `422 Unprocessable Entity` | The run type is not cancellable — *"Runs triggered by `<type>` cannot be cancelled"* |
+
+Access is resolved through `FlowAccessService.listLoggableFlowSummaries`, the same visibility rule the
+runs list uses, so a run you cannot see reads as `404` rather than `403`.
+
+## What gets stored
+
+Cancellation state lives in its own table instead of a column on the run, because a run is an
+aggregate over `node_executions` rather than a row.
+
+```sql
+CREATE TABLE "flow_run_states" (
+  "runId"              uuid PRIMARY KEY,
+  "flowId"             uuid NOT NULL,
+  "requestedByUserId"  uuid NOT NULL,
+  "requestedAt"        timestamptz NOT NULL,
+  "cancelledAt"        timestamptz,
+  "stoppedAtNodeId"    varchar,
+  "notExecutedNodeIds" jsonb,
+  ...
+)
+```
+
+`requestedAt` is written when the request arrives; `cancelledAt`, `stoppedAtNodeId` and
+`notExecutedNodeIds` are written by the scheduler once the run has actually stopped. The gap between
+the two is the window the UI shows as *Cancelling…*.
+
+Each `notExecutedNodeIds` entry carries enough to render a name without a second query:
+
+```ts
+interface NotExecutedNode {
+  nodeId: string;
+  label: string | null;
+  type: string | null;
+}
+```
+
+Individual nodes are stamped on `node_executions.cancelledAt`.
+
+| Migration | Change |
+|---|---|
+| `AddFlowRunStates1785510000000` | Creates `flow_run_states` + the `flowId` index |
+| `AddNodeExecutionsCancelledAt1785520000000` | Adds `node_executions.cancelledAt` |
+| `SeedNodeCancelInFlightFlag1785530000000` | Seeds `node_cancel_in_flight` as **disabled** |
+| `AlignFlowRunStatesTimestamps1785540000000` | Aligns the timestamp columns with the rest of the schema |
+
+## The cooperative stop
+
+The `apiV2` scheduler asks one question at the top of its loop, before it takes the next ready node:
+
+```ts
+while (scheduledId !== null) {
+  if (stoppedByCancel || (cancelWatchEnabled &&
+      await this.runCancellationService.isCancelRequested(cancelRunKey))) {
+    stoppedByCancel = true;
+    break;
+  }
+  ...
+}
+```
+
+The lookup is memoised for 1.5 s per run (`CANCEL_CHECK_TTL_MS`, capped at 500 runs) so a long flow
+does not turn into one `SELECT` per node. A positive answer is remembered permanently — once a run is
+cancelled it cannot un-cancel — while a negative answer expires with the TTL.
+
+If the lookup itself fails, the run **continues**. A database hiccup must not silently kill a healthy
+run, so the error is logged (*"Cancel lookup failed, run continues"*) and treated as "not cancelled".
+
+When the loop breaks, `resolveCancelledRunFootprint` records the footprint: `stoppedAtNodeId` is the
+last node that started, and `notExecutedNodeIds` is every scheduled node that neither completed nor
+was pruned by a condition branch (`dead`). The result is persisted with `markCancelled` (3 attempts,
+200 ms apart), followed by a `room_status_updated` event marking each unreached node `CANCELLED`.
+
+## Interrupting the step in flight
+
+Only reached when `node_cancel_in_flight` is enabled. Two paths, because a node either runs in the
+Temporal worker or inline in the API.
+
+### Worker path (Temporal)
+
+<Steps>
+  <Step title="The API signals the workflow">
+    `interruptStepsInFlight` reads `node_executions.metadata->>'workflowId'` for every in-flight node
+    of the run and sends each workflow the `cancelNode` signal. A signal that fails is logged and
+    skipped — one unreachable workflow must not abort the whole cancellation.
+  </Step>
+  <Step title="The workflow cancels its scope">
+    `processSingleNode` holds a cancellable `CancellationScope`; the signal handler cancels it, which
+    surfaces inside the activity as `Context.current().cancellationSignal`.
+  </Step>
+  <Step title="The activity settles instead of failing">
+    Activities wrapped in `runCancellableNode` recognise the abort, persist whatever partial output
+    they had, and return `{ cancelled: true, inputTokens, outputTokens }` rather than throwing. The
+    wrapper heartbeats every 3 s so Temporal does not time the activity out while it is working.
+  </Step>
+  <Step title="Tokens are settled">
+    `resolveCancelSettlement` charges only what a partial result really consumed, and only for node
+    types in `CHARGEABLE_NODE_TYPES` — today just the text generator.
+  </Step>
+</Steps>
+
+Two activities are wrapped today:
+
+| Node | Activity |
+|---|---|
+| Text generator | `textGeneratorActivity` |
+| API caller | `apiCallerActivity` |
+
+`NodeExecutionResult.status` is therefore `"COMPLETED" | "CANCELLED"`, and a cancelled step carries the
+message *"Step cancelled before it finished"*.
+
+### Inline path (in-process)
+
+For node types still executed inside the API, `startNodeCancelWatch` polls the cancel state every 2 s
+and aborts an `AbortSignal` carried through an `AsyncLocalStorage` context. Whether that abort actually
+interrupts the work depends on the node's transport:
+
+```ts
+// back/src/app-api/flux/node-abort-capability.ts
+const TRANSPORT_ABORTABLE_NODE_TYPES = [
+  'imageGenerator',
+  'voiceBoxNode',
+  'commandContentNode',
+  'audioReaderNode',
+  'webSearch',
+  'reportBuilder',
+];
+```
+
+Everything else reports `isStepInterruptible: false` and is only stopped at the next boundary. A
+cancelled inline node is persisted with `executionStatus: 'CANCELLED'`, `partialOutput: true`, and the
+tokens already charged for it.
+
+## What the API reports back
+
+`GET /executions_logs/runs` (and the per-flow variant) expose cancellation on every run:
+
+| Field | Meaning |
+|---|---|
+| `status` | `ok` \| `running` \| `error` \| `cancelled` — `cancelled` once `cancelledAt` is set |
+| `isCancelling` | A request exists, the run has not settled yet, and it is still running |
+| `isCancellable` | The run type is in `CANCELLABLE_RUN_TYPES` |
+| `isStepInterruptible` | Whether cancelling would abort the current step, given the flag and the in-flight node type |
+| `notExecutedNodes` | The nodes the run never reached |
+
+`status=cancelled` also works as a filter on the runs list.
+
+## In the editor
+
+The global node shows **Cancel Agent** while a run is in flight (`FlowGlobalNode`), calling
+`FlowExecutionsService.cancelRun(runId)`. The confirmation text follows `isStepInterruptible`, so the
+user is told which of the two behaviours they are getting:
+
+- *"Cancelling the agent"* — the current step will be aborted.
+- *"Cancelling — waiting for the current step to finish"* — the flag is off, or the in-flight node
+  cannot be interrupted.
+
+The button turns into *Cancelling…* and disables itself until the run settles, and the run finishes
+with an *"Agent run cancelled"* notice rather than an error.
+
+## Related documentation
+
+- [Flow and single-node execution](/main-api/specific-features/flow-and-single-node-execution) — the two run paths this hooks into
+- [Notify status activity](/worker/activities/notify-status) — the `room_status_updated` payload that carries `CANCELLED`
+- [Process single node workflow](/worker/workflows/process-single-node) — the workflow that receives the `cancelNode` signal
+- [`cancel_run` MCP tool](/mcp/tools/running-agents) — a **separate** path: it cancels the Temporal
+  workflow directly through `POST /mcp/internal/runs/:processId/cancel`, without going through
+  `flow_run_states` or the run-type allowlist described here

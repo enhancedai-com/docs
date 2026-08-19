@@ -36,7 +36,7 @@ async notifyStatusActivity({
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `nodes` | `Record<string, { status: string }>` | Object mapping node IDs to their status objects. Each status object contains a `status` field (`PENDING`, `COMPLETED`, or `FAILED`) |
+| `nodes` | `Record<string, { status: string }>` | Object mapping node IDs to their status objects. Each status object contains a `status` field (`PENDING`, `COMPLETED`, `FAILED`, or `CANCELLED`) |
 | `userId` | `string` | ID of the user to notify |
 | `flowId` | `string` | ID of the flow containing the nodes |
 

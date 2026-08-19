@@ -3,6 +3,17 @@ title: "MCP Client node"
 description: "Technical architecture of the MCP Client node for calling tools on Model Context Protocol servers"
 ---
 
+<Warning>
+  **🚧 Partly ahead of production.** The node itself is live, but two things on this page are not:
+
+  - **The name.** Production still labels it **MCP Server** — `nodeTypeNames.ts` and the sidebar both
+    say so, and the component is `McpServer.tsx`. The rename to **MCP Client** (`McpClient.tsx`, plus
+    the sidebar label) is on `front@main` only. The node **type** is `mcpNode` in both.
+  - **The single-operation third-party provider** described below. On production the `mcp` provider
+    still exposes a pull operation (`list_tools`); the one-tool `call_tool` push, the **Load tools**
+    button and the `inputSchema`-driven fields ship from `front@main` and `worker@develop`.
+</Warning>
+
 ## Overview
 
 The **MCP Client** node calls tools on a **Model Context Protocol** server. It supports:

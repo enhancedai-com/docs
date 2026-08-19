@@ -2,7 +2,16 @@
 title: "MCP Client"
 sidebarTitle: "MCP Client"
 description: "Temporal activity for the MCP Client node: connects to a customer's MCP server over streamable HTTP or SSE, resolves the tool and its arguments from a natural-language prompt, and calls it."
+tag: "WIP"
 ---
+
+<Warning>
+  **🚧 Not in production yet.** The MCP node does not run in the worker on production. The
+  `src/modules/nodes/mcp/` module and the `mcp` entry in `MIGRATED_INTEGRATION_PROVIDERS` exist only on
+  the development branches (`worker@develop`, `back@master`); on production every MCP call still
+  executes inline in the API through `McpCallService`. `MCP_MAX_RESULT_BYTES` likewise does not exist in
+  the production worker. Everything below describes the worker path as it stands on dev.
+</Warning>
 
 ## Overview
 

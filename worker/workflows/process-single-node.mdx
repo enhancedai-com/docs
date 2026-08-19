@@ -26,8 +26,12 @@ export async function processSingleNode(
   nodeId: string,
   userId: string,
   sessionId: string,
-  flowId: string
-)
+  flowId: string,
+  flowVersionHistoryId: string | null = null,
+  execId: string = "",
+  runId: string = "",
+  socketId: string | null = null,
+): Promise<NodeExecutionResult>
 ```
 
 ### Parameters
@@ -38,10 +42,45 @@ export async function processSingleNode(
 | `userId` | `string` | ID of the user executing the workflow |
 | `sessionId` | `string` | Session identifier for tracking execution context |
 | `flowId` | `string` | ID of the flow containing the node |
+| `flowVersionHistoryId` | `string \| null` | Version snapshot the node is read from; `null` for the working copy |
+| `execId` | `string` | Execution id the outputs are persisted under |
+| `runId` | `string` | Run the node belongs to; carried into every status event and log row |
+| `socketId` | `string \| null` | Passed through to the node activity so streamed output reaches the right client |
 
 ### Return value
 
-Returns `"Node executed successfully"` on successful completion, or throws an error on failure.
+Returns a `NodeExecutionResult` object, or throws on failure:
+
+```typescript
+interface NodeExecutionResult {
+  status: "COMPLETED" | "CANCELLED";
+  message: string;
+  nodeId: string;
+  nodeType: string;
+  nodeLabel: string | null;
+  flowId: string;
+  durationMs: number;
+  ai?: { aiSystem: string; model: string; inputTokens: number; outputTokens: number };
+}
+```
+
+`CANCELLED` is returned when the run was cancelled while this step was in flight, with the message
+*"Step cancelled before it finished"*. See [Cancel a run](/main-api/specific-features/cancel-a-run).
+
+### The `cancelNode` signal
+
+The workflow runs its work inside a cancellable `CancellationScope` and registers a `cancelNode`
+signal handler that cancels it:
+
+```typescript
+export const cancelNodeSignal = defineSignal("cancelNode");
+const cancelScope = new CancellationScope({ cancellable: true });
+setHandler(cancelNodeSignal, () => cancelScope.cancel());
+```
+
+The API sends this signal to every in-flight workflow of a run when someone cancels it — but only
+when the `node_cancel_in_flight` feature flag is enabled. With the flag off, no signal is sent and the
+step runs to completion.
 
 ## Execution flow
 
@@ -129,6 +168,7 @@ The node status progresses through these states:
 1. **PENDING** - Workflow started, node execution beginning
 2. **COMPLETED** - Node executed successfully
 3. **FAILED** - Node execution encountered an error
+4. **CANCELLED** - The run was cancelled while this node was in flight; the partial output is persisted
 
 ## Example usage
 

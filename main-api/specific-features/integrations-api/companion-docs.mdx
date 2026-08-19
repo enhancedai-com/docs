@@ -1,7 +1,18 @@
 ---
 title: "Companion documentation"
 description: "Read, replace, and regenerate the companion markdown document attached to an agent, folder, space, organization, or your own user — 15 endpoints, all returning raw markdown."
+tag: "WIP"
 ---
+
+<Warning>
+  **🚧 Not in production yet.** Companion documentation ships from `back@master`; production carries
+  none of it. The whole `src/app-api/entity_docs/` module (20 files, including
+  `entity-docs-api.controller.ts` with the 15 endpoints) exists only on the development branches, and
+  `src/enums/entity_doc_owner_type.enum.ts` does not exist on production at all. The one route
+  production does answer is the legacy `GET /integrations/agents/:id/documentation`, which returns the
+  markdown stored on `flows.agentflow_md` — not an `entity_docs` document, and with no `PUT` or
+  `regenerate` counterpart. Everything below describes the dev behaviour.
+</Warning>
 
 <Tag>v1.4</Tag>
 
