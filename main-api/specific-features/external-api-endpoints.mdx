@@ -42,6 +42,13 @@ Base path `/integrations`. Documented for non-programmers, step by step, in the 
 
 Fifteen endpoints, five owner scopes × three verbs. Responses are **raw `text/markdown`**, not JSON. Full walkthroughs in [companion documentation endpoints](/main-api/specific-features/integrations-api/companion-docs); the architecture is in [companion documentation (entity docs)](/main-api/specific-features/companion-docs).
 
+<Warning>
+  **🚧 Not in production yet.** Of the fifteen, production answers only
+  `GET /integrations/agents/:id/documentation`, and there it returns the legacy `flows.agentflow_md`
+  markdown rather than an `entity_docs` document. The other fourteen — every `PUT`, every
+  `regenerate`, and every non-agent owner scope — exist on `back@master` only.
+</Warning>
+
 | Method | Path | Purpose | Auth |
 | --- | --- | --- | --- |
 | `GET` | `/integrations/agents/:id/documentation` | Read an agent's companion document. | api-key or JWT |

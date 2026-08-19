@@ -1,7 +1,18 @@
 ---
 title: "Companion documentation (entity docs)"
 description: "Internal architecture of companion documentation — the entity_docs storage model, the provider-per-owner-type collectors, collected vs narrative sections, hash-based auto-refresh, the access model, the internal /entity-docs endpoints, and the migration off flows.agentflow_md."
+tag: "WIP"
 ---
+
+<Warning>
+  **🚧 Not in production yet.** Companion documentation ships from `back@master`; production carries
+  none of it. The whole `src/app-api/entity_docs/` module (20 files, including
+  `entity-docs-api.controller.ts` with the 15 endpoints) exists only on the development branches, and
+  `src/enums/entity_doc_owner_type.enum.ts` does not exist on production at all. The one route
+  production does answer is the legacy `GET /integrations/agents/:id/documentation`, which returns the
+  markdown stored on `flows.agentflow_md` — not an `entity_docs` document, and with no `PUT` or
+  `regenerate` counterpart. Everything below describes the dev behaviour.
+</Warning>
 
 Every agent, folder, space, organization, and user on the platform now carries a **companion document**: a single markdown file that describes what that entity is, what it is for, and what an AI assistant must not change without asking. The document is readable and editable in the UI, and over the [Integrations API](/main-api/specific-features/integrations-api/companion-docs).
 
