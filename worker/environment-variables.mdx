@@ -29,7 +29,7 @@ title: "Environment Variables"
 | LAMBDA_PYTHON_ALIAS | Required | `code-executor-python` Lambda alias (`non-prod`/`prod`) invoked as the `Qualifier`, so dev/staging/prod hit isolated aliases of the same function — no default, fails closed if unset |
 | URL_MAIN_API | Required | `back` base URL for internal calls |
 | INTERNAL_API_KEY | Required | auth for internal calls to `back` |
-| INTEGRATIONS_ENCRYPTION_KEY | Required | decrypts `user_integrations` credentials (Stripe adapter) — must match `back`'s value |
+| INTEGRATIONS_ENCRYPTION_KEY | Required | decrypts `user_integrations` credentials (Stripe, WordPress, HubSpot adapters, plus the `accessToken`/`refreshToken` columns encrypted via `token-encryption.ts`) — must match `back`'s value |
 | CLAIM_CHECK_THRESHOLD_BYTES | Optional | claim-check pattern threshold (default 262144) |
 | APICALLER_MAX_RESULT_BYTES | Optional | api-caller node result size limit (default 1_000_000) |
 | MCP_MAX_RESULT_BYTES | Optional | mcpNode tool-result size limit (default 1_800_000) |
@@ -55,6 +55,8 @@ The worker has **no such fallback** (`z.string().min(32)`, validated with `envSc
 <Warning>
 Earlier revisions of this page said the worker must **never** be set to `JWT_SECRET`. That is only true once `back` has its own `INTEGRATIONS_ENCRYPTION_KEY` set. While `back` is on the fallback, setting the worker to anything else means every `user_integrations` row fails to decrypt — and this fails **silently at run time**, after a green deploy, not at boot. Confirm the back's real environment before deploying the worker.
 </Warning>
+
+The SSM parameter existing is not the same as the worker task definition actually referencing it — staging and prod were found (during the P6 HubSpot rollout, `868ke6jb7`) running revisions that never declared this secret at all, despite already running Stripe/WordPress. `.specs/features/worker-thirdparty-integration-migration/p6-hubspot/verify-worker-hubspot-secrets.sh` checks (and can fix) this per environment — run it before any deploy that touches a migrated adapter.
 
 ## CI/CD
 
