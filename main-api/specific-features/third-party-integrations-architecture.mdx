@@ -5,7 +5,7 @@ description: "Adapter pattern, credential storage, and provider extensibility fo
 
 ## Overview
 
-The third-party integrations system acts as a bridge between your FluxPrompt flows and external services — WordPress, Slack, Notion, Stripe, QuickBooks, ClickUp, Supabase, Pinecone, Zapier and MCP servers. Every integration operates in one of two modes:
+The third-party integrations system acts as a bridge between your FluxPrompt flows and external services — WordPress, Slack, Notion, Stripe, HubSpot, QuickBooks, ClickUp, Supabase, Pinecone, Zapier and MCP servers. Every integration operates in one of two modes:
 
 - **Pull mode** — fetch data from an external service into your flow (e.g., read Notion pages, list Slack channels).
 - **Push mode** — send data from your flow to an external service (e.g., post a Slack message, create a Stripe product).
@@ -32,18 +32,27 @@ Every integration node can be in one of three states from the perspective of the
 
 ## Supported providers
 
-| Provider | Auth method | Pull | Push |
-|---|---|---|---|
-| WordPress | Credentials (URL + app password) | Yes | Yes |
-| Slack | OAuth | Yes | Yes |
-| Zapier | Webhook URL | Yes | Yes |
-| Stripe | Secret API key | Yes | Yes |
-| Notion | OAuth | Yes | Yes |
-| ClickUp | OAuth | Yes | Yes |
-| Supabase | Credentials (project URL + service role key) | Yes | Yes |
-| Pinecone | Credentials (project API key) | Yes | Yes |
-| QuickBooks | OAuth (company selected at consent; `realmId` scopes every call) | Yes | Yes |
-| MCP | Credentials (API key or token, per transport) | Yes (list tools) | No |
+| Provider | Auth method | Pull | Push | In production |
+|---|---|---|---|---|
+| WordPress | Credentials (URL + app password) | Yes | Yes | Yes |
+| Slack | OAuth | Yes | Yes | Yes |
+| Zapier | Webhook URL | Yes | Yes | Yes |
+| Stripe | Secret API key | Yes | Yes | Yes |
+| Notion | OAuth | Yes | Yes | Yes |
+| HubSpot | OAuth | Yes | Yes | Yes |
+| MCP | Credentials (API key or token, per transport) | Yes (list tools) | No | Yes |
+| ClickUp | OAuth | Yes | Yes | 🚧 Not yet |
+| Supabase | Credentials (project URL + service role key) | Yes | Yes | 🚧 Not yet |
+| QuickBooks | OAuth (company selected at consent; `realmId` scopes every call) | Yes | Yes | 🚧 Not yet |
+| Pinecone | Credentials (project API key) | Yes | Yes | 🚧 Not yet |
+
+<Warning>
+  The four providers marked **🚧 Not yet** are complete on the development branches — adapter,
+  provider config, and enum value — but no production release has shipped them. On production the
+  `user_integrations.provider` enum accepts only `microsoft`, `google`, `hubspot`, `wordpress`,
+  `slack`, `stripe`, `notion`, `zapier` and `mcp`, so a connection for ClickUp, Supabase, QuickBooks or
+  Pinecone cannot even be saved there. Their pages carry the same marker.
+</Warning>
 
 ## Adapter pattern
 
@@ -120,6 +129,25 @@ A Third Party Integration node does not always run in the same process, and the 
 **Editor-time operations always run in the API.** Connecting, refreshing a token, loading a dropdown (`getOptions`), fetching a schema, testing a connection — all of these are API endpoints, for every provider, always.
 
 **Execution — `pull` and `push` during a flow run — is being moved into the Temporal worker, one provider at a time.** The back keeps a set of migrated providers; when a node's provider is in that set, the back stops executing it inline and dispatches to the worker instead, which holds its own copy of the adapter's runtime path. The provenance of each ported adapter is recorded in `PORTED_FROM.md` in the worker's `third-party-integration` module.
+
+The set is `MIGRATED_INTEGRATION_PROVIDERS` in `back/src/shared/integration/integration-executable-node.ts`, and it is the **only** thing that decides where a provider runs — no environment flag is involved. Nothing else in the routing code names a provider, so releasing one is a single-line change.
+
+### Rollout to production
+
+Providers reach production one release at a time, each as its own deploy. A provider absent from this table still executes inline in the back on production, even though the worker already carries its adapter.
+
+| Provider | On the worker in production | Release |
+|---|---|---|
+| Stripe | yes | `868ke6j3r` |
+| WordPress | yes | `868ke6j56` |
+| Slack | yes | `868ke6j6m` |
+| Notion | yes | `868ke6j7t` |
+| Zapier | yes | `868ke6j9d` |
+| HubSpot | yes — both `thirdPartyIntegration` and the dedicated `hubSpotCRM` node | `868ke6jb7` |
+
+<Note>
+The worker ships **every** ported adapter as soon as the first provider is released, because the module builds its adapter map in one factory. An adapter present in the worker is therefore not evidence that its provider is routed there — only the back's set is. This is deliberate: hand-trimming the registry per release is how an inline-vs-worker behaviour difference would get introduced unnoticed.
+</Note>
 
 Two consequences worth knowing:
 

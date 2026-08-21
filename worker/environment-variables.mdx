@@ -29,16 +29,34 @@ title: "Environment Variables"
 | LAMBDA_PYTHON_ALIAS | Required | `code-executor-python` Lambda alias (`non-prod`/`prod`) invoked as the `Qualifier`, so dev/staging/prod hit isolated aliases of the same function — no default, fails closed if unset |
 | URL_MAIN_API | Required | `back` base URL for internal calls |
 | INTERNAL_API_KEY | Required | auth for internal calls to `back` |
-| INTEGRATIONS_ENCRYPTION_KEY | Required | decrypts `user_integrations` credentials (Stripe adapter) — must match `back`'s value |
+| INTEGRATIONS_ENCRYPTION_KEY | Required | decrypts `user_integrations` credentials (Stripe, WordPress, HubSpot adapters, plus the `accessToken`/`refreshToken` columns encrypted via `token-encryption.ts`) — must match `back`'s value |
 | CLAIM_CHECK_THRESHOLD_BYTES | Optional | claim-check pattern threshold (default 262144) |
 | APICALLER_MAX_RESULT_BYTES | Optional | api-caller node result size limit (default 1_000_000) |
+| MCP_MAX_RESULT_BYTES | Optional | 🚧 **dev only** — mcpNode tool-result size limit (default 1_800_000). The production worker does not run the MCP node, so this var is not read there. See [MCP Client](/worker/node/mcp). |
 | LOG_PROVIDER_OPTIONS | Optional | debug flag, logs AI provider options |
 
-All 27 vars are actively used — none obsolete. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES` and `LOG_PROVIDER_OPTIONS` are read directly via `process.env`, not through the Zod schema — no type-safety there, but that's expected since they're all optional with fallbacks.
+All 28 vars are actively used — none obsolete. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES`, `MCP_MAX_RESULT_BYTES` and `LOG_PROVIDER_OPTIONS` are read directly via `process.env`, not through the Zod schema — no type-safety there, but that's expected since they're all optional with fallbacks.
 
 ## Cross-repo gotcha
 
-`INTEGRATIONS_ENCRYPTION_KEY` must be **identical** to `back`'s value — same SSM param in every environment, and it must **never** be set to `JWT_SECRET`. The worker's copy of the credentials-decryption helper (ported from `back/src/common/credentials-encryption.service.ts` for the P0+Stripe migration, `868ke6j3r`) deliberately has no `JWT_SECRET` fallback: a `user_integrations` row encrypted by `back` only decrypts on the worker if the keys match exactly.
+`INTEGRATIONS_ENCRYPTION_KEY` must be **identical to the key `back` actually encrypted with** — and that is not always `back`'s `INTEGRATIONS_ENCRYPTION_KEY`. The back derives it as:
+
+```ts
+const key = process.env.INTEGRATIONS_ENCRYPTION_KEY || process.env.JWT_SECRET;
+```
+
+The worker has **no such fallback** (`z.string().min(32)`, validated with `envSchema.parse`, so it will not boot without the var). So read the back's environment first and follow whichever branch is true:
+
+| `back`'s `INTEGRATIONS_ENCRYPTION_KEY` | What the worker must be given |
+|---|---|
+| set | that same value |
+| empty / unset | the value of `back`'s `JWT_SECRET` — because that is what the stored rows were encrypted with |
+
+<Warning>
+Earlier revisions of this page said the worker must **never** be set to `JWT_SECRET`. That is only true once `back` has its own `INTEGRATIONS_ENCRYPTION_KEY` set. While `back` is on the fallback, setting the worker to anything else means every `user_integrations` row fails to decrypt — and this fails **silently at run time**, after a green deploy, not at boot. Confirm the back's real environment before deploying the worker.
+</Warning>
+
+The SSM parameter existing is not the same as the worker task definition actually referencing it — staging and prod were found (during the P6 HubSpot rollout, `868ke6jb7`) running revisions that never declared this secret at all, despite already running Stripe/WordPress. `.specs/features/worker-thirdparty-integration-migration/p6-hubspot/verify-worker-hubspot-secrets.sh` checks (and can fix) this per environment — run it before any deploy that touches a migrated adapter.
 
 ## CI/CD
 

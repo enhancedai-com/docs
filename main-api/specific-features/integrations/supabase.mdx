@@ -1,7 +1,16 @@
 ---
 title: "Supabase integration"
 description: "Read and write rows in your Supabase tables from a flow — select with filters and ordering, insert, update, upsert, or delete."
+tag: "WIP"
 ---
+
+<Warning>
+  **🚧 Not in production yet.** This provider is complete on the development branches — worker adapter,
+  back adapter, front provider config, and the `supabase` value on the
+  `user_integrations.provider` enum — but no production release has shipped it. On production the enum
+  does not accept `supabase`, so the connection cannot even be saved there. Everything below describes the
+  behaviour you get on dev.
+</Warning>
 
 ## Overview
 

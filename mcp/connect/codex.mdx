@@ -107,8 +107,13 @@ Authorization = "Bearer mcp_xxxxxxxxxxxx"
 
 Use **only one** auth entry per server.
 
+<Tip>
+  Name one entry per environment — `fluxprompt-dev`, `fluxprompt-staging`, `fluxprompt-prod` — and keep a single entry per server. Several entries pointing at the same URL (`fluxprompt`, `fluxprompt2`, `fluxprompt-2`) all connect, so nothing looks broken, but they clutter your logs and make a connection problem harder to diagnose.
+</Tip>
+
 ## Troubleshooting
 
+- **The handshake fails right after the browser flow.** The OAuth flow completes, then Codex reports `handshaking with MCP server failed: ... Transport channel closed, when send initialized notification` — often followed by `worker quit with fatal: unexpected server response: expect accepted or json, got Sse(None)`. Codex's Rust MCP client sends `Accept: text/event-stream` on every message, including the notification that finishes the handshake, and the server used to answer that notification with an SSE stream. It now answers a notification with a bare `202 Accepted` whatever the `Accept` header says, as the MCP streamable-HTTP transport requires, so Codex connects. If you still see this, update Codex to the current release and confirm the URL is `https://mcp.fluxprompt.ai/mcp`.
 - **401 Unauthorized with a literal header.** The `Authorization` value must include the `Bearer ` prefix — `Authorization = "mcp_xxxxxxxxxxxx"` (without `Bearer `) fails with 401. Always use `Bearer mcp_...`.
 - **Conflicting auth entries.** Don't combine `bearer_token_env_var` and an `http_headers` Authorization for the same server — pick one. Duplicate or conflicting entries cause failures.
 - **`tool_search` returns nothing.** Codex's internal `tool_search` does not list MCP server tools, so searching for `fluxprompt` returns 0 — that's expected. MCP tools are exposed as directly-callable (namespaced) tools. Ask Codex to call `list_agents`, `get_agent`, or `list_node_types` directly.

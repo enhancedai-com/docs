@@ -1,0 +1,377 @@
+---
+title: "Companion documentation"
+description: "Read, replace, and regenerate the companion markdown document attached to an agent, folder, space, organization, or your own user — 15 endpoints, all returning raw markdown."
+tag: "WIP"
+---
+
+<Warning>
+  **🚧 Not in production yet.** Companion documentation ships from `back@master`; production carries
+  none of it. The whole `src/app-api/entity_docs/` module (20 files, including
+  `entity-docs-api.controller.ts` with the 15 endpoints) exists only on the development branches, and
+  `src/enums/entity_doc_owner_type.enum.ts` does not exist on production at all. The one route
+  production does answer is the legacy `GET /integrations/agents/:id/documentation`, which returns the
+  markdown stored on `flows.agentflow_md` — not an `entity_docs` document, and with no `PUT` or
+  `regenerate` counterpart. Everything below describes the dev behaviour.
+</Warning>
+
+<Tag>v1.4</Tag>
+
+Every agent, folder, space, organization, and user has a **companion document**: one markdown file describing what it is, what it is for, and what an assistant should not change without asking. You can read it, replace it, and ask the platform to refresh it — the same document you see in the FluxPrompt UI.
+
+There are 15 endpoints: five things you can document, three things you can do to each.
+
+## What a companion document contains
+
+Every document has two kinds of sections, and knowing the difference is the whole trick to using these endpoints safely.
+
+| | Filled in by the platform | Filled in by you |
+| --- | --- | --- |
+| Examples on an agent | `Flow ID`, `Operational status`, `Required inputs` | `Purpose`, `Success criteria`, `Business rules` |
+| Who keeps it current | The platform, from live data | You, or your team, or an assistant |
+| What "regenerate" does to it | Rewrites it | Leaves it exactly as it is |
+
+So a document is part fact sheet, part handbook. The fact-sheet half is never yours to maintain, and the handbook half is never overwritten.
+
+<Info>
+Sections you have not filled in yet appear as an empty heading — just `## Purpose` with nothing under it. That is intentional: an empty heading tells you (and any assistant reading it) that something is still missing.
+</Info>
+
+## The five scopes
+
+| Scope | Path segment | Which id to use |
+| --- | --- | --- |
+| Agent | `agents/:id` | The agent's UUID — the `id` from [list agents](/main-api/specific-features/integrations-api/list-agents). |
+| Folder | `folders/:id` | The folder's UUID — the `id` from [list folders](/main-api/specific-features/integrations-api/list-folders). |
+| Space | `spaces/:id` | The space UUID, the same one the FluxPrompt UI shows. |
+| Organization | `organizations/:id` | The organization (company) UUID. |
+| Yourself | `me` | No id. It always means the owner of the API key you are calling with. |
+
+<Note>
+`me` has no id on purpose — you can only reach your own user document, never someone else's.
+</Note>
+
+## All 15 endpoints
+
+| What | Method | URL |
+| --- | --- | --- |
+| Read an agent's document | `GET` | `{{baseUrl}}/integrations/agents/<id>/documentation` |
+| Replace an agent's document | `PUT` | `{{baseUrl}}/integrations/agents/<id>/documentation` |
+| Refresh an agent's document | `POST` | `{{baseUrl}}/integrations/agents/<id>/documentation/regenerate` |
+| Read a folder's document | `GET` | `{{baseUrl}}/integrations/folders/<id>/documentation` |
+| Replace a folder's document | `PUT` | `{{baseUrl}}/integrations/folders/<id>/documentation` |
+| Refresh a folder's document | `POST` | `{{baseUrl}}/integrations/folders/<id>/documentation/regenerate` |
+| Read a space's document | `GET` | `{{baseUrl}}/integrations/spaces/<id>/documentation` |
+| Replace a space's document | `PUT` | `{{baseUrl}}/integrations/spaces/<id>/documentation` |
+| Refresh a space's document | `POST` | `{{baseUrl}}/integrations/spaces/<id>/documentation/regenerate` |
+| Read an organization's document | `GET` | `{{baseUrl}}/integrations/organizations/<id>/documentation` |
+| Replace an organization's document | `PUT` | `{{baseUrl}}/integrations/organizations/<id>/documentation` |
+| Refresh an organization's document | `POST` | `{{baseUrl}}/integrations/organizations/<id>/documentation/regenerate` |
+| Read your own document | `GET` | `{{baseUrl}}/integrations/me/documentation` |
+| Replace your own document | `PUT` | `{{baseUrl}}/integrations/me/documentation` |
+| Refresh your own document | `POST` | `{{baseUrl}}/integrations/me/documentation/regenerate` |
+
+If you haven't set up `{{baseUrl}}` and `{{apiKey}}` in Postman yet, do that first — step 2 of the [overview](/main-api/specific-features/integrations-api/overview) walks through it.
+
+## The responses are markdown, not JSON
+
+This is the one thing that surprises people. Every one of these 15 endpoints answers with the document itself, as plain markdown text:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: text/markdown; charset=utf-8
+```
+
+<Warning>
+In Postman, the response panel may default to the **Pretty** tab and show nothing useful, because there is no JSON to prettify. Click **Raw** (or **Preview**) to see the document. Nothing is wrong with your request.
+</Warning>
+
+Only `PUT` *sends* JSON. Everything the server sends back is markdown.
+
+## Read a document
+
+<Steps>
+  <Step title="Open a new tab in Postman">
+    Click **+ New Tab** or press `Ctrl/Cmd + T`.
+  </Step>
+  <Step title="Set the method and URL">
+    Set the method to **GET** and paste:
+
+    ```text
+    {{baseUrl}}/integrations/agents/<flowId>/documentation
+    ```
+
+    Replace `<flowId>` with the agent's `id`. For your own document, use `{{baseUrl}}/integrations/me/documentation` instead.
+  </Step>
+  <Step title="Add the API key header">
+    On the **Headers** tab:
+
+    | Key | Value |
+    |-----|-------|
+    | `api-key` | `{{apiKey}}` |
+  </Step>
+  <Step title="Send, then click Raw">
+    Click **Send**, then switch the response panel to **Raw**.
+  </Step>
+</Steps>
+
+### Example response
+
+```markdown
+## Flow name
+Weekly Invoice Digest
+
+## Flow ID
+`9f2b3c4a-1111-2222-3333-444455556666`
+
+## Space
+Finance Ops
+
+## Folder
+Billing
+
+## Operational status
+Operational — the last 12 run(s) all succeeded.
+
+## Last successful run
+2026-08-13T06:02:11.418Z
+
+## Summary
+Collects every unpaid invoice from the billing database and emails a digest to the finance team each Monday.
+
+## Purpose
+Give the finance team one Monday-morning list instead of five ad-hoc queries.
+
+## Trigger / entry point
+- Schedule (cron)
+- API / manual run
+
+## Required inputs
+- Reporting week — `varInputNode_week`
+
+## Optional inputs
+_None detected._
+
+## Expected outputs
+- Digest email body — `outputObjectNode_digest`
+
+## Required secrets / credentials
+- Billing database connection
+- SMTP credentials
+
+## Success criteria
+Every unpaid invoice older than 7 days appears exactly once, and the email arrives before 08:00.
+
+## Known failure modes
+- 2026-07-28T06:00:44.102Z — SQL connection timed out
+
+## Things Super Chat should avoid changing without confirmation
+The 7-day threshold and the recipient list.
+```
+
+<Note>
+`_None detected._` means the platform looked and found nothing — that section is up to date. An **empty** heading with nothing under it means nobody has written that part yet.
+</Note>
+
+## Replace a document
+
+`PUT` overwrites the whole document with the markdown you send. Use it when you keep documentation in your own system and want FluxPrompt to mirror it, or when an assistant has drafted a better version.
+
+<Steps>
+  <Step title="Set the method and URL">
+    Set the method to **PUT** and paste:
+
+    ```text
+    {{baseUrl}}/integrations/agents/<flowId>/documentation
+    ```
+  </Step>
+  <Step title="Add the headers">
+    | Key | Value |
+    |-----|-------|
+    | `api-key` | `{{apiKey}}` |
+    | `Content-Type` | `application/json` |
+  </Step>
+  <Step title="Add the body">
+    On the **Body** tab, choose **raw**, then select **JSON**. The body is a JSON object with a single field, `md`, holding your whole document as one string.
+  </Step>
+  <Step title="Send">
+    Click **Send**, then read the response on the **Raw** tab — it is the document as it was actually stored.
+  </Step>
+</Steps>
+
+### Request body
+
+<ParamField body="md" type="string" required>
+  The complete document, as markdown. Must not be empty.
+</ParamField>
+
+```json
+{
+  "md": "## Purpose\nGive the finance team one Monday-morning list.\n\n## Success criteria\nEvery unpaid invoice older than 7 days appears exactly once.\n"
+}
+```
+
+<Warning>
+JSON strings cannot contain real line breaks. Write each new line as `\n`, as in the example above. Most editors and every scripting language do this for you — in Postman, the easy route is to paste your markdown into a `\n`-escaping helper, or build the request from a script.
+</Warning>
+
+### What the server does to what you send
+
+The response is not always byte-identical to your body. The platform guarantees every document has the full set of headings for its scope, so **any required section missing from your markdown is appended as an empty heading**.
+
+Send this:
+
+```json
+{ "md": "## Purpose\nDrafts the weekly digest.\n" }
+```
+
+And the response contains your `## Purpose` section followed by `## Flow name`, `## Flow ID`, `## Summary`, `## Success criteria`, and every other required heading, empty and waiting. Nothing you wrote is removed or reordered.
+
+<Warning>
+`PUT` replaces the **entire** document. To change one paragraph, `GET` first, edit the text you got back, then `PUT` the whole thing. There is no partial update.
+</Warning>
+
+## Refresh a document
+
+`POST .../documentation/regenerate` asks the platform to look at the entity again and rewrite only the fact-sheet sections. Your narrative sections are left alone.
+
+<Steps>
+  <Step title="Set the method and URL">
+    Set the method to **POST** and paste:
+
+    ```text
+    {{baseUrl}}/integrations/agents/<flowId>/documentation/regenerate
+    ```
+  </Step>
+  <Step title="Add the API key header">
+    | Key | Value |
+    |-----|-------|
+    | `api-key` | `{{apiKey}}` |
+  </Step>
+  <Step title="Leave the body empty">
+    On the **Body** tab, choose **none**. This endpoint takes no input.
+  </Step>
+  <Step title="Send">
+    Click **Send**. The response, on the **Raw** tab, is the refreshed document.
+  </Step>
+</Steps>
+
+Regenerate when you have just changed the entity and want the document to catch up — you renamed a space, added members to an organization, or rewired an agent and want its inputs and outputs re-read.
+
+<Info>
+Agent documents already refresh themselves after a run, so you rarely need to call this for an agent. The other four scopes have no automatic trigger yet — regenerate is how their documents get built and kept current.
+</Info>
+
+### What gets rewritten, by scope
+
+<AccordionGroup>
+  <Accordion title="Agent">
+    **Rewritten:** Flow name · Flow ID · Space · Folder · Operational status · Last successful run · Last eval result · Trigger / entry point · Required inputs · Optional inputs · Expected outputs · Output destination · Connected systems / dependencies · Required secrets / credentials · Known failure modes · Missing configuration / user input needed. Also `Summary`, but only when the agent's start node already has a summary saved.
+
+    **Yours, never touched:** Purpose · Success criteria · Business rules / hard constraints · Things Super Chat should avoid changing without confirmation.
+  </Accordion>
+  <Accordion title="Folder">
+    **Rewritten:** Folder name · Folder ID · Section · Owner scope · Parent folder · Agents in this folder.
+
+    **Yours:** Summary · Purpose · Shared inputs / conventions · Business rules / hard constraints · Things Super Chat should avoid changing without confirmation.
+  </Accordion>
+  <Accordion title="Space">
+    **Rewritten:** Space name · Space ID · Organization · Logging enabled · Disabled models · Members · Folders · Agents in this space.
+
+    **Yours:** Summary · Purpose · Business rules / hard constraints · Style, tone & format · Things Super Chat should avoid changing without confirmation.
+  </Accordion>
+  <Accordion title="Organization">
+    **Rewritten:** Organization name · Organization ID · Domain · Disabled models · Execution retention days · Spaces · Members.
+
+    **Yours:** Summary · What this organization does · Business rules / hard constraints · Style, tone & format · Compliance / data-handling notes · Things Super Chat should avoid changing without confirmation.
+  </Accordion>
+  <Accordion title="Yourself (me)">
+    **Rewritten:** User name · User ID · Email · Account type · Role · Organizations · Accessible spaces · Personal space contents · Connected integrations.
+
+    **Yours:** Summary · What this person uses the platform for · Working preferences · Recurring requests / patterns · Things Super Chat should avoid changing without confirmation.
+  </Accordion>
+</AccordionGroup>
+
+## Who can do what
+
+Reading needs access to the thing itself. Writing — `PUT` and `regenerate` both count as writing — sometimes needs more.
+
+| Scope | You can read if… | You can write if… |
+| --- | --- | --- |
+| Agent | You can see the agent in FluxPrompt. | Same as read. |
+| Folder | You own the folder, or you can see the space it lives in. | Same as read. |
+| Space | You are a member of the space, or of the organization that owns it. | You are an **admin** of the space, or an admin of its organization. |
+| Organization | You are an active member, or the owner. | You are an **admin** of the organization. |
+| Yourself (`me`) | Always — it is your own document. | Always. |
+
+<Warning>
+A **space-scoped** API key can never write organization documentation, even if its owner is an org admin. That combination returns `403` with the message *A space-scoped API key cannot change organization documentation*. Use a user-level key for organization documents.
+</Warning>
+
+## Errors
+
+| Status | Message | What happened |
+| --- | --- | --- |
+| `400 Bad Request` | Validation failed on `md` | Your `PUT` body was missing `md`, or `md` was an empty string. |
+| `400 Bad Request` | The `:id` is not a valid UUID | Check for a truncated or mistyped id. UUIDs look like `9f2b3c4a-1111-2222-3333-444455556666`. |
+| `400 Bad Request` | `Documentation generation already in progress` | Something is already refreshing this exact document — a run that just finished, or your own retry. Wait a few seconds and send it again. |
+| `401 Unauthorized` | — | The `api-key` header is missing, misspelled, or holds an old key. Re-copy it from your profile. |
+| `403 Forbidden` | `You do not have access to this documentation` | You are authenticated but cannot see this folder, space, or organization. |
+| `403 Forbidden` | `Only an admin can change this documentation` | You can read the space or organization but you are not an admin of it. |
+| `403 Forbidden` | `A space-scoped API key cannot change organization documentation` | Switch to a user-level API key. |
+| `404 Not Found` | `This resource has no documentation yet` | The entity exists and you can see it, but no document has been created. Call `regenerate` (or `PUT`) once to create it. |
+| `404 Not Found` | `Agent not found` | For agents only: the id does not exist, or you do not have access to it. |
+
+For the complete error reference across the whole Integrations API, see [errors and tips](/main-api/specific-features/integrations-api/errors-and-tips).
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="I got a 404 on GET. Is the entity missing?">
+    Not necessarily. `This resource has no documentation yet` means the entity is fine — there just isn't a document. Send the `regenerate` call once and the `GET` will start working.
+  </Accordion>
+
+  <Accordion title="Will regenerate delete what I wrote?">
+    No. It only rewrites the fact-sheet sections listed above. Anything else you put in the document — including headings the platform doesn't recognize — stays exactly where it is.
+  </Accordion>
+
+  <Accordion title="Can I turn the automatic refresh off through the API?">
+    No. The auto-update switch exists only in the FluxPrompt UI, on the same panel where you read the document. It is deliberately not part of the external API.
+  </Accordion>
+
+  <Accordion title="Is the documentation field on GET /integrations/agents/:id the same thing?">
+    Yes — identical content. `GET /integrations/agents/:id` embeds the agent's document as a `documentation` string so you get the JSON and the markdown in one call. It is `null` when no document exists, where the dedicated endpoint returns `404`.
+  </Accordion>
+
+  <Accordion title="Do I have to keep the section headings?">
+    You don't have to send them — missing ones are added back for you. But don't rename them. The platform matches its own sections by heading text (ignoring case and spacing), so a renamed heading gets treated as a section it has never seen, and its content is appended a second time under the original name.
+  </Accordion>
+
+  <Accordion title="Can I use a heading level other than ##?">
+    Yes. Anything from `#` to `######` is recognized, and matching ignores case and extra spaces. Headings the platform adds for you are always `##`.
+  </Accordion>
+
+  <Accordion title="Can I delete a document?">
+    Not through the API. You can `PUT` a minimal document to clear it out, but the required headings will still be appended.
+  </Accordion>
+
+  <Accordion title="Can I use a JWT instead of an API key?">
+    Yes — these endpoints accept either `api-key: <key>` or `Authorization: Bearer <jwt>`. The API key is the simpler option for Postman and automation.
+  </Accordion>
+</AccordionGroup>
+
+## Next step
+
+<CardGroup cols={2}>
+  <Card title="Get an agent" icon="file-json" href="/main-api/specific-features/integrations-api/get-agent">
+    The agent JSON, with its `documentation` embedded.
+  </Card>
+  <Card title="Errors and tips" icon="life-buoy" href="/main-api/specific-features/integrations-api/errors-and-tips">
+    Every status code, troubleshooting, and FAQ.
+  </Card>
+  <Card title="All external endpoints" icon="list" href="/main-api/specific-features/external-api-endpoints">
+    Everything else your API key can reach.
+  </Card>
+  <Card title="How it works inside" icon="wrench" href="/main-api/specific-features/companion-docs">
+    Engineer-facing architecture of companion documentation.
+  </Card>
+</CardGroup>

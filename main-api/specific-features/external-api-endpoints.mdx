@@ -1,0 +1,185 @@
+---
+title: "External API endpoints"
+description: "Complete index of every FluxPrompt endpoint reachable with an API key — Integrations API, companion documentation, completions, memory pods, flow execution, batch processing, and documents — with auth mode and links to the detailed guides."
+---
+
+This page is the index of the platform's external HTTP surface: every endpoint you can call with an `api-key` header, grouped by area, with a one-line purpose and a link to the detailed guide where one exists.
+
+Paths are exact. There is no global route prefix and no API version segment — `POST /v1/chat/completions` is the only route with a `v1` in it, and that is part of its OpenAI-compatible shape.
+
+## How to read the auth column
+
+| Value | Meaning |
+| --- | --- |
+| **api-key** | Send `api-key: <YOUR_KEY>`. A JWT bearer token is not accepted. |
+| **api-key or JWT** | Either `api-key: <YOUR_KEY>` or `Authorization: Bearer <JWT>` works. |
+| **none** | No credential at all. The endpoint gates on something else (a `public` flag on the flow, or nothing). |
+
+The key goes in a header named exactly `api-key` — no `Bearer` scheme, no `x-` prefix.
+
+<Info>
+A **space-scoped** key resolves to the space's owning user with the space attached, so list endpoints automatically narrow to that one space. A **user-level** key sees everything that user can see. See [Integrations API overview](/main-api/specific-features/integrations-api/overview) for where to find each.
+</Info>
+
+## Integrations API — agents and folders
+
+Base path `/integrations`. Documented for non-programmers, step by step, in the [Integrations API guide](/main-api/specific-features/integrations-api/overview).
+
+| Method | Path | Purpose | Auth | Docs |
+| --- | --- | --- | --- | --- |
+| `GET` | `/integrations/folders` | List every folder the caller can write to, personal and space-owned. Filter with `?name=`. | api-key or JWT | [List folders](/main-api/specific-features/integrations-api/list-folders) |
+| `GET` | `/integrations/agents` | List accessible agents with their ready-to-use API, webhook, and chatbot URLs. Filter with `?name=` (`?search=` is a deprecated alias). | api-key or JWT | [List agents](/main-api/specific-features/integrations-api/list-agents) |
+| `POST` | `/integrations/agents` | Create an agent or chat flow; targets a folder by `folderId`, or finds-or-creates one by `folderName`. | api-key or JWT | [Create an agent](/main-api/specific-features/integrations-api/create-agent) |
+| `GET` | `/integrations/agents/:id` | Return the agent's full JSON — `nodes`, `edges`, and its `documentation` markdown. | api-key or JWT | [Get an agent](/main-api/specific-features/integrations-api/get-agent) |
+| `PATCH` | `/integrations/agents/:id` | Rename an agent and/or replace its full nodes+edges content. | api-key or JWT | [Update an agent](/main-api/specific-features/integrations-api/update-agent) |
+| `GET` | `/integrations/:provider/connection-test` | Validate that a key works for a given provider. Used by Zapier and similar tools to confirm a connection. | api-key | — |
+
+<Warning>
+`PATCH /integrations/agents/:id` performs a **full sync** of `content`. Any node or edge missing from your payload is deleted. `GET` first, modify, then `PATCH` the whole thing back.
+</Warning>
+
+## Companion documentation
+
+Fifteen endpoints, five owner scopes × three verbs. Responses are **raw `text/markdown`**, not JSON. Full walkthroughs in [companion documentation endpoints](/main-api/specific-features/integrations-api/companion-docs); the architecture is in [companion documentation (entity docs)](/main-api/specific-features/companion-docs).
+
+<Warning>
+  **🚧 Not in production yet.** Of the fifteen, production answers only
+  `GET /integrations/agents/:id/documentation`, and there it returns the legacy `flows.agentflow_md`
+  markdown rather than an `entity_docs` document. The other fourteen — every `PUT`, every
+  `regenerate`, and every non-agent owner scope — exist on `back@master` only.
+</Warning>
+
+| Method | Path | Purpose | Auth |
+| --- | --- | --- | --- |
+| `GET` | `/integrations/agents/:id/documentation` | Read an agent's companion document. | api-key or JWT |
+| `PUT` | `/integrations/agents/:id/documentation` | Replace an agent's companion document. | api-key or JWT |
+| `POST` | `/integrations/agents/:id/documentation/regenerate` | Re-collect the agent's machine-owned sections from live data. | api-key or JWT |
+| `GET` | `/integrations/folders/:id/documentation` | Read a folder's companion document. | api-key or JWT |
+| `PUT` | `/integrations/folders/:id/documentation` | Replace a folder's companion document. | api-key or JWT |
+| `POST` | `/integrations/folders/:id/documentation/regenerate` | Re-collect the folder's machine-owned sections. | api-key or JWT |
+| `GET` | `/integrations/spaces/:id/documentation` | Read a space's companion document. | api-key or JWT |
+| `PUT` | `/integrations/spaces/:id/documentation` | Replace a space's companion document. Space or org admin only. | api-key or JWT |
+| `POST` | `/integrations/spaces/:id/documentation/regenerate` | Re-collect the space's machine-owned sections. Space or org admin only. | api-key or JWT |
+| `GET` | `/integrations/organizations/:id/documentation` | Read an organization's companion document. | api-key or JWT |
+| `PUT` | `/integrations/organizations/:id/documentation` | Replace an organization's companion document. Org admin only. | api-key or JWT |
+| `POST` | `/integrations/organizations/:id/documentation/regenerate` | Re-collect the organization's machine-owned sections. Org admin only. | api-key or JWT |
+| `GET` | `/integrations/me/documentation` | Read the calling key owner's own companion document. | api-key or JWT |
+| `PUT` | `/integrations/me/documentation` | Replace the calling key owner's own companion document. | api-key or JWT |
+| `POST` | `/integrations/me/documentation/regenerate` | Re-collect the caller's own machine-owned sections. | api-key or JWT |
+
+## Completions API
+
+OpenAI-compatible surface over every supported provider. Documented in the [Completions API guide](/main-api/specific-features/completions-api/overview).
+
+| Method | Path | Purpose | Auth | Docs |
+| --- | --- | --- | --- | --- |
+| `POST` | `/v1/chat/completions` | Run a chat completion against any available model. Returns JSON, or an SSE stream when `stream: true`. | api-key | [Chat completions](/main-api/specific-features/completions-api/chat-completions) |
+| `GET` | `/v1/models` | List the models the calling key is allowed to use. | api-key | [List models](/main-api/specific-features/completions-api/list-models) |
+
+## Memory Pods
+
+All five live on the `/flux` controller. Documented in the [Memory Pods API guide](/main-api/specific-features/memory-pods-api/overview); internals in [memory pods architecture](/main-api/specific-features/memory-pods-architecture).
+
+| Method | Path | Purpose | Auth | Docs |
+| --- | --- | --- | --- | --- |
+| `POST` | `/flux/memory-pods` | Create a pod. A space-scoped key creates it in that space. | api-key | [Create a pod](/main-api/specific-features/memory-pods-api/create-pod) |
+| `GET` | `/flux/memory-pods/get` | List the caller's pods. Filter with `?id=` or `?podName=` (case-insensitive substring). | api-key | [List pods](/main-api/specific-features/memory-pods-api/list-pods) |
+| `POST` | `/flux/memory-pods/:podId/add-document` | Add documents to a pod, as multipart uploads or URLs. | api-key | [Add a document](/main-api/specific-features/memory-pods-api/add-document) |
+| `DELETE` | `/flux/memory-pods/:podId/delete-document` | Delete named files from a pod. | api-key | [Delete a document](/main-api/specific-features/memory-pods-api/delete-document) |
+| `PUT` | `/flux/memory-pods/:podId/replace-document` | Replace one file in a pod with a new URL, keeping the pod otherwise untouched. | api-key | [Replace a document](/main-api/specific-features/memory-pods-api/replace-document) |
+
+## Flow execution
+
+| Method | Path | Purpose | Auth |
+| --- | --- | --- | --- |
+| `POST` | `/flux/api-v2?flowId=<id>` | Run a flow and wait for the result. Optional `sessionId`, `versionId`, and `callback_url` (must be `http`/`https`). Returns the flow's output, or `400` when a node fails. | api-key |
+| `POST` | `/flux/api-v2-webhook?flowId=<id>` | Fire-and-forget webhook trigger: the whole request body is fed into the flow's first variable input node and the run is queued. | none |
+| `POST` | `/flux/run-public-flow/:id` | Run a flow that has been marked public, as the flow's owner. Refuses anything not flagged `public`. | none |
+
+The `api` and `webhook` URLs returned by `GET /integrations/agents` are exactly these first two routes, pre-filled with the flow id.
+
+<Warning>
+`/flux/api-v2-webhook` and `/flux/run-public-flow/:id` accept **no credential**. The webhook route's only protection is the secrecy of the flow id; the public route's only protection is the flow's `public` flag. Treat both URLs as secrets, and do not mark a flow public unless you intend it to be world-runnable.
+</Warning>
+
+### Batch processing
+
+Run a flow once per row of an uploaded CSV. The CSV is registered first through the UI, which produces the batch id these endpoints take.
+
+| Method | Path | Purpose | Auth |
+| --- | --- | --- | --- |
+| `POST` | `/flux/batch-process` | Start processing a registered batch file. Refuses a batch that is already in progress, completed, or fully processed. | api-key |
+| `GET` | `/flux/batch-process/:id/status` | Return `status`, `errorMessage`, `lastProcessedLine`, and `totalRows` for one batch. | api-key |
+| `GET` | `/flux/batch-process/all` | List every batch file belonging to the caller's flows. | api-key |
+| `POST` | `/flux/batch-process/:id/stop` | Stop a running batch. A completed batch is left alone. | api-key |
+| `GET` | `/flux/batch-process/:ids/download` | Build a CSV of inputs and outputs for one or more comma-separated batch ids, upload it, and return `downloadLink`. | api-key |
+
+<Warning>
+`/flux/batch-process/:ids/download` returns a link to object storage that needs no credential of its own. Anyone with the link can read the CSV, so do not paste it into a shared channel.
+</Warning>
+
+### Documents and uploads
+
+| Method | Path | Purpose | Auth |
+| --- | --- | --- | --- |
+| `POST` | `/flux/upload` | Upload a file and register it as a document for the caller. With `?spaceId=`, attaches it to that space after checking membership. | api-key |
+| `GET` | `/flux/doc?name=&id=` | Find the caller's documents. When exactly one matches and it is a `.pdf` or `.txt`, the extracted text is inlined in the response. | api-key |
+| `GET` | `/flux/all-doc` | List every document the caller owns, unfiltered. | api-key |
+
+<Note>
+`/flux/all-doc` is equivalent to calling `/flux/doc` with no query parameters and is kept for compatibility. Prefer `/flux/doc`.
+</Note>
+
+### Flow JSON (legacy)
+
+Superseded by the Integrations API agent endpoints. New integrations should use `GET`/`PATCH /integrations/agents/:id`, which validate the payload, return the agent's `documentation`, and enforce the folder/space access rules consistently.
+
+| Method | Path | Purpose | Auth |
+| --- | --- | --- | --- |
+| `GET` | `/flux/json/:id` | Return `id`, `name`, `nodes`, and `edges` for a flow. | api-key |
+| `PATCH` | `/flux/json/:id` | Replace a flow's nodes and/or edges plus its metadata. Full sync, same as the Integrations API. | api-key or JWT |
+
+## Other endpoints
+
+| Method | Path | Purpose | Auth |
+| --- | --- | --- | --- |
+| `POST` | `/merger/merge-pdf` | Merge several PDFs into one. | api-key |
+| `POST` | `/open-ai/get-completion` | Legacy single-provider completion. Returns `message`, `usedTokens`, and `cost`. | api-key |
+
+<Note>
+`/open-ai/get-completion` predates the unified router and is limited to one provider. Use [`POST /v1/chat/completions`](/main-api/specific-features/completions-api/chat-completions) instead — it covers every provider behind one request shape.
+</Note>
+
+## Internal-only
+
+These accept an `api-key`, but a second guard restricts them to internal staff accounts (a company email address). A customer key authenticates and then receives `403`.
+
+| Method | Path | Purpose | Auth |
+| --- | --- | --- | --- |
+| `GET` | `/space-logs/spaces/:spaceId/runs` | Paginated run-log list for a space (`?page=`, `?limit=`, max 100). | api-key + internal staff |
+| `GET` | `/space-logs/spaces/:spaceId/runs/latest` | The latest run's log payload. `422` when the space has logging disabled. | api-key + internal staff |
+| `GET` | `/space-logs/runs/:processId` | One run's log payload, with weak-ETag caching and `304` support. | api-key + internal staff |
+
+## Not on this page
+
+<Columns cols={2}>
+  <Card title="Master key endpoints" icon="key" href="/main-api/specific-features/master-api-key">
+    `/master/flows` and the `x-flux-act-as-space` impersonation header accept only the single platform master key — a regular API key gets `403`.
+  </Card>
+  <Card title="FluxPrompt MCP" icon="plug" href="/mcp/overview">
+    The MCP surface uses its own OAuth tokens and internal guards. A user API key does not authenticate against it.
+  </Card>
+</Columns>
+
+Endpoints guarded by `JwtAuthGuard` alone — the bulk of the platform, everything the web app calls — are out of scope here and are not reachable with an API key.
+
+## Related
+
+<Columns cols={2}>
+  <Card title="Integrations API overview" icon="book-open" href="/main-api/specific-features/integrations-api/overview">
+    Find your API key and set up Postman once.
+  </Card>
+  <Card title="Errors and tips" icon="life-buoy" href="/main-api/specific-features/integrations-api/errors-and-tips">
+    What each status code means and how to fix it.
+  </Card>
+</Columns>
