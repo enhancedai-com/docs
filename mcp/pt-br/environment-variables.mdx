@@ -12,7 +12,7 @@ title: "Variáveis de Ambiente"
 | MCP_PUBLIC_URL | Opcional | URL pública (metadata OAuth) |
 | MCP_FRONT_CONSENT_URL | Opcional | URL da tela de consentimento do FluxPrompt |
 | MCP_OAUTH_CONSENT_SECRET | Obrigatória | valida a assinatura do consentimento — precisa bater com o valor no `back` |
-| MCP_OAUTH_TOKEN_TTL | Opcional | TTL do access token |
+| MCP_OAUTH_TOKEN_TTL | Opcional | Tempo de vida do access token em segundos. Vazio ou `0` (padrão) emite tokens que não expiram, porque ainda não existe o grant de refresh |
 | MCP_DCR_CLIENT_TTL | Opcional | TTL de clientes via Dynamic Client Registration |
 | MCP_TOKEN_CACHE_TTL | Opcional | TTL do cache do resolver de tokens, em segundos (default 10). Limita por quanto tempo uma chave revogada ainda pode ser aceita na borda, então mantenha bem abaixo do SLA de revogação de 30s. |
 | BACK_BASE_URL | Opcional | URL base do `back` (default localhost:3000) |

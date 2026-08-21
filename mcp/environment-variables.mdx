@@ -12,7 +12,7 @@ title: "Environment Variables"
 | MCP_PUBLIC_URL | Optional | public URL (OAuth metadata) |
 | MCP_FRONT_CONSENT_URL | Optional | FluxPrompt consent screen URL |
 | MCP_OAUTH_CONSENT_SECRET | Required | validates consent signature — must match `back`'s value |
-| MCP_OAUTH_TOKEN_TTL | Optional | access token TTL |
+| MCP_OAUTH_TOKEN_TTL | Optional | Access-token lifetime in seconds. Empty or `0` (the default) issues tokens that never expire, because there is no refresh grant yet |
 | MCP_DCR_CLIENT_TTL | Optional | Dynamic Client Registration TTL |
 | MCP_TOKEN_CACHE_TTL | Optional | token resolver cache TTL in seconds (default 10). Caps how long a revoked key can still be accepted at the edge, so keep it well under the 30s revocation SLA. |
 | BACK_BASE_URL | Optional | `back` base URL (default localhost:3000) |
