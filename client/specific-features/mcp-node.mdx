@@ -3,23 +3,12 @@ title: "MCP Client node"
 description: "Technical architecture of the MCP Client node for calling tools on Model Context Protocol servers"
 ---
 
-<Warning>
-  **🚧 Partly ahead of production.** The node itself is live, but two things on this page are not:
-
-  - **The name.** Production still labels it **MCP Server** — `nodeTypeNames.ts` and the sidebar both
-    say so, and the component is `McpServer.tsx`. The rename to **MCP Client** (`McpClient.tsx`, plus
-    the sidebar label) is on `front@main` only. The node **type** is `mcpNode` in both.
-  - **The single-operation third-party provider** described below. On production the `mcp` provider
-    still exposes a pull operation (`list_tools`); the one-tool `call_tool` push, the **Load tools**
-    button and the `inputSchema`-driven fields ship from `front@main` and `worker@develop`.
-</Warning>
-
 ## Overview
 
 The **MCP Client** node calls tools on a **Model Context Protocol** server. It supports:
 
 - **Remote HTTP(S)** transport (JSON-RPC over HTTP with optional SSE), including saved connections and manual URL or handles
-- **Stdio (npx)** transport for any npm package name, executed on the product backend with environment secrets stored encrypted on `user_integrations`
+- **Stdio (npx)** transport — retired: no longer offered when saving a connection, and refused at execution with a config error asking for a remote URL instead
 - **OAuth-backed** MCP hosts (e.g. Magic Patterns): connecting via `CredentialsForm` with an empty auth token triggers OAuth auto-discovery
 
 ## Inputs
@@ -27,7 +16,7 @@ The **MCP Client** node calls tools on a **Model Context Protocol** server. It s
 | Input | Description |
 |-------|-------------|
 | **MCP Server URL** | Used for remote HTTP when not using a saved connection. Can be wired from other nodes via handles. Not used when the saved connection is stdio. |
-| **MCP connection (Integrations)** | `ThirdPartyIntegration/common/ConnectionStatus` on the node. Pick **Remote HTTP** or **Stdio (npx package)**. Stored as encrypted JSON with a `transport` field. |
+| **MCP connection (Integrations)** | `ThirdPartyIntegration/common/ConnectionStatus` on the node. Remote HTTP only — the **Stdio (npx package)** choice was removed. Stored as encrypted JSON with a `transport` field. |
 | **Auth token** | Manual bearer for remote HTTP when not using a saved connection. |
 | **Tool** | Optionally pick a tool after loading. If left empty, the backend uses Haiku to pick the best match for your prompt. |
 | **Prompt** | Natural-language prompt required. The backend resolves tool arguments from the prompt and schema via Anthropic. |
