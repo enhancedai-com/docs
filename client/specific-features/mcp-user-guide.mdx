@@ -1,11 +1,11 @@
 ---
-title: "MCP Server node user guide"
+title: "MCP Client node user guide"
 description: "How to connect to and use MCP servers in your workflows without writing code"
 ---
 
 ## What this does for you
 
-**MCP (Model Context Protocol)** lets your workflow talk to an external service that exposes **tools** — actions the service can run for you, such as fetching data, creating records, or running calculations. The **MCP Server** node picks one tool, sends it instructions, and stores the result in the node's output so the next steps in your flow can use it.
+**MCP (Model Context Protocol)** lets your workflow talk to an external service that exposes **tools** — actions the service can run for you, such as fetching data, creating records, or running calculations. The **MCP Client** node picks one tool, sends it instructions, and stores the result in the node's output so the next steps in your flow can use it.
 
 Think of it as a **bridge**: your flow stays in the product, while the heavy lifting happens on a vendor's or your team's MCP-compatible server.
 
@@ -25,17 +25,20 @@ Think of it as a **bridge**: your flow stays in the product, while the heavy lif
   <Tab title="Remote HTTP">
     A public `https://` MCP endpoint with bearer or OAuth authentication. Same model as connecting to remote servers in the MCP spec.
   </Tab>
-  <Tab title="Npm package (stdio / npx)">
-    You save an Integrations connection with the **package name** from the vendor's docs (e.g. `@modelcontextprotocol/server-github`) and your authentication. The backend runs `npx -y <package>` — this is **not** running MCP on your laptop; it runs in the product's API environment.
+  <Tab title="Npm package (stdio / npx) — retired">
+    This option is no longer offered when you create a connection, and a connection saved this way is
+    refused when it runs, with a message asking you to re-create it against a remote URL. Running a
+    vendor's package on our servers was dropped on purpose.
 
-    If a vendor gives you **only** a stdio npm package and **no** HTTPS URL, choose **Npm package** in Integrations.
+    If a vendor gives you **only** an npm package and **no** HTTPS URL, you cannot use it through the
+    node today — ask the vendor for a hosted HTTPS endpoint.
   </Tab>
 </Tabs>
 
 ## How it fits together
 
 1. You create a **connection** (saved URL + optional token, or OAuth)
-2. You configure the **MCP Server** node to use that connection (or a custom URL)
+2. You configure the **MCP Client** node to use that connection (or a custom URL)
 3. The **backend** calls the remote server; the result appears in the node output
 
 ## Path A — MCP (HTTP) saved connection
@@ -55,8 +58,8 @@ Use **Integrations** when you have an HTTPS MCP URL and optionally a bearer toke
     | **MCP package name** | Exact name from the docs (for npm) |
     | **Authentication** | Raw token, `NAME=value` lines, or JSON for npm packages |
   </Step>
-  <Step title="Use it in the MCP Server node">
-    1. Add an **MCP Server** node to your flow
+  <Step title="Use it in the MCP Client node">
+    1. Add an **MCP Client** node to your flow
     2. Pick the connection you created in the **MCP (HTTP)** card
     3. Click **Load tools from URL**, optionally pick a tool
     4. Set **Input mode** to **Prompt** or **Arguments**, then run
@@ -76,7 +79,7 @@ Some providers use OAuth (a browser login) instead of a static API key.
     In **Integrations**, find **MCP Integrations**, choose **Personal** or **Team**, then **Connect**. Complete the browser sign-in.
   </Step>
   <Step title="Configure the node">
-    In the **MCP Server** node, select the OAuth integration under **Use saved integration**. Clear the **MCP (HTTP)** connection if it was set. Load tools, optionally pick one, and run.
+    In the **MCP Client** node, select the OAuth integration under **Use saved integration**. Clear the **MCP (HTTP)** connection if it was set. Load tools, optionally pick one, and run.
   </Step>
 </Steps>
 

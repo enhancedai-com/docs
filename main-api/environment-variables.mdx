@@ -30,6 +30,8 @@ title: "Environment Variables"
 | RABBIT_RESPONSE_QUEUE_VECTOR_DB_SEARCH | Required | vector DB search response queue |
 | TEMPORAL_ADDRESS | Required | Temporal cluster address |
 | TEMPORAL_TASK_QUEUE | Required | Temporal task queue name |
+| AGENT_CONCURRENCY | Optional | how many `POST /flux/api-v2` flow executions run at the same time (default 5) |
+| AGENT_WAIT_TIMEOUT_MS | Optional | ms a `POST /flux/api-v2` call without `callback_url` waits for the result before answering `202` with the `statusUrl` (default 30000) |
 
 ## Auth / OAuth / Integrations
 
