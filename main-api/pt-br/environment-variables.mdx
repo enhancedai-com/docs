@@ -30,6 +30,8 @@ title: "Variáveis de Ambiente"
 | RABBIT_RESPONSE_QUEUE_VECTOR_DB_SEARCH | Obrigatória | fila de resposta vector DB search |
 | TEMPORAL_ADDRESS | Obrigatória | endereço do cluster Temporal |
 | TEMPORAL_TASK_QUEUE | Obrigatória | nome da task queue Temporal |
+| AGENT_CONCURRENCY | Opcional | quantas execuções de fluxo do `POST /flux/api-v2` rodam ao mesmo tempo (padrão 5) |
+| AGENT_WAIT_TIMEOUT_MS | Opcional | ms que uma chamada `POST /flux/api-v2` sem `callback_url` aguarda o resultado antes de responder `202` com a `statusUrl` (padrão 30000) |
 
 ## Auth / OAuth / Integrações
 
