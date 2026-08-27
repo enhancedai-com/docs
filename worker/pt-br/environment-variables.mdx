@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-27 env vars no `worker/.env.example`, validadas via Zod em `src/env.ts`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+32 env vars no `worker/.env.example`, validadas via Zod em `src/env.ts`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 | Var | Obrigatória? | Propósito |
 |---|---|---|
@@ -34,8 +34,12 @@ title: "Variáveis de Ambiente"
 | APICALLER_MAX_RESULT_BYTES | Opcional | limite de tamanho do resultado no node api-caller (default 1_000_000) |
 | MCP_MAX_RESULT_BYTES | Opcional | 🚧 **só em dev** — limite de tamanho do resultado da tool no node mcpNode (default 1_800_000). O worker de produção não executa o node MCP, então essa var não é lida lá. Veja [MCP Client](/worker/node/mcp). |
 | LOG_PROVIDER_OPTIONS | Opcional | flag de debug, loga opções do provider de IA |
+| FAL_KEY | Opcional | chave de API da fal.ai (node imageGenerator, provider fal — famílias pro/schnell/dev/Flux 2) — mesmo valor do `back` |
+| STABILITY_AI_API_KEY | Opcional | chave de API da Stability AI (node imageGenerator, provider stabilityai) — mesmo valor do `back` |
+| IDEOGRAM_API_KEY | Opcional | chave de API do Ideogram (node imageGenerator, provider ideogram) — mesmo valor do `back` |
+| REPLICATE_API_KEY | Opcional | chave de API do Replicate (node imageGenerator, provider opensources/kandinsky) — mesmo valor do `back` |
 
-Todas as 28 vars estão em uso ativo — nenhuma obsoleta. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES`, `MCP_MAX_RESULT_BYTES` e `LOG_PROVIDER_OPTIONS` são lidas direto via `process.env`, fora do schema Zod — sem type-safety aí, mas é esperado já que todas são opcionais com fallback.
+Todas as 32 vars estão em uso ativo — nenhuma obsoleta. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES`, `MCP_MAX_RESULT_BYTES`, `LOG_PROVIDER_OPTIONS`, `FAL_KEY`, `STABILITY_AI_API_KEY`, `IDEOGRAM_API_KEY` e `REPLICATE_API_KEY` são lidas direto via `process.env`, fora do schema Zod — sem type-safety aí, mas é esperado já que todas são opcionais com fallback.
 
 ## Pegadinha cross-repo
 
