@@ -88,7 +88,7 @@ Each of these fields also has an edge-driven counterpart — `promptData`, `subj
 | `size` | Passed straight through to `generateImage()`. |
 | `quality` | When set, forwarded as `providerOptions.openai.quality`. |
 
-The actual API call always targets `gpt-image-1` — `aiModel` is not read for the call itself. It is only used, via `persistModel`, to label the stored image (see [Persisted node data](#persisted-node-data)).
+The actual API call always targets `gpt-image-1` — `aiModel` is not read for the call itself. It is only used, via `persistModel`, to label the stored image (see [Persisted node data](#persisted-node-data)). `type` and `openAiModels` — the fields that would select Image to Image / AI Edit / Expand Image — are not read either; see [Known limitations](#known-limitations).
 
 ### `gemini`
 
@@ -124,6 +124,8 @@ Dispatch is three levels deep: `type` picks the operation family, then `engineId
 | `influenceStrength`, `outputFormat`, `seed`, `selectedImageToImageAspectRatio` | Per-method request parameters for the image-to-image family (note `outputFormat`, camelCase, is a distinct field from `output_format`). |
 
 `"Enhance resolution"` and `"Upscale Image"` both route to the same upscale method — the back's original code only recognized `"Upscale Image"`, which meant every real `"Enhance resolution"` node silently no-op'd. Accepting both is a deliberate fix (see [Provenance](#provenance), D16).
+
+Any `type` outside this table throws `UserConfigError` — including two real production values, `"AI Edit"` and `"AI erase"`; see [Known limitations](#known-limitations).
 
 ### `ideogram`
 
@@ -223,6 +225,18 @@ Other `data` fields are preserved via spread (`...nodeData`).
 ### On failure
 
 The activity does not write an error field onto `data` — it **throws** a typed `NodeError` subclass instead (see [Errors](#errors)). This differs from some older, not-yet-migrated node types, which write `errorMessage`/`errorStatusCode` onto `data` without throwing and rely on a separate detection step downstream. The thrown error flows through the standard Temporal failure path shared by every migrated node type, which the front already renders correctly off `executionStatus`/`executionError` from the socket status broadcast.
+
+## Known limitations
+
+Two provider-specific gaps, distinct from the [Provenance](#provenance) deviations above, show up in real production usage.
+
+<Warning>
+  **`openai` never reads mode or model selection.** [`buildOpenAiSpec`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/providers/openai-provider.ts) reads only `nodeData.size` and `nodeData.quality` — `nodeData.type` and `nodeData.openAiModels` are never referenced anywhere in the file or its call site. An `openai`-system node configured for `"Image to Image"`, `"AI Edit"`, or `"Expand Image"` still runs plain text-to-image generation and is billed for it; any connected source image is ignored. This matches the back's original `imageSystem === 'openai'` dispatch, which has the identical gap — a known limitation carried over from the back, not a worker regression, but one that affects real, currently-recorded usage: 22 rows across `Image to Image`/`Image to image` node configurations.
+</Warning>
+
+<Note>
+  **`stabilityai` fails loud on two unimplemented modes.** The [dispatch](#stabilityai) only recognizes `"Text to Image"`/unset, `"Image to image"`, and `"Enhance resolution"`/`"Upscale Image"`. Any other `type` — including `"AI Edit"` and `"AI erase"`, both present in production data (26 combined rows) — falls through to `unsupportedStabilityMode`, which throws `UserConfigError` (`userMessage: "This image mode is not yet available in the worker."`). The back's dispatch has no branch for either label, but falls through silently — no error, no image, no charge. A node using one of these modes now surfaces an explicit error instead.
+</Note>
 
 ## Retry and timeout behavior
 
