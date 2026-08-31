@@ -1,7 +1,11 @@
 ---
-title: "Output controller stall incident"
+title: "Display box stall incident"
 description: "Post-mortem analysis of event loop blocking caused by regex segmentation on large HTML documents"
 ---
+
+<Note>
+This incident involves the node shown in the flow builder canvas as **Display Box**. Its technical name is **Output Controller** (`type: outputController`); this page keeps that name where it appears in code identifiers and call paths below.
+</Note>
 
 ## Symptom
 
@@ -18,7 +22,7 @@ apiV2
               └── segmentation on outputController / reportBuilder textData
 ```
 
-When an Output Controller or Report Builder node contained large `textData`, the propagation step attempted to segment that text before merging it into downstream nodes.
+When a Display Box or Report Builder node contained large `textData`, the propagation step attempted to segment that text before merging it into downstream nodes.
 
 ## Root cause
 
@@ -55,7 +59,7 @@ The fix addressed the problem at multiple levels:
 ## User impact
 
 - Affected runs hung or timed out because the API was unresponsive during the stall period.
-- The scope was limited to flows that pushed large HTML content through an Output Controller or Report Builder node.
+- The scope was limited to flows that pushed large HTML content through a Display Box or Report Builder node.
 - Flows using smaller text payloads or non-HTML content were not affected.
 
 ## Prevention guidelines

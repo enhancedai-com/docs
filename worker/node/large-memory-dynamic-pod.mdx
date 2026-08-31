@@ -3,7 +3,7 @@ title: "Large Memory: dynamic pod id"
 description: "How the Large Memory node accepts a memory pod id at runtime via the podIdData input — the natural pairing for pods created through the Public API."
 ---
 
-The Large Memory node (`commandContentNode`) reads from a FluxPrompt memory pod during flow execution. Until commit `663f20e5`, the node was hard-tied to a single pod selected manually in the UI (`node.data.nameSpace`). External applications that already know which pod belongs to the current case, project, or client now have a runtime alternative: pass the pod id into the flow as a variable, and the node picks it up.
+The Large Memory node (technical name Command Content Node, node type `commandContentNode`) reads from a FluxPrompt memory pod during flow execution. Until commit `663f20e5`, the node was hard-tied to a single pod selected manually in the UI (`node.data.nameSpace`). External applications that already know which pod belongs to the current case, project, or client now have a runtime alternative: pass the pod id into the flow as a variable, and the node picks it up.
 
 This page documents that integration point.
 
