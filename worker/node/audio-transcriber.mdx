@@ -1,12 +1,16 @@
 ---
-title: "Audio transcriber"
-sidebarTitle: "Audio transcriber"
-description: "Temporal activity for the Audio Transcriber node: AI speech-to-text (OpenAI, Groq), chunked processing for large files, and optional YouTube transcript via SearchAPI."
+title: "AI audio transcriber"
+sidebarTitle: "AI audio transcriber"
+description: "Temporal activity for the AI Audio Transcriber node: AI speech-to-text (OpenAI, Groq), chunked processing for large files, and optional YouTube transcript via SearchAPI."
 ---
+
+<Note>
+Also known as **Audio transcriber** (this page's original title, matching the Worker module `audio-transcriber`) or **Audio Reader Node** (technical name); `type: audioReaderNode`. In the flow builder canvas this node's sidebar label is literally **Ai Audio Transcriber**; this page keeps the natural capitalization, **AI Audio Transcriber**.
+</Note>
 
 ## Overview
 
-The **audio transcriber** node turns audio into text. The Worker loads node configuration from Postgres, then either:
+The **AI Audio Transcriber** node turns audio into text. The Worker loads node configuration from Postgres, then either:
 
 - **AI transcription** — Uses the Vercel AI SDK [`experimental_transcribe`](https://sdk.vercel.ai/docs/reference/ai-sdk-core/transcribe) with OpenAI or Groq Whisper models, reading the audio from a URL in `data.inputPreview`.
 - **YouTube transcript** — When `data.type` is `ytTranscript`, fetches captions via [SearchAPI](https://www.searchapi.io/) (no speech-to-text model).
@@ -14,12 +18,12 @@ The **audio transcriber** node turns audio into text. The Worker loads node conf
 [`audioTranscriberActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`AudioTranscriberService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/audio-transcriber/audio-transcriber.service.ts).
 
 <Note>
-Unlike the [text generator](/worker/node/text-generator), the [`processSingleNode`](/worker/workflows/process-single-node) workflow does not call [validate model access](/worker/activities/validate-model-access) or [charge tokens](/worker/activities/charge-tokens) for this node type. Token or billing behavior for transcription is handled outside this workflow path if applicable.
+Unlike the [AI Text Generator](/worker/node/text-generator), the [`processSingleNode`](/worker/workflows/process-single-node) workflow does not call [validate model access](/worker/activities/validate-model-access) or [charge tokens](/worker/activities/charge-tokens) for this node type. Token or billing behavior for transcription is handled outside this workflow path if applicable.
 </Note>
 
 ## When it runs
 
-`audioTranscriberActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **audio transcriber** (`NodeType.AUDIO_TRANSCRIBER`).
+`audioTranscriberActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **AI Audio Transcriber** (`NodeType.AUDIO_TRANSCRIBER`).
 
 ## Activity signature
 

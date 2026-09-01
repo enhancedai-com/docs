@@ -5,7 +5,7 @@ description: "Runs user JavaScript or Python in AWS Lambda via the scripting act
 
 ## Overview
 
-The **scripting** node runs code the user provides in **JavaScript** or **Python**. The Worker resolves the node from the database, invokes the matching Lambda executor, persists `result` and `console` on the node row, and returns the same payload to the workflow.
+The **scripting** node (technical name Scripting Node, node type `scripting`) runs code the user provides in **JavaScript** or **Python**. The Worker resolves the node from the database, invokes the matching Lambda executor, persists `result` and `console` on the node row, and returns the same payload to the workflow.
 
 The Temporal activity [`scriptingActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`ScriptingService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/scripting/scripting.service.ts).
 

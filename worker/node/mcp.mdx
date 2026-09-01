@@ -6,7 +6,7 @@ description: "Temporal activity for the MCP Client node: connects to a customer'
 
 ## Overview
 
-The **MCP Client** node calls a tool on an MCP server the customer operates. The Worker resolves the connection (a URL typed on the node, or a saved connection stored in `user_integrations` with `provider = 'mcp'`), opens a client against it, decides **which** tool to call and **what arguments** to pass, then issues the `tools/call` and stores the result.
+The **MCP Client** node (node type `mcpNode`) calls a tool on an MCP server the customer operates. The Worker resolves the connection (a URL typed on the node, or a saved connection stored in `user_integrations` with `provider = 'mcp'`), opens a client against it, decides **which** tool to call and **what arguments** to pass, then issues the `tools/call` and stores the result.
 
 Two things the node does are worth stating plainly, because they are easy to assume the other way round:
 

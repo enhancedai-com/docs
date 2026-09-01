@@ -5,7 +5,7 @@ description: "Technical architecture of the MCP Client node for calling tools on
 
 ## Overview
 
-The **MCP Client** node calls tools on a **Model Context Protocol** server. It supports:
+The **MCP Client** node (node type `mcpNode`) calls tools on a **Model Context Protocol** server. It supports:
 
 - **Remote HTTP(S)** transport (JSON-RPC over HTTP with optional SSE), including saved connections and manual URL or handles
 - **Stdio (npx)** transport — retired: no longer offered when saving a connection, and refused at execution with a config error asking for a remote URL instead

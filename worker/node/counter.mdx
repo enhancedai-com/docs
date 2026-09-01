@@ -1,18 +1,22 @@
 ---
-title: "Counter"
-sidebarTitle: "Counter"
-description: "Temporal activity for the counter node: increment, decrement, or wait with an optional timed delay."
+title: "Process counter"
+sidebarTitle: "Process counter"
+description: "Temporal activity for the Process Counter node: increment, decrement, or wait with an optional timed delay."
 ---
+
+<Note>
+Also known as **Counter** (the Worker module and this page's original title) or **Counter Node** (technical name); `type: counterNode`.
+</Note>
 
 ## Overview
 
-The **counter** node performs one of three operations on a numeric value stored in the node: increment (`up`), decrement (`down`), or wait (`wait`). In wait mode, execution pauses for a configurable number of seconds before returning the existing text value unchanged.
+The **Process Counter** node performs one of three operations on a numeric value stored in the node: increment (`up`), decrement (`down`), or wait (`wait`). In wait mode, execution pauses for a configurable number of seconds before returning the existing text value unchanged.
 
 [`counterActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`CounterService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/counter/counter.service.ts).
 
 ## When it runs
 
-`counterActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **counter** (`NodeType.COUNTER`, stored value `counterNode`).
+`counterActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **Process Counter** (`NodeType.COUNTER`, stored value `counterNode`).
 
 <Note>
   The proxy for `counterActivity` uses a `startToCloseTimeout` of **2 minutes** (instead of the default 1 minute). This accounts for wait mode, where execution can pause up to 60 seconds.

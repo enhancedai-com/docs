@@ -3,6 +3,14 @@ title: "Changelog"
 description: "Novidades na integração MCP do FluxPrompt."
 ---
 
+## 2026-08-21 — Tipos de node resolvem pelo nome do canvas
+
+**O `add_node` e o `get_node_type` deixam de exigir o tipo técnico bruto — o nome que o usuário lê no canvas também funciona.**
+
+- **O `list_node_types` publica um `label` composto** — `"Nome front (Nome técnico)"` quando o nome do sidebar e o nome técnico diferem (ex.: `"Display Box (Output Controller)"`), ou só um dos dois quando coincidem ou o tipo não tem entrada no sidebar.
+- **O `node.type` do `add_node` e o `type` do `get_node_type` aceitam qualquer uma das três formas** — o tipo técnico (`outputController`), o nome do sidebar/frontend (`"Display Box"`), ou o label composto (`"Display Box (Output Controller)"`). A comparação ignora maiúsculas/minúsculas e colapsa espaços.
+- **Um valor não reconhecido é recusado com um erro** em vez de gravado em silêncio — inclusive uma string que parece plausível mas não é um tipo real.
+
 ## 2026-08-12 — Nós de integração agora são autoráveis
 
 **Os nós de terceiros migrados para o worker de execução estão totalmente descritos, e as conexões são descobríveis.**

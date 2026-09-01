@@ -5,7 +5,7 @@ description: "Read and write Google Sheets, Docs, Slides, and Drive, and send Gm
 
 ## Overview
 
-The Google Workspace integration lets a flow read from and write to your Google account: Sheets, Docs, Slides, and arbitrary files in Drive, plus sending email through Gmail. You connect your Google account once, then add a **Pull Data** node to read or a **Push Data** node to write.
+The Google Workspace integration lets a flow read from and write to your Google account: Sheets, Docs, Slides, and arbitrary files in Drive, plus sending email through Gmail. You connect your Google account once, then add a **Pull Data** node (node type `pullData`) to read or a **Push Data** node (node type `pushData`) to write.
 
 <Note>
 Google is a dedicated integration, not part of the generic **Third Party Integration** node used by WordPress, Slack, Notion, Stripe, Zapier, and MCP. You reach Google through the **Pull Data** and **Push Data** flow nodes (each has a Google/Microsoft provider toggle) and through the email/output node for Gmail. The "Google" provider that appears under Third Party Integration is a non-functional stub; its connection card is the real connect UI, but there is no Third Party Integration adapter behind it.

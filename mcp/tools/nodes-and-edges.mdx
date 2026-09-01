@@ -63,7 +63,7 @@ No parameters required.
 |-------|------|-------------|
 | `nodeTypes` | array | Full list of node types. |
 | `nodeTypes[].type` | string | Machine-readable identifier (camelCase, e.g. `commandTextNode`). Matches the `type` field in `get_agent` node objects. |
-| `nodeTypes[].label` | string | Human-readable name as shown in the FluxPrompt canvas. |
+| `nodeTypes[].label` | string | Human-readable name, composed as `"Front name (Technical name)"` when the canvas name and the technical name differ — e.g. `"Display Box (Output Controller)"` — or published as just the one name when they match or the type has no sidebar entry. This exact string, and the bare front name, are also valid input to [`add_node`](#add_node)'s `node.type` and to [`get_node_type`](#get_node_type)'s `type`. |
 | `nodeTypes[].description` | string | What this node does. |
 | `nodeTypes[].category` | string | Grouping: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. |
 | `nodeTypes[].inputSchema` | JSON Schema | The configuration this node accepts. |
@@ -87,7 +87,7 @@ catalogue.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `type` | string | Yes | Machine name, e.g. `commandTextNode`. |
+| `type` | string | Yes | The technical type (e.g. `commandTextNode`), the frontend/sidebar name (e.g. "Display Box"), or the composed label [`list_node_types`](#list_node_types) publishes (e.g. "Display Box (Output Controller)"). Matching is case-insensitive and collapses whitespace. A value that matches none of these returns an error instead of a schema. |
 
 <Warning>
   Respect `enum` when a field declares one, and never guess a value. These fields are not validated
@@ -168,6 +168,16 @@ Adds a node to an agent.
 |-----------|------|----------|-------------|
 | `agentId` | string (UUID) | Yes | Target agent. |
 | `node` | object | Yes | React-Flow node: a unique `id`, plus `type` and `data` as needed. |
+
+### Naming the node type
+
+`node.type` accepts any of three forms: the technical type (`outputController`), the frontend/sidebar
+name (`"Display Box"`), or the composed label [`list_node_types`](#list_node_types) publishes
+(`"Display Box (Output Controller)"`). Matching is case-insensitive and collapses whitespace, so
+`"display box"` resolves the same as `"Display Box"`.
+
+A value that matches none of the three is rejected with a `validation_error` — including a
+plausible-looking string that simply is not a real type.
 
 ### Do not invent coordinates
 
