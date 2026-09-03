@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-156 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+160 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 ## Database
 
@@ -189,6 +189,10 @@ title: "Environment Variables"
 | NODE_EXEC_MAX_PER_NODE | Optional | max kept executions per node |
 | NODE_EXEC_SLIM_AFTER_DAYS | Optional | days until execution "slimming" |
 | ZAPIER_WEBHOOK_RETENTION_HOURS | Optional | hours a Zapier webhook payload stays in Postgres before the purge cron archives it to S3 |
+| FLUX_MAX_NODE_ITERATIONS | Optional | system ceiling on how many times one node may loop, whatever its `loopBehavior` (default 1000) |
+| FLUX_MAX_ARRAY_ITEMS | Optional | system ceiling on how many items an `arrayNode` iterates in one execution (default 10000) |
+| FLUX_MAX_RUN_NODE_EXECUTIONS | Optional | node executions a single run may spend before it terminates (default 50000) |
+| FLUX_MAX_CHAIN_NODE_EXECUTIONS | Optional | node executions a whole sub-flow chain may spend, which nesting cannot reset (default 200000) |
 | ID_OF_AGENT_TO_BUILD_FORM | Required | internal agent that builds forms |
 | ID_OF_AGENT_TO_GENERATE_SUMMARY | Required | internal agent that generates summaries |
 | WEBHOOK_DB | Required | Redis DB index for user webhooks |
