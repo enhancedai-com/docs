@@ -78,6 +78,21 @@ error, carrying the ceiling message.
 
 Because the status phrase is identical everywhere, one string finds every trace of a given run.
 
+### A chain records one row per level
+
+The chain ceiling stops the whole chain, and every run in it — the one that tripped the counter and
+each caller above it — writes its own `flows_logs` row. A 39-deep chain therefore produces 39 rows,
+all carrying the **same** status and the **same** message. That is expected: each of those runs
+really did stop, and each stopped for that reason.
+
+<Warning>
+  A caller must never record the ceiling as a failed node. It is handed the ceiling itself
+  (`budgetCeiling`, the same channel `conditionNode` uses) and stops for the same reason. Treating it
+  as a node failure was a real defect: each level re-wrapped the message as
+  `Execution failed at node "X" — …`, so 39 levels produced one message with 39 prefixes, and the
+  caller runs were recorded as `Error while running - 500` instead of the ceiling status.
+</Warning>
+
 <Note>
   The nodes that never got to run are marked the same way a cancellation marks them, so the canvas
   stops spinning. The run is **not** written to `flow_run_states` as cancelled — a budget stop is not
