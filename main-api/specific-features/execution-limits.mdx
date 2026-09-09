@@ -11,10 +11,12 @@ Four ceilings do that stopping. They are a **platform rule, not a node setting**
 them from the canvas, and hitting one is never their misconfiguration.
 
 <Note>
-  All four are gated by the `execution_budget` feature flag (**Admin Dashboard → Feature Flags**).
-  With the flag off, the counters still run but no run is ever refused — so turning the flag on can
-  start stopping runs that used to complete, and turning it off is the way to unblock a customer
-  while you investigate.
+  All four are gated by the `execution_budget` feature flag (**Admin Dashboard → Feature Flags**),
+  which is seeded **disabled**. With the flag off the counters still run but no run is ever refused —
+  so turning the flag on can start stopping runs that used to complete, and turning it off is the way
+  to unblock a customer while you investigate. See
+  [Turning the ceilings on and off](#turning-the-ceilings-on-and-off) for what each ceiling does in
+  each state.
 </Note>
 
 ## The four ceilings
@@ -104,6 +106,63 @@ really did stop, and each stopped for that reason.
 The client listens for `run-budget-limit` and shows the message as soon as it arrives — a stop as an
 error toast, a shortened list as a warning — each linking to that run's log. Before this event
 existed, a shortened list was invisible until the page was reloaded.
+
+## Turning the ceilings on and off
+
+Everything above is gated by one feature flag, `execution_budget`. It is seeded **disabled**
+(migration `SeedExecutionBudgetFlag1788460000000`), so a freshly migrated environment enforces
+nothing until somebody turns it on.
+
+Toggle it from **Admin Dashboard → Feature Flags**, or directly:
+
+```http
+PATCH /feature-flags/execution_budget
+{ "enabled": true }
+```
+
+The endpoint requires a signed-in internal staff user (`JwtAuthGuard` + `InternalStaffGuard`).
+
+The flag is read once, at the start of each run, straight from the `feature_flags` table with no
+cache in front of it. A change therefore applies to the **next** run to start — no redeploy, no
+restart — and a run already in flight finishes under the value it started with.
+
+### What changes, ceiling by ceiling
+
+| Ceiling | Flag on | Flag off |
+|---|---|---|
+| Node repeats | A node repeating more than `FLUX_MAX_NODE_ITERATIONS` times stops the run, on **both** loop branches | No system cap. Only the node's own `loopCount` applies, and only when `loopBehavior` is `continue` |
+| Sequence items | A list longer than `FLUX_MAX_ARRAY_ITEMS` is shortened and the run continues with partial results | The whole list is iterated, however long it is |
+| Run steps | A run past `FLUX_MAX_RUN_NODE_EXECUTIONS` stops | Counted, never enforced |
+| Chained flow steps | A chain past `FLUX_MAX_CHAIN_NODE_EXECUTIONS` stops | Counted, never enforced |
+
+With the flag off no `run-budget-limit` event is emitted and no ceiling status ever reaches
+`flows_logs`, so every surface listed above behaves exactly as it did before this feature existed.
+
+<Warning>
+  Off is not a safe default — it is the old behaviour, hole included. As a rule, a condition node
+  whose `loopBehavior` is `stop` and whose condition never turns false has **no ceiling at all**
+  while the flag is off, because the node's own `loopCount` is not consulted on that branch. Closing
+  that hole is why the node-repeat ceiling exists; see [Known limitation](#known-limitation) for why
+  today's single-pass scheduler does not reach it either way.
+</Warning>
+
+### What does not change
+
+The counters. Both the per-run and the per-chain totals are incremented **before** the flag is
+consulted, so the accounting runs either way and only the refusal is gated. Two consequences worth
+relying on:
+
+- Enabling the flag has no warm-up. The chain counter is not starting from zero for chains already
+  under way; it has been counting all along.
+- Turning it off does not make runs cheaper. The bookkeeping cost is identical; what disappears is
+  the stop.
+
+<Note>
+  If the flag lookup itself fails — a database blip — it is treated as **disabled** and the run
+  proceeds with no ceilings (`FeatureFlagsService.isEnabled` catches the error and returns `false`).
+  The failure mode is an unbounded run, never a refused one. Worth remembering when a run that
+  should have stopped did not.
+</Note>
 
 ## Changing a ceiling per environment
 
