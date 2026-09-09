@@ -119,6 +119,7 @@
                       "main-api/specific-features/flow-and-single-node-execution",
                       "main-api/specific-features/async-flow-execution",
                       "main-api/specific-features/cancel-a-run",
+                      "main-api/specific-features/claim-check-authorization",
                       "main-api/specific-features/companion-docs",
                       {
                         "group": "Integrations",
@@ -415,6 +416,7 @@
                       "main-api/specific-features/flow-and-single-node-execution",
                       "main-api/specific-features/async-flow-execution",
                       "main-api/specific-features/cancel-a-run",
+                      "main-api/specific-features/claim-check-authorization",
                       "main-api/specific-features/companion-docs",
                       {
                         "group": "Integrations",
