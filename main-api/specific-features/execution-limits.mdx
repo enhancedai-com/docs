@@ -1,0 +1,200 @@
+---
+title: "Execution limits"
+description: "The four system ceilings that stop or shorten a run, what the user sees in each case, and every place the stop is recorded."
+---
+
+A flow can be built to run forever. A loop whose condition never turns false, a Sequence node fed a
+list nobody sized, two flows that call each other — none of these is a bug the user can see while
+building, and all of them spend compute and model tokens until something stops them.
+
+Four ceilings do that stopping. They are a **platform rule, not a node setting**: a user cannot raise
+them from the canvas, and hitting one is never their misconfiguration.
+
+<Note>
+  All four are gated by the `execution_budget` feature flag (**Admin Dashboard → Feature Flags**),
+  which is seeded **disabled**. With the flag off the counters still run but no run is ever refused —
+  so turning the flag on can start stopping runs that used to complete, and turning it off is the way
+  to unblock a customer while you investigate. See
+  [Turning the ceilings on and off](#turning-the-ceilings-on-and-off) for what each ceiling does in
+  each state.
+</Note>
+
+## The four ceilings
+
+| Ceiling | Env var | Default | What it counts | Effect |
+|---|---|---|---|---|
+| Node repeats | `FLUX_MAX_NODE_ITERATIONS` | 150 | How many times one node may repeat, whatever its own `loopBehavior` | **Stops** the run |
+| Sequence items | `FLUX_MAX_ARRAY_ITEMS` | 12000 | Items one `arrayNode` iterates in a single execution | **Shortens** the list, run continues |
+| Run steps | `FLUX_MAX_RUN_NODE_EXECUTIONS` | 50000 | Node executions one run may spend | **Stops** the run |
+| Chained flow steps | `FLUX_MAX_CHAIN_NODE_EXECUTIONS` | 200000 | Node executions a flow **and everything it calls** may spend together | **Stops** the run |
+
+Every node execution counts as one step, including each repeat inside a loop. Loop-body executions
+never reach the `node_executions` table, so that table is not where you count them — the run log is.
+
+### Why there are two step counters
+
+The run counter resets for each nested run; the chain counter does not. A flow that calls a sub-flow
+in a cycle gives every nested run a small, innocent-looking footprint, so only the chain counter can
+ever catch it. Measured in dev: with a `libraryNode` cycle, each nested run spent exactly **4** steps
+against a run ceiling of 20 — the run counter would never have fired.
+
+When both are over at once, the run ceiling is reported, because it is the more specific of the two.
+
+## What the user sees
+
+The status and the message come from one place, `back/src/app-api/flux/execution-budget.ts`, so the
+words in the run log, the toast, the API error and the CloudWatch line are the same words.
+
+| Ceiling | Run status | Message |
+|---|---|---|
+| Node repeats | `Stopped by system limit — node repeats` | Your flow stopped at a system limit: a single node can repeat 150 times. Lower the loop count or add a condition that ends the loop. |
+| Run steps | `Stopped by system limit — run steps` | Your flow stopped at a system limit: a single run can perform 50000 steps. Every node execution counts as a step, including each repeat inside a loop. |
+| Chained flow steps | `Stopped by system limit — chained flow steps` | Your flow stopped at a system limit: a flow and everything it calls can perform 200000 steps in total. Flows that call each other in a loop reach this quickly. |
+| Sequence items | `Finished — list shortened by system limit` | Your Sequence node received 250 items, but a system limit allows 100 items per node. The first 100 were processed and 150 were skipped, so the flow finished with partial results. |
+
+Three deliberate choices in this copy, worth knowing before you change it:
+
+- **"system limit", never "budget" or "ceiling".** The phrase carries the whole point — this is a
+  platform rule — and it appears in the status as well as the message, so the badge alone says it.
+- **The count reached is never shown to the user.** Only the limit is. `21` is not something a
+  customer can act on. It stays in the engineering log line, which keeps the `reached 21, limit 20`
+  form, so support loses nothing.
+- **The Sequence ceiling says "Finished", not "Stopped".** That run really does complete — the loop
+  body executes for the allowed items and the flow carries on with partial results. Calling it
+  "stopped" would be a lie in the other direction.
+
+## Where the stop is recorded
+
+A run that hits a stop ceiling is **not** a success and **not** a cancellation. It reports as an
+error, carrying the ceiling message.
+
+| Surface | What it shows |
+|---|---|
+| `flows_logs.status` | The run status from the table above |
+| `space_run_logs.status` | `error` for a stop, `success` for a shortened list |
+| `mcp_run_status` | `error`, `errorMessage` = the ceiling message |
+| `flow_execution_status` | `markError`, not `markCompleted` |
+| API / webhook callback | `success: false`, `error` = the ceiling message |
+| Socket event `run-budget-limit` | `{ processId, flowId, ceiling, limit, status, message, nodeId, nodeLabel }` |
+| CloudWatch | `flux.budget.<ceiling>` with `status` and `reason` |
+
+Because the status phrase is identical everywhere, one string finds every trace of a given run.
+
+### A chain records one row per level
+
+The chain ceiling stops the whole chain, and every run in it — the one that tripped the counter and
+each caller above it — writes its own `flows_logs` row. A 39-deep chain therefore produces 39 rows,
+all carrying the **same** status and the **same** message. That is expected: each of those runs
+really did stop, and each stopped for that reason.
+
+<Warning>
+  A caller must never record the ceiling as a failed node. It is handed the ceiling itself
+  (`budgetCeiling`, the same channel `conditionNode` uses) and stops for the same reason. Treating it
+  as a node failure was a real defect: each level re-wrapped the message as
+  `Execution failed at node "X" — …`, so 39 levels produced one message with 39 prefixes, and the
+  caller runs were recorded as `Error while running - 500` instead of the ceiling status.
+</Warning>
+
+<Note>
+  The nodes that never got to run are marked the same way a cancellation marks them, so the canvas
+  stops spinning. The run is **not** written to `flow_run_states` as cancelled — a budget stop is not
+  a cancellation, and support should not read it as one. See [Cancel a run](/main-api/specific-features/cancel-a-run).
+</Note>
+
+## In the interface
+
+The client listens for `run-budget-limit` and shows the message as soon as it arrives — a stop as an
+error toast, a shortened list as a warning — each linking to that run's log. Before this event
+existed, a shortened list was invisible until the page was reloaded.
+
+## Turning the ceilings on and off
+
+Everything above is gated by one feature flag, `execution_budget`. It is seeded **disabled**
+(migration `SeedExecutionBudgetFlag1788460000000`), so a freshly migrated environment enforces
+nothing until somebody turns it on.
+
+Toggle it from **Admin Dashboard → Feature Flags**, or directly:
+
+```http
+PATCH /feature-flags/execution_budget
+{ "enabled": true }
+```
+
+The endpoint requires a signed-in internal staff user (`JwtAuthGuard` + `InternalStaffGuard`).
+
+The flag is read once, at the start of each run, straight from the `feature_flags` table with no
+cache in front of it. A change therefore applies to the **next** run to start — no redeploy, no
+restart — and a run already in flight finishes under the value it started with.
+
+### What changes, ceiling by ceiling
+
+| Ceiling | Flag on | Flag off |
+|---|---|---|
+| Node repeats | A node repeating more than `FLUX_MAX_NODE_ITERATIONS` times stops the run, on **both** loop branches | No system cap. Only the node's own `loopCount` applies, and only when `loopBehavior` is `continue` |
+| Sequence items | A list longer than `FLUX_MAX_ARRAY_ITEMS` is shortened and the run continues with partial results | The whole list is iterated, however long it is |
+| Run steps | A run past `FLUX_MAX_RUN_NODE_EXECUTIONS` stops | Counted, never enforced |
+| Chained flow steps | A chain past `FLUX_MAX_CHAIN_NODE_EXECUTIONS` stops | Counted, never enforced |
+
+With the flag off no `run-budget-limit` event is emitted and no ceiling status ever reaches
+`flows_logs`, so every surface listed above behaves exactly as it did before this feature existed.
+
+<Warning>
+  Off is not a safe default — it is the old behaviour, hole included. As a rule, a condition node
+  whose `loopBehavior` is `stop` and whose condition never turns false has **no ceiling at all**
+  while the flag is off, because the node's own `loopCount` is not consulted on that branch. Closing
+  that hole is why the node-repeat ceiling exists; see [Known limitation](#known-limitation) for why
+  today's single-pass scheduler does not reach it either way.
+</Warning>
+
+### What does not change
+
+The counters. Both the per-run and the per-chain totals are incremented **before** the flag is
+consulted, so the accounting runs either way and only the refusal is gated. Two consequences worth
+relying on:
+
+- Enabling the flag has no warm-up. The chain counter is not starting from zero for chains already
+  under way; it has been counting all along.
+- Turning it off does not make runs cheaper. The bookkeeping cost is identical; what disappears is
+  the stop.
+
+<Note>
+  If the flag lookup itself fails — a database blip — it is treated as **disabled** and the run
+  proceeds with no ceilings (`FeatureFlagsService.isEnabled` catches the error and returns `false`).
+  The failure mode is an unbounded run, never a refused one. Worth remembering when a run that
+  should have stopped did not.
+</Note>
+
+## Changing a ceiling per environment
+
+The ceilings are plain env vars on the API task definition. Use the helper rather than editing the
+task definition by hand — it validates the value against the shipped defaults first and refuses prod
+without an explicit acknowledgement:
+
+```bash
+# read-only: what is in force right now
+node etc/execution-budget-env.mjs --env dev
+
+# register a new task definition revision with one ceiling changed
+node etc/execution-budget-env.mjs --env dev --set FLUX_MAX_ARRAY_ITEMS=100 --yes
+
+# ...and roll it out immediately instead of waiting for the next deploy
+node etc/execution-budget-env.mjs --env dev --set FLUX_MAX_ARRAY_ITEMS=100 --yes --update-service
+```
+
+An unusable value (`0`, negative, non-numeric, empty) is ignored and the shipped default applies —
+the ceiling is never accidentally disabled by a typo.
+
+<Warning>
+  The chain counter lives in memory in the API process that started the run. During a deploy, two
+  processes serve the same queue for several minutes, so a run can be counted by a process with the
+  old ceilings. Measured in dev: the drain window was **6.5 minutes** after ECS reported the
+  deployment complete. Do not treat a single post-deploy measurement as proof of a ceiling's value.
+</Warning>
+
+## Known limitation
+
+The node-repeat ceiling cannot currently be reached. The scheduler is single-pass — a completed node
+is never re-armed — so no `conditionNode` on the canvas iterates more than once today. The counter
+and its message are in place and correct; there is simply no topology that drives them. The one
+remaining place a node re-executes serially is inside a Sequence node's body, which is governed by
+the Sequence ceiling instead.
