@@ -221,6 +221,31 @@ title: "Environment Variables"
 | GIT_COMMIT | Optional | build metadata |
 | GIT_BRANCH | Optional | build metadata |
 
+## Rate limiting (S7 part 2)
+
+All 17 `RATE_LIMIT_*` / `MASTER_KEY_RATE_LIMIT_PER_MIN` vars are **optional** — every one has a code default in `back/src/app-api/rate-limit/rate-limit.config.ts`, so the API boots and behaves correctly with none of them set. The feature also ships **inert**: `RATE_LIMIT_MODE` defaults to `report`, which decides and logs but refuses nothing, so deploying it changes no behaviour until you set `enforce`.
+
+Everything except `MASTER_KEY_RATE_LIMIT_PER_MIN` is new in S7 part 2 (`868m0vkcj`) — before it there was no rate limiting on the run-creating entry points at all. `MASTER_KEY_RATE_LIMIT_PER_MIN` already existed and was absorbed into this limiter: it used to back an in-memory sliding window, and is now Redis-backed and enforced regardless of `RATE_LIMIT_MODE`.
+
+### Values that fail the boot
+
+Two invariants are asserted at startup, and a bad value does not degrade — the container fails to start:
+
+- for each per-route override, per window: `override <= general <= override * 10`
+- `pre-auth >= general`, per window
+
+A non-integer or non-positive value also throws rather than being ignored. An **empty string is treated as unset**, which is how a per-route override is cleared.
+
+`RATE_LIMIT_MODE` is the exception to the strictness: only the exact value `enforce` enables refusal, and **any other value, including a typo, silently means `report`**.
+
+### Other behaviour worth knowing
+
+`RATE_LIMIT_OBSERVATION_PER_MINUTE` is a pure logging trigger, per key, minute window only — it never affects the refusal decision. `RATE_LIMIT_PRE_AUTH_*` is one global value for all routes; no per-route pre-auth override exists.
+
+The limiter **fails open**: every Redis command is capped at 250 ms, and a timeout or error admits the request and logs it.
+
+To apply these per environment there is a helper script, `.specs/features/worker-flow-execution-epic/scripts/apply-rate-limit-envs.sh`, in the `enhancedai-com/Workflow` repo.
+
 ## Obsolete
 
 In `.env.example` but unused, safe to remove: `TYPEORM_SYNCHRONIZE`, `EMAIL_SSL`, `EMAIL_TLS`, `STRIPE_ACCOUNT_ID`.

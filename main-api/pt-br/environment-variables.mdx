@@ -221,6 +221,31 @@ title: "Variáveis de Ambiente"
 | GIT_COMMIT | Opcional | metadado de build |
 | GIT_BRANCH | Opcional | metadado de build |
 
+## Rate limiting (S7 parte 2)
+
+Todas as 17 vars `RATE_LIMIT_*` / `MASTER_KEY_RATE_LIMIT_PER_MIN` são **opcionais** — cada uma tem um default no código, em `back/src/app-api/rate-limit/rate-limit.config.ts`, então a API sobe e se comporta corretamente sem nenhuma delas definida. A feature também entra **inerte**: `RATE_LIMIT_MODE` tem default `report`, que decide e loga mas não recusa nada, então o deploy não muda comportamento nenhum até você setar `enforce`.
+
+Tudo exceto `MASTER_KEY_RATE_LIMIT_PER_MIN` é novo na S7 parte 2 (`868m0vkcj`) — antes dela não havia rate limiting algum nos entry points que criam execuções. `MASTER_KEY_RATE_LIMIT_PER_MIN` já existia e foi absorvida por este limitador: antes sustentava uma janela deslizante em memória, e agora é via Redis e aplicada independente do `RATE_LIMIT_MODE`.
+
+### Valores que derrubam o boot
+
+Dois invariantes são verificados na subida, e um valor ruim não degrada — o container não sobe:
+
+- para cada override por rota, por janela: `override <= geral <= override * 10`
+- `pre-auth >= geral`, por janela
+
+Um valor não inteiro ou não positivo também lança erro, em vez de ser ignorado. Uma **string vazia é tratada como não definida**, e é assim que se limpa um override por rota.
+
+`RATE_LIMIT_MODE` é a exceção a essa rigidez: só o valor exato `enforce` liga a recusa, e **qualquer outro valor, inclusive um typo, silenciosamente significa `report`**.
+
+### Outros comportamentos que vale saber
+
+`RATE_LIMIT_OBSERVATION_PER_MINUTE` é só um gatilho de logging, por chave, apenas na janela de minuto — nunca afeta a decisão de recusa. `RATE_LIMIT_PRE_AUTH_*` é um único valor global para todas as rotas; não existe override de pre-auth por rota.
+
+O limitador **falha aberto**: todo comando Redis tem teto de 250 ms, e um timeout ou erro admite a requisição e loga.
+
+Para aplicar isso por ambiente existe um script auxiliar, `.specs/features/worker-flow-execution-epic/scripts/apply-rate-limit-envs.sh`, no repo `enhancedai-com/Workflow`.
+
 ## Obsoletas
 
 Estão no `.env.example` mas sem uso, pode remover: `TYPEORM_SYNCHRONIZE`, `EMAIL_SSL`, `EMAIL_TLS`, `STRIPE_ACCOUNT_ID`.
