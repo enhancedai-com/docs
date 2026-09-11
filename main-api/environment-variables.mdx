@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-160 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+177 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 ## Database
 
@@ -73,7 +73,7 @@ title: "Environment Variables"
 | INTERNAL_API_KEY | Required | internal service-to-service calls |
 | MASTER_KEY_IP_ALLOWLIST | Optional | IP allowlist for master API key |
 | MASTER_KEY_OWNER_EMAIL | Required | master API key owner email |
-| MASTER_KEY_RATE_LIMIT_PER_MIN | Optional | master key rate limit (has fallback) |
+| MASTER_KEY_RATE_LIMIT_PER_MIN | Optional | master-key rate limit, Redis-backed and counted per key (default 600); always enforced regardless of `RATE_LIMIT_MODE` and exempt from the general/specific invariant below |
 | MCP_INTERNAL_SECRET | Required | internal guard for MCP calls — must match `mcp-server`'s value |
 | MCP_OAUTH_CONSENT_SECRET | Required | MCP OAuth consent signing — must match `mcp-server`'s value |
 | MCP_RESOURCE_METADATA_URL | Required | MCP resource metadata URL |
@@ -193,6 +193,22 @@ title: "Environment Variables"
 | FLUX_MAX_ARRAY_ITEMS | Optional | system ceiling on how many items an `arrayNode` iterates in one execution (default 12000) |
 | FLUX_MAX_RUN_NODE_EXECUTIONS | Optional | node executions a single run may spend before it terminates (default 50000) |
 | FLUX_MAX_CHAIN_NODE_EXECUTIONS | Optional | node executions a whole sub-flow chain may spend, which nesting cannot reset (default 200000) |
+| RATE_LIMIT_MODE | Optional | rate limiter mode: `report` (default) decides and logs but refuses nothing; `enforce` actually rejects |
+| RATE_LIMIT_GENERAL_PER_MINUTE | Optional | per-minute limit every route falls back to when it has no override (default 400) |
+| RATE_LIMIT_GENERAL_PER_HOUR | Optional | per-hour limit every route falls back to when it has no override (default 4000) |
+| RATE_LIMIT_PRE_AUTH_PER_MINUTE | Optional | per-minute floor applied before authentication, keyed by the presented credential; must stay >= the general per-minute limit (default 4000, 10x general) |
+| RATE_LIMIT_PRE_AUTH_PER_HOUR | Optional | per-hour floor applied before authentication, same rule (default 40000, 10x general) |
+| RATE_LIMIT_OBSERVATION_PER_MINUTE | Optional | logging-only threshold, far below the real limits, so `report` mode produces per-key measurements instead of silence — never refuses (default 5) |
+| RATE_LIMIT_API_V2_PER_MINUTE | Optional | per-route override for `api-v2`; blank by default, falls back to the general per-minute limit. If set, must satisfy `specific <= general <= 10 x specific` |
+| RATE_LIMIT_API_V2_PER_HOUR | Optional | same override, per-hour |
+| RATE_LIMIT_API_V2_WEBHOOK_PER_MINUTE | Optional | per-route override for `api-v2-webhook`; blank by default |
+| RATE_LIMIT_API_V2_WEBHOOK_PER_HOUR | Optional | same override, per-hour |
+| RATE_LIMIT_BATCH_PROCESS_PER_MINUTE | Optional | per-route override for `batch-process`; blank by default |
+| RATE_LIMIT_BATCH_PROCESS_PER_HOUR | Optional | same override, per-hour |
+| RATE_LIMIT_EXECUTE_FROM_CANVAS_PER_MINUTE | Optional | per-route override for `execute-from-canvas`; blank by default |
+| RATE_LIMIT_EXECUTE_FROM_CANVAS_PER_HOUR | Optional | same override, per-hour |
+| RATE_LIMIT_EMAIL_TRIGGER_PER_MINUTE | Optional | per-route override for `email-trigger`; blank by default |
+| RATE_LIMIT_EMAIL_TRIGGER_PER_HOUR | Optional | same override, per-hour |
 | ID_OF_AGENT_TO_BUILD_FORM | Required | internal agent that builds forms |
 | ID_OF_AGENT_TO_GENERATE_SUMMARY | Required | internal agent that generates summaries |
 | WEBHOOK_DB | Required | Redis DB index for user webhooks |
