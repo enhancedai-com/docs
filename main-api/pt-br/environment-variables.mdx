@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-160 env vars no `back/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+177 env vars no `back/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 ## Database
 
@@ -73,7 +73,7 @@ title: "Variáveis de Ambiente"
 | INTERNAL_API_KEY | Obrigatória | chamadas internas entre serviços |
 | MASTER_KEY_IP_ALLOWLIST | Opcional | allowlist de IP para master API key |
 | MASTER_KEY_OWNER_EMAIL | Obrigatória | email do dono da master key |
-| MASTER_KEY_RATE_LIMIT_PER_MIN | Opcional | rate limit da master key (tem fallback) |
+| MASTER_KEY_RATE_LIMIT_PER_MIN | Opcional | rate limit da master key, agora via Redis e contado por chave (padrão 600); sempre aplicado independente do `RATE_LIMIT_MODE` e isento do invariante geral/específico abaixo |
 | MCP_INTERNAL_SECRET | Obrigatória | guard interno das chamadas MCP — precisa bater com o valor no `mcp-server` |
 | MCP_OAUTH_CONSENT_SECRET | Obrigatória | assinatura do consentimento OAuth MCP — precisa bater com o valor no `mcp-server` |
 | MCP_RESOURCE_METADATA_URL | Obrigatória | URL de metadados do recurso MCP |
@@ -193,6 +193,22 @@ title: "Variáveis de Ambiente"
 | FLUX_MAX_ARRAY_ITEMS | Opcional | teto do sistema para quantos itens um `arrayNode` percorre em uma execução (padrão 12000) |
 | FLUX_MAX_RUN_NODE_EXECUTIONS | Opcional | execuções de nó que um run pode gastar antes de terminar (padrão 50000) |
 | FLUX_MAX_CHAIN_NODE_EXECUTIONS | Opcional | execuções de nó que a cadeia inteira de sub-flows pode gastar, que o aninhamento não reseta (padrão 200000) |
+| RATE_LIMIT_MODE | Opcional | modo do limitador: `report` (padrão) decide e loga mas não recusa nada; `enforce` recusa de verdade |
+| RATE_LIMIT_GENERAL_PER_MINUTE | Opcional | limite por minuto usado como fallback por qualquer rota sem override (padrão 400) |
+| RATE_LIMIT_GENERAL_PER_HOUR | Opcional | limite por hora usado como fallback por qualquer rota sem override (padrão 4000) |
+| RATE_LIMIT_PRE_AUTH_PER_MINUTE | Opcional | piso por minuto aplicado antes da autenticação, chaveado pela credencial apresentada; precisa ficar >= o limite geral por minuto (padrão 4000, 10x o geral) |
+| RATE_LIMIT_PRE_AUTH_PER_HOUR | Opcional | piso por hora aplicado antes da autenticação, mesma regra (padrão 40000, 10x o geral) |
+| RATE_LIMIT_OBSERVATION_PER_MINUTE | Opcional | limiar só de logging, bem abaixo dos limites reais, para o modo `report` gerar medições por chave em vez de silêncio — nunca recusa (padrão 5) |
+| RATE_LIMIT_API_V2_PER_MINUTE | Opcional | override por rota para `api-v2`; em branco por padrão, cai no limite geral por minuto. Se definido, precisa satisfazer `específico <= geral <= 10 x específico` |
+| RATE_LIMIT_API_V2_PER_HOUR | Opcional | mesmo override, por hora |
+| RATE_LIMIT_API_V2_WEBHOOK_PER_MINUTE | Opcional | override por rota para `api-v2-webhook`; em branco por padrão |
+| RATE_LIMIT_API_V2_WEBHOOK_PER_HOUR | Opcional | mesmo override, por hora |
+| RATE_LIMIT_BATCH_PROCESS_PER_MINUTE | Opcional | override por rota para `batch-process`; em branco por padrão |
+| RATE_LIMIT_BATCH_PROCESS_PER_HOUR | Opcional | mesmo override, por hora |
+| RATE_LIMIT_EXECUTE_FROM_CANVAS_PER_MINUTE | Opcional | override por rota para `execute-from-canvas`; em branco por padrão |
+| RATE_LIMIT_EXECUTE_FROM_CANVAS_PER_HOUR | Opcional | mesmo override, por hora |
+| RATE_LIMIT_EMAIL_TRIGGER_PER_MINUTE | Opcional | override por rota para `email-trigger`; em branco por padrão |
+| RATE_LIMIT_EMAIL_TRIGGER_PER_HOUR | Opcional | mesmo override, por hora |
 | ID_OF_AGENT_TO_BUILD_FORM | Obrigatória | agente interno que constrói formulários |
 | ID_OF_AGENT_TO_GENERATE_SUMMARY | Obrigatória | agente interno que gera resumos |
 | WEBHOOK_DB | Obrigatória | índice do Redis para webhooks de usuário |
@@ -204,6 +220,31 @@ title: "Variáveis de Ambiente"
 | COMMIT_SHA | Opcional | metadado de build |
 | GIT_COMMIT | Opcional | metadado de build |
 | GIT_BRANCH | Opcional | metadado de build |
+
+## Rate limiting (S7 parte 2)
+
+Todas as 17 vars `RATE_LIMIT_*` / `MASTER_KEY_RATE_LIMIT_PER_MIN` são **opcionais** — cada uma tem um default no código, em `back/src/app-api/rate-limit/rate-limit.config.ts`, então a API sobe e se comporta corretamente sem nenhuma delas definida. A feature também entra **inerte**: `RATE_LIMIT_MODE` tem default `report`, que decide e loga mas não recusa nada, então o deploy não muda comportamento nenhum até você setar `enforce`.
+
+Tudo exceto `MASTER_KEY_RATE_LIMIT_PER_MIN` é novo na S7 parte 2 (`868m0vkcj`) — antes dela não havia rate limiting algum nos entry points que criam execuções. `MASTER_KEY_RATE_LIMIT_PER_MIN` já existia e foi absorvida por este limitador: antes sustentava uma janela deslizante em memória, e agora é via Redis e aplicada independente do `RATE_LIMIT_MODE`.
+
+### Valores que derrubam o boot
+
+Dois invariantes são verificados na subida, e um valor ruim não degrada — o container não sobe:
+
+- para cada override por rota, por janela: `override <= geral <= override * 10`
+- `pre-auth >= geral`, por janela
+
+Um valor não inteiro ou não positivo também lança erro, em vez de ser ignorado. Uma **string vazia é tratada como não definida**, e é assim que se limpa um override por rota.
+
+`RATE_LIMIT_MODE` é a exceção a essa rigidez: só o valor exato `enforce` liga a recusa, e **qualquer outro valor, inclusive um typo, silenciosamente significa `report`**.
+
+### Outros comportamentos que vale saber
+
+`RATE_LIMIT_OBSERVATION_PER_MINUTE` é só um gatilho de logging, por chave, apenas na janela de minuto — nunca afeta a decisão de recusa. `RATE_LIMIT_PRE_AUTH_*` é um único valor global para todas as rotas; não existe override de pre-auth por rota.
+
+O limitador **falha aberto**: todo comando Redis tem teto de 250 ms, e um timeout ou erro admite a requisição e loga.
+
+Para aplicar isso por ambiente existe um script auxiliar, `.specs/features/worker-flow-execution-epic/scripts/apply-rate-limit-envs.sh`, no repo `enhancedai-com/Workflow`.
 
 ## Obsoletas
 
