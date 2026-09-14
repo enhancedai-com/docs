@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-160 env vars no `back/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+162 env vars no `back/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 ## Database
 
@@ -31,6 +31,8 @@ title: "Variáveis de Ambiente"
 | TEMPORAL_ADDRESS | Obrigatória | endereço do cluster Temporal |
 | TEMPORAL_TASK_QUEUE | Obrigatória | nome da task queue Temporal |
 | AGENT_CONCURRENCY | Opcional | quantas execuções de fluxo do `POST /flux/api-v2` rodam ao mesmo tempo (padrão 5) |
+| AGENT_JOB_TIMEOUT_MS | Opcional | quanto tempo um job de agente na fila pode rodar antes do Bull derrubá-lo (padrão 600000, 10 min) |
+| RUN_MAX_DURATION_MS | Opcional | quanto tempo um run inteiro pode levar antes de contar como abandonado — não é o mesmo que o timeout do job, pois runs reais passam de uma hora (padrão 21600000, 6 h) |
 | AGENT_WAIT_TIMEOUT_MS | Opcional | ms que uma chamada `POST /flux/api-v2` sem `callback_url` aguarda o resultado antes de responder `202` com a `statusUrl` (padrão 30000) |
 
 ## Auth / OAuth / Integrações

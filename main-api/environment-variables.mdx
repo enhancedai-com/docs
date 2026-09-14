@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-160 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+162 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 ## Database
 
@@ -31,6 +31,8 @@ title: "Environment Variables"
 | TEMPORAL_ADDRESS | Required | Temporal cluster address |
 | TEMPORAL_TASK_QUEUE | Required | Temporal task queue name |
 | AGENT_CONCURRENCY | Optional | how many `POST /flux/api-v2` flow executions run at the same time (default 5) |
+| AGENT_JOB_TIMEOUT_MS | Optional | how long one queued agent job may run before Bull times it out (default 600000, 10 min) |
+| RUN_MAX_DURATION_MS | Optional | how long a whole flow run may take before it counts as abandoned — not the same as the job timeout, since real runs exceed an hour (default 21600000, 6 h) |
 | AGENT_WAIT_TIMEOUT_MS | Optional | ms a `POST /flux/api-v2` call without `callback_url` waits for the result before answering `202` with the `statusUrl` (default 30000) |
 
 ## Auth / OAuth / Integrations
