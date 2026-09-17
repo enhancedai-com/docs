@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-30 env vars no `worker/.env.example`, validadas via Zod em `src/env.ts`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+29 env vars no `worker/.env.example`, validadas via Zod em `src/env.ts`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 | Var | Obrigatória? | Propósito |
 |---|---|---|
@@ -13,8 +13,7 @@ title: "Variáveis de Ambiente"
 | TYPEORM_USERNAME | Obrigatória | usuário do Postgres |
 | TYPEORM_PASSWORD | Obrigatória | senha do Postgres |
 | TYPEORM_DATABASE | Obrigatória | nome do banco Postgres |
-| WORKER_DB_POOL_MAX | Opcional | máximo de conexões do pg Pool do worker (default `MAX_CONCURRENT_ACTIVITY_TASK_EXECUTIONS` + 2 = 12) |
-| WORKER_DB_POOL_IDLE_TIMEOUT_MS | Opcional | idleTimeoutMillis do pg Pool (default 10000) |
+| WORKER_DB_POOL_IDLE_TIMEOUT_MS | Opcional | idleTimeoutMillis do pg Pool (default 30000) |
 | WORKER_DB_POOL_CONNECTION_TIMEOUT_MS | Opcional | connectionTimeoutMillis do pg Pool — quão rápido um pool saturado falha em vez de travar a activity até o `startToCloseTimeout` do Temporal (default 5000) |
 | REDIS_HOST | Obrigatória | host do Redis (pub/sub de notificações de status) |
 | REDIS_PORT | Obrigatória | porta do Redis |
