@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-27 env vars in `worker/.env.example`, validated via Zod in `src/env.ts`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+30 env vars in `worker/.env.example`, validated via Zod in `src/env.ts`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 | Var | Required? | Purpose |
 |---|---|---|
@@ -13,6 +13,9 @@ title: "Environment Variables"
 | TYPEORM_USERNAME | Required | Postgres user |
 | TYPEORM_PASSWORD | Required | Postgres password |
 | TYPEORM_DATABASE | Required | Postgres db name |
+| WORKER_DB_POOL_MAX | Optional | worker's pg Pool max connections (default `MAX_CONCURRENT_ACTIVITY_TASK_EXECUTIONS` + 2 = 12) |
+| WORKER_DB_POOL_IDLE_TIMEOUT_MS | Optional | pg Pool idleTimeoutMillis (default 10000) |
+| WORKER_DB_POOL_CONNECTION_TIMEOUT_MS | Optional | pg Pool connectionTimeoutMillis — how fast a saturated pool fails instead of hanging an activity until its Temporal `startToCloseTimeout` (default 5000) |
 | REDIS_HOST | Required | Redis host (status notifications pub/sub) |
 | REDIS_PORT | Required | Redis port |
 | OPENAI_API_KEY | Required | OpenAI client |
