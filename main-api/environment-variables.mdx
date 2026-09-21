@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-227 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+205 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 ## Database
 
@@ -73,7 +73,7 @@ title: "Environment Variables"
 | INTERNAL_API_KEY | Required | internal service-to-service calls |
 | MASTER_KEY_IP_ALLOWLIST | Optional | IP allowlist for master API key |
 | MASTER_KEY_OWNER_EMAIL | Required | master API key owner email |
-| MASTER_KEY_RATE_LIMIT_PER_MIN | Optional | master key rate limit (has fallback) |
+| MASTER_KEY_RATE_LIMIT_PER_MIN | Optional | master-key rate limit, Redis-backed and counted per key (default 600); always enforced regardless of `RATE_LIMIT_MODE` and exempt from the general/specific invariant below |
 | MCP_INTERNAL_SECRET | Required | internal guard for MCP calls — must match `mcp-server`'s value |
 | MCP_OAUTH_CONSENT_SECRET | Required | MCP OAuth consent signing — must match `mcp-server`'s value |
 | MCP_RESOURCE_METADATA_URL | Required | MCP resource metadata URL |
@@ -196,10 +196,10 @@ title: "Environment Variables"
 | RATE_LIMIT_MODE | Optional | rate limiter mode: `report` (default) decides and logs but refuses nothing; `enforce` actually rejects |
 | RATE_LIMIT_GENERAL_PER_MINUTE | Optional | per-minute limit every route falls back to when it has no override (default 400) |
 | RATE_LIMIT_GENERAL_PER_HOUR | Optional | per-hour limit every route falls back to when it has no override (default 4000) |
-| RATE_LIMIT_PRE_AUTH_PER_MINUTE | Optional | per-minute floor applied before authentication, keyed by the presented credential; must stay >= the general per-minute limit (default 4000) |
-| RATE_LIMIT_PRE_AUTH_PER_HOUR | Optional | per-hour floor applied before authentication, same rule (default 40000) |
-| RATE_LIMIT_OBSERVATION_PER_MINUTE | Optional | logging-only threshold, so `report` mode produces per-key measurements instead of silence — never refuses (default 5) |
-| RATE_LIMIT_API_V2_PER_MINUTE | Optional | per-route override for `api-v2`; blank by default. If set, must satisfy `specific <= general <= 10 x specific` |
+| RATE_LIMIT_PRE_AUTH_PER_MINUTE | Optional | per-minute floor applied before authentication, keyed by the presented credential; must stay >= the general per-minute limit (default 4000, 10x general) |
+| RATE_LIMIT_PRE_AUTH_PER_HOUR | Optional | per-hour floor applied before authentication, same rule (default 40000, 10x general) |
+| RATE_LIMIT_OBSERVATION_PER_MINUTE | Optional | logging-only threshold, far below the real limits, so `report` mode produces per-key measurements instead of silence — never refuses (default 5) |
+| RATE_LIMIT_API_V2_PER_MINUTE | Optional | per-route override for `api-v2`; blank by default, falls back to the general per-minute limit. If set, must satisfy `specific <= general <= 10 x specific` |
 | RATE_LIMIT_API_V2_PER_HOUR | Optional | same override, per-hour |
 | RATE_LIMIT_API_V2_WEBHOOK_PER_MINUTE | Optional | per-route override for `api-v2-webhook`; blank by default |
 | RATE_LIMIT_API_V2_WEBHOOK_PER_HOUR | Optional | same override, per-hour |
@@ -230,6 +230,31 @@ title: "Environment Variables"
 | COMMIT_SHA | Optional | build metadata |
 | GIT_COMMIT | Optional | build metadata |
 | GIT_BRANCH | Optional | build metadata |
+
+## Rate limiting (S7 part 2)
+
+All 27 `RATE_LIMIT_*` / `MASTER_KEY_RATE_LIMIT_PER_MIN` vars are **optional** — every one has a code default in `back/src/app-api/rate-limit/rate-limit.config.ts`, so the API boots and behaves correctly with none of them set. The feature also ships **inert**: `RATE_LIMIT_MODE` defaults to `report`, which decides and logs but refuses nothing, so deploying it changes no behaviour until you set `enforce`.
+
+Everything except `MASTER_KEY_RATE_LIMIT_PER_MIN` is new in S7 part 2 (`868m0vkcj`) — before it there was no rate limiting on the run-creating entry points at all. `MASTER_KEY_RATE_LIMIT_PER_MIN` already existed and was absorbed into this limiter: it used to back an in-memory sliding window, and is now Redis-backed and enforced regardless of `RATE_LIMIT_MODE`.
+
+### Values that fail the boot
+
+Two invariants are asserted at startup, and a bad value does not degrade — the container fails to start:
+
+- for each per-route override, per window: `override <= general <= override * 10`
+- `pre-auth >= general`, per window
+
+A non-integer or non-positive value also throws rather than being ignored. An **empty string is treated as unset**, which is how a per-route override is cleared.
+
+`RATE_LIMIT_MODE` is the exception to the strictness: only the exact value `enforce` enables refusal, and **any other value, including a typo, silently means `report`**.
+
+### Other behaviour worth knowing
+
+`RATE_LIMIT_OBSERVATION_PER_MINUTE` is a pure logging trigger, per key, minute window only — it never affects the refusal decision. `RATE_LIMIT_PRE_AUTH_*` is one global value for all routes; no per-route pre-auth override exists.
+
+The limiter **fails open**: every Redis command is capped at 250 ms, and a timeout or error admits the request and logs it.
+
+To apply these per environment there is a helper script, `.specs/features/worker-flow-execution-epic/scripts/apply-rate-limit-envs.sh`, in the `enhancedai-com/Workflow` repo.
 
 ## Obsolete
 
