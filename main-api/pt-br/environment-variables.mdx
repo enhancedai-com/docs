@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-177 env vars no `back/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+205 env vars no `back/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 ## Database
 
@@ -209,6 +209,16 @@ title: "Variáveis de Ambiente"
 | RATE_LIMIT_EXECUTE_FROM_CANVAS_PER_HOUR | Opcional | mesmo override, por hora |
 | RATE_LIMIT_EMAIL_TRIGGER_PER_MINUTE | Opcional | override por rota para `email-trigger`; em branco por padrão |
 | RATE_LIMIT_EMAIL_TRIGGER_PER_HOUR | Opcional | mesmo override, por hora |
+| RATE_LIMIT_BETA_V2_PER_MINUTE | Opcional | override por rota para `beta-v2`; em branco por padrão |
+| RATE_LIMIT_BETA_V2_PER_HOUR | Opcional | mesmo override, por hora |
+| RATE_LIMIT_EXECUTE_SINGLE_NODE_PER_MINUTE | Opcional | override por rota para `execute-single-node`; em branco por padrão |
+| RATE_LIMIT_EXECUTE_SINGLE_NODE_PER_HOUR | Opcional | mesmo override, por hora |
+| RATE_LIMIT_CHATBOT_API_SOCKET_PER_MINUTE | Opcional | override por rota para `chatbot-api-socket`; em branco por padrão |
+| RATE_LIMIT_CHATBOT_API_SOCKET_PER_HOUR | Opcional | mesmo override, por hora |
+| RATE_LIMIT_FORMAPI_V1_PER_MINUTE | Opcional | override por rota para `formapi-v1`; em branco por padrão |
+| RATE_LIMIT_FORMAPI_V1_PER_HOUR | Opcional | mesmo override, por hora |
+| RATE_LIMIT_RUN_PUBLIC_FLOW_PER_MINUTE | Opcional | override por rota para `run-public-flow`; em branco por padrão. A rota é pública, então um chamador anônimo é chaveado pelo flow que ele nomeia, nunca pela organização do dono do flow |
+| RATE_LIMIT_RUN_PUBLIC_FLOW_PER_HOUR | Opcional | mesmo override, por hora |
 | ID_OF_AGENT_TO_BUILD_FORM | Obrigatória | agente interno que constrói formulários |
 | ID_OF_AGENT_TO_GENERATE_SUMMARY | Obrigatória | agente interno que gera resumos |
 | WEBHOOK_DB | Obrigatória | índice do Redis para webhooks de usuário |
@@ -223,7 +233,7 @@ title: "Variáveis de Ambiente"
 
 ## Rate limiting (S7 parte 2)
 
-Todas as 17 vars `RATE_LIMIT_*` / `MASTER_KEY_RATE_LIMIT_PER_MIN` são **opcionais** — cada uma tem um default no código, em `back/src/app-api/rate-limit/rate-limit.config.ts`, então a API sobe e se comporta corretamente sem nenhuma delas definida. A feature também entra **inerte**: `RATE_LIMIT_MODE` tem default `report`, que decide e loga mas não recusa nada, então o deploy não muda comportamento nenhum até você setar `enforce`.
+Todas as 27 vars `RATE_LIMIT_*` / `MASTER_KEY_RATE_LIMIT_PER_MIN` são **opcionais** — cada uma tem um default no código, em `back/src/app-api/rate-limit/rate-limit.config.ts`, então a API sobe e se comporta corretamente sem nenhuma delas definida. A feature também entra **inerte**: `RATE_LIMIT_MODE` tem default `report`, que decide e loga mas não recusa nada, então o deploy não muda comportamento nenhum até você setar `enforce`.
 
 Tudo exceto `MASTER_KEY_RATE_LIMIT_PER_MIN` é novo na S7 parte 2 (`868m0vkcj`) — antes dela não havia rate limiting algum nos entry points que criam execuções. `MASTER_KEY_RATE_LIMIT_PER_MIN` já existia e foi absorvida por este limitador: antes sustentava uma janela deslizante em memória, e agora é via Redis e aplicada independente do `RATE_LIMIT_MODE`.
 

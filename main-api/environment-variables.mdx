@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-177 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+205 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 ## Database
 
@@ -209,6 +209,16 @@ title: "Environment Variables"
 | RATE_LIMIT_EXECUTE_FROM_CANVAS_PER_HOUR | Optional | same override, per-hour |
 | RATE_LIMIT_EMAIL_TRIGGER_PER_MINUTE | Optional | per-route override for `email-trigger`; blank by default |
 | RATE_LIMIT_EMAIL_TRIGGER_PER_HOUR | Optional | same override, per-hour |
+| RATE_LIMIT_BETA_V2_PER_MINUTE | Optional | per-route override for `beta-v2`; blank by default |
+| RATE_LIMIT_BETA_V2_PER_HOUR | Optional | same override, per-hour |
+| RATE_LIMIT_EXECUTE_SINGLE_NODE_PER_MINUTE | Optional | per-route override for `execute-single-node`; blank by default |
+| RATE_LIMIT_EXECUTE_SINGLE_NODE_PER_HOUR | Optional | same override, per-hour |
+| RATE_LIMIT_CHATBOT_API_SOCKET_PER_MINUTE | Optional | per-route override for `chatbot-api-socket`; blank by default |
+| RATE_LIMIT_CHATBOT_API_SOCKET_PER_HOUR | Optional | same override, per-hour |
+| RATE_LIMIT_FORMAPI_V1_PER_MINUTE | Optional | per-route override for `formapi-v1`; blank by default |
+| RATE_LIMIT_FORMAPI_V1_PER_HOUR | Optional | same override, per-hour |
+| RATE_LIMIT_RUN_PUBLIC_FLOW_PER_MINUTE | Optional | per-route override for `run-public-flow`; blank by default. The route is public, so an anonymous caller is keyed by the flow it names, never by the flow owner's organisation |
+| RATE_LIMIT_RUN_PUBLIC_FLOW_PER_HOUR | Optional | same override, per-hour |
 | ID_OF_AGENT_TO_BUILD_FORM | Required | internal agent that builds forms |
 | ID_OF_AGENT_TO_GENERATE_SUMMARY | Required | internal agent that generates summaries |
 | WEBHOOK_DB | Required | Redis DB index for user webhooks |
@@ -223,7 +233,7 @@ title: "Environment Variables"
 
 ## Rate limiting (S7 part 2)
 
-All 17 `RATE_LIMIT_*` / `MASTER_KEY_RATE_LIMIT_PER_MIN` vars are **optional** — every one has a code default in `back/src/app-api/rate-limit/rate-limit.config.ts`, so the API boots and behaves correctly with none of them set. The feature also ships **inert**: `RATE_LIMIT_MODE` defaults to `report`, which decides and logs but refuses nothing, so deploying it changes no behaviour until you set `enforce`.
+All 27 `RATE_LIMIT_*` / `MASTER_KEY_RATE_LIMIT_PER_MIN` vars are **optional** — every one has a code default in `back/src/app-api/rate-limit/rate-limit.config.ts`, so the API boots and behaves correctly with none of them set. The feature also ships **inert**: `RATE_LIMIT_MODE` defaults to `report`, which decides and logs but refuses nothing, so deploying it changes no behaviour until you set `enforce`.
 
 Everything except `MASTER_KEY_RATE_LIMIT_PER_MIN` is new in S7 part 2 (`868m0vkcj`) — before it there was no rate limiting on the run-creating entry points at all. `MASTER_KEY_RATE_LIMIT_PER_MIN` already existed and was absorbed into this limiter: it used to back an in-memory sliding window, and is now Redis-backed and enforced regardless of `RATE_LIMIT_MODE`.
 
