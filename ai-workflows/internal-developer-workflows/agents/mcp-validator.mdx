@@ -7,7 +7,7 @@ description: "Runs the MCP validation gate in an isolated context and returns a 
 
 A thin isolation wrapper around the [`mcp-validation`](/ai-workflows/internal-developer-workflows/skills/mcp-validation) skill. Its value is running the validation in its **own context** — keeping the main conversation clean — and returning a crisp **GO / NO-GO** verdict.
 
-The agent lives at `.workflow/agents/mcp-validator.md`. It loads the `mcp-validation` skill (the source of truth for the tracks, gotchas, and reporting format) and executes it.
+The agent lives at `.claude/agents/mcp-validator.md`. It loads the `mcp-validation` skill (the source of truth for the tracks, gotchas, and reporting format) and executes it.
 
 <Note>
   This is the **hybrid** pattern. The procedure is the skill; the agent just runs it isolated. Update validation logic in the skill, not here.
@@ -16,7 +16,7 @@ The agent lives at `.workflow/agents/mcp-validator.md`. It loads the `mcp-valida
 ## When to use it
 
 - "Validate the MCP" / "run the MCP gate"
-- "Is MCP Phase 1 releasable?"
+- "Is MCP Phase 2 releasable?"
 - Before opening an MCP PR
 
 ## How to invoke

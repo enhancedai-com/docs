@@ -89,6 +89,12 @@ Superpowers is a Claude Code plugin that adds structured development workflows �
 
 The Superpowers plugin provides the following skills. Claude Code invokes them automatically when the situation matches, or you can request them explicitly.
 
+#### Using superpowers
+
+**When to use:** At the start of any conversation — this is the entry-point skill that establishes how to find and use the rest.
+
+**What it does:** Requires skill invocation before any response, including clarifying questions, so the right skill fires instead of Claude improvising a workflow from scratch.
+
 #### Brainstorming
 
 **When to use:** Before any creative work — creating features, building components, adding functionality, or modifying behavior.
@@ -185,6 +191,12 @@ The Superpowers plugin provides the following skills. Claude Code invokes them a
 **When to use:** When creating new skills, editing existing skills, or verifying skills work before deployment.
 
 **What it does:** Guides the process of authoring Claude Code skills with proper structure, metadata, and testing.
+
+#### Diagnosing superpowers
+
+**When to use:** When a Superpowers session went wrong and you want to know why — repeated work, ignored plans, stumbles, poor results, a skill that didn't fire, or you want to build a bug report for the Superpowers maintainers.
+
+**What it does:** Investigates the current session or a past one (by id or path, on any harness) and explains what happened.
 
 ## Configure MCP — Context7
 
@@ -283,7 +295,7 @@ The documentation project uses Mintlify to generate the help site at [help.enhan
   Documentation content is always written in English regardless of the language you communicate in. The `docs.json` file is the only navigation config — never use the deprecated `mint.json`.
 </Warning>
 
-### Backend (`Flux-Prompt/`)
+### Backend (`back/`)
 
 The backend is a NestJS API with TypeScript, PostgreSQL, and integrations with multiple AI providers.
 
@@ -291,7 +303,7 @@ The backend is a NestJS API with TypeScript, PostgreSQL, and integrations with m
 
 ##### `code-standards.md`
 
-**Location:** `Flux-Prompt/.claude/rules/code-standards.md`
+**Location:** `back/.claude/rules/code-standards.md`
 
 **What it enforces:** Shared coding standards applied across all Enhanced projects.
 
@@ -310,7 +322,7 @@ The backend is a NestJS API with TypeScript, PostgreSQL, and integrations with m
 
 ##### `logging.md`
 
-**Location:** `Flux-Prompt/.claude/rules/logging.md`
+**Location:** `back/.claude/rules/logging.md`
 
 **What it enforces:** Consistent logging practices across all Enhanced projects.
 
@@ -326,7 +338,7 @@ The backend is a NestJS API with TypeScript, PostgreSQL, and integrations with m
 
 ##### `back.md`
 
-**Location:** `Flux-Prompt/.claude/rules/back.md`
+**Location:** `back/.claude/rules/back.md`
 
 **What it enforces:** NestJS-specific backend standards.
 
@@ -352,7 +364,7 @@ The backend is a NestJS API with TypeScript, PostgreSQL, and integrations with m
 
 #### Skill: NestJS best practices
 
-**Location:** `Flux-Prompt/.agents/skills/nestjs-best-practices/`
+**Location:** `back/.agents/skills/nestjs-best-practices/`
 
 **What it does:** A comprehensive collection of 40+ best practice rules organized into 10 categories. Each rule explains the problem, the solution, and provides code examples.
 
@@ -416,7 +428,7 @@ The backend is a NestJS API with TypeScript, PostgreSQL, and integrations with m
 - **Use ConfigModule for environment** — Validated env vars with Zod or Joi
 - **Use structured logging** — Consistent log format for observability
 
-### Frontend (`Flux-Prompt-Frontend/`)
+### Frontend (`front/`)
 
 The frontend is a React 18 application with TypeScript, Material-UI, Zustand, React Query, and React Flow for the workflow canvas.
 
@@ -424,19 +436,19 @@ The frontend is a React 18 application with TypeScript, Material-UI, Zustand, Re
 
 ##### `code-standards.md`
 
-**Location:** `Flux-Prompt-Frontend/.claude/rules/code-standards.md`
+**Location:** `front/.claude/rules/code-standards.md`
 
 Same coding standards as the backend — English code, naming conventions, constants, function guidelines, formatting rules. See the [backend code-standards section](#code-standardsmd) above.
 
 ##### `logging.md`
 
-**Location:** `Flux-Prompt-Frontend/.claude/rules/logging.md`
+**Location:** `front/.claude/rules/logging.md`
 
 Same logging standards as the backend — log levels, no file storage, no sensitive data, structured objects. See the [backend logging section](#loggingmd) above.
 
 ##### `react.md`
 
-**Location:** `Flux-Prompt-Frontend/.claude/rules/react.md`
+**Location:** `front/.claude/rules/react.md`
 
 **What it enforces:** React-specific standards for the frontend codebase.
 
@@ -457,9 +469,9 @@ Same logging standards as the backend — log levels, no file storage, no sensit
 
 #### Skill: ReactFlow fundamentals
 
-**Location:** `Flux-Prompt-Frontend/.agents/skills/reactflow-fundamentals/SKILL.md`
+**Location:** `front/.agents/skills/reactflow-fundamentals/SKILL.md`
 
-**What it does:** Teaches Claude Code how to build node-based UIs with React Flow — the core library behind the Enhanced workflow canvas. The canvas has 44 custom node types and 3 custom edge types.
+**What it does:** Teaches Claude Code how to build node-based UIs with React Flow — the core library behind the Enhanced workflow canvas. The canvas has 48 custom node types and 3 custom edge types.
 
 **Key areas covered:**
 - **Setup** — Installation (`@xyflow/react`), basic `<ReactFlow>` component with `useNodesState` and `useEdgesState`
@@ -474,7 +486,7 @@ Same logging standards as the backend — log levels, no file storage, no sensit
 
 **When to use:** Building workflow builders, node editors, data pipeline visualizations, conversation flows, or any interactive graph-based UI.
 
-### Worker (`flux-prompt-worker/`)
+### Worker (`worker/`)
 
 The worker is a NestJS microservice that runs as a Temporal Worker — no HTTP server, only queue processing for node and agent execution.
 
@@ -482,19 +494,19 @@ The worker is a NestJS microservice that runs as a Temporal Worker — no HTTP s
 
 ##### `code-standards.md`
 
-**Location:** `flux-prompt-worker/.claude/rules/code-standards.md`
+**Location:** `worker/.claude/rules/code-standards.md`
 
 Same coding standards as the backend and frontend. See the [backend code-standards section](#code-standardsmd) above.
 
 ##### `logging.md`
 
-**Location:** `flux-prompt-worker/.claude/rules/logging.md`
+**Location:** `worker/.claude/rules/logging.md`
 
 Same logging standards. See the [backend logging section](#loggingmd) above.
 
 ##### `temporal.md`
 
-**Location:** `flux-prompt-worker/.claude/rules/temporal.md`
+**Location:** `worker/.claude/rules/temporal.md`
 
 **What it enforces:** Comprehensive Temporal TypeScript guide for the worker microservice.
 
@@ -535,7 +547,7 @@ Same logging standards. See the [backend logging section](#loggingmd) above.
 
 ##### `worker.md`
 
-**Location:** `flux-prompt-worker/.claude/rules/worker.md`
+**Location:** `worker/.claude/rules/worker.md`
 
 **What it enforces:** Worker-specific architecture and conventions.
 
