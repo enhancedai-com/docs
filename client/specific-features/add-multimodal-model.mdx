@@ -1,218 +1,86 @@
 ---
 title: "Add a multimodal model"
-description: "How to register a new model with image or PDF capabilities in the frontend AI configuration"
+description: "How model capabilities and multimodal tags are managed for AI models in the platform"
 ---
 
 ## Location
 
-Model configurations live in:
+Model metadata is no longer a static constants array in the frontend. It is managed through the **Admin Panel** at `/admin/ai-models` (`src/views/AdminDashboard/AiModelsManagementPage.tsx`), an admin-only route backed by `AdminAiModelsService` (`src/service/AdminAiModelsService.ts`), which calls the `/model_price` API endpoints.
 
-```
-src/components/AiConfigs/constants.ts
+<Note>
+  The former `src/components/AiConfigs/constants.ts` provider arrays (`optionsArray`, `anthropicOptions`, `geminiOptions`, `groqOptions`, `xAiOptions`) no longer exist in the codebase. Model data now lives in the database and is edited through this admin page, not committed to source.
+</Note>
+
+## Data shape
+
+Each row in the admin table is a `ModelPriceResponse` (a price entry), optionally linked to a `SystemAiModelResponse` (the model's technical metadata):
+
+```typescript
+export interface AiModelTag {
+  label: string;
+  tooltip: string;
+}
+
+export interface SystemAiModelResponse {
+  id: string;
+  aiCompany: string;
+  modelName: string;
+  modelType: string;
+  maxInputToken: number | null;
+  maxOutputToken: number | null;
+  contextWindow: number | null;
+  isVisionModel: boolean;
+  supportsReasoning: boolean;
+  reasoningAlwaysOn: boolean;
+  supportsWebSearch: boolean;
+  supportsStructuredOutput: boolean;
+  supportsStreaming: boolean;
+  supportsTemperature: boolean;
+  supportsImageGenerationTool: boolean;
+  isActive: boolean;
+  isDeprecated: boolean;
+  isDefault: boolean;
+  description: string | null;
+  displayName: string | null;
+  tags: AiModelTag[] | null;
+}
 ```
 
-Models are organized by provider into arrays: `optionsArray` (OpenAI), `anthropicOptions`, `geminiOptions`, `groqOptions`, `xAiOptions`, and others.
+Multimodal/vision support is a structured `isVisionModel` boolean (shown as the **Vision** column in the table), not a tag convention. Tags remain free-form `{ label, tooltip }` pairs for anything the structured fields don't cover, such as attachment-count or file-size limits.
 
 ## Tag format
 
-All tags must be objects with `label` and `tooltip` properties:
+Tags are still objects with `label` and `tooltip`, defined by `AiModelTag` in `src/service/AdminAiModelsService.ts`:
 
 ```typescript
 tags: [{ label: 'Label Text', tooltip: 'Tooltip description' }]
 ```
 
 <Warning>
-  Never use plain string arrays for tags. All tags must have both `label` and `tooltip` properties.
+  Plain string tags are not supported by the type. Every tag needs both `label` and `tooltip`.
 </Warning>
 
-## Multimodal tag types
-
-<Tabs>
-  <Tab title="Images + PDF">
-    For models that support both images and PDFs:
-
-    ```typescript
-    {
-      label: 'Multimodal (Images, PDF)',
-      tooltip: 'Max: 10 images or 1 PDF per request | Images 26MB, PDF 43MB each',
-    }
-    ```
-
-    **Models:** GPT-5, GPT-5.1, GPT-5.2, GPT-4.1, GPT-4o, Claude models
-  </Tab>
-  <Tab title="Images only">
-    For models that support images but not PDFs:
-
-    ```typescript
-    {
-      label: 'Multimodal (Images Only)',
-      tooltip: 'Max: 10 images per request | 26MB per file | No PDF support',
-    }
-    ```
-
-    **Models:** Grok 4, Llama 4 models
-  </Tab>
-  <Tab title="Text only">
-    For models without multimodal support:
-
-    ```typescript
-    { label: 'Text Only', tooltip: 'No multimodal support' }
-    ```
-  </Tab>
-</Tabs>
-
-## Step-by-step guide
+## Managing a model
 
 <Steps>
-  <Step title="Locate the provider array">
-    Find the correct array for your model provider:
-
-    | Provider | Array |
-    |----------|-------|
-    | OpenAI | `optionsArray` |
-    | Anthropic | `anthropicOptions` |
-    | Gemini | `geminiOptions` |
-    | Groq | `groqOptions` |
-    | X AI | `xAiOptions` |
+  <Step title="Open the Admin Panel">
+    Go to `/admin/ai-models`. The page lists every `ModelPriceResponse` row with its AI company, model type, flux conversion rate, and whether it's linked to a `SystemAiModel`, active, deprecated, vision-capable, streaming-capable, or the provider default. A search box filters by model name or AI company.
   </Step>
-  <Step title="Add or update the model entry">
-    Add a new entry or modify an existing one in the array:
-
-    ```typescript
-    {
-      value: 'model-name',
-      name: 'Model Display Name',
-      disabled: false,
-      tags: [
-        {
-          label: 'Multimodal (Images, PDF)',
-          tooltip: 'Max: 10 images or 1 PDF per request | Images 26MB, PDF 43MB each',
-        },
-        { label: '128,000 Tokens', tooltip: 'Context window' },
-        { label: 'Reasoning', tooltip: 'Advanced reasoning capabilities' },
-      ],
-      description: 'Model description here.',
-    }
-    ```
+  <Step title="Create or edit">
+    Use **Create Model** to add a new price entry, or click an existing row to open its edit modal.
   </Step>
-  <Step title="Convert string tags to objects (if needed)">
-    If the model already exists with string tags, convert them:
-
-    ```typescript
-    // Before
-    tags: ['New', '400,000 Tokens', '128,000 Tokens']
-
-    // After
-    tags: [
-      { label: 'New', tooltip: 'Latest model release' },
-      { label: '400,000 Tokens', tooltip: 'Output token limit' },
-      { label: '128,000 Tokens', tooltip: 'Context window' },
-    ]
-    ```
+  <Step title="Set capability flags">
+    The edit modal exposes switches for the structured capability fields (`isVisionModel`, `supportsStreaming`, `supportsReasoning`, `supportsWebSearch`, `supportsStructuredOutput`, `supportsImageGenerationTool`, `supportsTemperature`).
   </Step>
-  <Step title="Add the multimodal tag">
-    Insert the multimodal tag at the beginning or in a logical position:
-
-    ```typescript
-    tags: [
-      { label: 'New', tooltip: 'Latest model release' },
-      {
-        label: 'Multimodal (Images, PDF)',
-        tooltip: 'Max: 10 images or 1 PDF per request | Images 26MB, PDF 43MB each',
-      },
-      // ... other tags
-    ]
-    ```
+  <Step title="Add tags">
+    A tags editor lets you add label/tooltip pairs for anything not covered by a structured field. Click an existing tag chip to edit it in place, or its delete icon to remove it.
   </Step>
 </Steps>
 
-## Complete examples
-
-<Accordion title="OpenAI model (GPT-5.2)">
-```typescript
-{
-  value: 'gpt-5.2',
-  name: 'gpt-5.2',
-  disabled: false,
-  tags: [
-    { label: 'New', tooltip: 'Latest model release' },
-    {
-      label: 'Multimodal (Images, PDF)',
-      tooltip: 'Max: 10 images or 1 PDF per request | Images 26MB, PDF 43MB each',
-    },
-    { label: '400,000 Tokens', tooltip: 'Output token limit' },
-    { label: '128,000 Tokens', tooltip: 'Context window' },
-    { label: 'Training up to Nov 2025', tooltip: 'Knowledge cutoff' },
-    { label: 'Reasoning', tooltip: 'Advanced reasoning capabilities' },
-  ],
-  description: 'GPT-5.2 is our best general-purpose model, part of the GPT-5 flagship model family.',
-}
-```
-</Accordion>
-
-<Accordion title="Anthropic model (Claude 4.5 Sonnet)">
-```typescript
-{
-  value: 'claude-4-5-sonnet-latest',
-  name: 'Claude 4.5 Sonnet',
-  tags: [
-    {
-      label: 'Multimodal (Images, PDF)',
-      tooltip: 'Max: 100 images or 5 PDFs per request | Images 5MB, PDF 6MB each',
-    },
-  ],
-  description: 'Latest Claude 4.5 Sonnet model with advanced reasoning and multimodal capabilities.',
-}
-```
-</Accordion>
-
-<Accordion title="X AI model (images only)">
-```typescript
-{
-  value: 'grok-4-0709',
-  name: 'Grok 4',
-  tags: [
-    {
-      label: 'Multimodal (Images Only)',
-      tooltip: 'Max: 10 images per request | 26MB per file | No PDF support',
-    },
-    { label: '256K Tokens', tooltip: '256,000 context window' },
-  ],
-  description: 'Most capable Grok model with vision capabilities for images only.',
-}
-```
-</Accordion>
-
-<Accordion title="Groq model (text only)">
-```typescript
-{
-  value: 'llama3-70b-8192',
-  name: 'Llama 3 70B',
-  disabled: false,
-  tags: [
-    { label: 'Text Only', tooltip: 'No multimodal support' },
-    { label: '8,192 Tokens', tooltip: 'Context window' },
-  ],
-  description: 'Llama 3 70B model optimized for high performance.',
-}
-```
-</Accordion>
-
-## Important notes
-
-<Note>
-  The tooltip should include specific limits and file size restrictions for multimodal models.
-</Note>
-
-- Use consistent labels: `'Multimodal (Images, PDF)'`, `'Multimodal (Images Only)'`, or `'Text Only'`
-- Research the model's actual capabilities and limits from official documentation before adding tags
-- This frontend configuration is for display purposes. Make sure the backend also supports the model for multimodal requests
-
 ## Verification
 
-After adding a model:
+After changing a model:
 
-1. Check for TypeScript/linting errors
-2. Verify the model appears correctly in the UI
-3. Test that multimodal tags display with proper tooltips
-4. Ensure the model works with multimodal file uploads (backend integration)
+1. Confirm the row reflects the new values in the admin table (e.g. the **Vision** or **Active** columns)
+2. Verify any new tag displays with the correct label and tooltip
+3. Make sure the backend actually supports the model for multimodal requests — this admin page only manages display/config metadata

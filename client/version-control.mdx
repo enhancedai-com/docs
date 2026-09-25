@@ -15,16 +15,16 @@ Version control spans four layers:
 
 - **Service layer** — `FlowVersionService` wraps all version API calls
 - **React Query hooks** — `useFlowVersions` provides queries and mutations with cache invalidation
-- **Zustand store** — `storeVersionControl` shares computed props between the editor and the top bar
+- **Zustand store** — `storeVersionControl` holds `isProductionView`, whether the user is viewing the deployed (production) version
 - **UI components** — `VersionControlDropdown`, `RestoreConfirmModal`, and `VersionNameModal`
 
 ### Data flow
 
-1. `CoreNodeDisplay` fetches versions, deployed version, and history using React Query hooks
-2. It computes `VersionControlProps` (version items, handlers, UI state) in a `useMemo`
-3. Props are stored in the Zustand store via `setVersionControlProps`
-4. `AgentTopBar` reads from the store and renders `VersionControlDropdown` inside a popover
-5. User actions in the dropdown call handlers defined in `CoreNodeDisplay`, which trigger mutations and page reloads
+1. `AgentTopBar` calls the `useAgentVersionControl(params.flowId)` hook directly
+2. The hook fetches versions, deployed version, and history using React Query hooks
+3. It computes `VersionControlProps` (version items, handlers, UI state) in a `useMemo` and returns it as a plain value
+4. `AgentTopBar` renders `VersionControlDropdown` inside a popover when `versionControlProps` is defined
+5. User actions in the dropdown call handlers returned by `useAgentVersionControl`, which trigger mutations and page reloads
 
 ## URL parameter
 
@@ -134,20 +134,17 @@ Validates that the input is non-empty before calling `onSubmit` with the trimmed
 
 ### Zustand store
 
-`storeVersionControl` shares version control state between `CoreNodeDisplay` (which computes it) and `AgentTopBar` (which renders the dropdown).
+`storeVersionControl` only tracks whether the user is viewing the deployed (production) version. It does not hold `VersionControlProps` — those are computed and returned directly by the `useAgentVersionControl` hook (see [Data flow](#data-flow)), not shared through a store.
 
 ```typescript
 interface VersionControlStore {
-  versionControlProps: VersionControlProps | null;
-  setVersionControlProps: (props: VersionControlProps | null) => void;
   isProductionView: boolean;
   setIsProductionView: (value: boolean) => void;
 }
 ```
 
-- `versionControlProps` is `null` when version control is disabled. The dropdown only renders when this value exists.
 - `isProductionView` tracks whether the user is viewing the deployed version.
-- Props are cleared on `CoreNodeDisplay` unmount.
+- `VersionControlProps` is `undefined` when version control is disabled. The dropdown only renders when `useAgentVersionControl` returns a defined value.
 
 ### React Query hooks
 
