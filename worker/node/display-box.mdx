@@ -123,6 +123,9 @@ On success, the stored JSON includes all original node data plus:
 | Cause | Error |
 | ----- | ----- |
 | Node not found in `flows_nodes` | `Node not found` |
+| `saveOutput` is true but the resolved text is empty | `UserConfigError`, field `text`: "Display Box has no content to save." |
+| `saveOutput` is true and `fileExtension` is set to something outside the allow-list (`txt`, `pdf`, `docx`, `md`, `json`, `csv`, `html`) | `UserConfigError`, field `fileExtension`: "File extension '\<value\>' is not supported." |
+| `saveOutput` is true and `customFileName` contains characters outside `/^[\w\-. ]{1,100}$/` | `UserConfigError`, field `customFileName`: "File name has invalid characters." |
 | File generation API returns non-2xx | Thrown with status code and response body (logged with context) |
 | File generation timeout (>10 min) | Abort signal timeout error |
 

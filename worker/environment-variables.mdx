@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-34 env vars in `worker/.env.example`, validated via Zod in `src/env.ts`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+42 env vars in `worker/.env.example`. `src/env.ts`'s Zod schema validates those plus 18 more vars that aren't in `.env.example` at all (several Required) — both sets are in the table below, 60 rows total. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 | Var | Required? | Purpose |
 |---|---|---|
@@ -23,25 +23,51 @@ title: "Environment Variables"
 | GROQ_API_KEY | Required | Groq client |
 | PPLX_API_KEY | Required | Perplexity client |
 | XAI_API_KEY | Required | xAI client |
+| MOONSHOT_API_KEY | Optional | Moonshot (Kimi) AI provider client |
+| MOONSHOT_BASE_URL | Optional | Moonshot API base URL (default `https://api.moonshot.ai/v1`) |
 | SEARCH_API_KEY | Required | web search (audio-transcriber node) |
+| SERP_API_KEY | Required | SerpAPI key for the web-search node's Google-search provider (`serpapi-client.ts`) |
 | AWS_ACCESS_KEY_ID | Optional | Lambda credentials (scripting node) |
 | AWS_SECRET_ACCESS_KEY | Optional | Lambda credentials |
-| AWS_REGION | Optional | AWS region (read implicitly by the SDK) |
+| AWS_REGION | Optional | declared in `.env.example`/`env.ts` but never read in application code — the scripting node's LambdaClient hardcodes `region: "us-east-1"` (`scripting.module.ts:16`), and S3 uses the separate `AWS_S3_REGION` var instead (`s3-upload.service.ts:21`, Required, no default). Appears vestigial |
 | LAMBDA_ENDPOINT | Optional | custom Lambda endpoint (LocalStack/dev) |
 | LAMBDA_PYTHON_ALIAS | Required | `code-executor-python` Lambda alias (`non-prod`/`prod`) invoked as the `Qualifier`, so dev/staging/prod hit isolated aliases of the same function — no default, fails closed if unset |
 | URL_MAIN_API | Required | `back` base URL for internal calls |
 | INTERNAL_API_KEY | Required | auth for internal calls to `back` |
 | INTEGRATIONS_ENCRYPTION_KEY | Required | decrypts `user_integrations` credentials (Stripe, WordPress, HubSpot adapters, plus the `accessToken`/`refreshToken` columns encrypted via `token-encryption.ts`) — must match `back`'s value |
+| SLACK_CLIENT_ID | Optional | Slack OAuth app credentials, used to refresh a Slack integration's access token when it's expired (`slack.adapter.ts`) |
+| SLACK_CLIENT_SECRET | Optional | Slack OAuth app credentials, same refresh flow as `SLACK_CLIENT_ID` |
+| SLACK_API_BASE | Optional | Slack API base URL override (default `https://slack.com/api`) |
+| NOTION_CLIENT_ID | Optional | Notion OAuth app credentials, used to refresh a Notion integration's access token (`notion.adapter.ts`) |
+| NOTION_CLIENT_SECRET | Optional | Notion OAuth app credentials, same refresh flow as `NOTION_CLIENT_ID` |
+| HUBSPOT_CLIENT_ID | Optional | HubSpot OAuth app credentials — same app as `back`'s, used to refresh the short-lived access token when executing a HubSpot integration node (`hubspot.adapter.ts`) |
+| HUBSPOT_CLIENT_SECRET_ID | Optional | HubSpot OAuth app credentials, same refresh flow as `HUBSPOT_CLIENT_ID` |
 | CLAIM_CHECK_THRESHOLD_BYTES | Optional | claim-check pattern threshold (default 262144) |
 | APICALLER_MAX_RESULT_BYTES | Optional | api-caller node result size limit (default 1_000_000) |
 | MCP_MAX_RESULT_BYTES | Optional | mcpNode tool-result size limit (default 1_800_000). See [MCP Client](/worker/node/mcp). |
 | LOG_PROVIDER_OPTIONS | Optional | debug flag, logs AI provider options |
-| FAL_KEY | Optional | fal.ai API key (imageGenerator node, fal provider — pro/schnell/dev/Flux 2 families) — same value as `back` |
+| FAL_KEY | Optional | fal.ai API key (imageGenerator node, fal provider — pro/schnell/dev/Flux 2 families, plus the `meta` Muse provider) — same value as `back` |
 | STABILITY_AI_API_KEY | Optional | Stability AI API key (imageGenerator node, stabilityai provider) — same value as `back` |
 | IDEOGRAM_API_KEY | Optional | Ideogram API key (imageGenerator node, ideogram provider) — same value as `back` |
-| REPLICATE_API_KEY | Optional | Replicate API key (imageGenerator node, opensources/kandinsky provider) — same value as `back` |
+| SCRAPINGBEE_KEY | Required | ScrapingBee API key for the web-crawling node (`web-crawling.service.ts`) |
+| OXYLAB_KEY | Required | Oxylabs API key for the web-crawling node (`web-crawling.service.ts`) |
+| BUILD_WITH_API_KEY | Required | BuiltWith API key for the web-crawling node (`web-crawling.service.ts`) |
+| EVEN_LAB_API | Required | ElevenLabs API key, configures the ElevenLabs client (`ai-provider.service.ts`) used by the voice-generator node |
+| VOICE_URL | Required | PlayHT voice-generator provider base URL (`playht.provider.ts`) — throws via `requireEnv` if unset |
+| VOICE_AUTHORIZATION | Required | PlayHT voice-generator provider auth header (`playht.provider.ts`) — throws via `requireEnv` if unset |
+| VOICE_USER | Required | PlayHT voice-generator provider user header (`playht.provider.ts`) — throws via `requireEnv` if unset |
+| AWS_S3_ACCESS_KEY_ID | Required | S3 client credentials for file uploads and vector storage (`s3-upload.service.ts`, `vector/aws.service.ts`) — distinct from `AWS_ACCESS_KEY_ID` used by the scripting node's Lambda client |
+| AWS_S3_SECRET_ACCESS_KEY | Required | S3 client credentials, same as `AWS_S3_ACCESS_KEY_ID` |
+| AWS_S3_REGION | Required | S3 client region — distinct from (and actually read, unlike) `AWS_REGION` |
+| AWS_S3_BUCKET_NAME | Required | S3 bucket used for uploads |
+| CLOUDFRONT_ASSETS_URL | Required | CloudFront base URL prefixed onto uploaded S3 asset keys |
+| PINECONE_API_KEY | Optional | Pinecone vector DB client credentials (`vector.service.ts`) |
+| PINECONE_ENV | Optional | declared in the Zod schema but never read anywhere in application code. Appears vestigial |
+| VOYAGE_API_KEY | Optional | Voyage AI embeddings client (`embeddings.ts`) |
+| RABBITMQ_URL | Optional | RabbitMQ connection string for vector-DB ingestion events (`rabbitmq-emit.ts`) — required together with `RABBITMQ_QUEUE_VECTOR_DB`, throws if only one is set |
+| RABBITMQ_QUEUE_VECTOR_DB | Optional | RabbitMQ queue name for vector-DB ingestion events, same pairing as `RABBITMQ_URL` |
 
-All 32 vars are actively used — none obsolete. `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES`, `MCP_MAX_RESULT_BYTES`, `LOG_PROVIDER_OPTIONS`, `FAL_KEY`, `STABILITY_AI_API_KEY`, `IDEOGRAM_API_KEY` and `REPLICATE_API_KEY` are read directly via `process.env`, not through the Zod schema — no type-safety there, but that's expected since they're all optional with fallbacks.
+All 60 vars are actively used except `AWS_REGION` and `PINECONE_ENV`, which are validated by the Zod schema but never read anywhere in application code (see their rows above). `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES`, `MCP_MAX_RESULT_BYTES`, `LOG_PROVIDER_OPTIONS`, `FAL_KEY`, `STABILITY_AI_API_KEY` and `IDEOGRAM_API_KEY` are read directly via `process.env`, not through the Zod schema — no type-safety there, but that's expected since they're all optional with fallbacks.
 
 ## Cross-repo gotcha
 

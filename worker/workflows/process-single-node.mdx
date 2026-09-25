@@ -91,18 +91,13 @@ The workflow follows this sequence:
     Notifies the user that the node execution has started by setting status to `PENDING` using [`notifyStatusActivity`](/worker/activities/notify-status).
   </Step>
   <Step title="Retrieve node information">
-    Queries the database to get node details (type, flow_id, data) using [`getInfoInDatabaseActivity`](/worker/activities/get-info-database).
+    Fetches the node's `type`/`flow_id`/(trimmed) `data` using [`getNodeInfoActivity`](/worker/activities/get-info-database) — **not** `getInfoInDatabaseActivity`, which is dead code (see that page).
   </Step>
   <Step title="Validate node exists">
-    Throws an error if the node is not found in the database.
+    Throws an error if the node is not found — in practice this is unreachable, since `getNodeInfoActivity` itself already throws (`NodeNotFoundError`) when no row matches.
   </Step>
   <Step title="Process by node type">
-    Executes different logic based on the node type:
-    <ul>
-      <li><strong>TEXT_GENERATOR</strong>: Validates model access, generates text, charges tokens, and optionally generates files</li>
-      <li><strong>SCRIPTING</strong>: Runs user JavaScript or Python via Lambda (see the <a href="/worker/node/scripting">Scripting node</a> doc)</li>
-      <li><strong>Other types</strong>: Currently throws an error (not yet supported)</li>
-    </ul>
+    Dispatches on `node.type`. Four types have dedicated inline handling (`TEXT_GENERATOR`, `LARGE_MEMORY`, `WEB_SEARCH`, `VOICE` — each with its own access-validation/charging calls); everything else goes through a single generic path, `resolveNodeActivity(node.type)`, which looks the type up in `UNIFORM_NODE_ACTIVITIES` (`node-activities.ts`) and, if found, calls that activity with a uniform prop shape. See [Node type dispatch](#node-type-dispatch) for the full table. A type matching neither throws `Node type ${node.type} not supported`.
   </Step>
   <Step title="Log successful execution">
     Creates an execution log entry with success status using [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs).
@@ -112,6 +107,38 @@ The workflow follows this sequence:
   </Step>
 </Steps>
 
+## Node type dispatch
+
+Nearly every `NodeType` is implemented today. The switch in `process-single-node.workflow.ts` has four explicit cases, each with type-specific access validation and/or post-run charging:
+
+| Node type | Activity | Extra steps |
+| --- | --- | --- |
+| `TEXT_GENERATOR` | `textGeneratorActivity` | `validateModelAccessActivity` before; `chargeTokensActivity` after (requires both `inputTokens`/`outputTokens` in the result) |
+| `LARGE_MEMORY` | `largeMemoryActivity` | `validateLargeMemoryAccessActivity` before; `chargeLargeMemoryUsageActivity` after |
+| `WEB_SEARCH` | `webSearchActivity` | `validateApiAccessActivity` before (capability derived from `node.data.type`: `"News"` → `google_news`, everything else → `google_search`); `chargeApiCallActivity` after |
+| `VOICE` | `voiceGeneratorActivity` | `chargeVoiceActivity` after, with the provider/model/`usedTokens` the activity itself returned |
+
+All other types dispatch through the generic path, `resolveNodeActivity(node.type)` against `UNIFORM_NODE_ACTIVITIES` (`node-activities.ts`), with no extra validation/charging step wrapping the call:
+
+| Node type | Activity |
+| --- | --- |
+| `SCRIPTING` | `scriptingActivity` |
+| `AUDIO_TRANSCRIBER` | `audioTranscriberActivity` |
+| `FUNCTION` (Functions/Math function) | `mathFunctionActivity` |
+| `API_CALLER` | `apiCallerActivity` |
+| `COUNTER` | `counterActivity` |
+| `SQL_QUERIER` | `sqlQuerierActivity` |
+| `DISPLAY_BOX` | `displayBoxActivity` |
+| `PULL_DATA` | `pullDataActivity` |
+| `PUSH_DATA` | `pushDataActivity` |
+| `MCP` | `mcpActivity` |
+| `HUB_SPOT_CRM` | `thirdPartyIntegrationActivity` |
+| `THIRD_PARTY_INTEGRATION` | `thirdPartyIntegrationActivity` |
+| `IMAGE_GENERATOR` | `imageGeneratorActivity` |
+| `WEB_CRAWLING` | `webCrawlingActivity` |
+
+A `NodeType` outside both tables throws `Node type ${node.type} not supported` — that's now the exception, not the default case it used to be.
+
 ## Node type: TEXT_GENERATOR
 
 When processing a `TEXT_GENERATOR` node, the workflow:
@@ -120,7 +147,10 @@ When processing a `TEXT_GENERATOR` node, the workflow:
 2. **Generates text**: Executes [`textGeneratorActivity`](/worker/node/text-generator) to produce the output
 3. **Validates tokens**: Ensures both input and output tokens are returned
 4. **Charges tokens**: Records token usage for billing using [`chargeTokensActivity`](/worker/activities/charge-tokens)
-5. **Generates file** (optional): If `saveOutput` and `fileType` are configured, generates a file using [`generateFileActivity`](/worker/activities/generate-file)
+
+<Warning>
+There is no file-generation step. `generateFileActivity` is never called anywhere in `process-single-node.workflow.ts` — it's dead code today, only referenced from a commented-out block in `process-agent.workflow.ts`. See [generateFile](/worker/activities/generate-file).
+</Warning>
 
 ## Error handling
 
@@ -137,7 +167,7 @@ The workflow implements comprehensive error handling:
     Creates an execution log entry with error status using [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs)
   </Step>
   <Step title="Update node data">
-    Updates the node's data with execution status using [`nodeExecutionErrorActivity`](/worker/activities/node-execution-error)
+    Calls [`nodeExecutionErrorActivity`](/worker/activities/node-execution-error) — currently a no-op; the real node-state update on failure already happened in the previous step, inside `generateExecutionLogsActivity`'s `isError` branch.
   </Step>
   <Step title="Notify failure">
     Updates the node status to `FAILED` using [`notifyStatusActivity`](/worker/activities/notify-status)
@@ -151,15 +181,17 @@ The workflow implements comprehensive error handling:
 
 This workflow uses the following activities:
 
-- [`notifyStatusActivity`](/worker/activities/notify-status) - Status notifications (start, completion, failure)
-- [`getInfoInDatabaseActivity`](/worker/activities/get-info-database) - Database queries
-- [`validateModelAccessActivity`](/worker/activities/validate-model-access) - Model access validation
-- [`textGeneratorActivity`](/worker/node/text-generator) - AI text generation (TEXT_GENERATOR nodes)
-- [`scriptingActivity`](/worker/node/scripting) - Script execution (SCRIPTING nodes)
-- [`chargeTokensActivity`](/worker/activities/charge-tokens) - Token billing
-- [`generateFileActivity`](/worker/activities/generate-file) - File generation (optional)
-- [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs) - Execution logging
-- [`nodeExecutionErrorActivity`](/worker/activities/node-execution-error) - Error handling
+- [`notifyStatusActivity`](/worker/activities/notify-status) - Status notifications (start, completion, failure, cancellation)
+- [`getNodeInfoActivity`](/worker/activities/get-info-database) - Fetches node type/flow_id/trimmed data (`getInfoInDatabaseActivity` is registered but unused — see that page)
+- `validateModelAccessActivity`, `validateLargeMemoryAccessActivity`, `validateApiAccessActivity` - Per-type access validation
+- `textGeneratorActivity`, `largeMemoryActivity`, `webSearchActivity`, `voiceGeneratorActivity` - The four explicitly-switched node types
+- `scriptingActivity`, `audioTranscriberActivity`, `mathFunctionActivity`, `apiCallerActivity`, `counterActivity`, `sqlQuerierActivity`, `displayBoxActivity`, `pullDataActivity`, `pushDataActivity`, `mcpActivity`, `thirdPartyIntegrationActivity`, `imageGeneratorActivity`, `webCrawlingActivity` - The remaining node types, dispatched generically via `resolveNodeActivity` (see [Node type dispatch](#node-type-dispatch))
+- `chargeTokensActivity`, `chargeLargeMemoryUsageActivity`, `chargeApiCallActivity`, `chargeVoiceActivity` - Per-type billing
+- [`persistCancelledNodeActivity`](/worker/workflows/worker-service) - Persists a cancelled node's partial output
+- [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs) - Execution logging (success and error)
+- [`nodeExecutionErrorActivity`](/worker/activities/node-execution-error) - Called on error, currently a no-op
+
+`generateFileActivity` is **not** used by this workflow — see the warning above.
 
 ## Status transitions
 

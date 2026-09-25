@@ -85,8 +85,8 @@ Execution happens in AWS Lambda, not inside the Worker process.
 - **API:** `console.log`, `console.error`, `console.warn`; **`setResult(value)`** sets the structured output `result`.
 - **Output:** The wrapper prints a JSON line with `{ result, console }`. If the process exits non-zero, the Lambda returns an `error` string (stderr).
 - Placeholders `{{varName}}` are applied after the variable map is built.
-- **Source:** `infra/lambda-execution/` (Dockerfile + `lambda_handler.py`).
-- **CI/CD:** `.github/workflows/deploy-lambda-executor.yml` — triggers on changes to `infra/lambda-execution/**` on `main` or via `workflow_dispatch`. Builds the Docker image, pushes to ECR, and updates the Lambda.
+- **Source:** `infra/lambda-executor/` (Dockerfile + `lambda_handler.py`).
+- **CI/CD:** three `workflow_dispatch`-only workflows, no push/path trigger — `deploy-lambda-executor.yml` (legacy, single-environment), `deploy-lambda-executor-prod.yml`, and `deploy-lambda-executor-nonprod.yml`. Each builds the Docker image from `infra/lambda-executor/`, pushes it to ECR, updates `code-executor-python`'s code, and — the prod/nonprod workflows only — publishes a new Lambda version and repoints the `prod`/`non-prod` alias at it (the `LAMBDA_PYTHON_ALIAS` the worker invokes as its `Qualifier` — see [Lambda function names](#lambda-function-names)).
 
 ### JavaScript (`code-executor-js`)
 
@@ -98,16 +98,23 @@ Execution happens in AWS Lambda, not inside the Worker process.
 
 ## Lambda function names
 
-The Worker resolves the Lambda name directly from the language — no environment variables needed:
+The Worker resolves the Lambda function name directly from the language, but for Python it also sets an explicit `Qualifier` from an environment variable:
 
-| Language | Lambda function | Package type |
-| -------- | --------------- | ------------ |
-| `Python` | `code-executor-python` | Container image (ECR) |
-| `JavaScript` | `code-executor-js` | Zip (Node.js) |
+| Language | Lambda function | Package type | `Qualifier` |
+| -------- | --------------- | ------------ | ----------- |
+| `Python` | `code-executor-python` | Container image (ECR) | `process.env.LAMBDA_PYTHON_ALIAS` — required, no default; selects the `prod`/`non-prod` alias so dev/staging/prod hit isolated aliases of the same function. See [Environment Variables](/worker/environment-variables). |
+| `JavaScript` | `code-executor-js` | Zip (Node.js) | none — always invokes `$LATEST` |
 
-If `language` does not match either value, `ScriptingService` throws.
+If `language` does not match either value, `ScriptingService` throws a `UserConfigError` ("Unsupported language: …").
 
-The `AWS_REGION` used by `LambdaClient` defaults to `us-east-1` in code.
+The `LambdaClient`'s `region` is hardcoded to `"us-east-1"` in `scripting.module.ts` — the `AWS_REGION` env var is not read.
+
+## Timeouts and output budgets
+
+- The worker aborts the Lambda `InvokeCommand` itself after `LAMBDA_TIMEOUT_MS = 110_000` (110 seconds), independent of whatever timeout the Lambda function is configured with.
+- The activity's returned `{ result, console }` is capped at `MAX_ACTIVITY_RESULT_BYTES = 1_000_000` (1 MB, serialized). Above that, `result` is truncated to a `100_000`-byte preview (`ACTIVITY_RESULT_PREVIEW_BYTES`) with a truncation marker, and `console` entries are kept up to a `400_000`-byte budget (`ACTIVITY_CONSOLE_BUDGET_BYTES`) before the rest are replaced with an "omitted" notice. The full, untruncated values are still persisted onto the node row — only the value returned to the workflow/heartbeat is bounded.
+- `consoleAsResult` (node data field, default `true`): when the Lambda's own `result` is empty (`undefined`/`null`/`""`), the service promotes the last JSON-shaped `console` entry (or, failing that, the last string entry) into `result` instead.
+- `assertNotSwapped` is a heuristic safety check: if `result` came back empty but a `console` entry looks like a JSON value, that's treated as a sign the Lambda wrote its real output to the wrong stream, and the run fails with an `IntegrationError` ("Scripting engine routed the result to the wrong output.") rather than silently returning an empty result.
 
 ## Local development
 
