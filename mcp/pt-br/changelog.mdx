@@ -3,6 +3,22 @@ title: "Changelog"
 description: "Novidades na integração MCP do FluxPrompt."
 ---
 
+## 2026-09-25 — `list_ai_models` expõe a capacidade de imagem
+
+**O `list_ai_models` agora informa se cada modelo gera imagem, e como.**
+
+- **Dois booleanos novos**, `supportsImageOutput` (o próprio modelo devolve uma imagem, ex. um modelo
+  nativo de imagem ou um modelo de chat cuja saída inclui imagens) e `supportsImageGenerationTool` (o
+  modelo pode chamar uma tool de geração de imagem do provider a partir de uma chat completion, ex.
+  `gpt-5-nano`/`gpt-5.5` da OpenAI chamando `image_generation`). São dois mecanismos diferentes — um
+  modelo pode ter um, os dois, ou nenhum.
+- **Uma lista `tools` derivada** (`image_generation`, `image_output`, `web_search`,
+  `structured_output`, `vision_input`, `reasoning`) que sempre concorda com os booleanos de capacidade
+  — uma função só deriva os dois, então não há nada para manter sincronizado à mão.
+- Um modelo recém-aprovado com capacidade de imagem é oferecido no picker, executado com a chamada
+  certa e listado aqui sem mudança de código — a capacidade é detectada a partir do catálogo de
+  modelos, não mantida à mão em cada camada.
+
 ## 2026-08-21 — Tipos de node resolvem pelo nome do canvas
 
 **O `add_node` e o `get_node_type` deixam de exigir o tipo técnico bruto — o nome que o usuário lê no canvas também funciona.**
