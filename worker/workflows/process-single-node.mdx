@@ -101,7 +101,7 @@ The workflow follows this sequence:
     <ul>
       <li><strong>TEXT_GENERATOR</strong>: Validates model access, generates text, charges tokens, and optionally generates files</li>
       <li><strong>SCRIPTING</strong>: Runs user JavaScript or Python via Lambda (see the <a href="/worker/node/scripting">Scripting node</a> doc)</li>
-      <li><strong>Other types</strong>: Currently throws an error (not yet supported)</li>
+      <li><strong>Other types</strong> (including <strong>IMAGE_GENERATOR</strong>, see the <a href="/worker/node/image-generator">Image generator</a> doc): Dispatched via <code>resolveNodeActivity(node.type)</code> to that type's own activity; throws only when no activity is registered for the type</li>
     </ul>
   </Step>
   <Step title="Log successful execution">

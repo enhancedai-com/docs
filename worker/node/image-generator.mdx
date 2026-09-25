@@ -1,0 +1,227 @@
+---
+title: "Image generator"
+sidebarTitle: "Image generator"
+description: "Temporal activity for the Image Generator node: prompt assembly, provider routing through a shared image-provider layer, per-provider billing timing, and cancellation."
+---
+
+<Note>
+Technical name **Image Generator**, raw type `imageGenerator` (`NodeType.IMAGE_GENERATOR`). This node was
+migrated from an inline back handler (`imageGeneratorNode` in `flux.service.ts`, now dead code — its dispatch
+case is gone) to the Temporal worker; see [`PORTED_FROM.md`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/PORTED_FROM.md) for the full provenance.
+</Note>
+
+## Overview
+
+The **Image Generator** node turns a prompt (assembled from up to seven fields) into a generated image using
+one of six provider systems, stores the result through the back's `/worker/store-image`, charges credits
+through `/worker/charge-tokens`, and persists the outcome on the node row.
+
+[`imageGeneratorActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`ImageGeneratorService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/image-generator.service.ts), which in turn calls the shared [`ImageProviderService`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/ai-provider/image/image-provider.service.ts) — see [The shared image provider layer](#the-shared-image-provider-layer) below.
+
+## When it runs
+
+`imageGeneratorActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node)
+workflow's default node-type dispatch (`resolveNodeActivity(node.type)` maps `NodeType.IMAGE_GENERATOR` to
+`imageGeneratorActivity`) — unlike the text generator, it does not go through a dedicated `switch` case, and
+the workflow does not call `validateModelAccessActivity` for it. The only access check is the activity's own
+aiSystem-support check (see below).
+
+## Activity signature
+
+```typescript
+async imageGeneratorActivity({
+  execId: string,
+  nodeId: string,
+  sessionId: string,
+  userId: string,
+  flowId: string,
+  flowVersionHistoryId: string | null,
+}): Promise<ImageGeneratorResponse>
+```
+
+`ImageGeneratorResponse`:
+
+```typescript
+{
+  text: string; // the stored image's URL
+}
+```
+
+## The shared image provider layer
+
+`ImageGeneratorService` carries **no provider call of its own** — everything provider-specific (the `ai`
+package's `generateImage()` call, every fal/Stability/Ideogram HTTP request, error classification) lives in
+`worker/src/modules/ai-provider/image/`, behind `ImageProviderService`. This split was deliberate: the node
+module is what a *future* image node (the OCR/image-reading node planned to replace the deprecated
+`imageReaderNode`) is meant to reuse without duplicating provider logic — see
+`.specs/features/worker-flow-execution-epic/TASK-A5-IMAGE-FAMILY.md` for the extraction's history.
+
+`ImageProviderService` exposes two methods:
+
+| Method | Role |
+| ------ | ---- |
+| `supports(aiSystem)` | `true` if `aiSystem` has a registered builder (either map below) |
+| `generate(request)` | Dispatches to the matching builder and returns a normalized `ImageProviderResult` |
+
+Two dispatch tables select the builder:
+
+| Map | `aiSystem` keys | How it calls the provider |
+| --- | ---------------- | -------------------------- |
+| `PROVIDER_BUILDERS` | `openai`, `gemini`, `fal`, `meta` | Builds an `ImageGenerateSpec` (model + call args), then `ImageProviderService.generate()` calls the **AI SDK**'s `generateImage()` once, uniformly, for all four |
+| `DIRECT_HTTP_BUILDERS` | `stabilityai`, `ideogram` | Each builder makes its own raw HTTP calls and **charges itself** via an injected `ctx.charge` closure, because charge-before-vs-after-the-call timing differs per provider and can't be normalized into one shared post-call charge |
+
+An unsupported or missing `aiSystem` — including `opensources` (Kandinsky via Replicate, removed 2026-09-03
+after being confirmed broken with no viable replacement) — fails `supports()`, and `ImageGeneratorService`
+throws a `UserConfigError`: *"This image provider is not yet available in the worker."*
+
+## End-to-end flow
+
+1. **Load node** — fetch the `flows_nodes` row by `nodeId`; read `data`.
+2. **Resolve `aiSystem`** — defaults to `openai` when unset (matching the back's own `newFormData.aiSystem`
+   default). If `ImageProviderService.supports(aiSystem)` is `false`, throw `UserConfigError`.
+3. **Build the prompt** — see [Prompt fields](#prompt-fields) below. An empty prompt throws `UserConfigError`.
+4. **Generate** — `ImageProviderService.generate()` with the resolved `aiSystem`, node data, prompt, the
+   activity's cancellation signal as `abortSignal`, and a `charge` closure bound to this node/flow/user.
+5. **Store** — the returned image (`base64`+`mimeType`, or a provider-hosted `sourceUrl`) is posted to
+   `POST /worker/store-image`, which returns the final `src` URL.
+6. **Charge** — `POST /worker/charge-tokens` (skipped here for `stabilityai`, which already charged itself in
+   step 4 — see [Billing timing](#billing-timing-per-provider)).
+7. **Append to `previewResponses`** — capped at the 10 most recent generations (FIFO), matching the front's
+   pre-migration behavior.
+8. **Persist** — `UPDATE flows_nodes` with `text` (the stored `src`), `previewResponses`/`previewIndex`,
+   `nodeUsedTokens` (always the latest call's token cost), and `usedTokens` (only set when the node is part of
+   a flow-trigger run, matching the front's original gate).
+9. **Return** — `{ text: src }`.
+
+## Prompt fields
+
+[`buildPrompt`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/build-prompt.ts) assembles the prompt from up to seven fields, each overridable by its edge-driven
+`<field>Data` array (joined with `" \n"` when present, no de-duplication — a verbatim port of the back's own
+`imageTypes.forEach` merge, not the shared `resolve-edge-data.ts` helper used elsewhere):
+
+```text
+prompt          -> "Prompt: <prompt>\n "
+style           -> "Style: <style>\n "   (only when style_present === "None")
+view            -> " View: <view>\n"
+subject         -> " Subject: <subject>\n"
+environment     -> " Environment: <environment>\n"
+tone            -> " Tone: <tone>\n"
+negativePrompt  -> (not concatenated into the merged string by buildPrompt/mergeText —
+                    consumed directly by individual providers instead, e.g. as negative_prompt)
+```
+
+The seven recognized fields are `prompt`, `subject`, `environment`, `tone`, `view`, `style`, and
+`negativePrompt`; `mergeText` only emits the first six into the assembled string (`negativePrompt` is read
+straight off `nodeData` by the providers that support it).
+
+## Provider systems and routing
+
+| `aiSystem` | Path | Model resolution | Notes |
+| ---------- | ---- | ------------------ | ----- |
+| `openai` | AI-SDK | Hardcoded `gpt-image-1` for both the API call and billing; `nodeData.aiModel` (fallback `gpt-image-1`) is only used for the **persisted** model string | Matches the back's real billing behavior — a node configured with `dall-e-3` is still billed under `gpt-image-1` |
+| `gemini` | AI-SDK | `nodeData.aiModel` (fallback to the literal string `gpt-image-1`, a ported legacy default that isn't a real Gemini id — not known to be hit by any real node) | Passes `aspectRatio` as a real `generateImage()` param, not appended to the prompt text |
+| `fal` | AI-SDK | `resolveImageModel(nodeData, "falModel", "pro")` — `aiModel` wins, then the legacy `falModel` field, then `"pro"` | Branches into `pro`/`schnell`/`dev`/default Flux families; `sync_mode` preserves a byte-identical string-vs-boolean comparison bug (`sync_mode === "false"`) found in real dev/staging rows |
+| `meta` | AI-SDK (via `buildFalSpec`) | Fixed to fal's `meta/muse-image/{text-to-image,edit}` models when `falModel === "muse"` | Meta's own catalog identity, executed through fal; image-to-image requires `nodeData.inputPreview` |
+| `stabilityai` | Direct HTTP | `resolveImageModel(nodeData, "engineId", "sd3")` | No longer calls Stability's own API at all — every mode (Text to Image, Sketch, Style, Enhance resolution) now proxies through fal's queue endpoints; unrecognized `type` throws `UserConfigError` |
+| `ideogram` | Direct HTTP | `resolveImageModel(nodeData, "ideogramModel", "ideogram-v3")` | Generate/remix proxy through fal's `fal-ai/ideogram/v3` queue endpoints; `'Expand Image'` throws `UserConfigError` (measured zero real usage before refusing it); the legacy direct-Ideogram upscale method is still implemented but unreachable from dispatch |
+
+`opensources` (Kandinsky) has no builder in either map and always hits the generic
+`ImageProviderService.supports()` refusal described above.
+
+Both direct-HTTP providers' fal calls are an async queue protocol: submit, then poll
+`GET <status_url>` every second (up to 120 attempts, ~2 minutes) until `status === "COMPLETED"`, then fetch
+`response_url`.
+
+## Billing timing per provider
+
+Charge timing is **not uniform** — it is part of this migration's byte-identical-port bar, since the back's
+pre-migration behavior already varied by provider:
+
+- **`stabilityai`** — every method (`runFalStableDiffusion`, `runFalSketch`, `runFalStyle`,
+  `runFalCreativeUpscale`) calls `ctx.charge(...)` **before** submitting the fal request. If generation then
+  fails, times out, or is cancelled, the charge already happened — nothing in the worker refunds it.
+- **`ideogram`** — `runGenerateImage`/`runRemixImage` call `ctx.charge(...)` only **after** a successful fal
+  response.
+- **`openai` / `gemini` / `fal` / `meta`** (the AI-SDK path) — `ImageGeneratorService` stores the image first
+  (`storeGeneratedImage`), then calls `chargeImageGeneration` once, uniformly, for all four — always **after**
+  a successful image.
+
+Every charge defaults to a flat **1** credit per generated image (`chargeImageGeneration`'s `usedTokens ??
+1`) unless a direct-HTTP provider resolves and passes its own value.
+
+## Cancellation
+
+Unlike [`textGeneratorActivity`](/worker/node/text-generator) and `apiCallerActivity`, `imageGeneratorActivity`
+is **not** wrapped in `runCancellableNode` — it has no graceful partial-output concept to save. Instead:
+
+- `ImageGeneratorService.process` reads the activity's own `Context.current().cancellationSignal` and passes
+  it straight into `ImageProviderService.generate()` as `request.abortSignal`.
+- **AI-SDK path** — the signal is forwarded to `generateImage({ ..., abortSignal })`. An abort is detected with
+  `isAbortError()` and **rethrown as-is**, bypassing `classifyAiSdkError` entirely (not wrapped into a
+  `ProviderError`).
+- **Direct-HTTP path** — the signal is threaded into every fal submit/status/result `fetch(url, { signal })`
+  call, into `fetchSourceImageBuffer`, and into the poll wait between attempts via
+  [`abortableSleep(ms, signal)`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/ai-provider/image/abortable-sleep.ts) — an abort during the wait rejects immediately instead of finishing the interval.
+- Either way, the resulting abort error propagates uncaught up to `runNodeActivity`, whose
+  `isRequestedCancellation()` check recognizes it (an `AbortError`/`CancelledFailure` while
+  `Context.current().cancellationSignal.aborted` is `true`) and rethrows it unwrapped, rather than turning it
+  into an `ApplicationFailure`.
+
+**The workflow's own cancellation type matters here.** `imageGeneratorActivity`'s Temporal proxy
+(`workflows/configs.ts`) uses only the `COMMON` retry policy — it does **not** set
+`ActivityCancellationType.WAIT_CANCELLATION_COMPLETED` the way `textGeneratorActivity`/`apiCallerActivity` do
+(their `INTERRUPTIBLE` preset). With the SDK's default `TRY_CANCEL`, `processSingleNode`'s
+`cancelScope.run(...)` for this node settles as cancelled as soon as the cancel signal is requested, **without
+waiting** for the activity to actually stop — the node is reported `CANCELLED` to the run while the activity
+keeps executing in the background until its own abort unwinds it. Because that unwind throws rather than
+returning a `CancelledNodeOutput`, `processSingleNode` reaches this case through its outer
+`catch (isCancellation(error))` branch (with `output: null`), not the `isCancelledNodeOutput` branch
+`runCancellableNode`-wrapped nodes use.
+
+`resolveCancelSettlement` only charges a cancelled node when its type is `TEXT_GENERATOR`, so cancelling an
+image-generator node never triggers an extra charge from the workflow's settlement path — but it also never
+**reverses** whatever the provider itself already charged, which is what makes `stabilityai`'s pre-charge
+(above) a real, unrefunded cost on a cancelled run.
+
+### Known limitation: fal queue jobs are not cancelled fal-side
+
+Every fal queue submission response includes a `cancel_url` for cancelling the job remotely. The worker never
+calls it — aborting stops the worker's own polling and HTTP wait, but the queued generation keeps running on
+fal's infrastructure until it finishes or fails on its own.
+
+## Timeouts
+
+```typescript
+export const { imageGeneratorActivity } =
+  proxyActivities<activities.ActivitiesService>({
+    ...COMMON, // retry: { maximumAttempts: 1 }
+    startToCloseTimeout: "5 minutes",
+    heartbeatTimeout: "30 seconds",
+  });
+```
+
+The activity is kept alive with a heartbeat every 15 seconds (`withKeepAliveHeartbeat`, half the 30-second
+`heartbeatTimeout`, matching Temporal's own guidance) regardless of provider.
+
+<Warning>
+The 5-minute `startToCloseTimeout` and 30-second `heartbeatTimeout` are a written placeholder, not a measured
+value — the source comment says so directly: *"Not a measured p95 ... Replace with a measured value before
+W5."* There is a single timeout shared by every provider; a per-provider timeout tuned against real production
+durations is still open work (a read-only measurement kit exists under
+`.specs/features/worker-flow-execution-epic/scripts/a5-image-timeouts/` to collect that data).
+</Warning>
+
+## Errors
+
+| Path | Classifier | Behavior |
+| ---- | ---------- | -------- |
+| AI-SDK (`openai`/`gemini`/`fal`/`meta`) | [`classifyAiSdkError`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/ai-provider/image/ai-sdk-error-classifier.ts) | `LoadAPIKeyError` or a 401/403 `APICallError` → `IntegrationError`; `NoImageGeneratedError` → retryable `ProviderError`; any other error → retryable `ProviderError` |
+| Direct HTTP (`stabilityai`/`ideogram`) | `classifyHttpError` exists but is **not invoked** anywhere in this dispatch path (confirmed in the migration's own docs — a pre-existing gap, not introduced by this task) | Raw `HttpStatusError`/`TimeoutError` from `http.ts` propagate uncaught and fall through to `runNodeActivity`'s generic `SystemError` fallback instead of a categorized error |
+| Unsupported/missing `aiSystem`, empty prompt, missing `inputPreview` for image-to-image modes | — | `UserConfigError` |
+| Cancellation | `isRequestedCancellation` | Rethrown unclassified (see [Cancellation](#cancellation)) |
+
+## Related documentation
+
+- [`processSingleNode` workflow](/worker/workflows/process-single-node)
+- [Cancel a run](/main-api/specific-features/cancel-a-run)
+- [Worker overview](/worker/overview)

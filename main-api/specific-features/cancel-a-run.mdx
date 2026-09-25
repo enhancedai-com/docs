@@ -159,12 +159,24 @@ Temporal worker or inline in the API.
   </Step>
 </Steps>
 
-Two activities are wrapped today:
+Two activities are wrapped in `runCancellableNode` today:
 
 | Node | Activity |
 |---|---|
 | Text generator | `textGeneratorActivity` |
 | API caller | `apiCallerActivity` |
+
+The image generator is also interruptible on the worker, but through a different mechanism.
+`imageGeneratorActivity` is **not** wrapped in `runCancellableNode` — it has no partial output worth saving.
+Instead it passes the activity's own `Context.current().cancellationSignal` straight into the shared
+image-provider layer's `generateImage()` call and into every fal/Ideogram/Stability HTTP request and poll
+wait; the resulting abort is rethrown unclassified rather than turned into a graceful
+`{ cancelled: true, ... }` result. Its Temporal proxy also defaults to `ActivityCancellationType.TRY_CANCEL`
+instead of the `WAIT_CANCELLATION_COMPLETED` preset the two activities above use, so the workflow reports the
+node `CANCELLED` as soon as the signal is requested, without waiting for the provider call to actually stop —
+and because it never reaches `TEXT_GENERATOR`'s settlement path, cancelling it neither charges nor refunds
+anything the provider itself already charged (a real cost for `stabilityai`, which charges before its call).
+See [Image generator → Cancellation](/worker/node/image-generator#cancellation) for the full mechanism.
 
 `NodeExecutionResult.status` is therefore `"COMPLETED" | "CANCELLED"`, and a cancelled step carries the
 message *"Step cancelled before it finished"*.
@@ -190,6 +202,16 @@ const TRANSPORT_ABORTABLE_NODE_TYPES = [
 Everything else reports `isStepInterruptible: false` and is only stopped at the next boundary. A
 cancelled inline node is persisted with `executionStatus: 'CANCELLED'`, `partialOutput: true`, and the
 tokens already charged for it.
+
+<Note>
+`imageGenerator` is still listed in `TRANSPORT_ABORTABLE_NODE_TYPES`, but that entry has no live effect
+today: `imageGenerator`'s flow dispatch is `'worker'`
+(`back/src/shared/node-dispatch/node-dispatch-registry.ts`), so it never runs through this inline path.
+`resolveStepInterruptible` checks `hasWorkflowId` first and returns `true` immediately whenever the
+in-flight node has one, without ever reaching `isTransportAbortable`. See
+[Image generator → Cancellation](/worker/node/image-generator#cancellation) for how it is actually
+interrupted, on the worker.
+</Note>
 
 ## What the API reports back
 
