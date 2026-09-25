@@ -132,8 +132,10 @@ straight off `nodeData` by the providers that support it).
 `ImageProviderService.supports()` refusal described above.
 
 Both direct-HTTP providers' fal calls are an async queue protocol: submit, then poll
-`GET <status_url>` every second (up to 120 attempts, ~2 minutes) until `status === "COMPLETED"`, then fetch
-`response_url`.
+`GET <status_url>` every second until `status === "COMPLETED"`, then fetch `response_url`. The poll runs
+against a wall-clock budget — 270s for `stabilityai` (kept under the activity's 5-minute ceiling, so the run
+still fails with a classified `TimeoutError`), 120s for `ideogram` — and the same budget is sent as
+`X-Fal-Request-Timeout` on submit, so fal never starts a request the worker has already given up on.
 
 ## Billing timing per provider
 
@@ -188,11 +190,11 @@ image-generator node never triggers an extra charge from the workflow's settleme
 **reverses** whatever the provider itself already charged, which is what makes `stabilityai`'s pre-charge
 (above) a real, unrefunded cost on a cancelled run.
 
-### Known limitation: fal queue jobs are not cancelled fal-side
+### fal queue jobs are cancelled fal-side
 
-Every fal queue submission response includes a `cancel_url` for cancelling the job remotely. The worker never
-calls it — aborting stops the worker's own polling and HTTP wait, but the queued generation keeps running on
-fal's infrastructure until it finishes or fails on its own.
+Every fal queue submission response includes a `cancel_url`. When the run is aborted, or the poll budget expires,
+the worker sends a best-effort `PUT <cancel_url>` (5s cap, errors ignored). A job still in fal's queue is removed;
+one already processing receives a cancellation signal and may still finish on fal's side.
 
 ## Timeouts
 
