@@ -3,9 +3,16 @@ title: "MCP Tokens"
 description: "Create, list, and revoke service tokens for MCP access."
 ---
 
-These endpoints let workspace owners manage **service tokens** (`mcp_…`) — the static bearer tokens used by CLI tools, n8n, Cursor, Codex, and OpenCode to authenticate against the MCP server.
+These endpoints let workspace members manage **service tokens** (`mcp_…`) — the static bearer tokens used by CLI tools, n8n, Cursor, Codex, and OpenCode to authenticate against the MCP server.
 
-All endpoints require a valid JWT (`Authorization: Bearer <jwt>`) and workspace owner role.
+All endpoints require a valid JWT (`Authorization: Bearer <jwt>`). The actual authorization requirement differs by endpoint — most only require **active membership** in the workspace, not the "owner" role the previous version of this page claimed:
+
+| Endpoint | Requirement |
+|----------|-------------|
+| List, Create | Active membership. A non-admin only sees/creates tokens they themselves created; an admin sees every token in the workspace. |
+| Revoke | Active membership **and** (ADMIN role **or** being the token's own creator). |
+| Get/update settings, Update scopes, Get audit history | ADMIN role in the workspace (the actual "owner" check, `assertWorkspaceOwner`). |
+| Add organization | The token's own owner (`grantedUserId` falling back to `createdByUserId`) **and** active membership in the target workspace. |
 
 ---
 
@@ -20,7 +27,7 @@ GET /workspaces/{workspaceId}/mcp-tokens
 Authorization: Bearer <jwt>
 ```
 
-Returns all active (non-revoked) tokens for the workspace. The raw token value is **never** returned in list responses — it is shown only once, at creation time.
+Returns all active (non-revoked) tokens for the workspace — every token for an admin caller, or only the tokens the caller themselves created for a non-admin caller. The raw token value is **never** returned in list responses — it is shown only once, at creation time.
 
 ### Response
 
@@ -34,10 +41,17 @@ Returns all active (non-revoked) tokens for the workspace. The raw token value i
       "kind": "service",
       "scopes": ["read"],
       "clientId": null,
+      "createdByUserId": "user-uuid-1",
+      "grantedUserId": null,
+      "ownerName": "Jane Doe",
       "authorizedBy": null,
       "createdAt": "2026-06-15T12:00:00.000Z",
       "lastUsedAt": "2026-06-17T08:30:00.000Z",
-      "revokedAt": null
+      "revokedAt": null,
+      "isOwner": true,
+      "organizations": [
+        { "workspaceId": "ws-uuid-1", "workspaceName": "Acme Corp", "scopes": ["read"] }
+      ]
     }
   ],
   "meta": { "total": 1 }
@@ -49,19 +63,24 @@ Returns all active (non-revoked) tokens for the workspace. The raw token value i
 | `id` | UUID | Token identifier. Use this to revoke. |
 | `name` | string | Display name given at creation. |
 | `kind` | `"service"` \| `"oauth"` | `service` = static token; `oauth` = issued via OAuth flow. |
-| `scopes` | string[] | Granted permissions. Phase 1: `["read"]` only. |
+| `scopes` | string[] | Scopes for this workspace's binding. `read`, `write`, and `execute` are all possible — see the [Create token](#create-token) scopes note. |
 | `clientId` | string \| null | OAuth client ID; `null` for service tokens. |
-| `authorizedBy` | string \| null | User who granted consent (OAuth tokens only). |
+| `createdByUserId` | UUID | User who created the token. |
+| `grantedUserId` | UUID \| null | For an OAuth token, the user who granted consent; `null` for a service token. |
+| `ownerName` | string \| null | Display name of the token's creator. |
+| `authorizedBy` | string \| null | Same as `ownerName`, but only populated for `kind: "oauth"` tokens (`null` for service tokens). |
 | `createdAt` | ISO 8601 | Creation timestamp. |
 | `lastUsedAt` | ISO 8601 \| null | Last time the token was used by the MCP server. |
 | `revokedAt` | ISO 8601 \| null | Revocation timestamp; `null` if still active. |
+| `isOwner` | boolean | Whether the caller is this token's owner (`grantedUserId` falling back to `createdByUserId`). Controls whether `organizations` is populated. |
+| `organizations` | array | Every other active workspace binding for this token, each `{ workspaceId, workspaceName, scopes }`. Empty unless `isOwner` is `true`. |
 
 ### Errors
 
 | Status | Reason |
 |--------|--------|
 | 401 | Missing or invalid JWT. |
-| 403 | Authenticated user is not a workspace owner. |
+| 403 | Authenticated user is not an active member of the workspace. |
 
 ---
 
@@ -89,7 +108,11 @@ Content-Type: application/json
 | Field | Type | Required | Constraints |
 |-------|------|----------|-------------|
 | `name` | string | Yes | 1–120 characters. |
-| `scopes` | string[] | Yes | Phase 1: must be `["read"]`. |
+| `scopes` | string[] | Yes | Non-empty array from `read`, `write`, `execute`. All three pass request validation — there is no 400 for requesting `write`/`execute`. |
+
+<Note>
+Requesting `write`/`execute` is not rejected, but it is **silently clamped** to `["read"]` unless the caller is a workspace ADMIN, or the workspace has `nonAdminPrivilegedScopesEnabled` turned on (see [Get/update settings](#get-update-settings) below). The response always reflects the effective (post-clamp) scopes, not the requested ones.
+</Note>
 
 ### Response `201 Created`
 
@@ -101,8 +124,15 @@ Content-Type: application/json
     "name": "CI pipeline",
     "kind": "service",
     "scopes": ["read"],
+    "clientId": null,
+    "createdByUserId": "user-uuid-1",
+    "grantedUserId": null,
+    "ownerName": "Jane Doe",
+    "authorizedBy": null,
     "token": "mcp_abc123xyz...",
-    "createdAt": "2026-06-17T10:00:00.000Z"
+    "createdAt": "2026-06-17T10:00:00.000Z",
+    "lastUsedAt": null,
+    "revokedAt": null
   }
 }
 ```
@@ -115,9 +145,9 @@ Content-Type: application/json
 
 | Status | Reason |
 |--------|--------|
-| 400 | Validation failed (`name` empty, `scopes` invalid or empty). |
+| 400 | Validation failed (`name` empty or over 120 characters, `scopes` empty or containing a value outside `read`/`write`/`execute`). |
 | 401 | Missing or invalid JWT. |
-| 403 | Authenticated user is not a workspace owner. |
+| 403 | Authenticated user is not an active member of the workspace. |
 
 ---
 
@@ -135,7 +165,7 @@ DELETE /workspaces/{workspaceId}/mcp-tokens/{tokenId}
 Authorization: Bearer <jwt>
 ```
 
-Sets `revokedAt` on the token. The MCP server honours revocation within its token cache TTL (default 30 seconds).
+Sets `revokedAt` on the token. The MCP server honours revocation within its token cache TTL (default 30 seconds). Requires active membership, and either the ADMIN role or being the token's own creator — a non-admin cannot revoke a token they did not create, even one owned by a teammate.
 
 ### Response `200 OK`
 
@@ -148,5 +178,179 @@ Sets `revokedAt` on the token. The MCP server honours revocation within its toke
 | Status | Reason |
 |--------|--------|
 | 401 | Missing or invalid JWT. |
-| 403 | Authenticated user is not a workspace owner. |
+| 403 | Not an active member of the workspace; or an active member but neither ADMIN nor the token's creator. |
 | 404 | Token not found or does not belong to this workspace. |
+
+---
+
+## Get/update settings
+
+Reads or updates the workspace's MCP token flags. ADMIN role required (`assertWorkspaceOwner`).
+
+```http
+GET /workspaces/{workspaceId}/mcp-tokens/settings
+PATCH /workspaces/{workspaceId}/mcp-tokens/settings
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+### `PATCH` request body
+
+```json
+{
+  "writesEnabled": true,
+  "executeEnabled": false,
+  "nonAdminPrivilegedScopesEnabled": false
+}
+```
+
+All three fields are optional booleans; omitted fields are left unchanged.
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "writesEnabled": true,
+    "executeEnabled": false,
+    "nonAdminPrivilegedScopesEnabled": false
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `writesEnabled` | boolean | Whether write-scope MCP tools are enabled for this workspace. |
+| `executeEnabled` | boolean | Whether execute-scope MCP tools are enabled for this workspace. |
+| `nonAdminPrivilegedScopesEnabled` | boolean | When `true`, non-admin members can create/receive `write`/`execute`-scoped tokens without those scopes being clamped down to `read`. |
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 401 | Missing or invalid JWT. |
+| 403 | Authenticated user is not an ADMIN of the workspace. |
+
+---
+
+## Update token scopes
+
+Replaces a token's scopes for this workspace binding. ADMIN role required — this is the one token-management endpoint that genuinely matches an "owner-only" description.
+
+```http
+PATCH /workspaces/{workspaceId}/mcp-tokens/{tokenId}/scopes
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+### Request body
+
+```json
+{ "scopes": ["read", "write"] }
+```
+
+`scopes` must be a non-empty array from `read`/`write`/`execute`. Note this endpoint does **not** clamp by role the way Create/Add organization do — the caller is already required to be ADMIN.
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000001",
+    "name": "CI pipeline",
+    "kind": "service",
+    "scopes": ["read", "write"],
+    "clientId": null,
+    "createdByUserId": "user-uuid-1",
+    "grantedUserId": null,
+    "ownerName": "Jane Doe",
+    "authorizedBy": null,
+    "createdAt": "2026-06-15T12:00:00.000Z",
+    "lastUsedAt": "2026-06-17T08:30:00.000Z",
+    "revokedAt": null
+  }
+}
+```
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 400 | `scopes` empty or containing an invalid value. |
+| 401 | Missing or invalid JWT. |
+| 403 | Authenticated user is not an ADMIN of the workspace. |
+| 404 | Token not found, or found but already revoked (`token_already_revoked`). |
+
+---
+
+## Get token audit history
+
+Returns the scope-grant audit trail for one token in this workspace — every `created`, `scopes_changed`, and `revoked` event. ADMIN role required.
+
+```http
+GET /workspaces/{workspaceId}/mcp-tokens/{tokenId}/audit
+Authorization: Bearer <jwt>
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "audit-uuid-1",
+      "tokenId": "aaaaaaaa-0000-0000-0000-000000000001",
+      "action": "scopes_changed",
+      "actorUserId": "user-uuid-1",
+      "fromScopes": ["read"],
+      "toScopes": ["read", "write"],
+      "createdAt": "2026-06-17T10:05:00.000Z"
+    }
+  ],
+  "meta": { "total": 1 }
+}
+```
+
+Limited to the 50 most recent entries.
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 401 | Missing or invalid JWT. |
+| 403 | Authenticated user is not an ADMIN of the workspace. |
+| 404 | Token not found, or not bound to this workspace. |
+
+---
+
+## Add organization
+
+Adds an active workspace binding to a token the caller already owns, so the same token can be used across more than one workspace. Requires the caller to be the token's owner (`grantedUserId` falling back to `createdByUserId`) and an active member of the target workspace.
+
+```http
+POST /workspaces/{workspaceId}/mcp-tokens/{tokenId}/organizations/{targetWorkspaceId}
+Authorization: Bearer <jwt>
+```
+
+`workspaceId` in the path is unused by this handler — the token's existing bindings and the target come from `tokenId`/`targetWorkspaceId`. Scopes for the new binding are the caller's effective scopes in `targetWorkspaceId` (clamped by role the same way Create token is). Calling this again for a binding that already exists and is active returns that binding's current scopes without change.
+
+### Response `201 Created`
+
+```json
+{
+  "status": "success",
+  "data": { "workspaceId": "ws-uuid-2", "scopes": ["read"] }
+}
+```
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 401 | Missing or invalid JWT. |
+| 403 | Caller is not this token's owner, or not an active member of `targetWorkspaceId`. |
+| 404 | Token not found. |
+| 409 | Token already revoked (`token_already_revoked`). |

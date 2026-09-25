@@ -68,41 +68,90 @@ Content-Type: application/json
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `workspaceId` | UUID | Yes | Workspace the user is granting access to. |
-| `scopes` | string[] | Yes | Scopes being granted. Phase 1: `["read"]`. |
+| `workspaceId` | UUID | One of `workspaceId`/`workspaceIds` | Single workspace the user is granting access to. |
+| `workspaceIds` | UUID[] | One of `workspaceId`/`workspaceIds` | Grant access to several workspaces in one consent. Takes precedence over `workspaceId` when both are sent. |
+| `scopes` | string[] | Yes | Scopes being requested, from `read`/`write`/`execute`. Per-workspace, non-admin requests for `write`/`execute` are silently downgraded to `["read"]` unless the workspace has `nonAdminPrivilegedScopesEnabled`. |
 | `clientId` | string | Yes | OAuth client ID from the authorization request. |
 | `nonce` | string | Yes | The `request_id` from the `/oauth/authorize` flow, used to bind consent to the original request. |
+
+At least one of `workspaceId` or `workspaceIds` is required; the request fails otherwise.
 
 ### Response
 
 ```json
 {
-  "assertion": "<signed-hs256-jwt>"
+  "status": "success",
+  "data": {
+    "assertion": "<signed-hs256-jwt>",
+    "expiresInSeconds": 300,
+    "scopes": ["read"],
+    "workspaces": [{ "workspaceId": "ws-uuid-1", "scopes": ["read"] }]
+  }
 }
 ```
 
-The `assertion` is a short-lived signed JWT that the consent page posts back to the MCP server's `/oauth/consent-callback` to complete the flow. It is not a user-facing token.
+| Field | Type | Description |
+|-------|------|-------------|
+| `assertion` | string | Short-lived signed HS256 JWT that the consent page posts back to the MCP server's `/oauth/consent-callback` to complete the flow. Not a user-facing token. |
+| `expiresInSeconds` | number | The assertion's lifetime (5 minutes). |
+| `scopes` | string[] | The effective (possibly clamped) scopes for the first granted workspace. |
+| `workspaces` | array | Effective scopes per granted workspace, each `{ workspaceId, scopes }` — one entry per id in `workspaceId`/`workspaceIds`. |
 
 ### Errors
 
 | Status | Reason |
 |--------|--------|
-| 400 | Missing or invalid fields. |
+| 400 | Missing or invalid fields, or neither `workspaceId` nor `workspaceIds` was provided. |
 | 401 | Missing or invalid JWT. |
-| 403 | User does not have sufficient role in the workspace (`read` requires any active member; `write`/`execute` require ADMIN — Phase 2). |
+| 403 | User is not an active member of a requested workspace. Requesting `write`/`execute` as a non-admin is **not** a 403 — it is silently clamped to `["read"]` in the response. |
+
+---
+
+## Prior grant
+
+Returns the scopes a user previously granted a given client for a given workspace, so the consent page can pre-select them (or skip consent for an unchanged request).
+
+```http
+GET /mcp/v1/oauth/prior-grant?workspaceId={ws}&clientId={id}
+Authorization: Bearer <jwt>
+```
+
+| Query param | Type | Required | Description |
+|-------------|------|----------|-------------|
+| `workspaceId` | UUID | Yes | Workspace to check. |
+| `clientId` | string | Yes | OAuth client ID from the authorization request. |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": { "scopes": ["read"] }
+}
+```
+
+`scopes` is `null` when the user has never granted this client access to this workspace.
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 400 | Missing or invalid query params. |
+| 401 | Missing or invalid JWT. |
+| 403 | User is not an active member of `workspaceId`. |
 
 ---
 
 ## How this fits into the full OAuth flow
 
 ```
-1. AI client → GET /.well-known/oauth-authorization-server   (mcp-server)
-2. AI client → POST /oauth/register                          (mcp-server DCR)
-3. AI client → GET /oauth/authorize                          (mcp-server → redirects to consent page)
-4. Consent page → GET /mcp/v1/oauth/workspaces               (back — this API)
-5. User approves → POST /mcp/v1/oauth/consent                (back — this API)
-6. Consent page → POST /oauth/consent-callback + assertion   (mcp-server)
-7. mcp-server → POST /oauth/token                            (mcp-server)
+1. AI client → GET /.well-known/oauth-authorization-server        (mcp-server)
+2. AI client → POST /oauth/register                               (mcp-server DCR)
+3. AI client → GET /oauth/authorize                                (mcp-server → redirects to consent page)
+4. Consent page → GET /mcp/v1/oauth/workspaces                     (back — this API)
+5. User approves → POST /mcp/v1/oauth/consent                      (back — this API)
+6. Consent page → GET /oauth/consent-callback?request_id=&assertion=&decision=approve   (mcp-server)
+7. mcp-server → POST /oauth/token                                  (mcp-server)
 8. AI client receives access token (mcp_oauth_…)
 ```
 
