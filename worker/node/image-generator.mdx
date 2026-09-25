@@ -23,8 +23,9 @@ through `/worker/charge-tokens`, and persists the outcome on the node row.
 `imageGeneratorActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node)
 workflow's default node-type dispatch (`resolveNodeActivity(node.type)` maps `NodeType.IMAGE_GENERATOR` to
 `imageGeneratorActivity`) — unlike the text generator, it does not go through a dedicated `switch` case, and
-the workflow does not call `validateModelAccessActivity` for it. The only access check is the activity's own
-aiSystem-support check (see below).
+the workflow does not call `validateModelAccessActivity` for it. Before the provider call, the only check is the
+activity's own aiSystem-support check (see below); the user's plan is only checked afterwards, when
+`/worker/charge-tokens` resolves the billing product.
 
 ## Activity signature
 
@@ -76,7 +77,8 @@ throws a `UserConfigError`: *"This image provider is not yet available in the wo
 
 ## End-to-end flow
 
-1. **Load node** — fetch the `flows_nodes` row by `nodeId`; read `data`.
+1. **Load node** — `fetchNodeRow` reads the run's `node_executions` row by `execId` + `nodeId` (falling back to
+   `flows_nodes` only when there is no `execId`); read `data`.
 2. **Resolve `aiSystem`** — defaults to `openai` when unset (matching the back's own `newFormData.aiSystem`
    default). If `ImageProviderService.supports(aiSystem)` is `false`, throw `UserConfigError`.
 3. **Build the prompt** — see [Prompt fields](#prompt-fields) below. An empty prompt throws `UserConfigError`.
@@ -88,7 +90,8 @@ throws a `UserConfigError`: *"This image provider is not yet available in the wo
    step 4 — see [Billing timing](#billing-timing-per-provider)).
 7. **Append to `previewResponses`** — capped at the 10 most recent generations (FIFO), matching the front's
    pre-migration behavior.
-8. **Persist** — `UPDATE flows_nodes` with `text` (the stored `src`), `previewResponses`/`previewIndex`,
+8. **Persist** — `persistNodeSuccess` writes the run's `node_executions."outputData"` (skipped once the step has
+   a `cancelledAt`) and the live `flows_nodes` output with `text` (the stored `src`), `previewResponses`/`previewIndex`,
    `nodeUsedTokens` (always the latest call's token cost), and `usedTokens` (only set when the node is part of
    a flow-trigger run, matching the front's original gate).
 9. **Return** — `{ text: src }`.
@@ -146,8 +149,10 @@ pre-migration behavior already varied by provider:
   (`storeGeneratedImage`), then calls `chargeImageGeneration` once, uniformly, for all four — always **after**
   a successful image.
 
-Every charge defaults to a flat **1** credit per generated image (`chargeImageGeneration`'s `usedTokens ??
-1`) unless a direct-HTTP provider resolves and passes its own value.
+Every charge sends `usedTokens: 1` per generated image (`chargeImageGeneration`'s `usedTokens ?? 1`) unless a
+direct-HTTP provider resolves and passes its own value. That is a count of images, not credits: the back converts
+it through the model's `model_price` row, and a missing price row
+fails the charge.
 
 ## Cancellation
 
