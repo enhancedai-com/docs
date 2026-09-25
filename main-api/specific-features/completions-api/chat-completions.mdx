@@ -37,10 +37,10 @@ Optional parameters that the underlying provider doesn't support are accepted an
 </Note>
 
 <Warning>
-**Payload limits.** Extra provider params are capped at **256,000 characters**, and the
-**total request** (messages + params) must stay under **~1.5 MB** — requests above that
-return `400 payload_too_large`. Credentials/transport keys (e.g. `api_key`, `base_url`,
-`headers`) are stripped for security and never forwarded.
+**Payload limits.** Extra provider params are capped at **256,000 characters** — requests above
+that return `400 passthrough_too_large`. The **total request** (messages + params) must also stay
+under **~1.5 MB** — requests above that return `400 payload_too_large`. Credentials/transport keys
+(e.g. `api_key`, `base_url`, `headers`) are stripped for security and never forwarded.
 </Warning>
 
 ### Advanced provider parameters

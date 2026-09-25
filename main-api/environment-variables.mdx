@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-205 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+206 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 ## Database
 
@@ -32,6 +32,7 @@ title: "Environment Variables"
 | TEMPORAL_TASK_QUEUE | Required | Temporal task queue name |
 | AGENT_CONCURRENCY | Optional | how many `POST /flux/api-v2` flow executions run at the same time (default 5) |
 | AGENT_WAIT_TIMEOUT_MS | Optional | ms a `POST /flux/api-v2` call without `callback_url` waits for the result before answering `202` with the `statusUrl` (default 30000) |
+| AGENT_JOB_TIMEOUT_MS | Optional | Bull job timeout for `POST /flux/api-v2` queue jobs (default 600000) |
 
 ## Auth / OAuth / Integrations
 
@@ -52,9 +53,12 @@ title: "Environment Variables"
 | MICROSOFT_REDIRECT_URI | Required | Microsoft OAuth redirect |
 | MICROSOFT_SCOPES | Required | Microsoft OAuth scopes |
 | MICROSOFT_TENANT_ID | Required | Microsoft tenant |
+| SLACK_APP_DOCS_URL | Optional | docs link shown in Slack app messages (default `https://docs.fluxprompt.ai`) |
+| SLACK_APP_SUPPORT_URL | Optional | support link shown in Slack app messages (default `https://enhanced.ai/contact`) |
 | SLACK_CLIENT_ID | Required | Slack integration |
 | SLACK_CLIENT_SECRET | Required | Slack integration |
 | SLACK_SCOPES | Required | Slack scopes |
+| SLACK_SIGNING_SECRET | Required | verifies incoming Slack event webhook signatures |
 | NOTION_CLIENT_ID | Required | Notion integration |
 | NOTION_CLIENT_SECRET | Required | Notion integration |
 | HUBSPOT_CLIENT_ID | Required | HubSpot integration |
@@ -71,9 +75,10 @@ title: "Environment Variables"
 | FRONTEND_OAUTH_CALLBACK_BASE | Required | callback base for Zapier/WordPress/MCP |
 | INTEGRATIONS_ENCRYPTION_KEY | Required | encrypts stored integration credentials — must match `worker`'s value |
 | INTERNAL_API_KEY | Required | internal service-to-service calls |
-| MASTER_KEY_IP_ALLOWLIST | Optional | IP allowlist for master API key |
-| MASTER_KEY_OWNER_EMAIL | Required | master API key owner email |
+| MASTER_KEY_IP_ALLOWLIST | Optional | IP allowlist for master API key (not in `.env.example`, read directly from `process.env`) |
+| MASTER_KEY_OWNER_EMAIL | Optional | master API key owner email (default `brad@enhanced.ai`; not in `.env.example`, read directly from `process.env`) |
 | MASTER_KEY_RATE_LIMIT_PER_MIN | Optional | master-key rate limit, Redis-backed and counted per key (default 600); always enforced regardless of `RATE_LIMIT_MODE` and exempt from the general/specific invariant below |
+| MCP_IDEMPOTENCY_KEY_PURGE_BATCH_SIZE | Optional | batch size for MCP idempotency key purge cron (default 500) |
 | MCP_INTERNAL_SECRET | Required | internal guard for MCP calls — must match `mcp-server`'s value |
 | MCP_OAUTH_CONSENT_SECRET | Required | MCP OAuth consent signing — must match `mcp-server`'s value |
 | MCP_RESOURCE_METADATA_URL | Required | MCP resource metadata URL |
@@ -190,10 +195,21 @@ title: "Environment Variables"
 | NODE_EXEC_MAX_PER_NODE | Optional | max kept executions per node |
 | NODE_EXEC_SLIM_AFTER_DAYS | Optional | days until execution "slimming" |
 | ZAPIER_WEBHOOK_RETENTION_HOURS | Optional | hours a Zapier webhook payload stays in Postgres before the purge cron archives it to S3 |
+| AI_GATEWAY_SYNC_ENABLED | Optional | kill switch for the nightly AI model gateway sync cron; `false` disables it (default enabled) |
+| AI_GATEWAY_SYNC_DRY_RUN | Optional | run the AI model gateway sync without writing any changes (default false) |
+| AI_GATEWAY_SYNC_DEPRECATE | Optional | let the AI model gateway sync deprecate stale models; `false` disables it (default true) |
+| AI_GATEWAY_SYNC_REMAP_FLOWS | Optional | let the AI model gateway sync remap flows off deprecated models; `false` disables it (default true) |
+| AI_GATEWAY_MIN_CATALOG_SIZE | Optional | sanity floor — abort the gateway sync if the provider catalogue returns fewer models than this (default 100) |
+| AI_GATEWAY_PRICE_CHANGE_ALERT_RATIO | Optional | price multiple that flags a model's price change for manual review during gateway sync (default 5) |
+| AI_GATEWAY_DEPRECATE_AFTER_MISSING_RUNS | Optional | consecutive sync runs a model must be missing from the gateway catalogue before it's deprecated (default 2) |
+| AI_MODEL_SYNC_CHAT_WEBHOOK_URL | Optional | chat webhook the AI model sync posts its nightly summary to; logs instead when unset |
+| AI_MODEL_SYNC_REVIEW_URL | Optional | link included in the sync summary to review pending model proposals (default `/admin/ai-model-proposals`) |
+| FLUX_DEFAULT_CASCADE_SIZE | Optional | default max sub-flow cascade size (root + nested) when a flow doesn't set its own override (default 5) |
 | FLUX_MAX_NODE_ITERATIONS | Optional | system ceiling on how many times one node may loop, whatever its `loopBehavior` (default 150) |
 | FLUX_MAX_ARRAY_ITEMS | Optional | system ceiling on how many items an `arrayNode` iterates in one execution (default 12000) |
 | FLUX_MAX_RUN_NODE_EXECUTIONS | Optional | node executions a single run may spend before it terminates (default 50000) |
 | FLUX_MAX_CHAIN_NODE_EXECUTIONS | Optional | node executions a whole sub-flow chain may spend, which nesting cannot reset (default 200000) |
+| RUN_MAX_DURATION_MS | Optional | ceiling on how long a flow run may run before it's treated as stale (default 21600000) |
 | RATE_LIMIT_MODE | Optional | rate limiter mode: `report` (default) decides and logs but refuses nothing; `enforce` actually rejects |
 | RATE_LIMIT_GENERAL_PER_MINUTE | Optional | per-minute limit every route falls back to when it has no override (default 400) |
 | RATE_LIMIT_GENERAL_PER_HOUR | Optional | per-hour limit every route falls back to when it has no override (default 4000) |
