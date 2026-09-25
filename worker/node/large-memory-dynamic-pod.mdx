@@ -21,26 +21,21 @@ The flow's Large Memory node now reads that variable and queries the right pod f
 
 ## The `podIdData` input
 
-The node has a `podIdData` input slot with the **same shape as `queryData`** — connect any upstream output that produces a UUID-shaped value (or a `{{var}}` placeholder that resolves to one).
+The node has a `podIdData` input slot with the **same shape as `queryData`** (both are `EdgeDataItem[]`, `{ id, text, label }`) — connect any upstream output that produces a UUID-shaped value.
 
 ### Resolution rules
 
-`resolveDynamicPodId` is the helper that computes the final pod id at execution time:
+The worker's `LargeMemoryService.resolvePod` (private method, `large-memory.service.ts:74-105`) computes the final pod at execution time:
 
 <Steps>
   <Step title="Collect connected items">
-    The helper joins every item connected to `podIdData` and trims whitespace. Multiple items are concatenated in order.
+    `resolveEdgeData(data.podIdData, undefined)` dedupes the connected `podIdData` items by `id`, filters out empty `text` values, and joins the rest with no separator, in order. There is no `{{var}}` placeholder substitution anywhere in this path — it's a plain edge-array text join, the same helper other worker nodes use for edge-driven fields.
   </Step>
-  <Step title="Resolve placeholders">
-    Any `{{var}}` placeholders are substituted against `mutatedSchema` (the live variable map for the run).
+  <Step title="Dynamic id present">
+    If the joined value is a non-empty string, the worker queries the `namespace` table directly by SQL: `SELECT id, "podName" FROM namespace WHERE id = $1 AND "deletedAt" IS NULL LIMIT 1`. A match is used as the pod for this execution only. **No match** throws — see [Error case](#error-case) — the node does **not** fall back to the manually selected pod once a dynamic id was supplied but not found.
   </Step>
-  <Step title="Decide which pod wins">
-    - If the resolved value is a non-empty string, it's used as the pod id for this execution only.
-    - If the placeholder is **unresolved** (the variable doesn't exist), it's treated as "no value provided" — the node falls back to the manually selected pod (`node.data.nameSpace`).
-    - If `podIdData` has no upstream connection at all, the node uses the manually selected pod.
-  </Step>
-  <Step title="Verify the pod exists">
-    The handler calls `Namespace.findOne` with the resolved id. If no pod matches, it throws `BadRequestException` naming the pod id so debugging is easy.
+  <Step title="No dynamic id">
+    If `podIdData` has no upstream connection (or every connected item is empty), the joined value is `""` and the node falls back to the manually selected pod (`data.nameSpace`, `{ id, name }`). If that's also unset, it throws a `UserConfigError` ("Configure a Large Memory pod before running this node.").
   </Step>
 </Steps>
 
@@ -98,10 +93,10 @@ The typical integration looks like this:
 
 ## Error case
 
-If the resolved pod id does not exist (or the caller can't see it), the node throws:
+If the resolved pod id does not exist (or has been soft-deleted), `resolvePod` throws a `UserConfigError` (field `podIdData`):
 
 ```
-BadRequestException: Memory pod with id <podId> not found
+userMessage: "Large Memory pod not found (id: <podId>)."
 ```
 
 The id is included in the message so the upstream variable can be traced quickly.
@@ -114,9 +109,9 @@ The id is included in the message so the upstream variable can be traced quickly
 
 ## Where to read the code
 
-- `back/src/app-api/flux/nodes/large-memory/handler.ts` — the node handler invoking the resolver
-- `back/src/app-api/flux/nodes/large-memory/resolve-dynamic-pod-id.ts` — the resolver
-- `back/src/app-api/flux/nodes/large-memory/resolve-dynamic-pod-id.spec.ts` — covers missing input, non-array input, literal values, schema resolution, unresolved placeholder fallback, multi-item joins, and non-UUID schema values
+- `worker/src/modules/nodes/large-memory/large-memory.service.ts` — `LargeMemoryService.process`/`resolvePod`, the code that actually runs this node today
+- `worker/src/modules/nodes/large-memory/large-memory.types.ts` — `LargeMemoryNodeData`, `LargeMemoryNamespaceRef`
+- `worker/src/modules/nodes/large-memory/large-memory.service.spec.ts` — covers the dynamic-id and static-fallback paths
 
 Refs commit `663f20e5` and ClickUp task `868jm7ja9`.
 

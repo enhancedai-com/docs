@@ -71,7 +71,7 @@ Returns `InputSize | undefined`:
     A `ResizeObserver` watches for size changes, updates local state immediately, and debounces auto-save by 500ms. It only saves if dimensions actually changed.
   </Step>
   <Step title="Auto-save">
-    After the debounce period, if the size changed, it calls `nodeDataAutoSaveDynamic` to persist the new dimensions.
+    After the debounce period, if the size changed, it calls `nodeDataAutoSaveDynamic` to persist the new dimensions. Two additional gates must also pass: the flow canvas must be in the `ready` phase (`flowCanvasPhase !== 'ready'` skips the save), and a `canPersistSize` window that resets to `false` for 1600ms after a node/flow-load/collapse change must have elapsed — so the 500ms debounce is not the only thing standing between a resize and a save.
   </Step>
   <Step title="Cleanup">
     Properly disconnects observers and clears timeouts on unmount or when dependencies change.

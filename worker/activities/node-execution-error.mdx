@@ -5,110 +5,84 @@ description: "Updates node data with execution error information"
 
 ## Overview
 
-The `nodeExecutionErrorActivity` updates the node's data in the database with execution status information when an error occurs. This ensures that node state reflects the execution failure.
+<Warning>
+`nodeExecutionErrorActivity` is currently a **complete no-op**: `async nodeExecutionErrorActivity(_props) { return; }` (`activities.service.ts:387-391`). It is still called from the workflow's error path, with a real props shape, but it does nothing when it runs — no query, no update. This page documents the prop shape it's still typed to receive and the call site that still invokes it, for whenever it gets a real implementation.
+</Warning>
 
-## Purpose
+## Purpose (as typed, not as implemented)
 
-- Update node state with error information
-- Persist execution status in node data
-- Enable error recovery and retry logic
-- Maintain node state consistency
+The activity's real props (`NodeExecutionErrorActivityProps`) suggest it was meant to persist a failed node's error status, but as shipped it has no effect — the node-state update that actually happens on failure is done by [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs)'s `isError` branch, which runs immediately before this activity in the workflow's error path (it updates both `node_executions` and `flows_nodes.data`).
 
 ## When it's executed
 
-This activity is called during error handling:
+This activity is called during error handling, in `process-single-node.workflow.ts`'s catch block:
 
 1. **On workflow failure**: When an error occurs during node execution
-2. **After error logging**: Typically called after logging the error
-3. **Before status notification**: Executes before notifying users of the failure
+2. **After error logging**: Called after `generateExecutionLogsActivity` (which does the real persistence)
+3. **Before status notification**: Executes before `notifyStatusActivity` notifies of the failure
 
 ## Signature
 
 ```typescript
 async nodeExecutionErrorActivity({
   nodeId: string,
-  nodeData: any,
-  executionStatus: string
+  flowId: string,
+  flowVersionHistoryId: string | null,
+  executionStatus: "FAILED",
+  errorMessage: string,
+  userMessage: string,
 }): Promise<void>
 ```
+
+There is no `nodeData` field — that was never part of the real prop shape.
 
 ## Inputs
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `nodeId` | `string` | ID of the node that encountered an error |
-| `nodeData` | `any` | Current node data object to update |
-| `executionStatus` | `string` | Execution status string (typically `"FAILED"`) |
+| `flowId` | `string` | ID of the flow containing the node |
+| `flowVersionHistoryId` | `string \| null` | Version history id for the flow |
+| `executionStatus` | `"FAILED"` | Execution status literal — no other value is valid on this type |
+| `errorMessage` | `string` | Dev-facing error message (the caller passes the same `detail.devMessage` also sent to `generateExecutionLogsActivity`) |
+| `userMessage` | `string` | User-facing error message |
 
 ## Outputs
 
-Returns `void`. The activity completes when the node data is successfully updated.
+Returns `void` immediately — the function body is `return;`. No database call is made.
 
 ## Implementation details
 
-The activity updates the `flows_nodes` table, merging the execution status into the node's data JSON field:
-
-```sql
-UPDATE flows_nodes 
-SET data = $1::jsonb 
-WHERE node_id = $2
+```typescript
+async nodeExecutionErrorActivity(_props: NodeExecutionErrorActivityProps): Promise<void> {
+  return;
+}
 ```
-
-The update merges the `executionStatus` into the existing `nodeData` object, preserving other node configuration while adding the error status.
 
 ## Example usage in workflow
 
 ```typescript
-// In error handling block
+// In process-single-node.workflow.ts's catch block, after generateExecutionLogsActivity
 await nodeExecutionErrorActivity({
   nodeId,
-  nodeData: node.data,
-  executionStatus: 'FAILED',
+  flowId,
+  flowVersionHistoryId,
+  executionStatus: "FAILED",
+  errorMessage: detail.devMessage,
+  userMessage: detail.userMessage,
 });
 ```
-
-## Execution status values
-
-| Status | Description | When used |
-|--------|-------------|-----------|
-| `FAILED` | Node execution failed | When an error occurs during execution |
-| `PENDING` | Node execution pending | Not typically used by this activity |
-| `COMPLETED` | Node execution completed | Not typically used by this activity |
-
-## Data structure
-
-The activity merges the execution status into the node data:
-
-```typescript
-const data = {
-  ...nodeData,
-  executionStatus,
-};
-```
-
-This preserves all existing node configuration while adding the execution status field.
-
-## Error handling
-
-The activity may throw an error if:
-
-- Database connection fails
-- The update query fails
-- The node ID doesn't exist
-- JSON serialization fails
-
-Errors in this activity are typically caught and logged, but don't prevent the workflow from completing its error handling sequence.
 
 ## Integration with error flow
 
 This activity is part of the error handling sequence:
 
 <Steps>
-  <Step title="Log error">
-    [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs) creates an error log entry
+  <Step title="Log error and update node state">
+    [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs) creates the error log entry **and** updates `node_executions`/`flows_nodes.data` with the failure — this is where the real node-state update actually happens today.
   </Step>
-  <Step title="Update node data">
-    `nodeExecutionErrorActivity` updates the node with error status
+  <Step title="No-op">
+    `nodeExecutionErrorActivity` runs but does nothing.
   </Step>
   <Step title="Notify user">
     [`notifyStatusActivity`](/worker/activities/notify-status) sends failure notification

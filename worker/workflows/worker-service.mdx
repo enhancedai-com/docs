@@ -100,31 +100,50 @@ The worker limits concurrent execution to prevent resource exhaustion:
 
 | Setting | Value | Description |
 |---------|-------|-------------|
-| `maxConcurrentWorkflowTaskExecutions` | 10 | Maximum workflow tasks processed simultaneously |
-| `maxConcurrentActivityTaskExecutions` | 5 | Maximum activity tasks processed simultaneously |
+| `maxConcurrentWorkflowTaskExecutions` | 20 | Maximum workflow tasks processed simultaneously |
+| `maxConcurrentActivityTaskExecutions` | 10 (`MAX_CONCURRENT_ACTIVITY_TASK_EXECUTIONS`, `temporal.constants.ts`) | Maximum activity tasks processed simultaneously |
 | `maxCachedWorkflows` | 20 | Maximum workflows kept in memory cache |
 
 ## Registered activities
 
-The worker registers all activity implementations from `ActivitiesService`:
+The worker registers **32** activity implementations from `ActivitiesService` (`worker.service.ts:33-119`):
 
 | Activity | Description |
 |----------|-------------|
 | `notifyStatusActivity` | Sends execution status updates to the frontend |
-| `getInfoInDatabaseActivity` | Queries node data from the database |
+| `getInfoInDatabaseActivity` | Registered, but dead code — no workflow calls it |
+| `getNodeInfoActivity` | Fetches node type/flow_id/trimmed data; the one `processSingleNode` actually calls |
 | `validateModelAccessActivity` | Validates user access to AI models |
 | `chargeTokensActivity` | Records token usage for billing |
-| `generateFileActivity` | Generates output files |
-| `generateExecutionLogsActivity` | Creates execution log entries |
-| `nodeExecutionErrorActivity` | Handles and persists node errors |
+| `generateFileActivity` | Generates output files; registered, but not called from any live workflow today |
+| `generateExecutionLogsActivity` | Creates execution log entries; also updates `node_executions`/`flows_nodes` on error |
+| `nodeExecutionErrorActivity` | Called on node error; currently a no-op |
+| `persistCancelledNodeActivity` | Persists a cancelled node's partial output |
+| `completionActivity` | Completion-related bookkeeping |
 | `textGeneratorActivity` | Executes the text generator node |
 | `scriptingActivity` | Executes the scripting node |
 | `audioTranscriberActivity` | Executes the audio transcriber node |
-| `mathFunctionActivity` | Executes the math function node |
+| `mathFunctionActivity` | Executes the Functions (math function) node |
 | `apiCallerActivity` | Executes the API caller node |
-| `counterActivity` | Executes the counter node |
+| `counterActivity` | Executes the process counter node |
 | `sqlQuerierActivity` | Executes the SQL querier node |
 | `displayBoxActivity` | Executes the display box node |
+| `pullDataActivity` | Executes the pull data node |
+| `pushDataActivity` | Executes the push data node |
+| `mcpActivity` | Executes the MCP node |
+| `thirdPartyIntegrationActivity` | Executes third-party integration nodes (and `HUB_SPOT_CRM`) |
+| `imageGeneratorActivity` | Executes the image generator node |
+| `webCrawlingActivity` | Executes the web crawling node |
+| `largeMemoryActivity` | Executes the Large Memory node |
+| `validateLargeMemoryAccessActivity` | Validates access before a Large Memory run |
+| `chargeLargeMemoryUsageActivity` | Charges usage after a Large Memory run |
+| `webSearchActivity` | Executes the web search node |
+| `validateApiAccessActivity` | Validates API-capability access (web search) |
+| `chargeApiCallActivity` | Charges usage after a web search run |
+| `voiceGeneratorActivity` | Executes the voice generator node |
+| `chargeVoiceActivity` | Charges usage after a voice generation run |
+
+All are wrapped through `bindRunToken` before registration.
 
 ## Troubleshooting
 

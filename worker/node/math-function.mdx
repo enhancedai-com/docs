@@ -1,7 +1,7 @@
 ---
 title: "Functions"
 sidebarTitle: "Functions"
-description: "Temporal activity for the Functions node: substitute named variables into a formula string and evaluate with expr-eval."
+description: "Temporal activity for the Functions node: evaluate a formula against named variables using hot-formula-parser."
 ---
 
 <Note>
@@ -10,7 +10,7 @@ Also known as **Math function** (the Worker module and this page's original titl
 
 ## Overview
 
-The **Functions** node evaluates a numeric expression stored on the node. You provide a **formula** string and a list of **variables**; each variable **name** is replaced by its **value** (as text) in the formula, then the expression is evaluated with [`expr-eval`](https://github.com/silentmatt/expr-eval) (`Parser`).
+The **Functions** node evaluates a spreadsheet-style expression stored on the node. You provide a **formula** string and a list of **variables**; each variable is registered on the parser by name via `parser.setVariable(name, parseVariableValue(value))` — there is no string substitution into the formula text — then the formula is evaluated with [`hot-formula-parser`](https://github.com/handsontable/formula-parser) (`Parser`).
 
 [`mathFunctionActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`MathFunctionService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/math-function/math-function.service.ts).
 
@@ -32,18 +32,18 @@ async mathFunctionActivity({
 
 ```typescript
 {
-  result: number;
+  result: number | string;
 }
 ```
 
-The activity returns `{ result }`; the same number is written to `flows_nodes.data.result` (see [Persisted node `data`](#persisted-node-data)).
+The activity returns `{ result }`; the same value is written to `flows_nodes.data.result` (see [Persisted node `data`](#persisted-node-data)). `result` can be a string because `hot-formula-parser` results that come back as an object are `JSON.stringify`-ed before being returned.
 
 ## End-to-end flow
 
 1. **Load node** — `SELECT` from `flows_nodes` by `nodeId`; read `data`.
-2. **Read inputs** — `formula` (string, default `""`) and `variables` (array, default `[]`).
-3. **Substitute** — Start from `formula`. For each entry in `variables`, replace every **whole-word** occurrence of `variable.name` with `variable.value` using a global regex `\b<name>\b`.
-4. **Evaluate** — `new Parser().evaluate(expression)`; the result must be a **number** (`result` is typed as `number` in the service return).
+2. **Resolve the formula** — prefer `formulaData` (an array of `{ text }` tokens, joined with `" "`) when it has entries; otherwise fall back to the plain `formula` string. Throws a `UserConfigError` ("Formula is required.") if both are empty, and another if the resolved formula exceeds `MAX_FORMULA_LENGTH` (500 characters).
+3. **Register variables** — for each entry in `variables` with a non-empty `name`, call `parser.setVariable(name, parseVariableValue(value))`. `parseVariableValue` coerces `value` to a `number` when it parses as one, to a `boolean` for the literal strings `"true"`/`"false"`, and otherwise leaves it as a string.
+4. **Evaluate** — `parser.parse(formula)` (`hot-formula-parser`'s `Parser`, not `expr-eval`). A non-empty `error` or a `null`/`undefined` `result` both throw a `UserConfigError`.
 5. **Persist** — `UPDATE flows_nodes` with `data` containing `result` and `executionStatus: "COMPLETED"`.
 6. **Return** — `{ result }`.
 
@@ -51,16 +51,17 @@ The activity returns `{ result }`; the same number is written to `flows_nodes.da
 
 | Field | Role |
 | ----- | ---- |
-| `formula` | Expression string, e.g. `a + b * 2`. Defaults to empty string if missing. |
-| `variables` | Array of `{ id: string; name: string; value: string }`. Each `name` is substituted by `value` before evaluation. |
+| `formula` | Expression string, e.g. `SUM(a, b) * 2`. Used when `formulaData` is absent or empty. |
+| `formulaData` | Array of `{ text: string }` tokens; when present and non-empty, its `text` values are joined with `" "` and used as the formula instead of the plain `formula` field. This is the edge-driven field written by the node's formula builder UI. |
+| `variables` | Array of `{ id: string; name: string; value: string }`. Each `name` is registered on the parser via `setVariable`, not substituted into the formula text. |
 
-`id` on each variable is not used by the Worker; it is kept for UI or persistence only.
+`id` on each variable is not used by the Worker; it is kept for UI or persistence only. The resolved formula (from either field) is capped at `MAX_FORMULA_LENGTH = 500` characters.
 
-## Variable substitution
+## Variable resolution
 
-- Replacements run **in array order**, repeatedly updating the working string.
-- Matching uses **word boundaries** (`\b`), so `x` does not replace the `x` inside `max`.
-- Values are inserted as **literal substrings** into the expression (they should form valid `expr-eval` syntax, typically numeric literals).
+- Each variable with a non-empty `name` is registered on the `hot-formula-parser` `Parser` instance via `setVariable(name, parseVariableValue(value))` — there is no text substitution into the formula string.
+- `parseVariableValue` coerces the string `value`: a value that parses as a number becomes a `number`, the literal strings `"true"`/`"false"` become a `boolean`, anything else stays a string (or becomes `""` if nullish).
+- Variables with a missing or blank `name` are skipped.
 
 ## Persisted node `data`
 
@@ -75,8 +76,16 @@ Other `data` fields are preserved via spread (`...nodeData`).
 
 ## Errors
 
-- Missing node row → `Node not found`.
-- Invalid expression, division by zero, or other evaluation failures → thrown by `Parser().evaluate` (and propagate to the workflow).
+All expected failures are structured `UserConfigError`s with a `field: "formula"` and a specific `userMessage`:
+
+| Condition | userMessage |
+| --- | --- |
+| Both `formula` and `formulaData` are empty/blank | `Formula is required.` |
+| Resolved formula longer than `MAX_FORMULA_LENGTH` (500 chars) | `Formula is too long. Max 500 characters.` |
+| `hot-formula-parser` returns a non-empty `error` | `Formula has an error: <error>.` |
+| `hot-formula-parser` returns a `null`/`undefined` result (e.g. an unconnected/undefined variable) | `Formula could not be evaluated. Check that every variable used in the formula is connected and has a value.` |
+
+A missing node row throws before validation is reached (`Node not found`).
 
 ## Related documentation
 

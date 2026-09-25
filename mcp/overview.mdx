@@ -103,7 +103,7 @@ FluxPrompt API  ──▶  Your agents, nodes, and flows
 | **OAuth** | A browser-based consent flow where you log in to FluxPrompt and grant a client access to a workspace. No token is pasted. Required for Claude Desktop and Claude.ai. |
 | **Service token** | A secret string scoped to your workspace (starts with `mcp_`), generated in [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens). Sent in the `Authorization` header. Used by machine-to-machine clients, the CLI, and n8n. Different from your FluxPrompt API key. |
 | **Tool** | A named action the MCP server exposes (e.g. `list_agents`). Your AI client calls tools on your behalf. |
-| **Workspace** | Your company or team context in FluxPrompt. One MCP token = one workspace. |
+| **Workspace** | Your company or team context in FluxPrompt. One authorization (OAuth or service token) can cover one workspace or several — see [Authentication](/mcp/authentication#one-authorization-can-cover-multiple-workspaces). |
 | **Streamable HTTP** | The transport protocol FluxPrompt MCP uses. A single HTTPS endpoint that accepts JSON-RPC 2.0 requests. |
 
 ## Before you start

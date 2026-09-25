@@ -64,11 +64,11 @@ The tooling is layered. Knowing which layer you are in tells you where to look f
 │  │  ├─ ec2-tunnel/                Dev/staging DB access via SSH tunnel
 │  │  ├─ ec2-tunnel-prod/           Read-only prod DB access (triple-layer safety)
 │  │  ├─ db-migration/              Data migration between environments
-│  │  ├─ tlc-spec-driven/           Adaptive feature planning
-│  │  └─ mcp-validation/            Local validation gate for the MCP server
+│  │  └─ tlc-spec-driven/           Adaptive feature planning
 │  ├─ rules/                        Always-applied context for code work
-│  ├─ agents/                       Custom subagents (incl. mcp-validator)
 │  └─ kb/                           Knowledge base (node specs, conventions)
+├─ skills/
+│  └─ mcp-validation/               Local validation gate for the MCP server
 └─ .claude/
    └─ agents/                       Custom subagents
       ├─ db-investigator.md         Diagnose "data missing" reports

@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-17 env vars no `front/.env.example`. Todas usam o prefixo `VITE_*` — o Vite só expõe vars com esse prefixo pro bundle do client. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+18 env vars no `front/.env.example`. Todas usam o prefixo `VITE_*` — o Vite só expõe vars com esse prefixo pro bundle do client. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 | Var | Obrigatória? | Propósito |
 |---|---|---|
@@ -15,6 +15,7 @@ title: "Variáveis de Ambiente"
 | VITE_PUBLISHABLE_KEY | Opcional | publishable key do Stripe |
 | VITE_GA_TRACKING_ID | Opcional | Google Analytics 4 |
 | VITE_GTM_CONTAINER_ID | Opcional | Google Tag Manager |
+| VITE_PINECONE_INTEGRATION_ID | Opcional | id de integração do connect-widget do Pinecone, usado pelo provider Pinecone do nó de integração de terceiros |
 | VITE_TINYMCE_API_KEY | Opcional | editor TinyMCE |
 | VITE_FLOW_EMAIL | Obrigatória | domínio usado no endereço de email do flow (webhooks) |
 | VITE_QUICK_CHAT_FLOW_ID | Opcional | flow do "Prompt Assistant" |
@@ -24,7 +25,7 @@ title: "Variáveis de Ambiente"
 | VITE_SUMMARY_FLOW_ID | Opcional | flow de geração de resumos |
 | VITE_ENV | Opcional | ambiente atual (prefixo de sala no Yjs) |
 
-Todas as 17 vars estão em uso ativo — nenhuma obsoleta.
+Todas as 18 vars estão em uso ativo — nenhuma obsoleta.
 
 ## CI/CD
 

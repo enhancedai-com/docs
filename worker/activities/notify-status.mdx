@@ -26,9 +26,12 @@ This activity is called at three key points:
 
 ```typescript
 async notifyStatusActivity({
-  nodes: Record<string, { status: string }>,
+  nodes: Record<string, { status: string; userMessage?: string; message?: string }>,
   userId: string,
-  flowId: string
+  flowId: string,
+  execId?: string,
+  runId?: string,
+  flowVersionHistoryId?: string | null,
 }): Promise<void>
 ```
 
@@ -36,9 +39,12 @@ async notifyStatusActivity({
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `nodes` | `Record<string, { status: string }>` | Object mapping node IDs to their status objects. Each status object contains a `status` field (`PENDING`, `COMPLETED`, `FAILED`, or `CANCELLED`) |
+| `nodes` | `Record<string, { status: string; userMessage?: string; message?: string }>` | Object mapping node IDs to their status objects. Each status object contains a `status` field (`PENDING`, `COMPLETED`, `FAILED`, or `CANCELLED`), plus optional `userMessage`/`message` text (used on failure) |
 | `userId` | `string` | ID of the user to notify |
 | `flowId` | `string` | ID of the flow containing the nodes |
+| `execId` | `string` (optional) | Execution id for this notification |
+| `runId` | `string` (optional) | Workflow run id |
+| `flowVersionHistoryId` | `string \| null` (optional) | Version history id for the flow |
 
 ## Outputs
 

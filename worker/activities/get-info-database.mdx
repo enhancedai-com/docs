@@ -5,22 +5,20 @@ description: "Queries the database to retrieve node information"
 
 ## Overview
 
-The `getInfoInDatabaseActivity` executes a database query to retrieve information about a node. It's used to fetch node configuration, type, and data before processing.
+<Warning>
+`getInfoInDatabaseActivity` is currently **dead code**. It's implemented and registered with the Temporal worker (`worker.service.ts`), but no workflow (`process-single-node.workflow.ts`, `process-agent.workflow.ts`, or any other) ever calls it. The activity that actually fetches node info in its place is [`getNodeInfoActivity`](#the-activity-actually-used-getnodeinfoactivity), described below.
+</Warning>
+
+`getInfoInDatabaseActivity` executes an arbitrary, caller-supplied SQL query against the worker's database pool and returns the first row. It's a generic query-runner, not specific to nodes — there's nothing in its implementation that reads node data, only what a caller's `query`/`params` ask for.
 
 ## Purpose
 
-- Retrieve node details from the database
-- Get node type to determine processing logic
-- Access node configuration and data
-- Validate node existence before execution
+- Run an arbitrary parameterized SQL query against the worker's database
+- Return the first row, or throw if none are found
 
 ## When it's executed
 
-This activity is called early in the workflow execution:
-
-1. **After status notification**: Right after notifying that execution has started
-2. **Before processing**: Before any node-specific processing begins
-3. **Node validation**: To ensure the node exists and can be processed
+Never, currently — see the warning above. If it were called, nothing constrains it to node-related queries; the example queries below are just what a caller could pass.
 
 ## Signature
 
@@ -101,6 +99,28 @@ The returned object structure depends on the query, but typically includes:
 - `type`: Node type (e.g., `TEXT_GENERATOR`)
 - `flow_id`: ID of the flow containing the node
 - `data`: JSON object containing node configuration and settings
+
+## The activity actually used: `getNodeInfoActivity`
+
+[`processSingleNode`](/worker/workflows/process-single-node) calls `getNodeInfoActivity` (`activities.service.ts:206-219`), not `getInfoInDatabaseActivity`. It runs right after `notifyStatusActivity` announces the node as `PENDING`, and before the `switch (node.type)` dispatch that runs the node-specific activity — so the "right after notifying execution has started, before any node-specific processing" framing above is correct, it's just the wrong activity name.
+
+```typescript
+async getNodeInfoActivity({
+  execId: string,
+  nodeId: string,
+  flowId: string,
+  flowVersionHistoryId: string | null,
+  runToken?: string,
+}): Promise<{
+  type: string;
+  flow_id: string;
+  data: Record<string, unknown>;
+}>
+```
+
+It fetches the node row via the shared `fetchNodeRow` helper (the same claim-check-aware lookup other node activities use), then narrows `data` down to a fixed, small set of fields — `NODE_CONFIG_FIELDS = ["label", "aiSystem", "aiModel", "type"]` — rather than returning the node's full `data` blob. This trimmed result is only used by the workflow to decide which activity to dispatch to and to label the run; each node-specific service (e.g. `TextGeneratorService`, `MathFunctionService`) does its own separate `fetchNodeRow` call to read the full node `data` it actually needs.
+
+If no row is found, `fetchNodeRow` throws before the workflow's own `if (!node) throw new Error("Node not found")` check is reached in practice.
 
 ## Related documentation
 

@@ -1,0 +1,107 @@
+---
+title: "Claim-check authorization"
+description: "How a large node payload stored in S3 is bound to the run that produced it: the run token, the two worker endpoints, and the claim_check_authz_enforce feature flag that decides whether a failed check refuses or only logs."
+---
+
+A node payload larger than `CLAIM_CHECK_THRESHOLD_BYTES` (262144 by default) is not stored in the
+database. It is written to a private S3 bucket and the row keeps only an envelope:
+
+```json
+{ "__claimRef": "node-exec/<execId>/<nodeId>-output.json", "bytes": 300000, "preview": "…" }
+```
+
+The worker has no S3 credentials of its own, so it reads and writes those objects through two
+internal endpoints on the main API:
+
+| Endpoint | What it does |
+|---|---|
+| `POST /worker/store-payload` | Writes a node's oversized output to S3 and returns the envelope |
+| `POST /worker/get-payload` | Reads an object back, given its key |
+
+Both sit behind `InternalApiGuard` — a single shared secret held by every worker replica.
+
+## The problem the run token solves
+
+The key encodes the run and the node it belongs to. Asking the caller to also *state* which
+`execId` and `nodeId` it is acting for, and refusing when the two disagree, adds no authority at
+all: whoever holds the key can read those two values off it and repeat them. The check would refuse
+only typos.
+
+So the caller has to present something it cannot derive from the key. Every node execution now
+stores a **run token** — a random UUID in `node_executions.runToken`, minted when the row is
+opened and never returned by the API (`select: false` on the column). The worker receives it as an
+argument of the workflow, keeps it in an `AsyncLocalStorage` bound once at activity registration,
+and sends it with every claim-check call.
+
+<Note>
+  The token is a capability, not an identity. It is never logged, never rendered, and never part of
+  a key. A refusal log records only how many stored rows matched and how many of them carried a
+  token — never the token itself.
+</Note>
+
+## What is checked
+
+`ClaimCheckAuthzService` (`back/src/temporal/claim-check-authz.service.ts`) runs before either
+endpoint touches S3.
+
+On a **read**, it parses the key, looks for a `node_executions` row whose `execId` and sanitized
+`nodeId` match and whose `input`/`outputData` envelope actually holds that key, and then compares
+the presented token against the stored one.
+
+On a **write**, it builds the key the write would produce, looks for the matching run row, and
+compares the token the same way.
+
+Five things end the check:
+
+| Reason | Meaning |
+|---|---|
+| `malformed_key` | The key is not a `node-exec/<execId>/<nodeId>-<input\|output>.json` path — a truncated key or a traversal attempt such as `node-exec/../../etc/passwd` |
+| `unrepresentable_node_id` | The write names a node id that cannot be represented in a key |
+| `no_stored_row` | No node execution ever stored that key — the object is not this system's to hand out |
+| `run_token_mismatch` | A row exists, but the caller presented the wrong token, or none |
+| `lookup_failed` | The database lookup itself failed |
+
+A row whose `runToken` is `NULL` is accepted. Those are executions that started before the column
+existed; they fail closed only in the sense that no *new* row is written without a token.
+
+## The `claim_check_authz_enforce` flag
+
+The flag decides what happens once the check has failed. It never changes what is checked.
+
+| Flag | Behaviour on a failed check |
+|---|---|
+| **Off** (default) | The request is served as before. The refusal is written to the log as `Claim-check would have refused: {…}` with the route, the reason and the parsed key. Nothing breaks; you get the measurement. |
+| **On** | The request is answered `403 Forbidden` — *"Claim-check key is not valid for this run"* — and the same line is logged as `Claim-check refused: {…}`. |
+
+`lookup_failed` is the one exception: a lookup that failed cannot tell an attempt from a legitimate
+read, so it refuses regardless of the flag.
+
+<Note>
+  The flag is seeded **disabled** (migration `AddFeatureFlagAdminColumns1788975461171`). Leave it off
+  for a few days, watch the log for `would have refused`, and turn it on once the count is zero for
+  legitimate traffic. Toggle it per environment from **Admin Dashboard → Feature Flags** under
+  *Claim-check authorisation*; the value is cached in the API for five seconds and the cache is
+  written through on update, so a change takes effect within seconds without a deploy.
+</Note>
+
+## What a legitimate run looks like
+
+Nothing about the normal path changes when the flag is on. A 300 KB node output is offloaded, the
+envelope is stored, the next node resolves the claim ref with the same token, and the run completes
+with no refusal logged. The token travels with the workflow, so a retry or a continuation of the
+same run still carries it.
+
+## Migrations
+
+| Migration | What it does |
+|---|---|
+| `AddRunTokenToNodeExecutions1788974723883` | Adds the nullable `node_executions.runToken` column |
+| `AddFeatureFlagAdminColumns1788975461171` | Adds `feature_flags.label`/`adminVisible` and seeds `claim_check_authz_enforce` as **disabled** |
+
+## Files
+
+`back/src/temporal/claim-check-authz.service.ts` · `back/src/temporal/worker.controller.ts`
+(`/worker/get-payload`, `/worker/store-payload`) ·
+`back/src/app-api/flux/claim-check.ts` (`claimCheckKey`, `parseClaimCheckKey`) ·
+`worker/src/modules/nodes/shared/run-token.ts` ·
+`worker/src/modules/nodes/shared/resolve-claim-ref.ts`

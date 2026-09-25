@@ -180,12 +180,12 @@ return { execId };
 `isTemporalNode(type)` returns `true` for the types already migrated to the worker:
 
 ```
-commandTextNode
-scripting
-apiCaller
-mathFunction
-counterNode
-outputController
+commandTextNode       scripting              apiCaller
+mathFunction           counterNode            outputController
+pullData               pushData               mcpNode
+imageGenerator         commandContentNode     voiceBoxNode
+webSearch              webCrawling            audioReaderNode
+sqlQuerier
 ```
 
 For these, the API enqueues a `processSingleNode` workflow on the `enhanced-ai-queue` task queue and returns immediately. The worker:
@@ -216,11 +216,7 @@ For node types not yet migrated to the worker, `runLegacyAndPersist` runs the wo
 Legacy types currently wired into the dispatcher:
 
 ```
-imageGenerator        webSearch              voiceBoxNode
-audioReaderNode       commandContentNode     pullData
-pushData              thirdPartyIntegration  mcpNode
-libraryNode           webCrawling            reportBuilder
-sqlQuerier            nodesBox
+thirdPartyIntegration    libraryNode    reportBuilder    nodesBox
 ```
 
 <Info>
@@ -274,7 +270,7 @@ UPDATE node_executions SET
 WHERE "execId" = $3 AND "nodeId" = $4;
 ```
 
-Large `outputData` payloads (above `CLAIM_CHECK_THRESHOLD_BYTES`) are offloaded to S3 and stored as a `{ __claimRef: <key>, bytes, preview }` envelope. `NodeExecutionsService.findLatestByExecAndNode` transparently resolves the claim ref before returning.
+Large `outputData` payloads (above `CLAIM_CHECK_THRESHOLD_BYTES`) are offloaded to S3 and stored as a `{ __claimRef: <key>, bytes, preview }` envelope. `NodeExecutionsService.findLatestByExecAndNode` transparently resolves the claim ref before returning. Redeeming one of those keys is authorized against the run that produced it — see [Claim-check authorization](/main-api/specific-features/claim-check-authorization).
 
 ## WebSocket contract
 

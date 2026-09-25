@@ -41,7 +41,10 @@ All three paths return the same metadata document (path-aware, per MCP spec).
 ```http
 GET /.well-known/oauth-protected-resource
 GET /mcp/.well-known/oauth-protected-resource
+GET /.well-known/oauth-protected-resource/mcp
 ```
+
+All three paths return the same metadata document.
 
 ```json
 {
@@ -106,20 +109,18 @@ Redirects the user's browser to the FluxPrompt consent page (`/mcp-authorize.htm
 ## Consent callback (internal)
 
 ```http
-POST /oauth/consent-callback
-Content-Type: application/json
+GET /oauth/consent-callback?request_id={id}&assertion={jwt}&decision=approve
 ```
 
-Called by the FluxPrompt consent page after the user approves. The `assertion` is a short-lived HS256 JWT signed by `back/` with the shared `MCP_OAUTH_CONSENT_SECRET`.
+Called by the FluxPrompt consent page after the user approves or denies. The `assertion` is a short-lived HS256 JWT signed by `back/` with the shared `MCP_OAUTH_CONSENT_SECRET`.
 
-### Request body
+### Query params
 
-```json
-{
-  "assertion": "<hs256-jwt>",
-  "request_id": "original-request-id"
-}
-```
+| Param | Required | Description |
+|-------|----------|-------------|
+| `request_id` | Yes | The original `request_id` from `/oauth/authorize`. `400` if missing or expired. |
+| `decision` | Yes | Must be exactly `approve` to continue the flow. Any other value (or a missing `assertion`) redirects back to `redirect_uri` with `error=access_denied`. |
+| `assertion` | Yes, when `decision=approve` | The HS256 JWT from `POST /mcp/v1/oauth/consent`. |
 
 On success, redirects to `redirect_uri?code=<auth-code>&state=<state>`.
 
@@ -146,12 +147,15 @@ grant_type=authorization_code
 {
   "access_token": "mcp_oauth_abc123...",
   "token_type": "Bearer",
-  "expires_in": 2592000,
   "scope": "read"
 }
 ```
 
 The `access_token` is an opaque `mcp_oauth_…` token persisted in Postgres. It is used as a `Bearer` token in all subsequent MCP requests.
+
+<Note>
+OAuth access tokens **do not expire by default** (`expires_in` is omitted from the response entirely, per RFC 6749). Set `MCP_OAUTH_TOKEN_TTL` (seconds) on the MCP server to opt into an expiry — with it configured, the response includes `expires_in: <MCP_OAUTH_TOKEN_TTL>`.
+</Note>
 
 ---
 
@@ -181,18 +185,20 @@ Returns `204 No Content`. Signals session end to the server.
 
 ```http
 GET /healthz
+GET /readyz
 ```
 
-Returns `200 OK` with `{ "status": "ok" }`. No auth required. Used by ECS health checks and post-deploy smoke tests.
+Both return `200 OK` with `{ "status": "ok" }`. No auth required. Used by ECS health/readiness checks and post-deploy smoke tests.
 
 ---
 
 ## CORS
 
-The MCP server enables CORS for browser-based OAuth clients. The following headers are present on all responses:
+The MCP server enables CORS for browser-based OAuth clients, reflecting the request's `Origin` header rather than sending a literal wildcard, and does not allow credentialed requests:
 
 ```
-Access-Control-Allow-Origin: *
+Access-Control-Allow-Origin: <the request's Origin>
+Access-Control-Allow-Credentials: (not sent — credentials: false)
 Access-Control-Expose-Headers: Mcp-Session-Id, WWW-Authenticate
 ```
 

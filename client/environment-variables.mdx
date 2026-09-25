@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-17 env vars in `front/.env.example`. All use the `VITE_*` prefix — Vite only exposes prefixed vars to the client bundle. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+18 env vars in `front/.env.example`. All use the `VITE_*` prefix — Vite only exposes prefixed vars to the client bundle. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 | Var | Required? | Purpose |
 |---|---|---|
@@ -15,6 +15,7 @@ title: "Environment Variables"
 | VITE_PUBLISHABLE_KEY | Optional | Stripe publishable key |
 | VITE_GA_TRACKING_ID | Optional | Google Analytics 4 |
 | VITE_GTM_CONTAINER_ID | Optional | Google Tag Manager |
+| VITE_PINECONE_INTEGRATION_ID | Optional | Pinecone connect-widget integration id, used by the third-party integration node's Pinecone provider |
 | VITE_TINYMCE_API_KEY | Optional | TinyMCE editor |
 | VITE_FLOW_EMAIL | Required | domain for flow email addresses in webhooks |
 | VITE_QUICK_CHAT_FLOW_ID | Optional | "Prompt Assistant" flow id |
@@ -24,7 +25,7 @@ title: "Environment Variables"
 | VITE_SUMMARY_FLOW_ID | Optional | summary generation flow id |
 | VITE_ENV | Optional | current environment (Yjs room prefix) |
 
-All 17 vars are actively used — none obsolete.
+All 18 vars are actively used — none obsolete.
 
 ## CI/CD
 

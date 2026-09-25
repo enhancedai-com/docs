@@ -120,6 +120,7 @@
                       "main-api/specific-features/async-flow-execution",
                       "main-api/specific-features/cancel-a-run",
                       "main-api/specific-features/execution-limits",
+                      "main-api/specific-features/claim-check-authorization",
                       "main-api/specific-features/companion-docs",
                       {
                         "group": "Integrations",
@@ -195,6 +196,7 @@
                     "pages": [
                       "worker/node/scripting",
                       "worker/node/text-generator",
+                      "worker/node/image-generator",
                       "worker/node/audio-transcriber",
                       "worker/node/math-function",
                       "worker/node/api-caller",
@@ -202,7 +204,6 @@
                       "worker/node/sql-querier",
                       "worker/node/display-box",
                       "worker/node/mcp",
-                      "worker/node/image-generator",
                       "worker/node/large-memory-dynamic-pod"
                     ]
                   },
@@ -291,15 +292,6 @@
                 "group": "API documentation",
                 "pages": [
                   "api-reference/introduction"
-                ]
-              },
-              {
-                "group": "Endpoint examples",
-                "pages": [
-                  "api-reference/endpoint/get",
-                  "api-reference/endpoint/create",
-                  "api-reference/endpoint/delete",
-                  "api-reference/endpoint/webhook"
                 ]
               },
               {
@@ -418,6 +410,7 @@
                       "main-api/specific-features/async-flow-execution",
                       "main-api/specific-features/cancel-a-run",
                       "main-api/specific-features/execution-limits",
+                      "main-api/specific-features/claim-check-authorization",
                       "main-api/specific-features/companion-docs",
                       {
                         "group": "Integrations",
@@ -493,6 +486,7 @@
                     "pages": [
                       "worker/node/scripting",
                       "worker/node/text-generator",
+                      "worker/node/image-generator",
                       "worker/node/audio-transcriber",
                       "worker/node/math-function",
                       "worker/node/api-caller",
@@ -500,7 +494,6 @@
                       "worker/node/sql-querier",
                       "worker/node/display-box",
                       "worker/node/mcp",
-                      "worker/node/image-generator",
                       "worker/node/large-memory-dynamic-pod"
                     ]
                   },
@@ -589,15 +582,6 @@
                 "group": "API documentation",
                 "pages": [
                   "api-reference/introduction"
-                ]
-              },
-              {
-                "group": "Endpoint examples",
-                "pages": [
-                  "api-reference/endpoint/get",
-                  "api-reference/endpoint/create",
-                  "api-reference/endpoint/delete",
-                  "api-reference/endpoint/webhook"
                 ]
               },
               {

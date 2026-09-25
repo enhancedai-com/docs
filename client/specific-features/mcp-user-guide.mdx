@@ -52,11 +52,8 @@ Use **Integrations** when you have an HTTPS MCP URL and optionally a bearer toke
   <Step title="Enter credentials">
     | Field | What to enter |
     |-------|---------------|
-    | **How to connect** | **Web address (HTTPS)** for a remote URL, or **Npm package** for stdio |
     | **MCP server web address** | Full URL including `https://` (often ends with `/mcp`) |
-    | **Secret token** | Only if the server docs say to send an API key or bearer token |
-    | **MCP package name** | Exact name from the docs (for npm) |
-    | **Authentication** | Raw token, `NAME=value` lines, or JSON for npm packages |
+    | **Secret token** | Only if the server docs say to send an API key or bearer token. Paste a raw token, a full header like `Authorization: Bearer ...`, or JSON like `{"scheme":"Bearer","token":"..."}` or `{"headers":{"x-api-key":"..."}}` |
   </Step>
   <Step title="Use it in the MCP Client node">
     1. Add an **MCP Client** node to your flow

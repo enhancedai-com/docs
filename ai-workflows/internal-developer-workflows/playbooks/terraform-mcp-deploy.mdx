@@ -113,7 +113,7 @@ The bucket must exist **before** `terraform init` — the backend does not self-
 
 <Step title="Populate the tfvars for the target environment">
 
-Use the [`terraform-infra-helper` agent](/ai-workflows/internal-developer-workflows/agents) to auto-discover the AWS IDs and fill the `REPLACE_` placeholders:
+Use the `terraform-infra-helper` agent to auto-discover the AWS IDs and fill the `REPLACE_` placeholders:
 
 ```
 use the terraform-infra-helper agent for <env>   # env = dev | staging | prod
