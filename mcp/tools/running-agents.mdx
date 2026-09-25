@@ -63,6 +63,71 @@ Returns:
 Poll at a sensible interval — a run that calls several AI models takes seconds to minutes, and every
 poll counts against your rate limit (60 requests/minute, 5 000/day per key).
 
+## `get_run_nodes`
+
+Returns one entry per node that started executing in a run. Use this instead of trusting the run's
+aggregate status: a run reports `"completed"` as long as it finished, even when a node never ran.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `runId` | string | Yes | The id returned by `run_agent`. |
+| `limit` | number | No | Page size. Default 50, capped at 200. |
+
+Returns `runId`, `versionId` (the FlowVersion the run targeted, or `null` for the working copy),
+`total` (the true count of nodes that started, not capped by the page size), `truncated` (boolean —
+more nodes exist beyond this page), `suspects` (count of entries whose `suspect` is non-null), and a
+`nodes` array:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `nodeId` | string | Node id — pass to `get_node_output`. |
+| `type` | string \| null | Node type. |
+| `state` | `"running"` \| `"succeeded"` \| `"failed"` | |
+| `startedAt` / `finishedAt` | ISO 8601 / ISO 8601 \| null | |
+| `error` | string \| null | |
+| `outputBytes` | number \| null | Size of the stored output. |
+| `outputPreview` | string \| null | First 200 characters, redacted before truncation. |
+| `outputRedacted` | boolean | `true` when a secret pattern was removed from the preview. |
+| `outputExpired` | boolean | `true` when retention already discarded the payload. |
+| `suspect` | `null` \| `{ code, consumers, hint }` | Heuristic only — set when a node succeeded with an empty output while a downstream node was waiting on it through a data edge. It is always `null` when the run graph could not be loaded, rather than guessed. |
+
+<Warning>
+  **This list is incomplete, and `total` counts only what it can see.** A node executed by the
+  Temporal worker is written with its own `execId` and no `metadata.runId`, so nothing links it back
+  to this run — it is missing here even though it ran and produced output. That covers the AI and
+  integration nodes, i.e. usually the ones you care about. Never conclude from an absent node that it
+  did not run; confirm by reading the value from the node that consumes it. An absent node can
+  otherwise mean it was pruned by a condition branch, was unreachable from the starter, or never ran
+  because an earlier node failed — this tool cannot tell those cases apart. Nodes inside a
+  `libraryNode` or `flowCaller` sub-flow belong to their own run and are not listed here.
+</Warning>
+
+Use `outputPreview` to skim, not to read the result — call `get_node_output` for the full value.
+
+## `get_node_output`
+
+Returns what a single node produced in a run. Call `get_run_nodes` first to see which nodes this tool
+can reach.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `runId` | string | Yes | The id returned by `run_agent`. |
+| `nodeId` | string | Yes | Node id, as it appears in `get_run_nodes`. |
+
+Returns `runId`, `nodeId`, `type`, `state`, `outputType` (which field the value came from), `output`
+(the node's scalar result — redacted first, then truncated at 20 000 characters), `truncated`,
+`totalBytes`, `redacted` (a secret pattern or sensitive key was removed), `outputExpired`, `error`
+and `finishedAt`.
+
+<Warning>
+  **An error here does NOT mean the node did not run.** The same Temporal-worker gap as
+  `get_run_nodes` applies: a node executed by the worker has its own `execId` and no `metadata.runId`,
+  so it cannot be looked up here even though it ran and produced output — this covers the AI and
+  integration nodes. Read the value from the node that consumes it instead of concluding the node
+  never started. Only the scalar output is returned, deliberately — the stored node object also holds
+  resolved prompts and credential fields.
+</Warning>
+
 ## `cancel_run`
 
 Requests cancellation of a run that is still in flight.
@@ -70,12 +135,18 @@ Requests cancellation of a run that is still in flight.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `runId` | string | Yes | The id returned by `run_agent`. |
-| `dryRun` | boolean | No | Default `true` — reports whether the run *could* be cancelled. |
+| `dryRun` | boolean | No | Default `false` — cancels immediately. Set `true` to validate (scope/flag/existence) without cancelling. |
 | `idempotencyKey` | string | No | Makes a real cancel safe to retry. |
 
 ```json
 { "dryRun": false, "applied": true, "runId": "c7f0…", "cancelled": true, "reason": "requested" }
 ```
+
+<Warning>
+  **`cancel_run` is the one write tool that does not default to dry-run.** Every other write tool
+  defaults to `dryRun: true`; `cancel_run` defaults to `dryRun: false` and cancels immediately. See
+  [Writing safely](/mcp/tools/writing-safely#dry-run-is-the-default).
+</Warning>
 
 Work already completed is not rolled back — cancelling stops the run going forward, it does not undo
 side effects a node already produced (a sent email stays sent).

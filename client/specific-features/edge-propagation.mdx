@@ -231,7 +231,6 @@ Used by nodes configured in the `nodePassOnlyText` object.
 export const nodePassOnlyText = {
   imageReaderNode: 'inputPreview',
   audioReaderNode: 'inputPreview',
-  documentSummarizer: 'inputPreview',
   arrayNode: 'content',
   imageGenerator: 'inputPreview',
   mathFunction: 'varId',
@@ -239,6 +238,7 @@ export const nodePassOnlyText = {
   libraryNode: 'varId',
   fileSave: 'varId',
   outputController: 'customFileName',
+  thirdPartyIntegration: 'blobConfig',
 };
 ```
 
@@ -375,7 +375,7 @@ The other Large Memory handles follow the same pattern: `textQuery → query →
 
 In `src/util/autosave/propagateDownstreamFromSeeds.ts`:
 
-- After `changeType: 'execute'`, `delete-edges`, and `connect`, the canvas runs `modifyData` in a **BFS** starting from explicit seeds
+- After `changeType: 'execute'`, `delete-edges`, `connect`, `'default'`, and `'changeText'`, the canvas runs `modifyData` in a **BFS** starting from explicit seeds
 - Each node is processed at most once per wave (`visited` set)
 - Step cap of `(nodes + edges) * 2` avoids infinite loops on cycles
 - Secondary hops use `changeType` treated as `'default'` so execute-specific branches don't re-fire

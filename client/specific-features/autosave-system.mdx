@@ -47,22 +47,31 @@ Update cache with saved data
 ### Cache key structure
 
 ```typescript
-const cacheKey = `${flowId}:${id || 'global'}:${changeType}`;
+const cacheKey = `${flowId}:${nodeIdForSave}:${changeType}`;
 ```
 
 - `flowId` — the ID of the current flow
-- `id` — the node ID (or `'global'` if not provided)
+- `nodeIdForSave` — the trimmed node ID; there is no `'global'` fallback — if
+  `id` is empty, `nodeDataAutoSaveDynamic` returns early and nothing is saved
 - `changeType` — the type of change (default: `'default'`)
 
 ### Cache entry
 
 ```typescript
 type SaveCacheEntry = {
-  lastData: any;
-  timer: NodeJS.Timeout | null;
+  lastData: Record<string, unknown> | null;
+  lastServerAcknowledgedData: Record<string, unknown> | null;
+  timer: ReturnType<typeof setTimeout> | null;
   timestamp: number;
+  latestSaveId: number;
+  inFlightSaveId: number | null;
 };
 ```
+
+`lastServerAcknowledgedData`, `latestSaveId`, and `inFlightSaveId` drive the
+optimistic-revert-on-save-error logic: `latestSaveId`/`inFlightSaveId` track
+which save is currently in flight, and `lastServerAcknowledgedData` is what
+the UI reverts to if that save fails.
 
 ### Cache behavior
 
@@ -81,6 +90,7 @@ const CRITICAL_CHANGE_TYPES = [
   'delete-edges',
   'update-edge',
   'connect',
+  'save-logs',
 ];
 ```
 
@@ -121,6 +131,22 @@ nodeDataAutoSaveDynamic({
 | `setSchema` | Function | No | Schema update function |
 | `objectCallerData` | object[] | No | Additional context data |
 | `flowTriggerData` | object | No | Flow execution trigger data |
+
+## Forcing a pending save to flush
+
+```typescript
+export const flushPendingNodeSave = async (
+  flowId: string,
+  nodeId: string,
+): Promise<void>
+```
+
+`flushPendingNodeSave` forces any pending debounced `'default'`-changeType
+save for a given node to run immediately and awaits its completion, instead
+of waiting for the trailing `DEBOUNCE_DELAY` timer. It is used before a node
+executes, so the run always reads the data the user just edited rather than
+whatever was last actually persisted — e.g. `ThirdPartyIntegrationNode.tsx`
+calls it at the start of its `onSubmit` handler, before dispatching the run.
 
 ## Usage patterns
 

@@ -40,19 +40,15 @@ async generateFileActivity({
 
 ## Outputs
 
-Returns a URL string pointing to the generated file. The URL format is:
-
-```
-${URL_MAIN_API}/internal-api/generate-file/${nodeId}.${fileType}
-```
+Returns the `file` field from the main API's JSON response (a URL string pointing to the generated file).
 
 ## Implementation details
 
 <Warning>
-This activity is currently a placeholder implementation. The actual file generation logic is not yet implemented.
+This activity makes a real HTTP call — it is not a stub — but it is currently **dead code**: nothing in `process-single-node.workflow.ts` (or any other live workflow) invokes `generateFileActivity`. The only reference to it in a workflow is a commented-out block in `process-agent.workflow.ts` (`process-agent`, a workflow that is itself not wired into the active node-dispatch path). Until something calls it, this activity never runs in production.
 </Warning>
 
-The current implementation returns a URL string without actually generating the file. The file generation endpoint is expected to handle the actual file creation when accessed.
+The implementation makes a real `POST ${URL_MAIN_API}/worker/generate-file` request with `{ nodeId, fileType }` in the body and the standard `internal-api-key` header, and returns `data.file` from the parsed JSON response. The actual file generation happens on the main API side, not in this activity — the worker only forwards the request and relays the resulting URL.
 
 ## Example usage in workflow
 
@@ -114,12 +110,10 @@ if (!fileUrl) {
 
 ## Future implementation
 
-The activity is marked as TODO and will be fully implemented to:
+The HTTP call itself is real and already implemented; what's outstanding is wiring a caller back up. Reintroducing this would mean:
 
-- Actually generate files from node output
-- Store files in appropriate storage (S3, local filesystem, etc.)
-- Return accessible file URLs
-- Handle file generation errors properly
+- Un-commenting/porting the `process-agent.workflow.ts` call site (or adding an equivalent one to `process-single-node.workflow.ts`) so a node with `saveOutput`/`generateFile.enabled` actually triggers this activity
+- Confirming the main API's `/worker/generate-file` endpoint still matches this request/response shape
 
 ## Related documentation
 

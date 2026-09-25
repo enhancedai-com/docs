@@ -26,14 +26,18 @@ This activity is called at two key points:
 
 ```typescript
 async generateExecutionLogsActivity({
+  execId: string,
   nodeId: string,
   flowId: string,
+  flowVersionHistoryId: string | null,
   userId: string,
   sessionId: string,
   message: string,
-  errorStack: any,
-  metadata: any,
-  isError: boolean
+  userMessage?: string | null,
+  errorStack?: string | null,
+  errorCategory?: string | null,
+  errorField?: string | null,
+  isError: boolean,
 }): Promise<void>
 ```
 
@@ -41,31 +45,35 @@ async generateExecutionLogsActivity({
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
+| `execId` | `string` | Execution id this log belongs to; also drives the broader post-insert behavior below |
 | `nodeId` | `string` | ID of the node being logged |
 | `flowId` | `string` | ID of the flow containing the node |
+| `flowVersionHistoryId` | `string \| null` | Version history id for the flow, used when resetting stale node output on error |
 | `userId` | `string` | ID of the user executing the workflow |
 | `sessionId` | `string` | Session identifier for tracking execution context |
-| `message` | `string` | Log message describing the execution result |
-| `errorStack` | `any` | Error stack trace (null for successful executions) |
-| `metadata` | `any` | Additional metadata about the execution (typically node data) |
+| `message` | `string` | Dev-facing log message describing the execution result |
+| `userMessage` | `string \| null` (optional) | User-facing message; combined with `message` in the node's `errorMessage` when both are set and differ |
+| `errorStack` | `string \| null` (optional) | Error stack trace (omitted for successful executions) |
+| `errorCategory` | `string \| null` (optional) | Error classification (e.g. the thrown error's `NodeError` subclass) |
+| `errorField` | `string \| null` (optional) | The node data field the error is attributed to, when known |
 | `isError` | `boolean` | Flag indicating whether this is an error log |
+
+There is no `metadata` parameter — the activity does not accept one. The `execution_logs.metadata` column is always written as a literal `null` by this INSERT.
 
 ## Outputs
 
-Returns `void`. The activity completes when the log entry is successfully created.
+Returns `void`. The activity completes when the log entry is successfully created (and, when `execId` is present, after the additional updates described below).
 
 ## Implementation details
 
-The activity inserts a record into the `execution_logs` table with the following structure:
+The activity inserts one row into `execution_logs` — `nodeId`, `flowId`, `userId`, `sessionId`, `message`, `userMessage`, `errorStack`, `errorCategory`, `errorField`, `metadata` (always `null`), `isError`, `execId`. For an error log with an `execId`, the insert is deduplicated: it's skipped (no row, no side effects below) if an error log already exists for that exact `(flowId, nodeId, execId)` triple.
 
-- `nodeId`: Node identifier
-- `flowId`: Flow identifier
-- `userId`: User identifier
-- `sessionId`: Session identifier
-- `message`: Log message
-- `errorStack`: Error stack trace (nullable)
-- `metadata`: JSON metadata (typically node configuration)
-- `isError`: Boolean error flag
+This activity does **more** than insert a log row — when `execId` is present, it also keeps `node_executions` and `flows_nodes` in sync with the outcome:
+
+- **On error** (`isError: true`): updates the matching `node_executions` row (`isError = true`, `executionLogId`, `output` set to the combined `userMessage`/`message`, `outputType: 'error'`), then resets any stale output already written onto the live `flows_nodes.data` row via `buildFailedNodeOutputReset` (type-specific reset shape) merged with `errorMessage` and `executionStatus: "FAILED"`.
+- **On success** (`isError: false`): re-reads the `node_executions` row's `outputData`, resolves it through the claim-check layer if needed, extracts `{ output, outputType }` for the node's type, sums the node's `token_transaction` rows into `nodeUsedTokens`, and updates `node_executions` (`output`, `outputType`, `metadata.nodeUsedTokens`, `outputData.nodeUsedTokens`, `executionLogId`).
+
+If `execId` is not provided, the activity only inserts the log row and returns — none of the `node_executions`/`flows_nodes` updates above happen.
 
 ## Example usage in workflow
 
@@ -73,13 +81,13 @@ The activity inserts a record into the `execution_logs` table with the following
 
 ```typescript
 await generateExecutionLogsActivity({
+  execId,
   nodeId,
   flowId,
+  flowVersionHistoryId,
   userId,
   sessionId,
   message: 'Node executed successfully',
-  errorStack: null,
-  metadata: node.data,
   isError: false,
 });
 ```
@@ -91,13 +99,15 @@ const errorMessage = error instanceof Error ? error.message : String(error || "E
 const stack = error.cause?.stack || error.stack || 'No stack';
 
 await generateExecutionLogsActivity({
+  execId,
   nodeId,
   flowId,
+  flowVersionHistoryId,
   userId,
   sessionId,
   message: errorMessage,
+  userMessage: error instanceof NodeError ? error.userMessage : undefined,
   errorStack: stack,
-  metadata: node.data,
   isError: true,
 });
 ```
@@ -106,9 +116,9 @@ await generateExecutionLogsActivity({
 
 Each log entry contains:
 
-- **Execution context**: `nodeId`, `flowId`, `userId`, `sessionId`
-- **Result information**: `message`, `isError`
-- **Debugging data**: `errorStack`, `metadata`
+- **Execution context**: `execId`, `nodeId`, `flowId`, `userId`, `sessionId`
+- **Result information**: `message`, `userMessage`, `isError`
+- **Debugging data**: `errorStack`, `errorCategory`, `errorField`
 
 ## Error handling
 

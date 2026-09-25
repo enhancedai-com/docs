@@ -8,6 +8,42 @@ description: "Create, rename, move and delete agents and the folders that hold t
 Agents live inside folders, so creating an agent starts with a folder. All tools on this page follow
 the shared write conventions — [dry-run by default, `idempotencyKey` to apply](/mcp/tools/writing-safely).
 
+## `list_workspaces`
+
+Returns every workspace (organization) this authorization covers. Call it first when another tool
+answers `workspace_required`, then pass the workspace id you want as `workspaceId` to that tool. It
+needs no scope and takes no `workspaceId` — it is one of the three tools exempt from that parameter
+(the others are `list_node_types` and `get_node_type`; see
+[Authentication](/mcp/authentication#one-authorization-can-cover-multiple-workspaces)).
+
+### Input
+
+Takes no parameters.
+
+### Output
+
+```json
+{
+  "workspaces": [
+    { "workspaceId": "3023e5f4-9099-4a56-bc28-538eb517a47f", "name": "Acme Inc", "scopes": ["read", "write"] },
+    { "workspaceId": "b2c3d4e5-f6a7-8901-bcde-f12345678901", "name": "", "scopes": ["read"] }
+  ],
+  "total": 2
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `workspaces[].workspaceId` | string (UUID) | Pass this as `workspaceId` to any other tool. |
+| `workspaces[].name` | string | Organization name; may be empty when the organization is unnamed. |
+| `workspaces[].scopes` | array of `"read"` \| `"write"` \| `"execute"` | Scopes this authorization holds **in that workspace** — they can differ between workspaces, since each organization's admin controls them independently. Do not assume write/execute access just because a workspace is listed. |
+| `total` | number | Count of workspaces returned. |
+
+<Note>
+  Don't cache this for long. An organization admin can reduce scopes or revoke this authorization at
+  any time, and the change applies only to that organization.
+</Note>
+
 ## `create_folder`
 
 Creates a folder in the workspace.

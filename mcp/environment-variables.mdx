@@ -30,17 +30,8 @@ title: "Environment Variables"
 | MCP_CB_ERROR_THRESHOLD | Optional | circuit breaker error rate threshold (default 0.5) |
 | MCP_CB_MIN_SAMPLES | Optional | min samples before evaluating circuit (default 5) |
 | DATADOG_API_KEY | Optional | Datadog audit log key |
-| INSPECTOR_CLIENT_PORT | Optional | MCP Inspector UI port (dev only) |
-| INSPECTOR_PROXY_PORT | Optional | MCP Inspector proxy port (dev only) |
-
-## Fixed during this audit
-
-The old `.env.example`/`docker-compose.yml` (on `staging`, where the real code lives) had names that didn't match what the code actually reads — those configs were silent no-ops:
-
-- `MCP_CIRCUIT_ERROR_RATE_THRESHOLD` / `MCP_CIRCUIT_WINDOW_SECONDS` / `MCP_CIRCUIT_COOLDOWN_SECONDS` → code reads `MCP_CB_ERROR_THRESHOLD` / `MCP_CB_WINDOW_MS` / `MCP_CB_COOLDOWN_MS` (also note: ms, not seconds)
-- `DD_API_KEY` / `DD_SITE` / `DD_AUDIT_INDEX` → code reads `DATADOG_API_KEY` (`DD_SITE`/`DD_AUDIT_INDEX` aren't read anywhere)
-
-All renamed to match the code in this pass. `BACK_BASE_URL` was already correct on `staging` — an earlier draft of this audit compared against `production`'s stale scaffold `.env.example` (which still says `BACK_API_URL`) and wrongly flagged it as a mismatch too. `production` doesn't have the real code at all yet (see the CI/CD gap below), so it's not a valid comparison target.
+| INSPECTOR_CLIENT_PORT | Optional | MCP Inspector UI port — currently inert; only read by the disabled Docker `inspector:` service, not by the `pnpm inspect` script actually used to run it (dev only) |
+| INSPECTOR_PROXY_PORT | Optional | MCP Inspector proxy port — currently inert; only read by the disabled Docker `inspector:` service, not by the `pnpm inspect` script actually used to run it (dev only) |
 
 ## Cross-repo gotcha
 
@@ -50,4 +41,8 @@ All renamed to match the code in this pass. `BACK_BASE_URL` was already correct 
 
 Same runtime-injection pattern as `back`/`worker` — vars live in the ECS task definition (SSM-backed), not baked at build time. Only `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` are needed as repo secrets (confirmed present).
 
-**Gap:** the CI/CD workflows (`cicd_dev.yml`, `cicd_staging.yml`, `cicd_prod.yml`) only exist on the `staging` branch. `production` is still the Phase 0 scaffold commit — there's no deploy pipeline there yet. The `fix/868k6pydd` PR for this repo targets `staging`, not `production`.
+**`production` lags behind.** `main` and `staging` carry the current code and the full CI/CD workflow
+set (`cicd_dev.yml`, `cicd_staging.yml`, `cicd_prod.yml`, `pr-review.yml`, `_test-gate.yml`).
+`production` is still the Phase 0 scaffold commit: no CI/CD workflow, and an `.env.example` with older
+names (`BACK_API_URL` instead of `BACK_BASE_URL`, `MCP_CIRCUIT_*` instead of `MCP_CB_*`). Don't use
+`production` as a reference for current env var names.

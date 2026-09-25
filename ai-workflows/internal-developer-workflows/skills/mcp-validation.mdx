@@ -7,7 +7,7 @@ description: "The procedure for locally validating the FluxPrompt MCP integratio
 
 Encapsulates how the team validates the MCP server (`mcp-server/` + `back/src/app-mcp` + `front/`) before releasing changes. It is the **source of truth** for the validation procedure — the [`mcp-validator`](/ai-workflows/internal-developer-workflows/agents/mcp-validator) agent is a thin wrapper that loads this skill and runs it in an isolated context.
 
-The skill lives at `.workflow/skills/mcp-validation/`. Source of truth is its `SKILL.md`.
+The skill lives at `skills/mcp-validation/`. Source of truth is its `SKILL.md`.
 
 <Note>
   This is the **hybrid** pattern: the reusable procedure is the skill; the agent just runs it in isolation and returns a verdict. To update how validation works, edit the skill — the agent stays thin.
@@ -15,7 +15,7 @@ The skill lives at `.workflow/skills/mcp-validation/`. Source of truth is its `S
 
 ## How to use it
 
-In Claude Code, say **"validate the MCP"** (also: "run the MCP gate", "is MCP Phase 1 releasable?"). The skill loads inline and runs the tracks. For an isolated run that keeps your main session clean, use the `mcp-validator` agent.
+In Claude Code, say **"validate the MCP"** (also: "run the MCP gate", "is MCP Phase 2 releasable?"). The skill loads inline and runs the tracks. For an isolated run that keeps your main session clean, use the `mcp-validator` agent.
 
 ## Validation tracks
 
@@ -29,6 +29,8 @@ Run in order; stop and report at the first hard failure. Each track reports pass
 | 4 | **Local-stack acceptance** | `back` (fresh build) + `mcp-server` up locally; protocol/tools acceptance |
 | 5 | **Protection checks** | Auth required (401 + `WWW-Authenticate`), kill switch + rate limit return JSON-RPC `-32006`, expired tokens rejected |
 | 6 | **OAuth + transport interop** | AS/protected-resource metadata (incl. path-aware), DCR → authorize → consent → token → authenticated call, `protocolVersion` echo, `Mcp-Session-Id`, CORS, `DELETE /mcp` → 204, and **DCR client persistence across a restart** |
+| 7 | **Phase 2 write/execute + primitives** | Full tool surface (`tools/list` matches `EXPECTED_TOOL_NAMES`) with `title`/`annotations`/`outputSchema`; write gating (dry-run → diff → apply with `dryRun:false`+`idempotencyKey`, replay dedup, CRUD round-trips); versioning (`create_version` → `list_versions` → `publish_version`); execute gating (`run_agent`, `get_run_status`, `cancel_run`); Prompts (`build_flow`, `edit_agent`, `organize_workspace`, `run_agent_recipe`); Resources (`fluxprompt://models`, `fluxprompt://node-types`) |
+| 8 | **Flow authoring integrity** | E1–E11 of the flow-authoring-integrity spec: handle registry drift, false-refusal contrast checks against the product's own truth, `check_agent_integrity` reporting (never refusing), `get_run_nodes` matching worker-executed rows by execution window, output redaction, edge rendering type, and the cheap per-tool refusal checks |
 
 ## Hard rules
 

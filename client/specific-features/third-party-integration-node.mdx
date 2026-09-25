@@ -30,7 +30,7 @@ The **Third Party Integration** node (node type `thirdPartyIntegration`) allows 
 | `blobConfig` | Optional JSON string of the full node config |
 | `output` | Result of the last pull or push execution |
 
-Reserved keys (`RESERVED_DATA_KEYS` / `BLOB_RESERVED_KEYS`) include `provider`, `mode`, `integrationId`, `blobConfig`, `output`, and connection-related keys.
+Reserved keys (`RESERVED_DATA_KEYS` / `BLOB_RESERVED_KEYS`) include `provider`, `providerEntry`, `mode`, `blobConfig`, `flowTrigger`, `output`, and UI-only keys (`label`, `placement`, `previewIndex`, `canceled`, `paused`). Connection fields — `integrationId`, `connectedByUserId`, `connectedByUserName`, `integrationName` — are **not** reserved: they are included in the serialized blob JSON.
 
 ### Local state
 
@@ -80,7 +80,7 @@ ThirdPartyIntegrationNode
     User can show/hide the JSON config, generate/copy it, or paste and apply. Apply uses `enrichMergedWithObjectDefaults` and persists the full payload.
   </Step>
   <Step title="Run">
-    User clicks Run or a flow trigger fires. `useThirdPartySubmit` validates, builds the payload, calls `pullData` or `pushData`, then persists the result with `changeType: 'execute'`.
+    User clicks Run or a flow trigger fires. `useThirdPartySubmit`'s returned `onSubmit` is captured but never called — the node's own `onSubmit` is what's wired to Run. It flushes any pending local field-debounce state via `persistWithBlob`, calls `flushPendingNodeSave(flowId, id)` to force the pending autosave through, then calls `FlowService.executeSingleNode(...)` to dispatch the run (execution itself is handled by `useTemporalFlowExecution`, not by `pullData`/`pushData`).
   </Step>
 </Steps>
 

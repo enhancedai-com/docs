@@ -1,17 +1,15 @@
 ---
 title: "Master API Key"
 description: "How the platform owner uses the single privileged master API key to call any FluxPrompt endpoint on behalf of any customer, with per-request impersonation and full server-side auditing."
-tag: "WIP"
 ---
 
 <Warning>
-  **🚧 Not released — and not on any environment branch.** The master API key is not reachable on
-  production, staging or dev. Its implementation (`src/app-api/master-api-key/`,
-  `src/entities/master_api_key.entity.ts`, `src/internal/controllers/master_api_key.controller.ts`,
-  migration `AddMasterApiKeyAndAccessLog1782917505179`) lives only on the `feat/868k16r8f-*` branches;
-  the production PR has been open and on hold since 2026-07-01, and the merges that landed on
-  `master`/`staging` are no longer reachable from those branches. Treat this page as the design
-  reference, and confirm the code is deployed before handing the collection to anyone.
+  **Internal support tooling — not customer-facing.** The master API key is live on production. Its
+  implementation (`src/app-api/master-api-key/`, `src/entities/master_api_key.entity.ts`,
+  `src/internal/controllers/master_api_key.controller.ts`, migration
+  `AddMasterApiKeyAndAccessLog1782917505179`) is mounted through `InternalModule` and reachable at
+  `POST /internal/master-api-key/rotate` and `GET /internal/master-api-key`. Only the designated
+  owner's account can use it — see [Manage the key](#manage-the-key).
 </Warning>
 
 The master API key is a single, global, privileged credential for the FluxPrompt platform. It lets the designated owner call any API endpoint as themselves, or impersonate any customer and act with that customer's full access — for example, to create a flow for a client or reproduce a customer-reported problem against their real data.
@@ -436,7 +434,7 @@ Every rejection is recorded in the audit log alongside accepted requests.
 
 ## Rate limiting
 
-Master-key traffic is capped at a default of **60 requests per minute** across all master-key calls. Requests over the limit are rejected until the rolling one-minute window clears.
+Master-key traffic is capped at a default of **600 requests per minute** across all master-key calls. Requests over the limit are rejected until the rolling one-minute window clears.
 
 <Note>
 An optional IP allowlist can be enabled later to restrict which source IPs may present the master key. It is currently open (no allowlist enforced). When configured, requests from IPs outside the list are rejected and audited.

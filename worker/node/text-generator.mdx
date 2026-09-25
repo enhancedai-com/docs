@@ -139,14 +139,33 @@ Other providers (Perplexity, xAI, Groq) return no tools when web search is reque
 
 ## Multimodal
 
-When `multimodalEnabled` is true, URLs in the prompt are extracted via regex, classified by extension, and passed as Vercel AI SDK content parts:
+When `multimodalEnabled` is true, `extractMultimodalContent` (`extract-multimodal-content.ts`) finds URLs in the user prompt, system prompt, and loaded session memories via regex, keeps only the ones with a supported file extension, and dedupes them — up to **`MAX_URLS = 10`** per execution, not 3. Supported extensions: `jpg`, `jpeg`, `png`, `gif`, `webp`, `heic`, `heif`, `bmp`, `tiff`/`tif`, `svg`, `avif`, `pdf`. Matched URLs are stripped out of the prompt/system-prompt/memory text to avoid duplication.
 
-- **Images** (jpg, jpeg, png, gif, webp) → `{ type: "image", image: "<url>" }`
-- **Other files** (pdf, audio, video, etc.) → `{ type: "file", data: "<url>", mediaType: "application/octet-stream" }`
+Only **images and PDFs** are actually supported end to end — `fileTypeFromMime` (`multimodal-file-processor.ts`) recognizes only `image/*` and `application/pdf`; any other resolved MIME type throws a `UserConfigError` ("Unsupported file format…"). There is no audio/video handling despite file extensions like those not being explicitly excluded from the initial URL match.
 
-Maximum **3 files** per execution. No base64 conversion or file size validation is performed; the SDK and provider handle content natively. URLs are removed from the prompt to avoid duplication in the system prompt.
+Before any file is processed, the model must be flagged multimodal-capable (`modelInfo.isVisionModel === true`) or the run fails with a `UserConfigError` ("The selected model does not support multimodal input…"). The model's `aiCompany` is then mapped to a provider key (`AI_COMPANY_TO_SYSTEM`); `perplexity` and `moonshot` map to a provider key that has no entry in the limits table below, so multimodal input on those providers always fails with "The selected model provider does not support multimodal input."
 
-Content parts are injected into the last user message. If no user messages exist, a new user message is created with the content parts.
+For each URL, `processMultimodalUrls` (`multimodal-file-processor.ts`):
+
+1. **Downloads the file** — `GET` with a 30s timeout and a `MAX_DOWNLOAD_BYTES = 100MB` cap (checked against `Content-Length`; a network error, non-2xx response, or oversized file throws `UserConfigError`).
+2. **Resolves its MIME type** — from the response's `Content-Type` header, falling back to the file extension.
+3. **Validates format and size** against the model's provider (see the per-provider limits table below) — an unsupported MIME type or a file over that provider's per-type byte limit throws `UserConfigError`.
+4. **Enforces per-execution image/PDF counts** against the same table, after all URLs are downloaded.
+5. **Encodes the file** — providers that support sending a direct image URL (`supportsDirectImageUrl`) get the original URL back as `data`; everything else (including all PDFs, and images on providers without direct-URL support) is **base64-encoded** from the downloaded bytes (`download.buffer.toString("base64")`).
+
+### Per-provider limits (`PROVIDER_LIMITS`)
+
+| Provider | Max images | Max PDFs | Max image size | Max PDF size | Direct image URL? |
+| -------- | ---------- | -------- | --------------- | ------------- | ------------------ |
+| OpenAI | 10 | 1 | 26 MB | 43 MB | Yes |
+| Anthropic | 100 | 5 | 5 MB | 6 MB | No (base64) |
+| Gemini | 3600 | 3600 | 26 MB | 26 MB | No (base64) |
+| Groq | 1 | 0 | 5 MB | — | No (base64) |
+| xAI | 10 | 0 | 26 MB | — | Yes |
+
+Both count limits are enforced together — e.g. a Groq run with 2 images fails even though each individual image is under the byte limit.
+
+Content parts are always sent as `{ type: "file", data, mediaType }` — including images; the Vercel AI SDK's `{ type: "image", image }` shape is not used — where `data` is either the original URL or a base64 string per the encoding rule above, and `mediaType` is the resolved MIME type (not a fixed `application/octet-stream`). These parts are appended after a `{ type: "text", text: userPrompt }` part and injected into the last user message; if no user messages exist, a new user message is created with the content parts.
 
 ## Session memory
 

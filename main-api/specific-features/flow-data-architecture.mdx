@@ -37,8 +37,8 @@ A layered service architecture sits above the database: `FlowService` orchestrat
 | `nodeId` | `varchar` | React Flow node ID |
 | `flowId` | `uuid` (FK) | Parent flow |
 | `type` | `varchar` | Node type (e.g., `fluxBox`, `trigger`) |
-| `positionX` | `float` | X coordinate on canvas |
-| `positionY` | `float` | Y coordinate on canvas |
+| `positionX` | `double precision` | X coordinate on canvas |
+| `positionY` | `double precision` | Y coordinate on canvas |
 | `data` | `jsonb` | Node-specific payload |
 | `extras` | `jsonb` | Forward-compatible extension fields |
 | `createdAt` | `timestamp` | Creation timestamp |
@@ -103,10 +103,10 @@ export class FlowNode {
   @Column()
   type: string;
 
-  @Column({ type: 'float' })
+  @Column('double precision', { name: 'position_x', default: 0 })
   positionX: number;
 
-  @Column({ type: 'float' })
+  @Column('double precision', { name: 'position_y', default: 0 })
   positionY: number;
 
   @Column({ type: 'jsonb', default: {} })
@@ -342,9 +342,9 @@ This means the frontend must send the complete canvas state on every save. Parti
 | File | Purpose |
 |---|---|
 | `src/entities/flow.entity.ts` | Flow entity definition |
-| `src/entities/flow-node.entity.ts` | FlowNode entity definition |
-| `src/entities/flow-edge.entity.ts` | FlowEdge entity definition |
-| `src/services/flow.service.ts` | Orchestrator service |
-| `src/services/flow-node.service.ts` | Node persistence logic |
-| `src/services/flow-edge.service.ts` | Edge persistence logic |
-| `src/controllers/flow.controller.ts` | REST API endpoints |
+| `src/entities/flow_node.entity.ts` | FlowNode entity definition |
+| `src/entities/flow_edge.entity.ts` | FlowEdge entity definition |
+| `src/app-api/folw/flow.service.ts` | Orchestrator service |
+| `src/app-api/folw/flow-node.service.ts` | Node persistence logic |
+| `src/app-api/folw/flow-edge.service.ts` | Edge persistence logic |
+| `src/app-api/folw/flow.controller.ts` | REST API endpoints |

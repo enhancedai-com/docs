@@ -295,15 +295,6 @@
                 ]
               },
               {
-                "group": "Endpoint examples",
-                "pages": [
-                  "api-reference/endpoint/get",
-                  "api-reference/endpoint/create",
-                  "api-reference/endpoint/delete",
-                  "api-reference/endpoint/webhook"
-                ]
-              },
-              {
                 "group": "FluxPrompt MCP",
                 "pages": [
                   "api-reference/mcp/tokens",
@@ -591,15 +582,6 @@
                 "group": "API documentation",
                 "pages": [
                   "api-reference/introduction"
-                ]
-              },
-              {
-                "group": "Endpoint examples",
-                "pages": [
-                  "api-reference/endpoint/get",
-                  "api-reference/endpoint/create",
-                  "api-reference/endpoint/delete",
-                  "api-reference/endpoint/webhook"
                 ]
               },
               {

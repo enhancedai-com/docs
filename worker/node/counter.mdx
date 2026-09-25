@@ -50,7 +50,8 @@ Types reference: [`CounterNodeData`](https://github.com/enhancedai-com/Flux-Prom
 | `isIncreasing` | Legacy boolean. Used as fallback when `counterMode` is absent: `true` → `up`, `false` → `down`. Defaults to `up` when both are undefined. |
 | `text` | Current counter value (as a string) for `up`/`down`, or the pass-through value returned in `wait` mode. |
 | `waitSeconds` | Static delay in seconds for `wait` mode. Ignored unless `counterMode` is `'wait'`. |
-| `waitSecondsData` | Optional `{ text: string }[]` fed by edge inputs. When present and non-empty, `[0].text` overrides `waitSeconds`. A cap of **60 seconds** is applied. |
+| `waitSecondsData` | Optional `{ text: string }[]` fed by edge inputs. When present and non-empty, `[0].text` overrides `waitSeconds`. |
+| `step` | Delta applied per run for `up`/`down` mode. Defaults to `1` when absent, null, or an empty string; must parse as a number or the run fails (see [Errors](#errors)). |
 | `executionStatus` | Set to `'COMPLETED'` by the Worker after a successful run. |
 
 ## Resolving `counterMode`
@@ -64,28 +65,43 @@ const counterMode =
 
 ## Resolving `waitSeconds` (wait mode only)
 
-```typescript
-const waitSecondsFromInput =
-  nodeData.waitSecondsData && nodeData.waitSecondsData.length > 0
-    ? Math.min(60, Math.max(0, Number(nodeData.waitSecondsData[0]?.text) || 0))
-    : null;
+`resolveWaitSeconds` (`counter.service.ts:85-114`) prefers the edge-driven `waitSecondsData[0].text` over the static `waitSeconds` field, but it does **not** silently clamp an out-of-range value — it throws a `UserConfigError`:
 
-const waitSeconds = waitSecondsFromInput ?? Number(nodeData.waitSeconds) ?? 0;
+```typescript
+const fromInput =
+  data.waitSecondsData && data.waitSecondsData.length > 0
+    ? data.waitSecondsData[0]?.text
+    : undefined;
+const rawValue = fromInput ?? data.waitSeconds;
+if (rawValue === undefined || rawValue === null || rawValue === "") return 0;
+
+const num = Number(rawValue);
+if (!Number.isFinite(num)) {
+  // throws UserConfigError: "Wait seconds input is not a number."
+}
+if (num < 0 || num > 60) {
+  // throws UserConfigError: "Wait time must be 0–60 seconds."
+}
+return num;
 ```
 
-Edge-driven input (`waitSecondsData`) takes precedence over the static `waitSeconds` field. The cap of 60 seconds is applied **only** to the dynamic value; `waitSeconds` is used as-is.
+An empty/unset value resolves to `0` seconds (no wait). A non-numeric value or a value outside `[0, 60]` fails the run instead of being clamped.
+
+## Resolving `step` (up/down mode only)
+
+`resolveStep` reads `data.step`; an absent/null/empty value defaults to `1`. A non-numeric `step` throws a `UserConfigError` ("Counter step must be a number.").
 
 ## End-to-end flow
 
 1. **Load node** — `SELECT` from `flows_nodes` by `nodeId`; cast `data` to `CounterNodeData`.
 2. **Resolve mode** — derive `counterMode` from `counterMode` or `isIncreasing` fallback.
-3. **Resolve delay** — if `wait` mode, derive `waitSeconds` from edge input or static field.
+3. **Resolve delay/step** — if `wait` mode, derive `waitSeconds` from edge input or static field (throws if invalid/out of range); otherwise resolve `step` (default `1`) and a `seed` parsed from the current `text` (default `0`).
 4. **Execute**:
-   - **`up`** — parse `text` as a number (default `0`), add 1, convert back to string.
-   - **`down`** — parse `text` as a number (default `0`), subtract 1, convert back to string.
-   - **`wait`** — if `waitSeconds > 0`, await `setTimeout(waitSeconds * 1000)`; return `text` unchanged.
+   - **`up`/`down`** — call `applyCounterDelta`, which applies `+step`/`-step` against a session-scoped counter store (`SessionNodeScope`: `flowId` + `nodeId` + `sessionId` + `userId`) in Postgres, under a row lock — not a plain re-parse of the node's own `text` field. The node's current `text` is only used as the `seed` when no counter value has been stored yet for that scope.
+   - **`wait`** — if `waitSeconds > 0`, await `setTimeout(waitSeconds * 1000)` (cancellable via the Temporal activity context); return `text` unchanged.
 5. **Persist** — `UPDATE flows_nodes` with merged `data`, setting `text` to the output value and `executionStatus: 'COMPLETED'`.
-6. **Return** — `{ text: outputText }`.
+6. **Record audit metadata** — `recordNodeExecutionMetadata` merges a `counterAction` object into `node_executions.metadata` for the run (see [Persisted node `data`](#persisted-node-data)).
+7. **Return** — `{ text: outputText }`.
 
 ## Persisted node `data`
 
@@ -96,9 +112,16 @@ On success, the stored JSON merges all existing fields with:
 | `text` | Result after the operation (new count, or unchanged value in wait mode). |
 | `executionStatus` | `'COMPLETED'`. |
 
+Every run also merges a `counterAction` object into `node_executions.metadata` (via `recordNodeExecutionMetadata`) as an audit record of what happened: `{ counterMode: 'wait', waitSeconds }` in wait mode, or `{ counterMode: 'up' | 'down', step, delta, from, to }` for `up`/`down`.
+
 ## Errors
 
 - Missing node row → `Node not found`.
+- Unsupported `counterMode` (resolves to something other than `up`/`down`/`wait`) → `UserConfigError`, "Counter mode is invalid."
+- `wait` mode, non-numeric `waitSeconds`/`waitSecondsData` value → `UserConfigError`, "Wait seconds input is not a number."
+- `wait` mode, resolved wait seconds outside `[0, 60]` → `UserConfigError`, "Wait time must be 0–60 seconds."
+- `up`/`down` mode, non-numeric `step` → `UserConfigError`, "Counter step must be a number."
+- `up`/`down` mode, non-numeric current `text` (used as the counter seed) → `UserConfigError`, "Counter value must be a number."
 
 ## Related documentation
 

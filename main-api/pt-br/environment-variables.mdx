@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-205 env vars no `back/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+206 env vars no `back/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 ## Database
 
@@ -32,6 +32,7 @@ title: "Variáveis de Ambiente"
 | TEMPORAL_TASK_QUEUE | Obrigatória | nome da task queue Temporal |
 | AGENT_CONCURRENCY | Opcional | quantas execuções de fluxo do `POST /flux/api-v2` rodam ao mesmo tempo (padrão 5) |
 | AGENT_WAIT_TIMEOUT_MS | Opcional | ms que uma chamada `POST /flux/api-v2` sem `callback_url` aguarda o resultado antes de responder `202` com a `statusUrl` (padrão 30000) |
+| AGENT_JOB_TIMEOUT_MS | Opcional | timeout do job Bull para as filas do `POST /flux/api-v2` (padrão 600000) |
 
 ## Auth / OAuth / Integrações
 
@@ -52,9 +53,12 @@ title: "Variáveis de Ambiente"
 | MICROSOFT_REDIRECT_URI | Obrigatória | redirect OAuth Microsoft |
 | MICROSOFT_SCOPES | Obrigatória | scopes OAuth Microsoft |
 | MICROSOFT_TENANT_ID | Obrigatória | tenant Microsoft |
+| SLACK_APP_DOCS_URL | Opcional | link de docs mostrado nas mensagens do app Slack (padrão `https://docs.fluxprompt.ai`) |
+| SLACK_APP_SUPPORT_URL | Opcional | link de suporte mostrado nas mensagens do app Slack (padrão `https://enhanced.ai/contact`) |
 | SLACK_CLIENT_ID | Obrigatória | integração Slack |
 | SLACK_CLIENT_SECRET | Obrigatória | integração Slack |
 | SLACK_SCOPES | Obrigatória | scopes Slack |
+| SLACK_SIGNING_SECRET | Obrigatória | valida a assinatura dos webhooks de eventos do Slack |
 | NOTION_CLIENT_ID | Obrigatória | integração Notion |
 | NOTION_CLIENT_SECRET | Obrigatória | integração Notion |
 | HUBSPOT_CLIENT_ID | Obrigatória | integração HubSpot |
@@ -71,9 +75,10 @@ title: "Variáveis de Ambiente"
 | FRONTEND_OAUTH_CALLBACK_BASE | Obrigatória | base de callback (Zapier/WordPress/MCP) |
 | INTEGRATIONS_ENCRYPTION_KEY | Obrigatória | criptografa credenciais de integrações salvas — precisa bater com o valor do `worker` |
 | INTERNAL_API_KEY | Obrigatória | chamadas internas entre serviços |
-| MASTER_KEY_IP_ALLOWLIST | Opcional | allowlist de IP para master API key |
-| MASTER_KEY_OWNER_EMAIL | Obrigatória | email do dono da master key |
+| MASTER_KEY_IP_ALLOWLIST | Opcional | allowlist de IP para master API key (não está no `.env.example`, lida direto do `process.env`) |
+| MASTER_KEY_OWNER_EMAIL | Opcional | email do dono da master key (padrão `brad@enhanced.ai`; não está no `.env.example`, lida direto do `process.env`) |
 | MASTER_KEY_RATE_LIMIT_PER_MIN | Opcional | rate limit da master key, agora via Redis e contado por chave (padrão 600); sempre aplicado independente do `RATE_LIMIT_MODE` e isento do invariante geral/específico abaixo |
+| MCP_IDEMPOTENCY_KEY_PURGE_BATCH_SIZE | Opcional | tamanho de lote no expurgo de chaves de idempotência MCP (padrão 500) |
 | MCP_INTERNAL_SECRET | Obrigatória | guard interno das chamadas MCP — precisa bater com o valor no `mcp-server` |
 | MCP_OAUTH_CONSENT_SECRET | Obrigatória | assinatura do consentimento OAuth MCP — precisa bater com o valor no `mcp-server` |
 | MCP_RESOURCE_METADATA_URL | Obrigatória | URL de metadados do recurso MCP |
@@ -190,10 +195,21 @@ title: "Variáveis de Ambiente"
 | NODE_EXEC_MAX_PER_NODE | Opcional | máx. de execuções mantidas por node |
 | NODE_EXEC_SLIM_AFTER_DAYS | Opcional | dias até compactar ("slim") execuções |
 | ZAPIER_WEBHOOK_RETENTION_HOURS | Opcional | horas que um payload de webhook do Zapier fica no Postgres antes do cron de purga arquivar no S3 |
+| AI_GATEWAY_SYNC_ENABLED | Opcional | interruptor do cron noturno de sync de modelos de IA via gateway; `false` desliga (padrão ligado) |
+| AI_GATEWAY_SYNC_DRY_RUN | Opcional | roda o sync de modelos de IA sem gravar nenhuma mudança (padrão false) |
+| AI_GATEWAY_SYNC_DEPRECATE | Opcional | deixa o sync depreciar modelos obsoletos; `false` desliga (padrão true) |
+| AI_GATEWAY_SYNC_REMAP_FLOWS | Opcional | deixa o sync remapear flows para fora de modelos depreciados; `false` desliga (padrão true) |
+| AI_GATEWAY_MIN_CATALOG_SIZE | Opcional | piso de sanidade — aborta o sync se o catálogo do provider vier com menos modelos que isso (padrão 100) |
+| AI_GATEWAY_PRICE_CHANGE_ALERT_RATIO | Opcional | múltiplo de preço que sinaliza uma mudança de preço de modelo para revisão manual durante o sync (padrão 5) |
+| AI_GATEWAY_DEPRECATE_AFTER_MISSING_RUNS | Opcional | execuções consecutivas do sync em que um modelo precisa estar ausente do catálogo do gateway antes de ser depreciado (padrão 2) |
+| AI_MODEL_SYNC_CHAT_WEBHOOK_URL | Opcional | webhook de chat para onde o sync de modelos posta o resumo noturno; sem ela, só loga |
+| AI_MODEL_SYNC_REVIEW_URL | Opcional | link incluído no resumo do sync para revisar propostas de modelo pendentes (padrão `/admin/ai-model-proposals`) |
+| FLUX_DEFAULT_CASCADE_SIZE | Opcional | tamanho máximo padrão de cascata de sub-flows (raiz + aninhados) quando um flow não define o próprio override (padrão 5) |
 | FLUX_MAX_NODE_ITERATIONS | Opcional | teto do sistema para quantas vezes um nó pode repetir, qualquer que seja o `loopBehavior` (padrão 150) |
 | FLUX_MAX_ARRAY_ITEMS | Opcional | teto do sistema para quantos itens um `arrayNode` percorre em uma execução (padrão 12000) |
 | FLUX_MAX_RUN_NODE_EXECUTIONS | Opcional | execuções de nó que um run pode gastar antes de terminar (padrão 50000) |
 | FLUX_MAX_CHAIN_NODE_EXECUTIONS | Opcional | execuções de nó que a cadeia inteira de sub-flows pode gastar, que o aninhamento não reseta (padrão 200000) |
+| RUN_MAX_DURATION_MS | Opcional | teto de quanto tempo um run de flow pode durar antes de ser tratado como obsoleto/parado (padrão 21600000) |
 | RATE_LIMIT_MODE | Opcional | modo do limitador: `report` (padrão) decide e loga mas não recusa nada; `enforce` recusa de verdade |
 | RATE_LIMIT_GENERAL_PER_MINUTE | Opcional | limite por minuto usado como fallback por qualquer rota sem override (padrão 400) |
 | RATE_LIMIT_GENERAL_PER_HOUR | Opcional | limite por hora usado como fallback por qualquer rota sem override (padrão 4000) |

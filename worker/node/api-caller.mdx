@@ -190,15 +190,24 @@ Both modes support array-root responses by iterating each item and applying filt
 
 ## Errors
 
-| Cause | Error |
+All are structured errors (`UserConfigError` unless noted) with a real `userMessage`:
+
+| Cause | userMessage |
 | ----- | ----- |
 | Missing node | `Node not found` |
-| Missing URL after resolution | `No URL provided: urlData and url are both missing or empty` |
-| Invalid JSON in auth headers | `Invalid JSON in authentication headers` |
-| Invalid JSON body (JSON content type) | `Invalid JSON in request body` |
-| Invalid JSON body (form-urlencoded fallback) | `Invalid JSON in request body for form-urlencoded` |
-| HTTP status outside 2xx (no polling) | `HTTP <status>: <body>` (also persisted as error) |
-| Polling timeout | `Polling timed out without matching condition` (also persisted as error) |
+| Missing URL after resolution | `URL is required.` (`requireField`) |
+| URL fails to parse | `URL is malformed.` |
+| GET/HEAD configured with a request body (`BODYLESS_METHODS`) | `The <METHOD> method cannot send a request body. Select POST, PUT or PATCH, or remove the request body.` |
+| `jsonAuth` is not valid JSON | `Authentication headers field is not valid JSON.` |
+| `jsonAuth` parses to something other than an object or a header string (e.g. an array or a number) | `Authentication headers must be a JSON object or a header string.` — note `jsonAuth` accepts either a JSON object of headers directly, or JSON text that parses to a **string**, which is then read as raw `Name: Value` header lines |
+| A header line in that raw-string form has no `:` separator | `Authentication header is missing a ':' separator.` |
+| A header line has an empty name before the `:` | `Authentication header has an empty name.` |
+| `jsonRequestBody` is not valid JSON (JSON content type, or the form-urlencoded fallback which also parses it as JSON before re-encoding as form params) | `Request body is not valid JSON.` (field `jsonRequestBody`) — the same message either way |
+| HTTP 4xx response | `The remote server rejected the request (HTTP <status>)<: reason>` (`UserConfigError`) |
+| HTTP response outside 2xx and not 4xx (e.g. 5xx) | `The remote server failed (HTTP <status>)<: reason>. Try again.` (`IntegrationError`) |
+| Polling exhausts its retry duration without a match | `Polling did not match '<pollingConditionField>' within <N>s.` (`TimeoutError`) |
+
+`<reason>`, when present, is a short excerpt pulled from the response body's `error`/`message`/`userMessage`/`detail` field (or the raw body text), capped at 300 characters.
 
 ## Related documentation
 

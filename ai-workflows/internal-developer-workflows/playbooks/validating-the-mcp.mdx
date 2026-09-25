@@ -28,6 +28,8 @@ Run in order. Stop and report at the first hard failure (unless you explicitly w
 | 4 | **Local-stack acceptance** | `back` + `mcp-server` started locally over HTTP; protocol/tools acceptance suite passes against a local token. |
 | 5 | **Protection checks** | Auth required (401 with `WWW-Authenticate`), kill switch + rate limit return the expected JSON-RPC error, expired tokens rejected. |
 | 6 | **OAuth + transport interop** | AS/protected-resource metadata, DCR, authorize → consent → token → authenticated call, CORS preflight, session header — **and DCR client persistence across an `mcp-server` restart**. |
+| 7 | **Phase 2 write/execute + primitives** | Full tool surface (`tools/list` matches `EXPECTED_TOOL_NAMES`); write gating (dry-run → diff → apply, idempotent replay, CRUD round-trips); versioning (`create_version` → `list_versions` → `publish_version`); execute gating (`run_agent`, `get_run_status`, `cancel_run`); Prompts and Resources primitives. |
+| 8 | **Flow authoring integrity** | Handle registry drift, false-refusal contrast checks against the product's own truth, `check_agent_integrity` reporting (never refusing), `get_run_nodes` matching worker-executed rows correctly, output redaction, edge rendering type. |
 
 <Note>
 Tracks 3 and 4 use a disposable local Postgres and a locally started stack. They must never run against shared environments. Anything that needs dev/staging/prod (e.g. applying a migration there) stops and goes through a reviewed PR.
@@ -37,7 +39,7 @@ Tracks 3 and 4 use a disposable local Postgres and a locally started stack. They
 
 <Steps>
   <Step title="Load the skill inline">
-    In Claude Code, say **“validate the MCP”** (also: “run the MCP gate”, “is MCP Phase 1 releasable?”). This loads the `mcp-validation` skill and runs the tracks in the current session.
+    In Claude Code, say **“validate the MCP”** (also: “run the MCP gate”, “is MCP Phase 2 releasable?”). This loads the `mcp-validation` skill and runs the tracks in the current session.
   </Step>
   <Step title="Or use the agent for an isolated run">
     Invoke the **`mcp-validator`** agent. It runs the same tracks in its own context and reports a clean **GO / NO-GO** without polluting your main conversation.

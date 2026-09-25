@@ -31,7 +31,9 @@ async chargeTokensActivity({
   inputTokens: number,
   outputTokens: number,
   model: string,
-  aiSystem: string
+  aiSystem: string,
+  execId?: string,
+  nodeId?: string,
 }): Promise<boolean>
 ```
 
@@ -45,6 +47,8 @@ async chargeTokensActivity({
 | `outputTokens` | `number` | Number of output tokens generated |
 | `model` | `string` | Name/identifier of the AI model used |
 | `aiSystem` | `string` | AI system/provider (e.g., `openai`, `anthropic`) |
+| `execId` | `string` (optional) | Execution id the charge belongs to |
+| `nodeId` | `string` (optional) | Node id the charge belongs to |
 
 ## Outputs
 
@@ -65,6 +69,8 @@ The request includes:
 - `outputTokens`: Output token count
 - `model`: Model name
 - `aiSystem`: AI system/provider
+- `execId`: Execution identifier (optional)
+- `nodeId`: Node identifier (optional)
 
 The request is authenticated using the `INTERNAL_API_KEY` header.
 
@@ -132,7 +138,7 @@ The activity communicates with the main API's internal endpoint:
 - **Endpoint**: `/worker/charge-tokens`
 - **Method**: POST
 - **Authentication**: Internal API key (`INTERNAL_API_KEY`)
-- **Request body**: `{ flowId, userId, inputTokens, outputTokens, model, aiSystem }`
+- **Request body**: `{ flowId, userId, inputTokens, outputTokens, model, aiSystem, execId?, nodeId? }`
 - **Response**: `{ success: boolean }`
 
 ## Related documentation

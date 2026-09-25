@@ -19,7 +19,7 @@ The `UserObject` entity maps to the `flow_objects` table.
 | `sessionEnabled` | `boolean` | Whether session tracking is active |
 | `selectedSession` | `varchar` | Currently active session key |
 | `sessions` | `jsonb` | Session data (see `FluxObjectSession`) |
-| `flowId` | `uuid` (FK) | Parent flow (set when `localObject` is true) |
+| `flowId` | `varchar` (FK) | Parent flow (set when `localObject` is true) |
 | `text` | `jsonb` | Object content (see `FluxObjectTextItem`) |
 | `userId` | `uuid` (FK) | Owning user |
 | `companyUserId` | `uuid` (FK) | Owning company user |
@@ -95,7 +95,7 @@ The objects system is accessed through several endpoints across different contro
 | `GET` | `/company-spaces` | List all company spaces with objects |
 | `GET` | `/company-spaces/:id` | Get a single space with its objects |
 | `GET` | `/company/user-company` | Get company user data including objects |
-| `POST` | `/company/:id/add-user` | Add a user to a company and seed their objects |
+| `POST` | `/company/add-user/:id` | Add a user to a company and seed their objects |
 | `POST` | `/internal/objects-migration/migrate` | Bulk migration endpoint for objects |
 
 <Warning>
@@ -152,9 +152,9 @@ When `localObject` is set to `true`, the object is scoped to a specific flow via
 
 | File | Purpose |
 |---|---|
-| `src/entities/user-object.entity.ts` | UserObject entity definition |
-| `src/services/objects.service.ts` | ObjectsService with CRUD and ownership logic |
-| `src/interfaces/flux-object.interface.ts` | FluxObject and related interfaces |
-| `src/controllers/user.controller.ts` | User-level object endpoints |
-| `src/controllers/company-spaces.controller.ts` | Space-level object endpoints |
-| `src/services/flux/object-caller.ts` | Object read/write during flow execution |
+| `src/entities/user_object.entity.ts` | UserObject entity definition |
+| `src/app-api/objects/objects.service.ts` | ObjectsService with CRUD and ownership logic |
+| `src/app-api/objects/interfaces/flux-object.interface.ts` | FluxObject and related interfaces |
+| `src/app-api/user/user.controller.ts` | User-level object endpoints |
+| `src/app-api/company_spaces/company_spaces.controller.ts` | Space-level object endpoints |
+| `src/app-api/flux/flux.service.ts` | `objectCaller()` method — object read/write during flow execution |

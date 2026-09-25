@@ -14,6 +14,12 @@ four conventions. Learn them once and every write tool behaves predictably.
 *would* happen so you can inspect it first. To actually apply the change you must pass **both**
 `dryRun: false` **and** an `idempotencyKey`.
 
+<Warning>
+  **`cancel_run` is the one exception.** It defaults to `dryRun: false` and cancels immediately —
+  pass `dryRun: true` explicitly to validate without cancelling. See
+  [Running agents](/mcp/tools/running-agents#cancel_run).
+</Warning>
+
 ```json
 // 1. Inspect
 { "agentId": "a1b2…", "nodeId": "textBox_1", "patch": { "data": { "text": "hi" } } }
@@ -102,6 +108,36 @@ workspace admin can allow non-admin write/execute keys in **Settings → MCP Tok
 | `provider_not_ready` | The provider is not enabled for MCP writes in this environment. | Ask an admin; the allowlist is per environment. |
 | `-32006` rate limited | 60 requests/minute or 5 000/day per key. | Honour `retryAfterMs`. |
 | `-32602` invalid params | A required parameter was omitted. `data.missing` names them. | Send the parameter; the schema for each tool lists what is required. |
+
+## `check_agent_integrity`
+
+Checks whether an agent's current node/edge graph will actually render and execute the way it looks
+— without changing anything. It needs only the `read` scope and is safe to call on any agent,
+including one this MCP did not author.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `agentId` | string (UUID) | Yes | Agent to check. From `list_agents`. |
+| `versionId` | string | No | Check a specific version snapshot instead of the current draft. |
+
+Returns:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ok` | boolean | `false` when `flowEntryIssues`, `unrenderableEdges`, `missingInputs`, `unreachableNodes` or `wrongEdgeTypes` has at least one entry. Does **not** depend on `unverifiableEdges`. `ok: true` never means the flow produces correct output — it cannot see a starved third-party call that still reports success, or an unfed data field on a node type this MCP did not author. |
+| `flowEntryIssues` | array | `{ code, reason }` — no usable execution entry point; the flow will not run at all. `code` is `no_global_starter`, `global_starter_id_not_resolvable` or `global_starter_not_connected`. |
+| `unrenderableEdges` | array | `{ edgeId, source, target, sourceHandle, targetHandle, reason, validSourceHandles?, validTargetHandles? }` — edges whose handle does not exist on the node and so will not be drawn. |
+| `missingInputs` | array | `{ code, nodeId, nodeType, targetHandle, companionField?, sourceEdgeId, reason }` — data that is wired but will never arrive. `code` is `empty_companion_array` or `control_classified_data_handle`. |
+| `unreachableNodes` | array | `{ nodeId, nodeType }` — nodes with no control/global/condition path from the global starter. |
+| `wrongEdgeTypes` | array | `{ edgeId, sourceHandle, expectedType, actualType }` — control/global edges not drawn as execution edges. |
+| `unverifiableEdges` | array | `{ edgeId, source, target, sourceHandle, targetHandle, reason }` — edges the write path accepted because the target node type accepts any handle, so the registry cannot confirm or deny the handle is valid. Present for visibility only; does not affect `ok`. |
+
+<Warning>
+  **Call this on agents you just authored or edited too, not only pre-existing ones.** A write can
+  pass validation on each individual edge and still leave the agent wrong as a whole — for example a
+  control edge where a data edge was needed. `ok: true` only means this specific set of checks found
+  nothing, not that the flow works.
+</Warning>
 
 ## What the response tells you beyond the diff
 

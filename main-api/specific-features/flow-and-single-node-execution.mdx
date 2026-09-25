@@ -180,12 +180,12 @@ return { execId };
 `isTemporalNode(type)` returns `true` for the types already migrated to the worker:
 
 ```
-commandTextNode
-scripting
-apiCaller
-mathFunction
-counterNode
-outputController
+commandTextNode       scripting              apiCaller
+mathFunction           counterNode            outputController
+pullData               pushData               mcpNode
+imageGenerator         commandContentNode     voiceBoxNode
+webSearch              webCrawling            audioReaderNode
+sqlQuerier
 ```
 
 For these, the API enqueues a `processSingleNode` workflow on the `enhanced-ai-queue` task queue and returns immediately. The worker:
@@ -216,11 +216,7 @@ For node types not yet migrated to the worker, `runLegacyAndPersist` runs the wo
 Legacy types currently wired into the dispatcher:
 
 ```
-imageGenerator        webSearch              voiceBoxNode
-audioReaderNode       commandContentNode     pullData
-pushData              thirdPartyIntegration  mcpNode
-libraryNode           webCrawling            reportBuilder
-sqlQuerier            nodesBox
+thirdPartyIntegration    libraryNode    reportBuilder    nodesBox
 ```
 
 <Info>

@@ -1,15 +1,19 @@
 ---
 title: "Image generator"
 sidebarTitle: "Image generator"
-description: "Temporal activity for the image generator node: generates images through six provider systems (openai, gemini, fal, stabilityai, ideogram, opensources), uploads the result, and charges usage."
+description: "Temporal activity for the image generator node: generates images through six provider systems (openai, gemini, fal, meta, stabilityai, ideogram), uploads the result, and charges usage."
 ---
 
 ## Overview
 
 The **image generator** node produces an image from a prompt assembled out of several node fields, then uploads the result and charges the user for one (or more) generated images. The node supports six provider systems, selected by `nodeData.aiSystem` (default `openai`):
 
-- **`openai`**, **`gemini`**, **`fal`** — call [`generateImage()`](https://ai-sdk.dev/docs/ai-sdk-core/image-generation) from the [AI SDK](https://ai-sdk.dev/) against a model returned by `aiProviders.<provider>.image(...)`.
-- **`stabilityai`**, **`ideogram`**, **`opensources`** (Kandinsky via Replicate) — make direct HTTP calls, bypassing the AI SDK entirely.
+- **`openai`**, **`gemini`**, **`fal`**, **`meta`** (Muse, executed via the `fal` client) — call [`generateImage()`](https://ai-sdk.dev/docs/ai-sdk-core/image-generation) from the [AI SDK](https://ai-sdk.dev/) against a model returned by `aiProviders.<provider>.image(...)`.
+- **`stabilityai`**, **`ideogram`** — make direct HTTP calls, bypassing the AI SDK entirely.
+
+<Note>
+  A seventh legacy system, **`opensources`** (Kandinsky via Replicate), was removed 2026-09-03 — it was confirmed broken in both dev and prod (Replicate returned HTTP 401) with no viable replacement. `aiSystem: "opensources"` now falls through to the generic "aiSystem not supported" `UserConfigError`.
+</Note>
 
 [`imageGeneratorActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`ImageGeneratorService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/image-generator.service.ts), which dispatches through two lookup tables keyed by `aiSystem`: `PROVIDER_BUILDERS` (the AI SDK path) and `DIRECT_HTTP_BUILDERS` (the direct-HTTP path). If `aiSystem` matches neither, the activity throws a `UserConfigError`.
 
@@ -77,7 +81,7 @@ Each of these fields also has an edge-driven counterpart — `promptData`, `subj
 
 | Field | Role |
 | ----- | ---- |
-| `aiSystem` | Selects the provider system: `openai` (default), `gemini`, `fal`, `stabilityai`, `ideogram`, or `opensources`. |
+| `aiSystem` | Selects the provider system: `openai` (default), `gemini`, `fal`, `meta`, `stabilityai`, or `ideogram`. |
 | `aiModel` | Model id, read by `openai`, `gemini`, and (via [`resolveImageModel`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/providers/resolve-image-model.ts)) `stabilityai`/`ideogram` as the primary source of the model — the per-provider legacy field (`engineId`, `ideogramModel`) is a fallback for stored data older than `aiModel`. |
 | `spaceId` | Optional; threaded through to the upload call. |
 
@@ -141,15 +145,20 @@ Any `type` outside this table throws `UserConfigError` — including two real pr
 
 `type: "Expand Image"` throws `UserConfigError`. The back silently routed this to its upscale method; this port refuses instead, since no real node was found using this combination — see [Provenance](#provenance), D15.
 
-### `opensources` (Kandinsky via Replicate)
+### `meta` (Muse, via fal)
+
+`meta` shares its builder with `fal` (`buildFalSpec` handles both `aiSystem` values — there is no separate `meta` module) but is a distinct catalog identity, matching the `stabilityai`/`ideogram` precedent of a dedicated `aiSystem` id that still executes through an existing client. It is selected whenever `falModel === "muse"` and calls `fal.ai/models/meta/muse-image/{text-to-image,edit}`.
 
 | Field | Role |
 | ----- | ---- |
-| `steps` | Number of inference steps. Defaults to `75`. |
-| `width`, `height` | Image dimensions. Default to `1024` each. |
-| `negativePrompt` | Sent as a top-level `negative_prompt` sibling of the Replicate `input` object (a confirmed-dead field in Replicate's real API, preserved as-is). |
+| `type` | `"Image to image"` routes to the `edit` endpoint (requires `inputPreview`, throws `UserConfigError` if missing); anything else routes to `text-to-image`. |
+| `imageSize` | Fal's named size preset (the same field/values `fal` uses), converted to Muse's own colon aspect-ratio string (e.g. `landscape_4_3` → `4:3`) via a lookup table — Muse's endpoint takes `aspect_ratio`, not `image_size`. |
+| `output_format` | Sent as `outputFormat`. The installed AI SDK's fal options schema only accepts `"jpeg"`/`"png"`; any other value (including Muse's own real default, `"webp"`) falls back to `"png"`. |
+| `sync_mode` | Same literal-string-`"false"` comparison as the `fal` provider. |
+| `inputPreview` | For image-to-image, sent as `images: [inputPreview]` on a multi-image prompt (`providerOptions.fal.useMultipleImages: true`), which makes the AI SDK serialize it as fal's plural `image_urls` field. |
+| `num_images` | Sent as `n`, same as `fal`. Defaults to `1`. |
 
-There is no model selector for this provider system — `opensources` maps unconditionally to the Kandinsky 2.2 model on Replicate.
+Muse does not read `guidance_scalefloat`, `safety_tolerance`, or `inference_steps` — its request shape has no equivalents for those fal-family parameters.
 
 ## Building the prompt
 
@@ -169,7 +178,7 @@ Uploads go through `storeGeneratedImage` (in [`store-and-charge.ts`](https://git
 {
   nodeId: string;
   execId: string;
-  provider: string;   // e.g. 'openAi', 'gemini', 'fal', 'stabilityAi', 'ideogram', 'openSources'
+  provider: string;   // e.g. 'openAi', 'gemini', 'fal', 'meta', 'stabilityAi', 'ideogram'
   model: string;
   userId: string;
   flowId?: string;
@@ -218,7 +227,7 @@ Other `data` fields are preserved via spread (`...nodeData`).
 
 | Providers | Shape |
 | --------- | ----- |
-| `fal`, `opensources`, `stabilityai` | A bare **string** — the image URL itself. |
+| `fal`, `meta`, `stabilityai` | A bare **string** — the image URL itself. |
 | `openai`, `gemini` | An **object**: `{ message: string; usedTokens: number; cost: number }` — `message` holds the URL. |
 | `ideogram` | An **object**: `{ image: string; usedTokens: number; cost: number }` — note the key is `image`, not `message`. |
 
@@ -247,8 +256,6 @@ The service calls `Context.current().heartbeat()` twice per run, to keep the act
 - `{ nodeId, phase: "generating" }` — before the provider call.
 - `{ nodeId, phase: "uploading" }` — before the upload to `/worker/store-image`.
 
-The `opensources` (Kandinsky) provider additionally polls Replicate for prediction status, with a worker-side cap of **120 attempts at a 1-second interval (~2 minutes)**. Exceeding the cap throws `TimeoutError`. The underlying Replicate SDK/API has no such bound on its own — this poll budget is a deliberate worker-side addition, required so a stuck prediction eventually surfaces as a timeout instead of running indefinitely.
-
 ## Errors
 
 | Condition | Class |
@@ -259,7 +266,7 @@ The `opensources` (Kandinsky) provider additionally polls Replicate for predicti
 | Provider poll exceeds budget | `TimeoutError` |
 | Image upload or DB write failure | `SystemError` |
 
-Implemented by [`ai-sdk-error-classifier.ts`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/ai-sdk-error-classifier.ts) for the AI SDK path (`openai`/`gemini`/`fal`) and [`http-error-classifier.ts`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/http-error-classifier.ts) for the direct-HTTP path (`stabilityai`/`ideogram`/`opensources`).
+Implemented by [`ai-sdk-error-classifier.ts`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/ai-sdk-error-classifier.ts) for the AI SDK path (`openai`/`gemini`/`fal`/`meta`) and [`http-error-classifier.ts`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/http-error-classifier.ts) for the direct-HTTP path (`stabilityai`/`ideogram`).
 
 ## Provenance
 
