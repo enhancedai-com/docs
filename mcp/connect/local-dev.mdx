@@ -27,7 +27,7 @@ Choose one approach. Docker Compose is recommended for new contributors — no N
 
 <Tabs>
   <Tab title="Option A — Docker Compose (recommended)">
-    Starts `mcp-server` + MCP Inspector in a single command.
+    Starts `mcp-server` alone — no Node/pnpm setup required on the host.
 
     ```bash
     cp .env.example .env
@@ -35,7 +35,15 @@ Choose one approach. Docker Compose is recommended for new contributors — no N
     docker compose up
     ```
 
-    The MCP Inspector web UI opens at **http://localhost:5173**.
+    The server listens on **http://localhost:3100** (published from the container).
+
+    <Note>
+    **MCP Inspector does not run in Docker Compose.** The `inspector:` service in `docker-compose.yml`
+    is defined but commented out — inside Docker its OAuth issuer (`http://mcp-server:3100`) would not
+    match the `localhost` the browser and redirects use, so it doesn't work there. Run the Inspector on
+    the host instead, whether `mcp-server` runs in Docker (this option) or standalone (Option B) — see
+    [Step 2](#step-2-test-with-mcp-inspector).
+    </Note>
 
     <Note>
     **`BACK_BASE_URL` in Docker** — the value depends on where `back/` is running:
@@ -75,8 +83,7 @@ MCP_INTERNAL_SECRET=mcp_dev_local
 MCP_KILL_SWITCH=off
 
 # Leave blank to skip Datadog writes locally
-DD_API_KEY=
-DD_SITE=datadoghq.com
+DATADOG_API_KEY=
 ```
 
 `MCP_INTERNAL_SECRET` must match the value set in `back/`'s `.env`.
@@ -100,19 +107,15 @@ The script is idempotent — running it again replaces the previous token with t
 
 <Tabs>
   <Tab title="Docker Compose (Option A)">
-    MCP Inspector is already running. Open **http://localhost:5173** and connect:
+    The Inspector is not part of the Docker Compose stack (see the note in [Step 1](#step-1-start-the-server)) — run it on the host the same way as Option B, connecting to the port Docker published:
 
     | Field | Value |
     |-------|-------|
     | Transport | Streamable HTTP |
-    | URL | `http://mcp-server:3100/mcp` |
+    | URL | `http://localhost:3100/mcp` |
     | Header | `Authorization: Bearer mcp_dev_local` |
 
-    <Warning>
-    Use `http://mcp-server:3100/mcp`, **not** `http://localhost:3100/mcp`. The Inspector's proxy runs inside Docker — `localhost` there refers to the Inspector container itself. Docker resolves `mcp-server` to the correct container via the internal network.
-    </Warning>
-
-    Click **Connect**, then **Tools → List**. You should see `list_agents`, `get_agent`, and `list_node_types`.
+    Follow the **Standalone (Option B)** tab for the exact steps — switch to Streamable HTTP, set the URL above, add the header, then **Connect**.
   </Tab>
   <Tab title="Standalone (Option B)">
     [MCP Inspector](https://github.com/modelcontextprotocol/inspector) can also be run directly. Run it **without arguments** — passing a URL directly makes it treat the URL as a stdio process to spawn, which fails for HTTP servers:
@@ -154,7 +157,10 @@ From the `mcp-server/` directory (server must already be running):
 pnpm claude:register
 ```
 
-This script reads `PORT` and `MCP_INTERNAL_SECRET` from `.env` and writes the `fluxprompt-mcp` entry into `claude_desktop_config.json` automatically. It is idempotent — running it again prints the current state and exits without changes.
+This script reads `PORT` from `.env` (used only when you don't pass `--url`) and writes the
+`fluxprompt-mcp` entry — `{ "url": "<target>" }`, with no `Authorization` header, since Claude Desktop's
+config doesn't support one — into `claude_desktop_config.json`. It is idempotent — running it again
+with the same URL prints the current state and exits without changes.
 
 After running, **fully restart Claude Desktop**. The `fluxprompt-mcp` entry appears in the tools panel (hammer icon).
 
@@ -253,17 +259,11 @@ All three must pass before any commit.
   <Accordion title="Cannot reach back/ (ECONNREFUSED)">
     `BACK_BASE_URL` points to a host that isn't running. If running in Docker, make sure you are using `http://host.docker.internal:<port>` (not `http://localhost:...`). If running standalone, start your local `back/` instance.
   </Accordion>
-  <Accordion title="Inspector shows wrong proxy port or ECONNREFUSED (Docker)">
-    The npm cache inside the inspector container may have a stale version. Clear it and restart:
-
-    ```bash
-    docker compose down -v && docker compose up
-    ```
-
-    The `-v` flag removes named volumes, including the Inspector npm cache.
-  </Accordion>
-  <Accordion title="Inspector cannot reach the MCP server (Docker)">
-    Check the URL in the Inspector UI. It must be `http://mcp-server:3100/mcp`, not `http://localhost:3100/mcp`. The Inspector proxy runs inside Docker — `localhost` there is the Inspector container, not your host.
+  <Accordion title="Inspector shows ECONNREFUSED or won't connect">
+    The Inspector runs on the host (see [Step 2](#step-2-test-with-mcp-inspector)), not inside Docker
+    Compose — the `inspector:` service in `docker-compose.yml` is commented out. Make sure you started
+    it on the host, and that the URL you gave it is `http://localhost:3100/mcp` (the port Docker
+    publishes `mcp-server` on).
   </Accordion>
   <Accordion title="tools/list returns an empty array">
     The token's scope doesn't include `read`. The dev token must have `scope: 'read'` in the `mcp_tokens` table.

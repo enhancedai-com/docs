@@ -76,10 +76,20 @@ A key carries one or more of three scopes:
 
 No scope grants access to billing, users, or workspace settings — those are never exposed over MCP.
 
-### A key is bound to one workspace
+### One authorization can cover multiple workspaces
 
-Each key is issued for **one** organization, chosen on the consent screen (OAuth) or by the workspace
-the token was created in. To act on another organization you authorize again and hold a second key.
+A single OAuth authorization or service token is **not** limited to one organization — an admin can
+let the same key reach several of their organizations, and scopes are set **per workspace**, so a
+key can carry `write` in one and only `read` in another. Call
+[`list_workspaces`](/mcp/tools/agents-and-folders#list_workspaces) to see every workspace an
+authorization covers and its scopes in each.
+
+Because of this, every tool except `list_workspaces`, `list_node_types` and `get_node_type` accepts
+an optional `workspaceId` parameter:
+
+- Omit it when the authorization covers exactly one workspace — it is inferred automatically.
+- Pass it when the authorization covers more than one. A call that omits it in that case is refused
+  with `workspace_required`, and the error lists the covered workspace ids so you can choose.
 
 ### Scopes are clamped by your role
 

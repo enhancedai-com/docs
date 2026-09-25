@@ -30,17 +30,8 @@ title: "Variáveis de Ambiente"
 | MCP_CB_ERROR_THRESHOLD | Opcional | limiar de erro do circuit breaker (default 0.5) |
 | MCP_CB_MIN_SAMPLES | Opcional | amostras mínimas antes de avaliar o circuito (default 5) |
 | DATADOG_API_KEY | Opcional | chave do audit log no Datadog |
-| INSPECTOR_CLIENT_PORT | Opcional | porta da UI do MCP Inspector (dev only) |
-| INSPECTOR_PROXY_PORT | Opcional | porta do proxy do MCP Inspector (dev only) |
-
-## Corrigido nesta auditoria
-
-O `.env.example`/`docker-compose.yml` antigos (na `staging`, onde o código real vive) tinham nomes que não batiam com o que o código realmente lê — essas configs eram no-op silencioso:
-
-- `MCP_CIRCUIT_ERROR_RATE_THRESHOLD` / `MCP_CIRCUIT_WINDOW_SECONDS` / `MCP_CIRCUIT_COOLDOWN_SECONDS` → o código lê `MCP_CB_ERROR_THRESHOLD` / `MCP_CB_WINDOW_MS` / `MCP_CB_COOLDOWN_MS` (e nota: é ms, não segundos)
-- `DD_API_KEY` / `DD_SITE` / `DD_AUDIT_INDEX` → o código lê `DATADOG_API_KEY` (`DD_SITE`/`DD_AUDIT_INDEX` não são lidas em lugar nenhum)
-
-Tudo renomeado pra bater com o código nesta passada. `BACK_BASE_URL` já estava correto na `staging` — uma versão anterior desta auditoria comparou contra o `.env.example` desatualizado da `production` (que ainda diz `BACK_API_URL`) e apontou isso como mismatch por engano. A `production` nem tem o código real ainda (ver o gap de CI/CD abaixo), então não é um alvo válido de comparação.
+| INSPECTOR_CLIENT_PORT | Opcional | porta da UI do MCP Inspector — atualmente inerte; só é lida pelo serviço `inspector:` desabilitado no Docker, não pelo script `pnpm inspect` realmente usado pra rodá-lo (dev only) |
+| INSPECTOR_PROXY_PORT | Opcional | porta do proxy do MCP Inspector — atualmente inerte; só é lida pelo serviço `inspector:` desabilitado no Docker, não pelo script `pnpm inspect` realmente usado pra rodá-lo (dev only) |
 
 ## Pegadinha cross-repo
 
@@ -50,4 +41,8 @@ Tudo renomeado pra bater com o código nesta passada. `BACK_BASE_URL` já estava
 
 Mesmo padrão de injeção em runtime do `back`/`worker` — as vars vivem na task definition do ECS (respaldada por SSM), não são injetadas em build. Só precisa de `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` como secrets do repo (confirmados presentes).
 
-**Gap:** os workflows de CI/CD (`cicd_dev.yml`, `cicd_staging.yml`, `cicd_prod.yml`) só existem na branch `staging`. A `production` ainda é o commit do scaffold Phase 0 — não tem pipeline de deploy lá ainda. O PR de `fix/868k6pydd` deste repo aponta pra `staging`, não pra `production`.
+**A `production` está atrasada.** A `main` e a `staging` carregam o código atual e o conjunto completo
+de workflows de CI/CD (`cicd_dev.yml`, `cicd_staging.yml`, `cicd_prod.yml`, `pr-review.yml`,
+`_test-gate.yml`). A `production` ainda é o commit do scaffold Phase 0: sem workflow de CI/CD, e um
+`.env.example` com nomes antigos (`BACK_API_URL` em vez de `BACK_BASE_URL`, `MCP_CIRCUIT_*` em vez de
+`MCP_CB_*`). Não use a `production` como referência para os nomes atuais das env vars.
