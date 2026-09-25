@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-32 env vars in `worker/.env.example`, validated via Zod in `src/env.ts`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+34 env vars in `worker/.env.example`, validated via Zod in `src/env.ts`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 | Var | Required? | Purpose |
 |---|---|---|
@@ -13,6 +13,8 @@ title: "Environment Variables"
 | TYPEORM_USERNAME | Required | Postgres user |
 | TYPEORM_PASSWORD | Required | Postgres password |
 | TYPEORM_DATABASE | Required | Postgres db name |
+| WORKER_DB_POOL_IDLE_TIMEOUT_MS | Optional | pg Pool idleTimeoutMillis (default 30000) |
+| WORKER_DB_POOL_CONNECTION_TIMEOUT_MS | Optional | pg Pool connectionTimeoutMillis — how fast a saturated pool fails instead of hanging an activity until its Temporal `startToCloseTimeout` (default 5000) |
 | REDIS_HOST | Required | Redis host (status notifications pub/sub) |
 | REDIS_PORT | Required | Redis port |
 | OPENAI_API_KEY | Required | OpenAI client |
@@ -32,7 +34,7 @@ title: "Environment Variables"
 | INTEGRATIONS_ENCRYPTION_KEY | Required | decrypts `user_integrations` credentials (Stripe, WordPress, HubSpot adapters, plus the `accessToken`/`refreshToken` columns encrypted via `token-encryption.ts`) — must match `back`'s value |
 | CLAIM_CHECK_THRESHOLD_BYTES | Optional | claim-check pattern threshold (default 262144) |
 | APICALLER_MAX_RESULT_BYTES | Optional | api-caller node result size limit (default 1_000_000) |
-| MCP_MAX_RESULT_BYTES | Optional | 🚧 **dev only** — mcpNode tool-result size limit (default 1_800_000). The production worker does not run the MCP node, so this var is not read there. See [MCP Client](/worker/node/mcp). |
+| MCP_MAX_RESULT_BYTES | Optional | mcpNode tool-result size limit (default 1_800_000). See [MCP Client](/worker/node/mcp). |
 | LOG_PROVIDER_OPTIONS | Optional | debug flag, logs AI provider options |
 | FAL_KEY | Optional | fal.ai API key (imageGenerator node, fal provider — pro/schnell/dev/Flux 2 families) — same value as `back` |
 | STABILITY_AI_API_KEY | Optional | Stability AI API key (imageGenerator node, stabilityai provider) — same value as `back` |

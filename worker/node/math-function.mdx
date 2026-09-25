@@ -1,18 +1,22 @@
 ---
-title: "Math function"
-sidebarTitle: "Math function"
-description: "Temporal activity for the math function node: substitute named variables into a formula string and evaluate with expr-eval."
+title: "Functions"
+sidebarTitle: "Functions"
+description: "Temporal activity for the Functions node: substitute named variables into a formula string and evaluate with expr-eval."
 ---
+
+<Note>
+Also known as **Math function** (the Worker module and this page's original title) or **Math Function** (technical name); `type: mathFunction`.
+</Note>
 
 ## Overview
 
-The **math function** node evaluates a numeric expression stored on the node. You provide a **formula** string and a list of **variables**; each variable **name** is replaced by its **value** (as text) in the formula, then the expression is evaluated with [`expr-eval`](https://github.com/silentmatt/expr-eval) (`Parser`).
+The **Functions** node evaluates a numeric expression stored on the node. You provide a **formula** string and a list of **variables**; each variable **name** is replaced by its **value** (as text) in the formula, then the expression is evaluated with [`expr-eval`](https://github.com/silentmatt/expr-eval) (`Parser`).
 
 [`mathFunctionActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`MathFunctionService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/math-function/math-function.service.ts).
 
 ## When it runs
 
-`mathFunctionActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **function** (`NodeType.FUNCTION`, stored value `mathFunction`).
+`mathFunctionActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **Functions** (`NodeType.FUNCTION`, stored value `mathFunction`).
 
 ## Activity signature
 

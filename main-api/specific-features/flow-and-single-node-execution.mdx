@@ -274,7 +274,7 @@ UPDATE node_executions SET
 WHERE "execId" = $3 AND "nodeId" = $4;
 ```
 
-Large `outputData` payloads (above `CLAIM_CHECK_THRESHOLD_BYTES`) are offloaded to S3 and stored as a `{ __claimRef: <key>, bytes, preview }` envelope. `NodeExecutionsService.findLatestByExecAndNode` transparently resolves the claim ref before returning.
+Large `outputData` payloads (above `CLAIM_CHECK_THRESHOLD_BYTES`) are offloaded to S3 and stored as a `{ __claimRef: <key>, bytes, preview }` envelope. `NodeExecutionsService.findLatestByExecAndNode` transparently resolves the claim ref before returning. Redeeming one of those keys is authorized against the run that produced it — see [Claim-check authorization](/main-api/specific-features/claim-check-authorization).
 
 ## WebSocket contract
 

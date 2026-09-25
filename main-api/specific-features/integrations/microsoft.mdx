@@ -5,7 +5,7 @@ description: "Read and write Excel, Word, PowerPoint, and OneDrive files and sen
 
 ## Overview
 
-The Microsoft 365 integration connects a Microsoft account to your flows so you can read from and write to OneDrive files and send mail from Outlook. It is a dedicated module that lives behind the **Pull Data** and **Push Data** flow nodes and the email/output node, not the generic third-party adapter framework.
+The Microsoft 365 integration connects a Microsoft account to your flows so you can read from and write to OneDrive files and send mail from Outlook. It is a dedicated module that lives behind the **Pull Data** (node type `pullData`) and **Push Data** (node type `pushData`) flow nodes and the email/output node, not the generic third-party adapter framework.
 
 In the Pull Data and Push Data nodes you choose a provider (Google or Microsoft). When you pick Microsoft, the node shows a Microsoft file picker and per-format options. Pull mode brings file contents into the flow as text; push mode writes the flow's text back into a file or uploads a new file. The email/output node can send the flow output through your connected Outlook account.
 

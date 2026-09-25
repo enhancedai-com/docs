@@ -64,7 +64,7 @@ Nenhum parâmetro necessário.
 |-------|------|-----------|
 | `nodeTypes` | array | Lista completa de tipos de node. |
 | `nodeTypes[].type` | string | Identificador legível por máquina (camelCase, ex.: `commandTextNode`). Corresponde ao campo `type` nos objetos de node do `get_agent`. |
-| `nodeTypes[].label` | string | Nome legível por humanos conforme exibido no canvas do FluxPrompt. |
+| `nodeTypes[].label` | string | Nome legível por humanos, composto como `"Nome front (Nome técnico)"` quando o nome do canvas e o nome técnico diferem — ex.: `"Display Box (Output Controller)"` — ou publicado como apenas um dos dois quando coincidem ou o tipo não tem entrada no sidebar. Essa string exata, e o nome front isolado, também são entrada válida para o `node.type` do [`add_node`](#add_node) e para o `type` do [`get_node_type`](#get_node_type). |
 | `nodeTypes[].description` | string | O que este node faz. |
 | `nodeTypes[].category` | string | Agrupamento: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. |
 | `nodeTypes[].inputSchema` | JSON Schema | A configuração que este node aceita. |
@@ -88,7 +88,7 @@ catálogo inteiro.
 
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |-----------|------|-------------|-----------|
-| `type` | string | Sim | Nome de máquina, ex.: `commandTextNode`. |
+| `type` | string | Sim | O tipo técnico (ex.: `commandTextNode`), o nome do sidebar/frontend (ex.: "Display Box"), ou o label composto que o [`list_node_types`](#list_node_types) publica (ex.: "Display Box (Output Controller)"). A comparação ignora maiúsculas/minúsculas e colapsa espaços. Um valor que não casa com nenhum dos três retorna um erro em vez de um schema. |
 
 <Warning>
   Respeite o `enum` quando o campo declarar um, e nunca chute um valor. Esses campos não são validados
@@ -171,6 +171,16 @@ Adiciona um node ao agente.
 |-----------|------|-------------|-----------|
 | `agentId` | string (UUID) | Sim | Agente de destino. |
 | `node` | object | Sim | Node do React-Flow: um `id` único, mais `type` e `data` conforme necessário. |
+
+### Nomeando o tipo do node
+
+O `node.type` aceita qualquer uma das três formas: o tipo técnico (`outputController`), o nome do
+sidebar/frontend (`"Display Box"`), ou o label composto que o [`list_node_types`](#list_node_types)
+publica (`"Display Box (Output Controller)"`). A comparação ignora maiúsculas/minúsculas e colapsa
+espaços, então `"display box"` resolve para o mesmo tipo que `"Display Box"`.
+
+Um valor que não casa com nenhuma das três formas é recusado com `validation_error` — inclusive uma
+string que parece plausível mas simplesmente não é um tipo real.
 
 ### Não invente coordenadas
 

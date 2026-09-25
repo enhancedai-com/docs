@@ -4,6 +4,10 @@ sidebarTitle: "API caller"
 description: "Temporal activity for the API caller node: HTTP requests with polling, output filtering, query params, JSON or form bodies, custom headers, Basic auth, and TLS options."
 ---
 
+<Note>
+In the flow builder canvas this node's sidebar label is **Api Caller**; the technical name is **API Caller** and the raw type is `apiCaller`. This page keeps the Worker's own casing, **API caller**, as its title.
+</Note>
+
 ## Overview
 
 The **API caller** node performs HTTP requests configured on the node row, with optional **polling** and **output filtering**. The Worker resolves the URL and credentials (preferring **edge-linked** values when present), merges query parameters into the URL, builds headers and body from `contentType` and related fields, executes the request with [undici](https://undici.nodejs.org/)'s `Agent` (optional TLS verification control), then optionally polls for a desired condition and filters the response before storing and returning the result.

@@ -1,18 +1,22 @@
 ---
-title: "SQL querier"
-sidebarTitle: "SQL querier"
-description: "Temporal activity for the SQL querier node: connects to MySQL, PostgreSQL, MongoDB, SQL Server, or Firebase, runs a query or filter, and returns the results as JSON text."
+title: "SQL database"
+sidebarTitle: "SQL database"
+description: "Temporal activity for the SQL Database node: connects to MySQL, PostgreSQL, MongoDB, SQL Server, or Firebase, runs a query or filter, and returns the results as JSON text."
 ---
+
+<Note>
+Also referred to as **SQL querier** (the Worker module and this page's original title) or **SQL Querier** (technical name); `type: sqlQuerier`.
+</Note>
 
 ## Overview
 
-The **SQL querier** node connects to an external database, executes a configured query or document filter, serializes the result as JSON, and stores it on the node row. It supports five database engines — **MySQL**, **PostgreSQL**, **MongoDB**, **SQL Server**, and **Firebase Firestore** — each with optional SSL/TLS.
+The **SQL Database** node connects to an external database, executes a configured query or document filter, serializes the result as JSON, and stores it on the node row. It supports five database engines — **MySQL**, **PostgreSQL**, **MongoDB**, **SQL Server**, and **Firebase Firestore** — each with optional SSL/TLS.
 
 [`sqlQuerierActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`SqlQuerierService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/sql-querier/sql-querier.service.ts). Low-level connection logic lives in [`DatabaseConnectService`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/sql-querier/database-connect.service.ts).
 
 ## When it runs
 
-`sqlQuerierActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **SQL querier** (`NodeType.SQL_QUERIER`, stored value `sqlQuerier`).
+`sqlQuerierActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **SQL Database** (`NodeType.SQL_QUERIER`, stored value `sqlQuerier`).
 
 ## Activity signature
 

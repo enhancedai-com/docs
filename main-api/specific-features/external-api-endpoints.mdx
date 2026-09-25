@@ -92,11 +92,14 @@ All five live on the `/flux` controller. Documented in the [Memory Pods API guid
 
 | Method | Path | Purpose | Auth |
 | --- | --- | --- | --- |
-| `POST` | `/flux/api-v2?flowId=<id>` | Run a flow and wait for the result. Optional `sessionId`, `versionId`, and `callback_url` (must be `http`/`https`). Returns the flow's output, or `400` when a node fails. | api-key |
+| `POST` | `/flux/api-v2?flowId=<id>` | Queue a flow run. With `callback_url` it answers `202` with `{executionId, statusUrl}`; without one it waits up to `AGENT_WAIT_TIMEOUT_MS` and answers `200` with the output, `400` when a node fails, or `202` with the `statusUrl` when the run outlives the wait. Optional `sessionId`, `versionId`. | api-key |
+| `GET` | `/flux/executions/:id` | Status of a queued api-v2 run: `pending`, `in_progress`, `completed` (with `output`, `tokensUsed`, `totalCost`, `durationMs`) or `error` (with `errorMessage`). Scoped to the caller. | api-key |
 | `POST` | `/flux/api-v2-webhook?flowId=<id>` | Fire-and-forget webhook trigger: the whole request body is fed into the flow's first variable input node and the run is queued. | none |
 | `POST` | `/flux/run-public-flow/:id` | Run a flow that has been marked public, as the flow's owner. Refuses anything not flagged `public`. | none |
 
 The `api` and `webhook` URLs returned by `GET /integrations/agents` are exactly these first two routes, pre-filled with the flow id.
+
+The queueing contract behind `api-v2` — the `202` shape, the poll endpoint, and the concurrency and wait knobs — is described in [asynchronous flow execution](/main-api/specific-features/async-flow-execution).
 
 <Warning>
 `/flux/api-v2-webhook` and `/flux/run-public-flow/:id` accept **no credential**. The webhook route's only protection is the secrecy of the flow id; the public route's only protection is the flow's `public` flag. Treat both URLs as secrets, and do not mark a flow public unless you intend it to be world-runnable.

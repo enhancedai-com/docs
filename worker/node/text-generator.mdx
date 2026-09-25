@@ -1,18 +1,22 @@
 ---
-title: "Text generator"
-sidebarTitle: "Text generator"
+title: "AI text generator"
+sidebarTitle: "AI text generator"
 description: "Temporal activity that runs the AI Text Generator node: Vercel AI SDK streamText, provider routing, memory, web search, and simplified multimodal handling."
 ---
 
+<Note>
+Also known as **Text generator** (the Worker module and this page's original title) or **Command Text Node** (technical name); `type: commandTextNode`. In the flow builder canvas this node's sidebar label is literally **Ai Text Generator**; this page keeps the natural capitalization, **AI Text Generator**.
+</Note>
+
 ## Overview
 
-The **text generator** node produces LLM output using the Vercel AI SDK (`streamText`, consumed internally). The worker loads node configuration from Postgres, resolves the model via `system_ai_models`, builds a unified system prompt and messages, calls the provider, persists results on the node row, and returns token usage to the workflow for billing.
+The **AI Text Generator** node produces LLM output using the Vercel AI SDK (`streamText`, consumed internally). The worker loads node configuration from Postgres, resolves the model via `system_ai_models`, builds a unified system prompt and messages, calls the provider, persists results on the node row, and returns token usage to the workflow for billing.
 
 [`textGeneratorActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`TextGeneratorService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/text-generator/text-generator.service.ts).
 
 ## When it runs
 
-`textGeneratorActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **text generator** (`NodeType.TEXT_GENERATOR`). The workflow typically calls [`validateModelAccessActivity`](/worker/activities/validate-model-access) before execution and [`chargeTokensActivity`](/worker/activities/charge-tokens) afterward using the returned token counts.
+`textGeneratorActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **AI Text Generator** (`NodeType.TEXT_GENERATOR`). The workflow typically calls [`validateModelAccessActivity`](/worker/activities/validate-model-access) before execution and [`chargeTokensActivity`](/worker/activities/charge-tokens) afterward using the returned token counts.
 
 ## Activity signature
 

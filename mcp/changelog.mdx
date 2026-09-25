@@ -3,6 +3,14 @@ title: "Changelog"
 description: "What's new in the FluxPrompt MCP integration."
 ---
 
+## 2026-08-21 — Node types resolve by their canvas name
+
+**`add_node` and `get_node_type` no longer require the raw technical type — the name a user reads on the canvas works too.**
+
+- **`list_node_types` publishes a composed `label`** — `"Front name (Technical name)"` when the sidebar name and the technical name differ (e.g. `"Display Box (Output Controller)"`), or just the one name when they match or the type has no sidebar entry.
+- **`add_node`'s `node.type` and `get_node_type`'s `type` accept any of three forms** — the technical type (`outputController`), the frontend/sidebar name (`"Display Box"`), or the composed label (`"Display Box (Output Controller)"`). Matching is case-insensitive and collapses whitespace.
+- **An unrecognised value is rejected with an error** rather than stored silently — including a plausible-looking string that is not a real type.
+
 ## 2026-08-12 — Integration nodes are authorable
 
 **The third-party nodes migrated to the execution worker are now fully described, and connections are discoverable.**

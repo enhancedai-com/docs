@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-32 env vars no `worker/.env.example`, validadas via Zod em `src/env.ts`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+34 env vars no `worker/.env.example`, validadas via Zod em `src/env.ts`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 | Var | Obrigatória? | Propósito |
 |---|---|---|
@@ -13,6 +13,8 @@ title: "Variáveis de Ambiente"
 | TYPEORM_USERNAME | Obrigatória | usuário do Postgres |
 | TYPEORM_PASSWORD | Obrigatória | senha do Postgres |
 | TYPEORM_DATABASE | Obrigatória | nome do banco Postgres |
+| WORKER_DB_POOL_IDLE_TIMEOUT_MS | Opcional | idleTimeoutMillis do pg Pool (default 30000) |
+| WORKER_DB_POOL_CONNECTION_TIMEOUT_MS | Opcional | connectionTimeoutMillis do pg Pool — quão rápido um pool saturado falha em vez de travar a activity até o `startToCloseTimeout` do Temporal (default 5000) |
 | REDIS_HOST | Obrigatória | host do Redis (pub/sub de notificações de status) |
 | REDIS_PORT | Obrigatória | porta do Redis |
 | OPENAI_API_KEY | Obrigatória | cliente OpenAI |
@@ -32,7 +34,7 @@ title: "Variáveis de Ambiente"
 | INTEGRATIONS_ENCRYPTION_KEY | Obrigatória | descriptografa credenciais de `user_integrations` (adapters Stripe, WordPress, HubSpot, além das colunas `accessToken`/`refreshToken` criptografadas via `token-encryption.ts`) — precisa bater com o valor do `back` |
 | CLAIM_CHECK_THRESHOLD_BYTES | Opcional | limiar do padrão claim-check (default 262144) |
 | APICALLER_MAX_RESULT_BYTES | Opcional | limite de tamanho do resultado no node api-caller (default 1_000_000) |
-| MCP_MAX_RESULT_BYTES | Opcional | 🚧 **só em dev** — limite de tamanho do resultado da tool no node mcpNode (default 1_800_000). O worker de produção não executa o node MCP, então essa var não é lida lá. Veja [MCP Client](/worker/node/mcp). |
+| MCP_MAX_RESULT_BYTES | Opcional | limite de tamanho do resultado da tool no node mcpNode (default 1_800_000). Veja [MCP Client](/worker/node/mcp). |
 | LOG_PROVIDER_OPTIONS | Opcional | flag de debug, loga opções do provider de IA |
 | FAL_KEY | Opcional | chave de API da fal.ai (node imageGenerator, provider fal — famílias pro/schnell/dev/Flux 2) — mesmo valor do `back` |
 | STABILITY_AI_API_KEY | Opcional | chave de API da Stability AI (node imageGenerator, provider stabilityai) — mesmo valor do `back` |

@@ -1,21 +1,30 @@
 ---
 title: "MCP integration"
-description: "Connect a Model Context Protocol server and list the tools it exposes, over a remote HTTPS endpoint or an npm package run on the server."
+description: "Connect a Model Context Protocol server over a remote HTTPS endpoint, list the tools it exposes, and call one through the connection's single push action."
 ---
 
 ## Overview
 
-The MCP integration saves a connection to a **Model Context Protocol** server and lists the tools that server exposes. It is the connection-and-discovery half of MCP support: you store the server address (or npm package) and its credentials once, and FluxPrompt validates the server and caches its tool catalog.
+The MCP integration saves a connection to a **Model Context Protocol** server and lists the tools that server exposes. It is the connection-and-discovery half of MCP support: you store the server address and its credentials once, and FluxPrompt validates the server and caches its tool catalog.
 
-This is distinct from the MCP Server flow node, which is what actually calls a tool. The integration finds and lists tools; the node runs them. For node usage, see [the MCP Server node reference](/client/specific-features/mcp-node) and [the MCP Server node user guide](/client/specific-features/mcp-user-guide).
+This is distinct from the MCP Client node, which is the other way to call a tool. The integration finds and lists tools; the node picks one from a prompt and runs it. For node usage, see [the MCP Client node reference](/client/specific-features/mcp-node) and [the MCP Client node user guide](/client/specific-features/mcp-user-guide).
 
 | Feature | Mode | Description |
 |---|---|---|
 | List tools | Pull | Enumerate the tools the connected MCP server exposes |
+| Call tool | Push | Call one tool on the connected server with the arguments you pass. The provider's only push action (`call_tool`). |
 
 <Note>
-Tool calls run from the MCP Server flow node, not through this integration. Push is not supported here. Pull is limited to listing tools; calling `list_tools` returns the catalog, and the node executes the chosen tool.
+There is no mode choice to make: `list_tools` is reachable in either mode through the dynamic-options channel, and push has exactly one action, `call_tool`. A push takes an **explicit** tool name and arguments — it never infers them from a prompt. That inference is what the [MCP Client node](/client/specific-features/mcp-node) does instead.
 </Note>
+
+<Warning>
+  **The npm-package transport is no longer offered.** The UI only lets you save a remote HTTPS
+  connection, and a `stdio_npx` connection is **refused at execution** with a config error telling you
+  to re-create it against a remote URL — the Temporal worker never spawns a package for a customer's
+  server. Connections of that kind saved earlier, and the `stdio*` fields documented below, still exist
+  in the stored credential shape and in the connect API, but there is no supported path that runs them.
+</Warning>
 
 ## How it works under the hood
 
@@ -25,20 +34,20 @@ There are two transports:
 
 **`remote_http` (default)** — Requires a `serverUrl` that starts with `http://` or `https://`, with an optional auth token. On connect, FluxPrompt computes a credential fingerprint, then calls the MCP call service `listToolsWithTarget({ transport: 'remote_http', serverUrl, authToken })` to both validate the server and fetch its tool list. The encrypted connection stores `{ transport, serverUrl, authToken, runtimeCache: { fingerprint, tools, resolvedAuthHeaders? } }`. The `providerAccountId` is the server host, and metadata records `{ serverHost, mcpTransport: 'remote_http' }`.
 
-**`stdio_npx`** — Requires an npm package name (`stdioPackage`), with an optional version. Any environment values you supply are resolved from the connect credentials, and the MCP server runs server-side via `npx`. FluxPrompt lists the tools once to validate the package and caches them. The `providerAccountId` is the sanitized package name, and metadata records `{ mcpTransport: 'stdio_npx', packageName }`.
+**`stdio_npx`** (legacy, not runnable) — Requires an npm package name (`stdioPackage`), with an optional version. Any environment values you supply are resolved from the connect credentials, and the connect path lists the tools once via `npx` to validate the package. The `providerAccountId` is the sanitized package name, and metadata records `{ mcpTransport: 'stdio_npx', packageName }`. **Execution refuses this transport** — it was deliberately not ported to the worker, so the shape below is documentation of what is stored, not of a working path.
 
 <Info>
 For a remote HTTPS server, the token is optional. If the server requires authentication and no token was supplied, the connect attempt throws `McpOAuthRequiredError(serverUrl, host)`, which signals that an OAuth handshake is needed before the connection can be saved.
 </Info>
 
-`pull()` only accepts the object type `list_tools`; any other type throws. It re-fetches tools through `listToolsWithTarget`, honoring the runtime cache for `remote_http` when the fingerprint still matches, and returns `{ tools }`. `push()` is not supported and throws `MCP tool calls run from the MCP Server flow node, not from push.` `getOptions` is not implemented. Credentials are stored encrypted in `user_integrations.apiCredentialsEncrypted`.
+`pull()` only accepts the object type `list_tools`; any other type throws. It re-fetches tools through `listToolsWithTarget`, honoring the runtime cache for `remote_http` when the fingerprint still matches, and returns `{ tools }`. `push()` on the back adapter is unreachable and throws `MCP pushes run in the Temporal worker. Reaching this means the mcp provider was routed away from the worker.` — `mcp` is in `MIGRATED_INTEGRATION_PROVIDERS`, so a push executes in the worker's own mcp adapter. `getOptions` is not implemented. Credentials are stored encrypted in `user_integrations.apiCredentialsEncrypted`.
 
 ## Prerequisites and credentials
 
 What you need depends on the transport you pick.
 
 - **Remote HTTPS (`remote_http`)** — the full HTTPS URL of the MCP endpoint, and a token only if your provider issued one.
-- **Npm package (`stdio_npx`)** — the exact package name from the provider's docs, an optional version, and optional authentication that the package needs.
+- **Npm package (`stdio_npx`)** — legacy. The exact package name from the provider's docs, an optional version, and optional authentication that the package needs. Not offered in the UI and refused at execution; use a remote HTTPS server instead.
 
 The connection form exposes these fields. Every field except `transport` is conditional and appears only when `transport` matches its `dependsOn` value.
 
@@ -100,5 +109,5 @@ Copy the exact package name from the provider's documentation into **stdioPackag
 </Accordion>
 
 <Accordion title="How do I actually call a tool?">
-Calling a tool happens in the MCP Server flow node, not in this integration. After the connection lists its tools, add an MCP Server node, select this connection, load the tools, and run. See [the MCP Server node reference](/client/specific-features/mcp-node) and [the MCP Server node user guide](/client/specific-features/mcp-user-guide).
+Two ways. Use this connection's **Call tool** push action, naming the tool and its arguments explicitly. Or add an **MCP Client** node, select this connection, load the tools, and let a prompt pick the tool and fill the arguments. See [the MCP Client node reference](/client/specific-features/mcp-node) and [the MCP Client node user guide](/client/specific-features/mcp-user-guide).
 </Accordion>

@@ -6,7 +6,7 @@ description: "Temporal activity for the display box node: aggregates text inputs
 
 ## Overview
 
-The **display box** node aggregates text from one or more inputs and optionally generates a downloadable file. The Worker resolves text from edge-linked data or a static field, calls the main API to generate a file when `saveOutput` is enabled, and persists the result on the node row.
+The **display box** node (technical name Output Controller, node type `outputController`) aggregates text from one or more inputs and optionally generates a downloadable file. The Worker resolves text from edge-linked data or a static field, calls the main API to generate a file when `saveOutput` is enabled, and persists the result on the node row.
 
 [`displayBoxActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`DisplayBoxService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/display-box/display-box.service.ts).
 
