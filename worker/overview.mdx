@@ -82,7 +82,7 @@ The worker registers 32 activities in total (`worker.service.ts:33-119`) — one
 - [`scriptingActivity`](/worker/node/scripting) - Runs user JavaScript or Python via Lambda
 - [`nodeExecutionErrorActivity`](/worker/activities/node-execution-error) - Called on node error; currently a no-op
 - [`generateFileActivity`](/worker/activities/generate-file) - Generates output files; registered but not currently called from any live workflow
-- Fifteen more node-execution activities (`mathFunctionActivity`, `counterActivity`, `imageGeneratorActivity`, `webCrawlingActivity`, `largeMemoryActivity`, `webSearchActivity`, `voiceGeneratorActivity`, `mcpActivity`, `thirdPartyIntegrationActivity`, `apiCallerActivity`, `sqlQuerierActivity`, `displayBoxActivity`, `pullDataActivity`, `pushDataActivity`, `audioTranscriberActivity`) plus their per-type validation/charging activities and `persistCancelledNodeActivity`/`completionActivity` — see [Worker service](/worker/workflows/worker-service#registered-activities) for the complete list
+- Fifteen more node-execution activities (`mathFunctionActivity`, `counterActivity`, [`imageGeneratorActivity`](/worker/node/image-generator), `webCrawlingActivity`, `largeMemoryActivity`, `webSearchActivity`, `voiceGeneratorActivity`, `mcpActivity`, `thirdPartyIntegrationActivity`, `apiCallerActivity`, `sqlQuerierActivity`, `displayBoxActivity`, `pullDataActivity`, `pushDataActivity`, `audioTranscriberActivity`) plus their per-type validation/charging activities and `persistCancelledNodeActivity`/`completionActivity` — see [Worker service](/worker/workflows/worker-service#registered-activities) for the complete list
 
 ## Execution flow
 

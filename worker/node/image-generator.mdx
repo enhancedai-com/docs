@@ -15,7 +15,7 @@ The **image generator** node produces an image from a prompt assembled out of se
   A seventh legacy system, **`opensources`** (Kandinsky via Replicate), was removed 2026-09-03 — it was confirmed broken in both dev and prod (Replicate returned HTTP 401) with no viable replacement. `aiSystem: "opensources"` now falls through to the generic "aiSystem not supported" `UserConfigError`.
 </Note>
 
-[`imageGeneratorActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`ImageGeneratorService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/image-generator.service.ts), which dispatches through two lookup tables keyed by `aiSystem`: `PROVIDER_BUILDERS` (the AI SDK path) and `DIRECT_HTTP_BUILDERS` (the direct-HTTP path). If `aiSystem` matches neither, the activity throws a `UserConfigError`.
+[`imageGeneratorActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`ImageGeneratorService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/image-generator.service.ts), which builds the prompt and hands every provider call to [`ImageProviderService`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/ai-provider/image/image-provider.service.ts) (see [The shared image provider layer](#the-shared-image-provider-layer)). That service dispatches through two lookup tables keyed by `aiSystem`: `PROVIDER_BUILDERS` (the AI SDK path) and `DIRECT_HTTP_BUILDERS` (the direct-HTTP path). If `aiSystem` matches neither, the activity throws a `UserConfigError`.
 
 <Note>
   This node was ported from the back's `imageGeneratorNode` handler. See [Provenance](#provenance) for the full source-to-worker file mapping and the behavior differences introduced during the port.
@@ -46,13 +46,40 @@ async imageGeneratorActivity({
 }
 ```
 
+## The shared image provider layer
+
+`ImageGeneratorService` carries **no provider call of its own** — everything provider-specific (the `ai`
+package's `generateImage()` call, every fal/Stability/Ideogram HTTP request, error classification) lives in
+`worker/src/modules/ai-provider/image/`, behind `ImageProviderService`. This split was deliberate: the node
+layer is what a future image node reuses instead of copying provider logic. See the
+[A5 task spec](https://github.com/enhancedai-com/Workflow/blob/main/.specs/features/worker-flow-execution-epic/TASK-A5-IMAGE-FAMILY.md)
+for the extraction's history.
+
+`ImageProviderService` exposes two methods:
+
+| Method | Role |
+| ------ | ---- |
+| `supports(aiSystem)` | `true` if `aiSystem` has a registered builder (either map below) |
+| `generate(request)` | Dispatches to the matching builder and returns a normalized `ImageProviderResult` |
+
+Two dispatch tables select the builder:
+
+| Map | `aiSystem` keys | How it calls the provider |
+| --- | ---------------- | -------------------------- |
+| `PROVIDER_BUILDERS` | `openai`, `gemini`, `fal`, `meta` | Builds an `ImageGenerateSpec` (model + call args), then `ImageProviderService.generate()` calls the **AI SDK**'s `generateImage()` once, uniformly, for all four |
+| `DIRECT_HTTP_BUILDERS` | `stabilityai`, `ideogram` | Each builder makes its own raw HTTP calls and **charges itself** via an injected `ctx.charge` closure, because charge-before-vs-after-the-call timing differs per provider and can't be normalized into one shared post-call charge |
+
+An unsupported or missing `aiSystem` — including `opensources` (Kandinsky via Replicate, removed 2026-09-03
+after being confirmed broken with no viable replacement) — fails `supports()`, and `ImageGeneratorService`
+throws a `UserConfigError`: *"This image provider is not yet available in the worker."*
+
 ## End-to-end flow
 
 1. **Load node** — read the node row (`execId`-scoped `node_executions.input` during a run, `flows_nodes.data` otherwise); read `data`.
 2. **Resolve the provider** — look up `nodeData.aiSystem` (default `"openai"`) in `PROVIDER_BUILDERS` and `DIRECT_HTTP_BUILDERS`. Neither match throws `UserConfigError`.
 3. **Build the prompt** — assemble `prompt`/`subject`/`environment`/`tone`/`view`/`style`/`negativePrompt` (see [Building the prompt](#building-the-prompt)). An empty result throws `UserConfigError`.
 4. **Heartbeat `"generating"`** — `Context.current().heartbeat({ nodeId, phase: "generating" })`.
-5. **Generate** — either `generateImage()` from the `ai` package (AI SDK path) or the provider's own HTTP call chain (direct-HTTP path).
+5. **Generate** — `ImageProviderService.generate()`: either `generateImage()` from the `ai` package (AI SDK path) or the provider's own HTTP call chain (direct-HTTP path), with the activity's cancellation signal passed through (see [Cancellation](#cancellation)).
 6. **Heartbeat `"uploading"`** — `Context.current().heartbeat({ nodeId, phase: "uploading" })`.
 7. **Upload** — `POST /worker/store-image` with the generated bytes or source URL (see [Storing the image](#storing-the-image)).
 8. **Charge** — `POST /worker/charge-tokens` (see [Billing](#billing)). On the direct-HTTP path, the provider module charges itself, at its own point in the call chain, instead of `process()` charging once afterward.
@@ -82,7 +109,7 @@ Each of these fields also has an edge-driven counterpart — `promptData`, `subj
 | Field | Role |
 | ----- | ---- |
 | `aiSystem` | Selects the provider system: `openai` (default), `gemini`, `fal`, `meta`, `stabilityai`, or `ideogram`. |
-| `aiModel` | Model id, read by `openai`, `gemini`, and (via [`resolveImageModel`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/providers/resolve-image-model.ts)) `stabilityai`/`ideogram` as the primary source of the model — the per-provider legacy field (`engineId`, `ideogramModel`) is a fallback for stored data older than `aiModel`. |
+| `aiModel` | Model id, read by `openai`, `gemini`, and (via [`resolveImageModel`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/ai-provider/image/resolve-image-model.ts)) `stabilityai`/`ideogram` as the primary source of the model — the per-provider legacy field (`engineId`, `ideogramModel`) is a fallback for stored data older than `aiModel`. |
 | `spaceId` | Optional; threaded through to the upload call. |
 
 ### `openai`
@@ -125,7 +152,7 @@ Dispatch is three levels deep: `type` picks the operation family, then `engineId
 | `imageToImageSelectedType` | For `"Image to image"`: `"sketch"` (default), `"structure"`, or `"style"`. |
 | `inputPreview` | Required for `"Image to image"` — missing it throws `UserConfigError`. Also read by `"Enhance resolution"`/`"Upscale Image"`. |
 | `output_format`, `aspect_ratio`, `steps`, `cfg_scale`, `height`, `width`, `clip_guidance_preset`, `promptWeight`, `style_present` | Per-method request parameters for the text-to-image family. |
-| `influenceStrength`, `outputFormat`, `seed`, `selectedImageToImageAspectRatio` | Per-method request parameters for the image-to-image family (note `outputFormat`, camelCase, is a distinct field from `output_format`). |
+| `influenceStrength`, `outputFormat`, `seed`, `selectedImageToImageAspectRatio` | Per-method request parameters for the image-to-image family (note `outputFormat`, camelCase, is a distinct field from `output_format`). `influenceStrength` is a **0–100 percentage** (the canvas slider shows "Influence Strength: N%"), divided by 100 before use, so `0.5` means 0.5 %; higher keeps more of the source image. |
 
 `"Enhance resolution"` and `"Upscale Image"` both route to the same upscale method — the back's original code only recognized `"Upscale Image"`, which meant every real `"Enhance resolution"` node silently no-op'd. Accepting both is a deliberate fix (see [Provenance](#provenance), D16).
 
@@ -203,7 +230,11 @@ Exactly one of `base64` (raw bytes for providers that return generated bytes dir
 
 Charging goes through `chargeImageGeneration` (also in `store-and-charge.ts`), which calls `POST /worker/charge-tokens` — the same endpoint documented in [Charge tokens](/worker/activities/charge-tokens), extended with three optional fields (`label`, `usedTokens`, `billingFlowId`) that existing callers don't send.
 
-By default, this node charges **one `usedTokens` credit per generated image** (`usedTokens: params.usedTokens ?? 1`, `label: "Image"`). Some direct-HTTP providers pass a different value instead of the default — for example, Stability's `textToImage` charges `Math.ceil(steps / 30)` credits when `steps > 30` (otherwise `1`). On the AI SDK path, `process()` charges once, after the call succeeds; on the direct-HTTP path, each provider method calls `ctx.charge(...)` itself, at whatever point in its own call chain matches the back's original charge-before-vs-after-the-call timing for that method.
+By default, this node charges **one `usedTokens` credit per generated image** (`usedTokens: params.usedTokens ?? 1`, `label: "Image"`). Some direct-HTTP providers pass a different value instead of the default — for example, Stability's `textToImage` charges `Math.ceil(steps / 30)` credits when `steps > 30` (otherwise `1`). On the AI SDK path, `process()` charges once, after the call succeeds; on the direct-HTTP path, each provider method calls `ctx.charge(...)` itself, at whatever point in its own call chain matches the back's original charge-before-vs-after-the-call timing for that method:
+
+- **`stabilityai`** — every method charges **before** submitting the fal request. If generation then fails, times out, or is cancelled, the charge already happened and nothing in the worker refunds it.
+- **`ideogram`** — charges only **after** a successful fal response.
+- **`openai` / `gemini` / `fal` / `meta`** — the image is stored first, then charged once, always after a successful image.
 
 <Warning>
   The back's real `openai` path charges input and output tokens separately, via two `updateTokens` calls. This endpoint's charge-deduplication logic (keyed by `(execId, nodeId)`) makes a second charge call for the same node execution a silent no-op, so that two-call behavior could not be replicated here. This is a known, tracked gap in the port — not a bug introduced by it.
@@ -240,18 +271,67 @@ The activity does not write an error field onto `data` — it **throws** a typed
 Two provider-specific gaps, distinct from the [Provenance](#provenance) deviations above, show up in real production usage.
 
 <Warning>
-  **`openai` never reads mode or model selection.** [`buildOpenAiSpec`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/providers/openai-provider.ts) reads only `nodeData.size` and `nodeData.quality` — `nodeData.type` and `nodeData.openAiModels` are never referenced anywhere in the file or its call site. An `openai`-system node configured for `"Image to Image"`, `"AI Edit"`, or `"Expand Image"` still runs plain text-to-image generation and is billed for it; any connected source image is ignored. This matches the back's original `imageSystem === 'openai'` dispatch, which has the identical gap — a known limitation carried over from the back, not a worker regression, but one that affects real, currently-recorded usage: 22 rows across `Image to Image`/`Image to image` node configurations.
+  **`openai` never reads mode or model selection.** [`buildOpenAiSpec`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/ai-provider/image/openai-provider.ts) reads only `nodeData.size` and `nodeData.quality` — `nodeData.type` and `nodeData.openAiModels` are never referenced anywhere in the file or its call site. An `openai`-system node configured for `"Image to Image"`, `"AI Edit"`, or `"Expand Image"` still runs plain text-to-image generation and is billed for it; any connected source image is ignored. This matches the back's original `imageSystem === 'openai'` dispatch, which has the identical gap — a known limitation carried over from the back, not a worker regression, but one that affects real, currently-recorded usage: 22 rows across `Image to Image`/`Image to image` node configurations.
 </Warning>
 
 <Note>
   **`stabilityai` fails loud on two unimplemented modes.** The [dispatch](#stabilityai) only recognizes `"Text to Image"`/unset, `"Image to image"`, and `"Enhance resolution"`/`"Upscale Image"`. Any other `type` — including `"AI Edit"` and `"AI erase"`, both present in production data (26 combined rows) — falls through to `unsupportedStabilityMode`, which throws `UserConfigError` (`userMessage: "This image mode is not yet available in the worker."`). The back's dispatch has no branch for either label, but falls through silently — no error, no image, no charge. A node using one of these modes now surfaces an explicit error instead.
 </Note>
 
+## Cancellation
+
+Unlike [`textGeneratorActivity`](/worker/node/text-generator) and `apiCallerActivity`, `imageGeneratorActivity`
+is **not** wrapped in `runCancellableNode` — it has no graceful partial-output concept to save. Instead:
+
+- `ImageGeneratorService.process` reads the activity's own `Context.current().cancellationSignal` and passes
+  it straight into `ImageProviderService.generate()` as `request.abortSignal`.
+- **AI-SDK path** — the signal is forwarded to `generateImage({ ..., abortSignal })`. An abort is detected with
+  `isAbortError()` and **rethrown as-is**, bypassing `classifyAiSdkError` entirely (not wrapped into a
+  `ProviderError`).
+- **Direct-HTTP path** — the signal is threaded into every fal submit/status/result `fetch(url, { signal })`
+  call, into `fetchSourceImageBuffer`, and into the poll wait between attempts via
+  [`abortableSleep(ms, signal)`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/ai-provider/image/abortable-sleep.ts) — an abort during the wait rejects immediately instead of finishing the interval.
+- Either way, the resulting abort error propagates uncaught up to `runNodeActivity`, whose
+  `isRequestedCancellation()` check recognizes it (an `AbortError`/`CancelledFailure` while
+  `Context.current().cancellationSignal.aborted` is `true`) and rethrows it unwrapped, rather than turning it
+  into an `ApplicationFailure`.
+
+**The workflow's own cancellation type matters here.** `imageGeneratorActivity`'s Temporal proxy
+(`workflows/configs.ts`) uses only the `COMMON` retry policy — it does **not** set
+`ActivityCancellationType.WAIT_CANCELLATION_COMPLETED` the way `textGeneratorActivity`/`apiCallerActivity` do
+(their `INTERRUPTIBLE` preset). With the SDK's default `TRY_CANCEL`, `processSingleNode`'s
+`cancelScope.run(...)` for this node settles as cancelled as soon as the cancel signal is requested, **without
+waiting** for the activity to actually stop — the node is reported `CANCELLED` to the run while the activity
+keeps executing in the background until its own abort unwinds it. Because that unwind throws rather than
+returning a `CancelledNodeOutput`, `processSingleNode` reaches this case through its outer
+`catch (isCancellation(error))` branch (with `output: null`), not the `isCancelledNodeOutput` branch
+`runCancellableNode`-wrapped nodes use.
+
+`resolveCancelSettlement` only charges a cancelled node when its type is `TEXT_GENERATOR`, so cancelling an
+image-generator node never triggers an extra charge from the workflow's settlement path — but it also never
+**reverses** whatever the provider itself already charged, which is what makes `stabilityai`'s pre-charge
+(above) a real, unrefunded cost on a cancelled run.
+
+### fal queue jobs are cancelled fal-side
+
+Every fal queue submission response includes a `cancel_url`. When the run is aborted, or the poll budget expires,
+the worker sends a best-effort `PUT <cancel_url>` (5s cap, errors ignored). A job still in fal's queue is removed;
+one already processing receives a cancellation signal and may still finish on fal's side.
+
 ## Retry and timeout behavior
 
-`imageGeneratorActivity` is registered with `startToCloseTimeout: "5 minutes"` and `heartbeatTimeout: "30 seconds"`, and `maximumAttempts: 1` (no Temporal-level retry) in [`configs.ts`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/workflows/configs.ts). These are not measured p95 values — there is no real timing data for image generation yet — they match this codebase's existing default for a single external-provider-call activity (the same values used by `apiCallerActivity`, `thirdPartyIntegrationActivity`, and `mcpActivity`).
+`imageGeneratorActivity` is registered with `startToCloseTimeout: "5 minutes"` and `heartbeatTimeout: "30 seconds"`, and `maximumAttempts: 1` (no Temporal-level retry) in [`configs.ts`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/workflows/configs.ts). The single 5-minute ceiling was validated against 30 days of production `imageGenerator` executions (2026-09-25): `openai` 230 runs, p95 33 s, max 91 s; `fal` 17 runs, max 19 s. `gemini`, `ideogram` and `meta` had no production runs in that window.
 
-The service calls `Context.current().heartbeat()` twice per run, to keep the activity alive during long external calls:
+`stabilityai` and `ideogram` do not rely on that ceiling: both poll fal's queue (submit, then `GET <status_url>` every second until `COMPLETED`, then fetch `response_url`) against their own wall-clock budget, so they fail with a classified `TimeoutError` before Temporal would kill the activity:
+
+| Provider | fal poll budget | Why |
+| -------- | --------------- | --- |
+| `stabilityai` | 270 s | Raised from ~2 minutes: 38 of 60 production Stability runs had been poll timeouts, and fal's queue wait for its endpoints varies (15 s to ~2 minutes observed on dev). Still under the 5-minute ceiling. |
+| `ideogram` | 120 s | Unchanged. |
+
+The same budget is sent as `X-Fal-Request-Timeout` (seconds) on submit, so fal never starts a request the worker has already given up on. When the budget runs out, the worker also cancels the job (see [fal queue jobs are cancelled fal-side](#fal-queue-jobs-are-cancelled-fal-side)).
+
+The activity is kept alive by a heartbeat every 15 seconds (`withKeepAliveHeartbeat`, half the 30-second `heartbeatTimeout`) regardless of provider. The service also calls `Context.current().heartbeat()` twice per run to report its phase:
 
 - `{ nodeId, phase: "generating" }` — before the provider call.
 - `{ nodeId, phase: "uploading" }` — before the upload to `/worker/store-image`.
@@ -263,10 +343,10 @@ The service calls `Context.current().heartbeat()` twice per run, to keep the act
 | Missing prompt, unsupported provider/mode pair, Ideogram `'Expand Image'` | `UserConfigError` |
 | Missing/invalid provider API key, no user product found | `IntegrationError` |
 | Provider 4xx/5xx, content-policy refusal, no image generated | `ProviderError` |
-| Provider poll exceeds budget | `TimeoutError` |
+| fal poll exceeds its budget (270 s `stabilityai`, 120 s `ideogram`) | `TimeoutError` |
 | Image upload or DB write failure | `SystemError` |
 
-Implemented by [`ai-sdk-error-classifier.ts`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/ai-sdk-error-classifier.ts) for the AI SDK path (`openai`/`gemini`/`fal`/`meta`) and [`http-error-classifier.ts`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/image-generator/http-error-classifier.ts) for the direct-HTTP path (`stabilityai`/`ideogram`).
+Implemented by [`ai-sdk-error-classifier.ts`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/ai-provider/image/ai-sdk-error-classifier.ts) for the AI SDK path (`openai`/`gemini`/`fal`/`meta`) and [`http-error-classifier.ts`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/ai-provider/image/http-error-classifier.ts) for the direct-HTTP path (`stabilityai`/`ideogram`).
 
 ## Provenance
 
