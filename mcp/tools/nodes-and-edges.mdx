@@ -101,6 +101,63 @@ Returns the AI models available to the workspace, so you can fill an AI node's `
 with a value that actually exists and is enabled for that workspace — rather than a model name you
 remember from elsewhere.
 
+### Input
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspaceId` | string | Only when this authorization covers more than one workspace | Call [`list_workspaces`](/mcp/tools/agents-and-folders#list_workspaces) to discover which workspaces this key covers. |
+| `cursor` | string | No | Opaque cursor from a previous response's `nextCursor`. |
+
+### Output
+
+Each item carries `provider`, `modelName`, `displayName`, `description`, `modelType`,
+`contextWindow`, `supportsVision`, `supportsReasoning`, `supportsImageOutput`,
+`supportsImageGenerationTool` and a derived `tools` array (e.g. `image_generation`,
+`image_output`, `web_search`, `structured_output`, `vision_input`, `reasoning`).
+
+`supportsImageOutput` means the model itself returns an image (a native image model, or a chat model
+whose output includes images, e.g. `gemini-2.5-flash-image`). `supportsImageGenerationTool` means the
+model can call a provider-side image-generation tool from a chat completion (e.g. OpenAI's
+`gpt-5-nano`/`gpt-5.5` calling `image_generation`) — these are two different mechanisms, and a model
+can have either, both, or neither. `tools` is derived from these and the other capability fields, not
+a separate source: it always agrees with the booleans.
+
+```json
+{
+  "models": [
+    {
+      "provider": "openai",
+      "modelName": "gpt-5-nano",
+      "displayName": "GPT-5 Nano",
+      "modelType": "Text",
+      "supportsVision": true,
+      "supportsReasoning": true,
+      "supportsImageGenerationTool": true,
+      "supportsImageOutput": false,
+      "tools": ["image_generation", "web_search", "structured_output", "vision_input", "reasoning"]
+    },
+    {
+      "provider": "gemini",
+      "modelName": "gemini-2.5-flash-image",
+      "displayName": "Gemini 2.5 Flash Image",
+      "modelType": "Image",
+      "supportsVision": true,
+      "supportsReasoning": true,
+      "supportsImageGenerationTool": false,
+      "supportsImageOutput": true,
+      "tools": ["image_output", "web_search", "vision_input", "reasoning"]
+    }
+  ],
+  "total": 87
+}
+```
+
+<Warning>
+  Results are cached for a short period and may lag a few minutes behind an admin approving or
+  toggling a model. Don't treat a model listed here as a guarantee it will still be available at
+  execution time — `run_agent` reports it if a model becomes unavailable.
+</Warning>
+
 ## `list_integrations`
 
 Returns the third-party connections the authorizing user may use, so you can fill an integration
