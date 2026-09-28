@@ -3,6 +3,26 @@ title: "Changelog"
 description: "What's new in the FluxPrompt MCP integration."
 ---
 
+## 2026-09-28 — ClickUp nodes and integration picker values
+
+**`thirdPartyIntegration` now talks to ClickUp, and its pickers stop needing guessed ids.**
+
+### New tool
+- **`list_integration_options`** — returns the values a `thirdPartyIntegration` picker offers for one
+  field of a saved connection, as `{label, value}` items, the same list the canvas dropdown shows.
+  ClickUp's pickers chain: `team` (no context) → `space` (`{team}`) → `folder` (`{space}`, optional) →
+  `list` (`{folder}` or `{space}` for a folderless list) → `status`/`statusFilter` and `assignees`
+  (`{team}`). `taskId` has no picker — read ids from a `tasks` pull. Other providers expose their
+  pickers the same way.
+
+### Node catalogue
+- **`thirdPartyIntegration` now describes `clickup`** — the pull object types (`tasks`, `task`,
+  `spaces`, `lists`, `comments`), the write actions (`create_task`, `update_task`, `create_comment`)
+  and the fields each one names (`team`, `space`, `folder`, `list`, `taskId`, `assignees`, `priority`,
+  `includeClosed`, `includeSubtasks`, `commentText`, `notifyAll`, plus the shared `name`,
+  `description`, `status`, `statusFilter`, `tags`, `parent`, `orderBy`, `dateFrom`, `dateTo` and
+  `dueDate`).
+
 ## 2026-09-25 — `list_ai_models` exposes image capability
 
 **`list_ai_models` now reports whether each model can generate images, and how.**
