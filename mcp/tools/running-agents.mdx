@@ -54,11 +54,12 @@ Returns:
 | Field | Type | Description |
 |-------|------|-------------|
 | `runId` | string | The run being reported. |
-| `status` | string | Current state of the run. |
-| `tokens` | number | Tokens consumed. |
+| `status` | `"pending"` \| `"in_progress"` \| `"completed"` \| `"error"` | Current state of the run. `pending` is queued and not started; `completed` and `error` are final. A run you cancelled reports `error` with the message `Run cancelled`. |
+| `tokens` | number | FluxCredits consumed — a decimal amount of credits, not a provider token count. |
 | `cost` | number | Cost attributed to the run. |
 | `durationMs` | number | Wall-clock duration. |
 | `error` | string \| null | Failure reason, or `null` when there is none. |
+| `triggeredBy` | string \| null | Name of the key or client that started the run, or `null` when it cannot be resolved. |
 
 Poll at a sensible interval — a run that calls several AI models takes seconds to minutes, and every
 poll counts against your rate limit (60 requests/minute, 5 000/day per key).
@@ -92,15 +93,19 @@ more nodes exist beyond this page), `suspects` (count of entries whose `suspect`
 | `suspect` | `null` \| `{ code, consumers, hint }` | Heuristic only — set when a node succeeded with an empty output while a downstream node was waiting on it through a data edge. It is always `null` when the run graph could not be loaded, rather than guessed. |
 
 <Warning>
-  **This list is incomplete, and `total` counts only what it can see.** A node executed by the
-  Temporal worker is written with its own `execId` and no `metadata.runId`, so nothing links it back
-  to this run — it is missing here even though it ran and produced output. That covers the AI and
-  integration nodes, i.e. usually the ones you care about. Never conclude from an absent node that it
-  did not run; confirm by reading the value from the node that consumes it. An absent node can
-  otherwise mean it was pruned by a condition branch, was unreachable from the starter, or never ran
-  because an earlier node failed — this tool cannot tell those cases apart. Nodes inside a
-  `libraryNode` or `flowCaller` sub-flow belong to their own run and are not listed here.
+  **Overlapping runs of the same agent can show each other's nodes.** Node executions are matched to
+  a run by the agent and the run's time window (start to finish, with a minute of slack), because
+  nodes executed by the Temporal worker carry no run id of their own. Rows that do carry the run id
+  are matched exactly, but two runs of the **same agent** that overlap in time cannot be told apart
+  — the same node executions appear in both. A single run stays exact.
 </Warning>
+
+<Note>
+  An absent node is still not proof it never ran: it may have been pruned by a condition branch, be
+  unreachable from the starter, or have been skipped because an earlier node failed — this tool
+  cannot tell those cases apart. Nodes inside a `libraryNode` or `flowCaller` sub-flow belong to
+  their own run and are not listed here. At most 200 executions are read per run.
+</Note>
 
 Use `outputPreview` to skim, not to read the result — call `get_node_output` for the full value.
 
@@ -120,12 +125,11 @@ Returns `runId`, `nodeId`, `type`, `state`, `outputType` (which field the value 
 and `finishedAt`.
 
 <Warning>
-  **An error here does NOT mean the node did not run.** The same Temporal-worker gap as
-  `get_run_nodes` applies: a node executed by the worker has its own `execId` and no `metadata.runId`,
-  so it cannot be looked up here even though it ran and produced output — this covers the AI and
-  integration nodes. Read the value from the node that consumes it instead of concluding the node
-  never started. Only the scalar output is returned, deliberately — the stored node object also holds
-  resolved prompts and credential fields.
+  **An error here means no execution row for that node was found in this run's window** — the node
+  never started, was pruned by a condition branch, or was skipped because an earlier node failed.
+  The same overlap caveat as `get_run_nodes` applies: two runs of the same agent that overlap in
+  time share node executions. Only the scalar output is returned, deliberately — the stored node
+  object also holds resolved prompts and credential fields.
 </Warning>
 
 ## `cancel_run`
@@ -135,18 +139,36 @@ Requests cancellation of a run that is still in flight.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `runId` | string | Yes | The id returned by `run_agent`. |
-| `dryRun` | boolean | No | Default `false` — cancels immediately. Set `true` to validate (scope/flag/existence) without cancelling. |
-| `idempotencyKey` | string | No | Makes a real cancel safe to retry. |
+| `dryRun` | boolean | No | Default `false` — cancels immediately. Set `true` to check whether the run could be cancelled, without cancelling it. |
+| `idempotencyKey` | string | No | Accepted, but not used: the server does not cache or replay a cancel. See the note below. |
 
 ```json
-{ "dryRun": false, "applied": true, "runId": "c7f0…", "cancelled": true, "reason": "requested" }
+{ "runId": "c7f0…", "cancelled": true, "reason": "cancelled" }
 ```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `runId` | string | The run you asked about. |
+| `cancelled` | boolean | `true` only when the run was actually cancelled. |
+| `reason` | `"cancelled"` \| `"cancel_unsupported"` \| `"dry_run"` | `cancelled` — the run was stopped. `dry_run` — you passed `dryRun: true`; nothing was cancelled. `cancel_unsupported` — there was nothing to cancel: the run already finished, is not tracked any more, or is not one this workspace owns. |
+
+The response carries no `dryRun` or `applied` fields, unlike the other write tools.
+
+A run still queued is removed from the queue; a run already processing is cancelled through its
+workflow, so "processing" is not too late.
 
 <Warning>
   **`cancel_run` is the one write tool that does not default to dry-run.** Every other write tool
   defaults to `dryRun: true`; `cancel_run` defaults to `dryRun: false` and cancels immediately. See
   [Writing safely](/mcp/tools/writing-safely#dry-run-is-the-default).
 </Warning>
+
+<Note>
+  **`cancel_run` skips the write gate and the idempotency cache.** Unlike the other write tools it
+  needs only the `execute` scope — the `mcp.execute.enabled` switch is not checked — and an
+  `idempotencyKey` changes nothing. A retry just asks again: it is harmless, because a run that
+  already stopped answers `cancel_unsupported`.
+</Note>
 
 Work already completed is not rolled back — cancelling stops the run going forward, it does not undo
 side effects a node already produced (a sent email stays sent).

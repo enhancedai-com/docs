@@ -55,14 +55,88 @@ Retorna:
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
 | `runId` | string | A execução informada. |
-| `status` | string | Estado atual da execução. |
-| `tokens` | number | Tokens consumidos. |
+| `status` | `"pending"` \| `"in_progress"` \| `"completed"` \| `"error"` | Estado atual da execução. `pending` está na fila e não começou; `completed` e `error` são finais. Uma execução que você cancelou reporta `error` com a mensagem `Run cancelled`. |
+| `tokens` | number | FluxCredits consumidos — uma quantidade decimal de créditos, não uma contagem de tokens do provider. |
 | `cost` | number | Custo atribuído à execução. |
 | `durationMs` | number | Duração real. |
 | `error` | string \| null | Motivo da falha, ou `null` quando não houver. |
+| `triggeredBy` | string \| null | Nome da chave ou do cliente que iniciou a execução, ou `null` quando não dá para resolver. |
 
 Consulte em intervalos razoáveis — uma execução que chama vários modelos de IA leva de segundos a
 minutos, e cada consulta conta no seu rate limit (60 requisições/minuto, 5.000/dia por chave).
+
+## `get_run_nodes`
+
+Retorna uma entrada por node que começou a executar em uma execução. Use isto em vez de confiar no
+status agregado da execução: uma execução reporta `"completed"` desde que tenha terminado, mesmo
+quando um node nunca rodou.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `runId` | string | Sim | O id retornado pelo `run_agent`. |
+| `limit` | number | Não | Tamanho da página. Padrão 50, limitado a 200. |
+
+Retorna `runId`, `versionId` (a FlowVersion que a execução usou, ou `null` para a cópia de trabalho),
+`total` (a contagem real de nodes que começaram, não limitada pelo tamanho da página), `truncated`
+(boolean — existem mais nodes além desta página), `suspects` (contagem de entradas cujo `suspect` não
+é nulo) e um array `nodes`:
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `nodeId` | string | Id do node — passe para o `get_node_output`. |
+| `type` | string \| null | Tipo do node. |
+| `state` | `"running"` \| `"succeeded"` \| `"failed"` | |
+| `startedAt` / `finishedAt` | ISO 8601 / ISO 8601 \| null | |
+| `error` | string \| null | |
+| `outputBytes` | number \| null | Tamanho da saída armazenada. |
+| `outputPreview` | string \| null | Primeiros 200 caracteres, com redação aplicada antes do corte. |
+| `outputRedacted` | boolean | `true` quando um padrão de segredo foi removido do preview. |
+| `outputExpired` | boolean | `true` quando a retenção já descartou o conteúdo. |
+| `suspect` | `null` \| `{ code, consumers, hint }` | Apenas heurística — definido quando um node teve sucesso com saída vazia enquanto um node downstream esperava por ele por uma edge de dado. É sempre `null` quando o grafo da execução não pôde ser carregado, em vez de adivinhado. |
+
+<Warning>
+  **Execuções sobrepostas do mesmo agente podem mostrar os nodes umas das outras.** As execuções de
+  node são associadas a uma execução pelo agente e pela janela de tempo da execução (do início ao fim,
+  com um minuto de folga), porque os nodes executados pelo worker Temporal não carregam um id de
+  execução próprio. Linhas que carregam o id da execução são associadas com exatidão, mas duas
+  execuções do **mesmo agente** que se sobrepõem no tempo não podem ser distinguidas — as mesmas
+  execuções de node aparecem nas duas. Uma execução isolada continua exata.
+</Warning>
+
+<Note>
+  Um node ausente ainda não prova que ele não rodou: ele pode ter sido podado por um branch de
+  condição, estar inalcançável a partir do starter, ou ter sido pulado porque um node anterior
+  falhou — esta ferramenta não distingue esses casos. Nodes dentro de um sub-fluxo `libraryNode` ou
+  `flowCaller` pertencem à própria execução e não são listados aqui. No máximo 200 execuções de node
+  são lidas por execução.
+</Note>
+
+Use `outputPreview` para dar uma olhada, não para ler o resultado — chame o `get_node_output` para o
+valor completo.
+
+## `get_node_output`
+
+Retorna o que um único node produziu em uma execução. Chame o `get_run_nodes` primeiro para ver quais
+nodes esta ferramenta alcança.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `runId` | string | Sim | O id retornado pelo `run_agent`. |
+| `nodeId` | string | Sim | Id do node, como aparece no `get_run_nodes`. |
+
+Retorna `runId`, `nodeId`, `type`, `state`, `outputType` (de qual campo veio o valor), `output` (o
+resultado escalar do node — com redação primeiro, depois truncado em 20.000 caracteres), `truncated`,
+`totalBytes`, `redacted` (um padrão de segredo ou chave sensível foi removido), `outputExpired`,
+`error` e `finishedAt`.
+
+<Warning>
+  **Um erro aqui significa que nenhuma linha de execução daquele node foi encontrada na janela desta
+  execução** — o node nunca começou, foi podado por um branch de condição, ou foi pulado porque um
+  node anterior falhou. Vale o mesmo alerta de sobreposição do `get_run_nodes`: duas execuções do
+  mesmo agente que se sobrepõem no tempo compartilham execuções de node. Apenas a saída escalar é
+  retornada, de propósito — o objeto do node armazenado também contém prompts resolvidos e campos de
+  credencial.
+</Warning>
 
 ## `cancel_run`
 
@@ -71,12 +145,36 @@ Solicita o cancelamento de uma execução ainda em andamento.
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |-----------|------|-------------|-----------|
 | `runId` | string | Sim | O id retornado pelo `run_agent`. |
-| `dryRun` | boolean | Não | Padrão `true` — informa se a execução *poderia* ser cancelada. |
-| `idempotencyKey` | string | Não | Torna um cancelamento real seguro para repetir. |
+| `dryRun` | boolean | Não | Padrão `false` — cancela imediatamente. Defina `true` para verificar se a execução *poderia* ser cancelada, sem cancelar. |
+| `idempotencyKey` | string | Não | Aceito, mas não usado: o servidor não guarda nem repete um cancelamento. Veja a nota abaixo. |
 
 ```json
-{ "dryRun": false, "applied": true, "runId": "c7f0…", "cancelled": true, "reason": "requested" }
+{ "runId": "c7f0…", "cancelled": true, "reason": "cancelled" }
 ```
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `runId` | string | A execução sobre a qual você perguntou. |
+| `cancelled` | boolean | `true` somente quando a execução foi de fato cancelada. |
+| `reason` | `"cancelled"` \| `"cancel_unsupported"` \| `"dry_run"` | `cancelled` — a execução foi interrompida. `dry_run` — você passou `dryRun: true`; nada foi cancelado. `cancel_unsupported` — não havia o que cancelar: a execução já terminou, não é mais rastreada, ou não pertence a este workspace. |
+
+A resposta não traz os campos `dryRun` nem `applied`, ao contrário das outras ferramentas de escrita.
+
+Uma execução ainda na fila é removida da fila; uma execução já em processamento é cancelada pelo seu
+workflow, então "em processamento" não é tarde demais.
+
+<Warning>
+  **O `cancel_run` é a única ferramenta de escrita que não usa dry-run por padrão.** Todas as outras
+  ferramentas de escrita usam `dryRun: true` por padrão; o `cancel_run` usa `dryRun: false` e cancela
+  imediatamente. Veja [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely#dry-run-é-o-padrão).
+</Warning>
+
+<Note>
+  **O `cancel_run` ignora o portão de escrita e o cache de idempotência.** Ao contrário das outras
+  ferramentas de escrita, ele exige apenas o escopo `execute` — o interruptor `mcp.execute.enabled`
+  não é verificado — e um `idempotencyKey` não muda nada. Repetir simplesmente pergunta de novo: é
+  inofensivo, porque uma execução que já parou responde `cancel_unsupported`.
+</Note>
 
 Trabalho já concluído não é revertido — cancelar interrompe a execução daqui para frente, não desfaz
 efeitos colaterais que um node já produziu (um e-mail enviado continua enviado).

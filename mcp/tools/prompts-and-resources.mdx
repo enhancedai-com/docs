@@ -22,12 +22,24 @@ attachable context; other clients may expose them differently or not at all.
 |--------|-----------|-----------------------|
 | `build_flow` | `goal` | Create a folder and an empty agent, then build a text-gen node wired to a data output — both the edge **and** the data reference. |
 | `edit_agent` | `agentId` | Inspect an agent, then add/update/remove nodes safely with optimistic concurrency (`expectedVersion`). |
-| `organize_workspace` | — | Create folders and move agents into them, or back to the root. |
-| `run_agent_recipe` | `agentId` | Validate a run with dry-run, dispatch it, then poll `get_run_status` until it finishes. |
+| `organize_workspace` | — | Create folders and move agents into them. |
+| `run_agent_recipe` | `agentId` | Validate a run with dry-run, dispatch it, poll `get_run_status` until it finishes, then verify with `get_run_nodes` and `get_node_output` that every expected node ran. |
 
 These encode the ordering that is easy to get wrong: fetching a node's real schema **before** writing
 it, creating both edges when chaining nodes, and passing `empty: true` so a new agent does not arrive
 with starter-template nodes.
+
+`run_agent_recipe` reports `tokens` from `get_run_status` as a **FluxCredits** total — a decimal amount
+of credits, not a provider token count — and treats a `completed` status as unproven: it has you
+confirm that every node you expect appears in `get_run_nodes` with state `succeeded`, and read
+results with `get_node_output`.
+
+<Warning>
+  **The `organize_workspace` prompt text still mentions moving an agent to the root
+  (`targetFolderId: null`), but the server refuses it.** [`move_agent`](/mcp/tools/agents-and-folders#move_agent)
+  answers a `validation_error`, because an agent at the root becomes unreachable by every MCP tool.
+  Move agents into folders only, and ignore that part of the recipe.
+</Warning>
 
 <Tip>
   Prompts are guidance, not enforcement. They still perform each mutation as a dry-run first, so you
@@ -39,10 +51,12 @@ with starter-template nodes.
 | URI | Contents |
 |-----|----------|
 | `fluxprompt://models` | The AI models available to this workspace: `provider`, `modelName`, `displayName`, `description`, `modelType`, `contextWindow`, `supportsVision`, `supportsReasoning`. |
-| `fluxprompt://node-types` | The node type catalogue: `type`, `label`, `description`, `category`, `inputSchema`, `outputSchema`. |
+| `fluxprompt://node-types` | The full node type catalogue: `type`, `label`, `description`, `category`, `inputSchema`, `outputSchema` and `handles` for every type. |
 
-Both mirror what `list_ai_models` and `list_node_types` return. Reach for the resource when you want
-the catalogue sitting in context for a whole conversation, and for the tool when you want one lookup
+`fluxprompt://models` mirrors what `list_ai_models` returns. `fluxprompt://node-types` does **not**
+mirror `list_node_types`: that tool returns summaries only, while the resource returns the full
+entries — what `get_node_type` returns for each type, all at once. Reach for a resource when you want
+the catalogue sitting in context for a whole conversation, and for a tool when you want one lookup
 mid-task.
 
 <Warning>
@@ -55,4 +69,4 @@ mid-task.
 
 - [Writing safely](/mcp/tools/writing-safely) — the conventions every recipe follows
 - [Nodes & edges](/mcp/tools/nodes-and-edges) — what `build_flow` and `edit_agent` automate
-- [`list_node_types`](/mcp/tools/nodes-and-edges#list_node_types) — the tool form of `fluxprompt://node-types`
+- [`list_node_types`](/mcp/tools/nodes-and-edges#list_node_types) — the summary form of `fluxprompt://node-types`

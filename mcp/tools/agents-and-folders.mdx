@@ -62,7 +62,7 @@ Creates a folder in the workspace.
 ### Creating inside a space
 
 `parentId` is how a folder reaches a space. There is no `spaceId` parameter: the space is derived from
-the parent folder, and the call is refused if you do not have write access to that space.
+the parent folder, and the call is refused if you are not a member of that space.
 
 <Note>
   A folder cannot be created directly at a space's root. Nest it under a folder that already exists
@@ -405,7 +405,7 @@ Delete an agent or a folder. Both are destructive and both default to dry-run.
 
 - *"Create a folder called Sales agents and an empty agent called Lead Scorer inside it"*
 - *"Rename the folder 30be… to Archive"*
-- *"Move my Lead Scorer agent to the root"*
+- *"Move my Lead Scorer agent into the Archive folder"*
 
 ## Related
 
