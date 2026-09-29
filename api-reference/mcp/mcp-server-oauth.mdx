@@ -94,7 +94,7 @@ Content-Type: application/json
 }
 ```
 
-Generated `client_id` values are prefixed `dcr_`. `client_name` is optional and is returned as `null` when omitted. Registration is stored for 90 days by default (`MCP_DCR_CLIENT_TTL`).
+Generated `client_id` values are prefixed `dcr_`. `client_name` is optional and is returned as `null` when omitted. Registration lifetime is set by `MCP_DCR_CLIENT_TTL` (see [MCP environment variables](/mcp/environment-variables)).
 
 DCR clients are **persisted in Postgres** via `back/` and survive mcp-server restarts.
 

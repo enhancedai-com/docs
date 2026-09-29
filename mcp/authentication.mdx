@@ -29,9 +29,9 @@ This is **required** for Claude Desktop and Claude.ai, and **supported** by Clau
 
 ### What an OAuth grant includes
 
-- **Scopes.** The client asks for the scopes it wants. If it asks for none, FluxPrompt grants `read` only. You don't pick scopes on the consent screen — you approve or deny what the client asked for. Each selected workspace then clamps the scopes by your role there (see [Scopes are clamped by your role](#scopes-are-clamped-by-your-role)).
-- **Workspaces.** You can authorize several organizations in one go. Scopes are worked out **per workspace**, so the same grant can carry `write` in one and `read` in another.
-- **Lifetime.** OAuth access tokens **do not expire** by default, and there is **no refresh token**: the server only supports the `authorization_code` grant. The client keeps using the same token until you revoke it in [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) (OAuth grants appear there with the type **OAuth**). After a revocation, reconnect the client to authorize again.
+OAuth access tokens **do not expire**, and there is **no refresh token**: the server only supports the `authorization_code` grant. The client keeps using the same token until you revoke it in [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens), where OAuth grants appear with the type **OAuth**. After a revocation, reconnect the client to authorize again.
+
+What the grant can do is worked out per workspace — see [Scopes are clamped by your role](#scopes-are-clamped-by-your-role) and [One authorization can cover multiple workspaces](#one-authorization-can-cover-multiple-workspaces).
 
 ## Method 2 — Static service token
 
@@ -43,7 +43,7 @@ Any active member of a workspace can generate one in the FluxPrompt UI:
 
 1. Open [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
 2. Click **Generate key**. In the **Generate MCP key** dialog, enter a **Key name** (for example `n8n`). If you belong to other organizations, you can also tick them under **Also grant this key access to**.
-3. Choose the scopes. Workspace admins see the scope checkboxes, with `read` preselected. Other members always get a key with read-only access and can ask an admin to widen it later.
+3. Choose the scopes. Workspace admins see the scope checkboxes, with `read` preselected. Other members get a read-only key from this dialog (see [Scopes are clamped by your role](#scopes-are-clamped-by-your-role)).
 4. Click **Generate**, then copy the key — it starts with `mcp_` and is **shown only once**. Store it somewhere safe.
 
 Admins see every key and OAuth grant in the workspace; other members see only the keys they created.
@@ -77,13 +77,13 @@ If you believe a service token has been exposed:
 
 A key carries one or more of three scopes:
 
-| Scope | Grants |
-|-------|--------|
-| `read` | List agents and folders, fetch an agent's full structure, browse node types and AI models. |
-| `write` | Create and edit agents, folders, nodes and edges; snapshot and publish versions. |
-| `execute` | Run an agent, poll a run, cancel a run. |
+| Scope | Grants | Tools |
+|-------|--------|-------|
+| `read` | List agents, folders and versions, fetch an agent's full structure, and browse node types, AI models, integrations and voices. | [Agents & folders](/mcp/tools/agents-and-folders), [Nodes & edges](/mcp/tools/nodes-and-edges), [Versioning](/mcp/tools/versioning) |
+| `write` | Create and edit agents, folders, nodes and edges; snapshot and publish versions. | [Writing safely](/mcp/tools/writing-safely), [Agents & folders](/mcp/tools/agents-and-folders), [Nodes & edges](/mcp/tools/nodes-and-edges), [Versioning](/mcp/tools/versioning) |
+| `execute` | Run an agent, poll a run, cancel a run. | [Running agents](/mcp/tools/running-agents) |
 
-No scope grants access to billing, users, or workspace settings — those are never exposed over MCP.
+A tool the key's scopes do not cover is refused with `-32401 Insufficient scope`; see [Workspace-level switches](#workspace-level-switches) to tell that apart from a switch refusal. No scope grants access to billing, users, or workspace settings — those are never exposed over MCP.
 
 ### One authorization can cover multiple workspaces
 
@@ -103,12 +103,18 @@ an optional `workspaceId` parameter:
 
 ### Scopes are clamped by your role
 
+A client asks for the scopes it wants; you don't pick them on the consent screen, and if it asks for none the grant is `read` only.
+
 If you are not an admin of an organization, requesting `write`/`execute` there yields a grant
 clamped to `read` instead of an error — this applies to each organization separately. A workspace
 admin controls this with the **Let regular members create powerful keys** toggle in
 [Settings → MCP Keys](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens). It is **on by
-default**; when an admin turns it off, non-admin members get `read` only. The toggle is checked only
-when a key is created or an app is reconnected, so keys that already exist keep the scopes they were given.
+default**; when an admin turns it off, non-admin members get `read` only.
+
+The toggle does not change the **Generate key** dialog: only admins see the scope checkboxes there, so
+non-admins always get a read-only key from it. The toggle governs whether a non-admin can hold
+`write`/`execute` through OAuth consent or the API. It is checked only when a key is created or an app
+is reconnected, so keys that already exist keep the scopes they were given.
 
 ### Change a key's scopes
 
@@ -171,7 +177,7 @@ the triggering key/client name appears in the agent's execution history.
     Yes — each token is independent. You can have one token per client (e.g. one for n8n, one for a backend service) and revoke them individually from [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
   </Accordion>
   <Accordion title="Does a service token expire?">
-    Neither service tokens nor OAuth access tokens expire automatically. They remain valid until revoked, and there is no refresh flow. We recommend revoking keys you no longer use.
+    No — neither service tokens nor OAuth access tokens expire, so revoke keys you no longer use (see [What an OAuth grant includes](#what-an-oauth-grant-includes)).
   </Accordion>
   <Accordion title="Can I use my regular FluxPrompt API key instead?">
     No. The MCP server uses a separate authentication system. Your regular API key will not work.

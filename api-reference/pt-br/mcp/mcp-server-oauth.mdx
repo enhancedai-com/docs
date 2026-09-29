@@ -94,7 +94,7 @@ Content-Type: application/json
 }
 ```
 
-Os `client_id` gerados têm o prefixo `dcr_`. `client_name` é opcional e é retornado como `null` quando omitido. O registro é armazenado por 90 dias por padrão (`MCP_DCR_CLIENT_TTL`).
+Os `client_id` gerados têm o prefixo `dcr_`. `client_name` é opcional e é retornado como `null` quando omitido. A duração do registro é definida por `MCP_DCR_CLIENT_TTL` (veja [variáveis de ambiente do MCP](/mcp/pt-br/environment-variables)).
 
 Os clientes DCR são **persistidos no Postgres** via `back/` e sobrevivem a reinicializações do mcp-server.
 

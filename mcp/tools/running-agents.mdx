@@ -6,8 +6,8 @@ description: "Dispatch a run, poll it for the result, and cancel one that is sti
 ## Description
 
 Running is asynchronous: `run_agent` returns a `runId` immediately and you poll `get_run_status` for
-the outcome. These tools need the `execute` scope, and the workspace toggle `mcp.execute.enabled`
-must be on — see [writing safely](/mcp/tools/writing-safely).
+the outcome. These tools need the `execute` scope, and the workspace's execute switch must be on —
+see [writing safely](/mcp/tools/writing-safely#permissions).
 
 ## `run_agent`
 
@@ -23,7 +23,11 @@ Dispatches a run.
 | `idempotencyKey` | string | Yes when `dryRun:false` | Prevents a duplicate run on retry. |
 
 **Dry-run here means validate-only:** it checks the workspace flag, your scope and your remaining
-quota, and resolves the inputs, without dispatching anything.
+quota, and resolves the inputs, without dispatching anything. Dry runs do not count against the run quota.
+
+### Run quota
+
+Each workspace can dispatch 200 runs per UTC day through MCP. Once it is used up, `run_agent` fails with `quota_exceeded: MCP run quota exceeded for this workspace` until the next UTC day. `quotaRemaining` in the response shows what is left.
 
 ```json
 { "dryRun": false, "dispatched": true, "runId": "c7f0…", "quotaRemaining": 48 }
@@ -62,7 +66,7 @@ Returns:
 | `triggeredBy` | string \| null | Name of the key or client that started the run, or `null` when it cannot be resolved. |
 
 Poll at a sensible interval — a run that calls several AI models takes seconds to minutes, and every
-poll counts against your rate limit (60 requests/minute, 5 000/day per key).
+poll counts against your [rate limit](/mcp/environment-variables).
 
 ## `get_run_nodes`
 
@@ -74,7 +78,7 @@ aggregate status: a run reports `"completed"` as long as it finished, even when 
 | `runId` | string | Yes | The id returned by `run_agent`. |
 | `limit` | number | No | Page size. Default 50, capped at 200. |
 
-Returns `runId`, `versionId` (the FlowVersion the run targeted, or `null` for the working copy),
+Returns `runId`, `versionId` (the version the run targeted, or `null` for the working copy),
 `total` (the true count of nodes that started, not capped by the page size), `truncated` (boolean —
 more nodes exist beyond this page), `suspects` (count of entries whose `suspect` is non-null), and a
 `nodes` array:
@@ -93,11 +97,9 @@ more nodes exist beyond this page), `suspects` (count of entries whose `suspect`
 | `suspect` | `null` \| `{ code, consumers, hint }` | Heuristic only — set when a node succeeded with an empty output while a downstream node was waiting on it through a data edge. It is always `null` when the run graph could not be loaded, rather than guessed. |
 
 <Warning>
-  **Overlapping runs of the same agent can show each other's nodes.** Node executions are matched to
-  a run by the agent and the run's time window (start to finish, with a minute of slack), because
-  nodes executed by the Temporal worker carry no run id of their own. Rows that do carry the run id
-  are matched exactly, but two runs of the **same agent** that overlap in time cannot be told apart
-  — the same node executions appear in both. A single run stays exact.
+  **Overlapping runs of the same agent can show each other's nodes.** If two runs of the same agent
+  overlap in time, each may list the other's nodes. A single run is exact — avoid overlapping runs
+  when you need per-node results.
 </Warning>
 
 <Note>
@@ -125,11 +127,10 @@ Returns `runId`, `nodeId`, `type`, `state`, `outputType` (which field the value 
 and `finishedAt`.
 
 <Warning>
-  **An error here means no execution row for that node was found in this run's window** — the node
-  never started, was pruned by a condition branch, or was skipped because an earlier node failed.
-  The same overlap caveat as `get_run_nodes` applies: two runs of the same agent that overlap in
-  time share node executions. Only the scalar output is returned, deliberately — the stored node
-  object also holds resolved prompts and credential fields.
+  **An error here means no execution of that node was found for this run** — the node never
+  started, was pruned by a condition branch, or was skipped because an earlier node failed. The
+  overlap caveat of `get_run_nodes` applies here too. Only the scalar output is returned,
+  deliberately — the stored node object also holds resolved prompts and credential fields.
 </Warning>
 
 ## `cancel_run`
@@ -140,7 +141,7 @@ Requests cancellation of a run that is still in flight.
 |-----------|------|----------|-------------|
 | `runId` | string | Yes | The id returned by `run_agent`. |
 | `dryRun` | boolean | No | Default `false` — cancels immediately. Set `true` to check whether the run could be cancelled, without cancelling it. |
-| `idempotencyKey` | string | No | Accepted, but not used: the server does not cache or replay a cancel. See the note below. |
+| `idempotencyKey` | string | No | Not needed; retrying a cancel is harmless. |
 
 ```json
 { "runId": "c7f0…", "cancelled": true, "reason": "cancelled" }
@@ -157,17 +158,10 @@ The response carries no `dryRun` or `applied` fields, unlike the other write too
 A run still queued is removed from the queue; a run already processing is cancelled through its
 workflow, so "processing" is not too late.
 
-<Warning>
-  **`cancel_run` is the one write tool that does not default to dry-run.** Every other write tool
-  defaults to `dryRun: true`; `cancel_run` defaults to `dryRun: false` and cancels immediately. See
-  [Writing safely](/mcp/tools/writing-safely#dry-run-is-the-default).
-</Warning>
-
 <Note>
-  **`cancel_run` skips the write gate and the idempotency cache.** Unlike the other write tools it
-  needs only the `execute` scope — the `mcp.execute.enabled` switch is not checked — and an
-  `idempotencyKey` changes nothing. A retry just asks again: it is harmless, because a run that
-  already stopped answers `cancel_unsupported`.
+  **`cancel_run` is the one write tool that defaults to `dryRun: false`** and cancels immediately.
+  It needs only the `execute` scope, is not behind the workspace write switch, and retrying is
+  harmless. See [Writing safely](/mcp/tools/writing-safely#dry-run-is-the-default).
 </Note>
 
 Work already completed is not rolled back — cancelling stops the run going forward, it does not undo

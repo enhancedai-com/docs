@@ -72,16 +72,12 @@ exige um `idempotencyKey` explícito para aplicar, então nada muda até você m
 </CardGroup>
 
 <Note>
-  Ferramentas de escrita e execução exigem uma chave com os escopos `write`/`execute` **e** as
-  configurações correspondentes do workspace: **Let AI assistants change things** (`mcp.writes.enabled`)
-  e **Let AI assistants run agents** (`mcp.execute.enabled`). Ambas vêm ligadas por padrão, e um admin do
-  workspace as controla em **Settings → MCP Keys**.
+  Ferramentas de escrita e execução exigem uma chave com os escopos `write`/`execute` **e** os interruptores correspondentes do workspace; veja [Interruptores no nível do workspace](/mcp/pt-br/authentication#interruptores-no-nível-do-workspace).
 </Note>
 
 ### Limites
 
-- **Cota de execuções** — cada workspace pode iniciar até **200** execuções de agentes por dia (UTC) via MCP. Depois disso, o `run_agent` é recusado com `quota_exceeded` até o próximo dia UTC. Um dry-run não consome a cota; ele informa `quotaRemaining`.
-- **Limite de requisições** — cada chave pode fazer 60 requisições por minuto e 5.000 por dia por padrão.
+Cada workspace tem uma cota diária de execuções para o `run_agent`, descrita em [`run_agent`](/mcp/pt-br/tools/running-agents#run_agent). Cada chave também tem limite de requisições; os valores padrão estão em [Variáveis de ambiente](/mcp/pt-br/environment-variables).
 
 ## Como funciona
 
@@ -105,10 +101,7 @@ FluxPrompt API  ──▶  Seus agentes, nodes e flows
 
 ### Transporte
 
-- Toda requisição é um `POST` HTTP para `/mcp` com uma mensagem JSON-RPC 2.0. A resposta é JSON simples.
-- Se o seu cliente enviar `Accept: text/event-stream`, a resposta é um único frame SSE (um evento `data:` e o stream fecha em seguida). Não há stream de servidor de longa duração, então `GET /mcp` não é suportado.
-- Uma notificação JSON-RPC (mensagem sem `id`) é respondida apenas com `202 Accepted`.
-- `DELETE /mcp` encerra uma sessão e retorna `204`. Nada é guardado no servidor, então é seguro ignorar.
+Streamable HTTP, JSON-RPC sobre `POST /mcp`. Os detalhes do transporte estão na [referência do servidor MCP](/api-reference/pt-br/mcp/mcp-server-oauth).
 
 ## Glossário rápido
 
@@ -116,7 +109,7 @@ FluxPrompt API  ──▶  Seus agentes, nodes e flows
 |-------|-------------|
 | **MCP** | Model Context Protocol — um padrão aberto para conectar clientes de IA a ferramentas e dados externos. |
 | **OAuth** | Um fluxo de consentimento no navegador em que você faz login no FluxPrompt e concede a um cliente acesso a um workspace. Nenhum token é colado. Obrigatório para Claude Desktop e Claude.ai. |
-| **Service token** | Uma string secreta vinculada ao seu workspace (e, opcionalmente, a outros workspaces de que você faz parte) (começa com `mcp_`), gerada em [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens). Enviada no header `Authorization`. Usada por clientes máquina-a-máquina, a CLI e o n8n. Diferente da sua API key do FluxPrompt. |
+| **Service token** | Um segredo que começa com `mcp_`, vinculado a um ou mais workspaces, gerado em [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens). Enviada no header `Authorization`. Usada por clientes máquina-a-máquina, a CLI e o n8n. Diferente da sua API key do FluxPrompt. |
 | **Tool** | Uma ação nomeada que o servidor MCP expõe (ex.: `list_agents`). Seu cliente de IA chama as tools em seu nome. |
 | **Workspace** | O contexto da sua empresa ou equipe no FluxPrompt. Uma autorização (OAuth ou service token) pode cobrir um workspace ou vários — veja [Autenticação](/mcp/pt-br/authentication#uma-autorização-pode-cobrir-vários-workspaces). |
 | **Streamable HTTP** | O protocolo de transporte que o FluxPrompt MCP utiliza. Um único endpoint HTTPS que aceita requisições JSON-RPC 2.0. |

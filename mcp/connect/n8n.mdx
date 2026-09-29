@@ -14,7 +14,7 @@ Inside n8n you can build workflows that automatically:
 ## Prerequisites
 
 - n8n instance (cloud or self-hosted, v1.22+)
-- A FluxPrompt workspace **service token** (see [Authentication](/mcp/authentication)) — generate one in [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens). A static service token is the recommended method for n8n.
+- A FluxPrompt workspace **service token** — generate one under [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens); see [Generate a service token](/mcp/authentication#generate-a-service-token). A static service token is the recommended method for n8n. The key's scopes decide which tools n8n can call; see [Scopes](/mcp/authentication#scopes).
 
 ## Step-by-step
 
@@ -41,35 +41,21 @@ Inside n8n you can build workflows that automatically:
     - `get_agent` — requires `agentId` (the agent's UUID)
     - `list_node_types` — no parameters required
 
-    Set any required parameters in the **Tool Parameters** section. The full list of tools and their parameters is in the [tool catalog](/mcp/tools/agents-and-folders); see [Tools and scopes](#tools-and-scopes) for what your key can call.
+    Set any required parameters in the **Tool Parameters** section. The full list of tools and their parameters is in the [tool catalog](/mcp/tools/agents-and-folders).
   </Step>
   <Step title="Test the node">
     Click **Execute node**. The output will contain the structured response from FluxPrompt.
   </Step>
 </Steps>
 
-## Example: list all agents and filter by name
+## Example: find agents by name
 
-This workflow lists all FluxPrompt agents and filters for ones whose name contains "Parser":
+This workflow finds the FluxPrompt agents whose name contains "Parser":
 
 1. **MCP Client Tool** — calls `list_agents` with `search` set to `Parser`. The server filters by name (case-insensitive), so you don't need a Code node for a simple match.
-2. **Pagination** — `list_agents` returns a page of up to 50 agents as `{ agents, total, nextCursor }`. `nextCursor` is present only when more results exist. To get the next page, call the tool again with `cursor` set to that `nextCursor` and the **same** `search`, `folderId` and `folderName`; loop until `nextCursor` is absent. A cursor is bound to the filters that produced it and is rejected if you change them.
-3. **Code node** — combine the pages, for example `return $input.all().flatMap(item => item.json.agents)`.
+2. **Pagination (only when needed)** — `list_agents` returns a page of up to 50 agents as `{ agents, total, nextCursor }`. If `nextCursor` is present, call the tool again with `cursor` set to it and the **same** `search`, `folderId` and `folderName`; a cursor is bound to the filters that produced it and is rejected if you change them. If `nextCursor` is absent, that page is everything.
+3. **Code node** — if you paged, combine the pages, for example `return $input.all().flatMap(item => item.json.agents)`.
 4. **Whatever you need next** — send results to Slack, write to a spreadsheet, etc.
-
-If you skip step 2, you only see the first 50 agents.
-
-## Tools and scopes
-
-n8n can call the full FluxPrompt tool catalog. Which tools it can use depends on the scopes on your key:
-
-| Scope | What it unlocks | Catalog |
-|-------|-----------------|---------|
-| `read` | List and inspect agents, folders, versions, node types, models, integrations and voices | [Agents & folders](/mcp/tools/agents-and-folders), [Nodes & edges](/mcp/tools/nodes-and-edges), [Versioning](/mcp/tools/versioning) |
-| `write` | Create and edit agents, folders, nodes and edges; snapshot and publish versions | [Writing safely](/mcp/tools/writing-safely), [Agents & folders](/mcp/tools/agents-and-folders), [Nodes & edges](/mcp/tools/nodes-and-edges), [Versioning](/mcp/tools/versioning) |
-| `execute` | Run an agent, poll a run, cancel a run | [Running agents](/mcp/tools/running-agents) |
-
-A tool your authorization does not cover is refused with `-32401 Insufficient scope`. Write and execute tools also need the matching workspace settings turned on — see [Authentication](/mcp/authentication#workspace-level-switches).
 
 ## Troubleshooting
 

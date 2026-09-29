@@ -263,8 +263,8 @@ Every mutating route (`write` scope, plus `POST agents/{id}/run`) accepts these 
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `dryRun` | boolean | No | Defaults to **`true`**. A dry run validates and returns the would-be result without persisting anything. Send `false` to apply the change. |
-| `idempotencyKey` | string | Required when `dryRun` is `false` | Retrying with the same key and payload returns the stored response instead of re-executing. |
+| `dryRun` | boolean | No | Defaults to **`true`**. See [Dry-run is the default](/mcp/tools/writing-safely#dry-run-is-the-default). |
+| `idempotencyKey` | string | Required when `dryRun` is `false` | See [Idempotency keys](/mcp/tools/writing-safely#idempotency-keys). |
 
 Gate errors on mutating routes:
 
@@ -286,7 +286,7 @@ All routes require the `write` scope and respond `200`. Bodies extend the gate f
 | `POST /mcp/v1/internal/agents` | `name` (string, required), `folderId` (string, required), `type` (`"chat"` for a chat agent, anything else is a regular agent), `empty` (boolean) | Creates an agent in a folder. |
 | `PATCH /mcp/v1/internal/agents/{id}` | `name` (string, required, min length 1), `expectedVersion` | Renames the agent. |
 | `DELETE /mcp/v1/internal/agents/{id}` | gate fields only | Removes the agent. |
-| `POST /mcp/v1/internal/agents/{id}/move` | `targetFolderId` (string or `null` for the root) | Moves the agent to another folder. |
+| `POST /mcp/v1/internal/agents/{id}/move` | `targetFolderId` (string, the destination folder id; `null` is refused) | Moves the agent to another folder. |
 
 `{id}` must be a UUID (`400` otherwise). Result shapes are documented in the [`agents-and-folders`](/mcp/tools/agents-and-folders) tool reference.
 

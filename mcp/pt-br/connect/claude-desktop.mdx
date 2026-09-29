@@ -53,19 +53,7 @@ O Claude chamará as tools do FluxPrompt MCP automaticamente e exibirá os resul
 
 ## O que o Claude pode fazer com o FluxPrompt
 
-Após a conexão, o Claude pode chamar o catálogo de tools do FluxPrompt. Quais tools ele realmente consegue usar depende dos escopos concedidos quando você autorizou:
-
-| Escopo | O que libera | Catálogo |
-|--------|--------------|----------|
-| `read` | Listar e inspecionar agentes, pastas, versões, tipos de node, modelos, integrações e vozes | [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
-| `write` | Criar e editar agentes, pastas, nodes e edges; criar snapshots e publicar versões | [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely), [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
-| `execute` | Executar um agente, acompanhar uma execução, cancelar uma execução | [Executando agentes](/mcp/pt-br/tools/running-agents) |
-
-Uma tool que a sua autorização não cobre é recusada com `-32401 Insufficient scope`. As tools de escrita e execução também exigem que as configurações correspondentes do workspace estejam ligadas — veja [Autenticação](/mcp/pt-br/authentication#interruptores-no-nível-do-workspace).
-
-### Quais escopos você concedeu
-
-Você não escolhe escopos na tela de consentimento: o FluxPrompt concede os escopos que o cliente pediu. Se um cliente não pedir nenhum, a autorização é apenas `read`. Em cada organização selecionada, o seu papel pode reduzir ainda mais os escopos — um membro que não é admin recebe `read`, a menos que um admin tenha permitido **Let regular members create powerful keys**. Você pode selecionar várias organizações em uma única autorização, e os escopos são definidos por organização; peça ao Claude para chamar [`list_workspaces`](/mcp/pt-br/tools/agents-and-folders#list_workspaces) para ver cada uma e seus escopos. O acesso OAuth não expira; revogue-o em [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
+Após a conexão, o Claude pode chamar o catálogo de tools do FluxPrompt. Quais tools ele consegue usar depende dos escopos da sua autorização; veja [Escopos](/mcp/pt-br/authentication#escopos) e [O que uma autorização OAuth inclui](/mcp/pt-br/authentication#o-que-uma-autorização-oauth-inclui) para saber por quanto tempo ela dura.
 
 O Claude escolherá a tool correta automaticamente com base na sua pergunta. Você também pode pedir explicitamente: *"Use `get_agent` para mostrar a estrutura do agente de ID abc123"*.
 

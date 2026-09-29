@@ -51,7 +51,7 @@ Antes de investigar erros específicos, verifique estas cinco coisas:
 - `missing_token` — a requisição não tinha o header `Authorization: Bearer ...`.
 - `invalid_token` — o token é desconhecido, foi revogado, expirou ou não tem vínculo ativo com um workspace.
 
-Para clientes baseados em token (Cursor, n8n, CLI, serviços de backend), o service token está ausente, malformado ou revogado. Clientes OAuth (Claude Desktop, Claude.ai) leem o header `WWW-Authenticate` e iniciam o fluxo de login sozinhos — veja a entrada acima se algum não conseguir entrar.
+Clientes OAuth (Claude Desktop, Claude.ai) leem o header `WWW-Authenticate` e iniciam o fluxo de login sozinhos — veja a entrada acima se algum não conseguir entrar.
 
 **Solução:**
 1. Confirme que o seu header `Authorization` é `Bearer mcp_xxxxx` sem caracteres extras.
@@ -232,7 +232,7 @@ Ambos incluem `retryAfterMs`:
 
 ## Rodando o servidor localmente?
 
-Configurações locais trazem falhas próprias — um `BACK_BASE_URL` na porta errada, uma chave sem vínculo com workspace, ou uma URL de consentimento OAuth que o front não serve. Veja [Desenvolvimento local](/mcp/pt-br/connect/local-dev#solução-de-problemas).
+Veja a [solução de problemas do desenvolvimento local](/mcp/pt-br/connect/local-dev#solução-de-problemas).
 
 ---
 

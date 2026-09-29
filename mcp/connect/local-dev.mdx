@@ -19,7 +19,7 @@ The two recommended tools are:
 - Node.js ≥ 22.13 and pnpm ≥ 11 **or** Docker Desktop (see option A below)
 - `mcp-server/` cloned
 - A local `back/` instance running (or a dev tunnel to the dev environment)
-- The local front (`front/`, on `http://localhost:3000`) running, so you can generate an **MCP key** (see [Get a client credential](#get-a-client-credential)) or complete the OAuth consent screen
+- The local front (`front/`, on `http://localhost:3000`) running, so you can generate an **MCP key** (see [Get a client credential](#get-a-client-credential)) or complete the OAuth consent screen. For OAuth it must be started with `VITE_MCP_SERVER_URL=http://localhost:3100/mcp` set — see [Client environment variables](/client/environment-variables)
 
 ## Step 1 — Start the server
 
@@ -54,15 +54,7 @@ Choose one approach. Docker Compose is recommended for new contributors — no N
     </Note>
 
     <Note>
-    **`BACK_BASE_URL` in Docker** — the container can't use `localhost` to reach your machine, because inside a container `localhost` is the container itself. The compose file already adds `extra_hosts: ["host.docker.internal:host-gateway"]`, so `host.docker.internal` resolves to the host on every OS, including Linux and WSL:
-
-    | Where `back/` runs | `BACK_BASE_URL` value |
-    |--------------------|----------------------|
-    | On the host (pnpm start:dev, or a container that publishes its port) | `http://host.docker.internal:<port>` |
-
-    The compose file joins only the `default` network, not `back_default`, so a `back/` service name isn't resolvable from `mcp-server` — publish `back/`'s port to the host and use `host.docker.internal`.
-
-    Set `<port>` to the port your `back/` actually listens on. `.env.example` ships `http://host.docker.internal:3000`, but the workspace stack runs `back/` on **3001** — change it if that's your setup, or every call fails with `503 upstream_unavailable`.
+    In Docker, set `BACK_BASE_URL` to `http://host.docker.internal:<port your back/ listens on>` — compose already maps `host.docker.internal` to the host on every OS.
     </Note>
   </Tab>
   <Tab title="Option B — Standalone (pnpm start:dev)">
@@ -88,6 +80,11 @@ NODE_ENV=development
 BACK_BASE_URL=http://host.docker.internal:3001   # Docker; use http://localhost:3001 for pnpm
 MCP_INTERNAL_SECRET=<same value as in back/.env>
 
+# Local OAuth (Claude Desktop, Claude Code, the Inspector's OAuth flow)
+MCP_PUBLIC_URL=http://localhost:3100
+MCP_OAUTH_CONSENT_SECRET=<same value as in back/.env>
+MCP_FRONT_CONSENT_URL=http://localhost:3000/mcp-authorize.html
+
 MCP_KILL_SWITCH=off
 
 # Leave blank to skip Datadog writes locally
@@ -109,18 +106,18 @@ The health endpoints are `/healthz` and `/readyz` (there is no `/health`).
 
 ### Get a client credential
 
-Local `mcp-server` resolves every client token through `back/`, and `back/` only accepts a token that has an **active workspace binding**. The old helper script `back/scripts/create-dev-mcp-token.mjs` inserts a row into `mcp_tokens` without that binding, so its `mcp_dev_local` token is rejected with `401 invalid_token`. Don't use it.
-
-Use one of these instead:
+Local `mcp-server` resolves every client token through `back/`, so use one of these two supported paths:
 
 <Steps>
   <Step title="Generate an MCP key in the local front">
     Open `http://localhost:3000`, go to **Settings → MCP Keys** (or open `http://localhost:3000/dashboard-beta?settings=mcpTokens`), and click **Generate key**. Copy the key that starts with `mcp_` and use it as `Authorization: Bearer <key>`.
   </Step>
   <Step title="Or use OAuth">
-    Clients that support OAuth (Claude Desktop, Claude Code, MCP Inspector's OAuth flow) need no key. Set up [Local OAuth](#local-oauth) and let the client run the consent screen.
+    Clients that support OAuth (Claude Desktop, Claude Code, MCP Inspector's OAuth flow) need no key. Set the [Local OAuth](#local-oauth) values and let the client run the consent screen.
   </Step>
 </Steps>
+
+Don't use `back/scripts/create-dev-mcp-token.mjs`: its token is rejected.
 
 <Note>
 Keys are created against the database your local `back/` uses, so the key only works with a local `mcp-server` that points at that same `back/`.
@@ -141,7 +138,7 @@ Keys are created against the database your local `back/` uses, so the key only w
     Follow the **Standalone (Option B)** tab for the exact steps — switch to Streamable HTTP, set the URL above, add the header, then **Connect**.
   </Tab>
   <Tab title="Standalone (Option B)">
-    [MCP Inspector](https://github.com/modelcontextprotocol/inspector) runs directly on the host. From `mcp-server/`, the repo script starts a pinned version bound to `127.0.0.1` with the browser auto-open disabled and the Inspector proxy's own auth turned off (`DANGEROUSLY_OMIT_AUTH=true`, local use only) — its UI is on port `5173`:
+    [MCP Inspector](https://github.com/modelcontextprotocol/inspector) runs directly on the host. From `mcp-server/`, `pnpm inspect` starts the Inspector on port `5173` (local use only):
 
     ```bash
     pnpm inspect
@@ -170,7 +167,7 @@ Keys are created against the database your local `back/` uses, so the key only w
         ```
       </Step>
       <Step title="Connect and explore">
-        Click **Connect**, then **Tools → List**. You see the full tool catalog (about 30 tools) — see the [tools pages](/mcp/tools/agents-and-folders) for what each one does. Select any tool and click **Call** to see the raw JSON-RPC request and response.
+        Click **Connect**, then **Tools → List**. The tool list is non-empty — see the [tools pages](/mcp/tools/agents-and-folders) for what each one does. Select any tool and click **Call** to see the raw JSON-RPC request and response.
       </Step>
     </Steps>
   </Tab>
@@ -178,7 +175,7 @@ Keys are created against the database your local `back/` uses, so the key only w
 
 ## Step 3 — Test with Claude Desktop
 
-Claude Desktop authenticates with **OAuth only** — it does not support custom headers in its config file, so there is nowhere to put a token. Complete [Local OAuth](#local-oauth) first, then register the server. See also [Authentication](/mcp/authentication).
+Claude Desktop is OAuth-only: it can't send custom headers, so there is no token to put in its config and no `headers` block to add. Set the [Local OAuth](#local-oauth) values in Step 1 and make sure the front is running, then register the server. Clients that accept headers (Claude Code, Cursor, the Inspector, `curl`) can use an MCP key instead. See also [Authentication](/mcp/authentication).
 
 ### Option A — Register with one command
 
@@ -189,8 +186,7 @@ pnpm claude:register
 ```
 
 This script reads `PORT` from `.env` (used only when you don't pass `--url`) and writes the
-`fluxprompt-mcp` entry — `{ "url": "<target>" }`, with no `Authorization` header, since Claude Desktop's
-config doesn't support one — into `claude_desktop_config.json`. It is idempotent — running it again
+`fluxprompt-mcp` entry — `{ "url": "<target>" }` — into `claude_desktop_config.json`. It is idempotent — running it again
 with the same URL prints the current state and exits without changes.
 
 After running, **fully restart Claude Desktop**. The `fluxprompt-mcp` entry appears in the tools panel (hammer icon), and Claude Desktop starts the OAuth flow on first use.
@@ -218,8 +214,6 @@ After running, **fully restart Claude Desktop**. The `fluxprompt-mcp` entry appe
     }
     ```
 
-    Don't add a `headers` block — Claude Desktop ignores custom headers and signs in through OAuth.
-
     <Warning>
     If the file already has an `mcpServers` key, add `"fluxprompt-local": { ... }` inside it — do not create a second `mcpServers` block.
     </Warning>
@@ -232,26 +226,16 @@ After running, **fully restart Claude Desktop**. The `fluxprompt-mcp` entry appe
   </Step>
 </Steps>
 
-<Note>
-Clients that do accept headers (Claude Code, Cursor, the Inspector, `curl`) can send `Authorization: Bearer <your MCP key>` instead of using OAuth.
-</Note>
-
 ## Local OAuth
 
-To run the OAuth consent flow against your local stack, configure these values:
+The `mcp-server` side of local OAuth (`MCP_PUBLIC_URL`, `MCP_OAUTH_CONSENT_SECRET`, `MCP_FRONT_CONSENT_URL`) is in the Step 1 `.env`. The rest:
 
 | Where | Variable | Local value |
 |-------|----------|-------------|
-| `mcp-server` | `MCP_PUBLIC_URL` | The origin clients reach the server on, without `/mcp` — `http://localhost:3100`, or your tunnel origin |
-| `mcp-server` and `back` | `MCP_OAUTH_CONSENT_SECRET` | The **same** value on both — otherwise the consent signature fails |
-| `mcp-server` | `MCP_FRONT_CONSENT_URL` | `http://localhost:3000/mcp-authorize.html` |
-| `front` | `VITE_MCP_SERVER_URL` | `http://localhost:3100/mcp` (build-time — restart the Vite dev server after changing it) |
+| `back` | `MCP_OAUTH_CONSENT_SECRET` | The **same** value as on `mcp-server` — otherwise the consent signature fails |
+| `front` | `VITE_MCP_SERVER_URL` | `http://localhost:3100/mcp` (build-time — restart the Vite dev server after changing it; see [Client environment variables](/client/environment-variables)) |
 
-<Warning>
-`MCP_FRONT_CONSENT_URL` defaults to `http://localhost:5173/mcp/authorize` in the code and in `.env.example`, but the front doesn't serve that path. The front serves the consent page as `mcp-authorize.html` on port `3000`, so set the value above or the consent redirect lands on a page that doesn't exist.
-</Warning>
-
-Restart `mcp-server` after editing its `.env`. `back/` also needs `MCP_SERVER_INTERNAL_URL` and `MCP_RESOURCE_METADATA_URL` — see [Main API environment variables](/main-api/environment-variables).
+`back/` also needs `MCP_SERVER_INTERNAL_URL` and `MCP_RESOURCE_METADATA_URL` — see [Main API environment variables](/main-api/environment-variables). Restart `mcp-server` after editing its `.env`.
 
 ## Tunnels
 
@@ -268,7 +252,7 @@ Quick tunnels get a **new URL every time you start them**. When the public URL c
 Then restart the front and `mcp-server`, and reconnect the client. If they disagree, OAuth discovery returns an issuer that doesn't match the URL the client used and the sign-in fails.
 
 <Tip>
-The workspace has a `mcp-tunnel-url` skill that updates all three files in one step (`.claude/skills/mcp-tunnel-url/switch.sh --tunnel "<url>"`, or `--local` to go back to localhost). It edits files only — you restart the services yourself.
+The workspace's `mcp-tunnel-url` skill updates all three files in one step. It edits files only — you restart the services yourself.
 </Tip>
 
 For ngrok's free tier, send the `ngrok-skip-browser-warning: 1` header on every request — see [Troubleshooting](#troubleshooting). cloudflared needs no extra header.
@@ -283,7 +267,7 @@ curl -s -X POST http://localhost:3100/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
-A working setup returns a JSON-RPC `result.tools` array with the full tool catalog (about 30 tools). `tools/list` isn't filtered by scope, so an empty list is not a permissions problem.
+A working setup returns a JSON-RPC `result.tools` array with the tool catalog. `tools/list` isn't filtered by scope, so an empty list is not a permissions problem.
 
 ## Run the test suite
 
@@ -302,15 +286,15 @@ All three must pass before any commit.
     The response body has a `reason`:
 
     - `missing_token` — no `Authorization: Bearer ...` header.
-    - `invalid_token` — the token isn't accepted: it's unknown, revoked, expired, or has no **active workspace binding**. A row inserted by hand into `mcp_tokens` (including the old `mcp_dev_local` script) has no binding and always fails. `MCP_INTERNAL_SECRET` is not a client token either.
+    - `invalid_token` — the token isn't accepted: it's unknown, revoked, expired, or has no active workspace binding. Locally, `MCP_INTERNAL_SECRET` is not a client token either.
 
-    Generate a new key under **MCP Keys** in the local front (see [Get a client credential](#get-a-client-credential)). Note that `mcp-server` caches token lookups for `MCP_TOKEN_CACHE_TTL` seconds.
+    Generate a new key under **MCP Keys** in the local front (see [Get a client credential](#get-a-client-credential)). For the generic 401 reasons, see [Troubleshooting](/mcp/troubleshooting).
   </Accordion>
   <Accordion title='"Service disabled" error (-32005)'>
     `MCP_KILL_SWITCH=on` is set in your `.env`. Change it to `off` and restart.
   </Accordion>
   <Accordion title="503 upstream_unavailable / cannot reach back/ (ECONNREFUSED)">
-    `mcp-server` couldn't reach `back/`, so it answers `503` with `reason: "upstream_unavailable"`. `BACK_BASE_URL` points to a host or port that isn't running. If `mcp-server` runs in Docker, use `http://host.docker.internal:<port>` (not `http://localhost:...`) and make sure `<port>` is the one your `back/` listens on (`.env.example` says `3000`; the workspace stack uses `3001`). If running standalone, start your local `back/` instance.
+    `mcp-server` couldn't reach `back/`, so it answers `503` with `reason: "upstream_unavailable"`. Check `BACK_BASE_URL` (see [Step 1](#minimal-env-for-local-work)) and that `back/` is running.
   </Accordion>
   <Accordion title="502 upstream_auth_rejected">
     `MCP_INTERNAL_SECRET` differs between `mcp-server` and `back/`. Set the same value on both and restart `mcp-server`.
@@ -322,7 +306,7 @@ All three must pass before any commit.
     publishes `mcp-server` on).
   </Accordion>
   <Accordion title="OAuth consent page doesn't load or the sign-in fails">
-    Check [Local OAuth](#local-oauth): `MCP_FRONT_CONSENT_URL` must be `http://localhost:3000/mcp-authorize.html`, `MCP_OAUTH_CONSENT_SECRET` must be identical on `mcp-server` and `back`, and `MCP_PUBLIC_URL` / `VITE_MCP_SERVER_URL` must point at the same origin the client uses (see [Tunnels](#tunnels)).
+    Check the [Local OAuth](#local-oauth) values and the Step 1 `.env`: `MCP_OAUTH_CONSENT_SECRET` must be identical on `mcp-server` and `back`, and `MCP_PUBLIC_URL` / `VITE_MCP_SERVER_URL` must point at the same origin the client uses (see [Tunnels](#tunnels)).
   </Accordion>
   <Accordion title='Exposing the server via ngrok — responses come back as HTML ("Unexpected content type: text/html")'>
     When you tunnel the local server through **ngrok** (free tier), ngrok serves its browser-warning interstitial page (HTTP 200, `Content-Type: text/html`) instead of proxying to the MCP server. The MCP client then fails with `Unexpected content type: text/html`.
@@ -342,7 +326,7 @@ All three must pass before any commit.
     }
     ```
 
-    Claude Desktop can't send custom headers, so use cloudflared, or let ngrok inject the header for you (`ngrok http 3100 --request-header-add "ngrok-skip-browser-warning: 1"`).
+    For a client that can't send headers, use cloudflared, or let ngrok inject the header for you (`ngrok http 3100 --request-header-add "ngrok-skip-browser-warning: 1"`).
 
     Verify with curl (note the value `1`):
 

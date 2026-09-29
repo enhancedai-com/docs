@@ -63,8 +63,9 @@ Nenhum parâmetro necessário. Assim como o `get_node_type`, não recebe `worksp
 ## `get_node_type`
 
 Retorna a definição completa de um tipo de node: `type`, `label`, `description`, `category`,
-`inputSchema`, `outputSchema` e `handles`. Chame antes de todo `add_node` e antes de ligar com o
-[`connect_nodes`](#connect_nodes).
+`inputSchema`, `outputSchema` e `handles`. Chame uma vez por tipo de node que você usa, e antes de ligar com o
+[`connect_nodes`](#connect_nodes). Para buscar todos os schemas de uma vez, leia o resource
+[`fluxprompt://node-types`](/mcp/pt-br/tools/prompts-and-resources#resources).
 
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |-----------|------|-------------|-----------|
@@ -86,14 +87,11 @@ dados, não ligações.
 | `canContinueExecutionChain` | boolean | Se o tipo expõe um handle de origem que continua a cadeia de execução. Um `globalStarter` só pode conectar direto em um tipo em que isto é `true`. |
 
 <Warning>
-  **Respeite o `enum` quando o campo declarar um.** Vários campos de node aceitam apenas um
-  conjunto fixo de valores — por exemplo, `dynamicSettingsNode.selectedOption` é `"text"` ou
-  `"voice"`, e `fluxObject.selectedType` é uma de seis strings exatas, como `"Load All Entries"`.
-  Esses campos **não** são validados na escrita: um valor fora da lista é gravado e depois não casa
-  com nenhum branch na renderização, então o node fica sem painel selecionado e não faz nada.
-  (`add_node` e `update_node` devolvem isso em `invalidEnumValues`, mas aplicam a escrita mesmo
-  assim.) Leia o `enum` do campo no `inputSchema` e nunca chute um valor que pareça plausível, como
-  `"default"`.
+  **Respeite o `enum` quando o campo declarar um.** Leia o `enum` do campo no `inputSchema` e nunca
+  chute um valor que pareça plausível, como `"default"`. Um valor fora da lista é gravado mesmo
+  assim, reportado em `invalidEnumValues`, e o node não faz nada — se um node ficar inerte, confira o
+  nome e o valor do campo. Exemplos: `dynamicSettingsNode.selectedOption` é `"text"` ou `"voice"`;
+  `fluxObject.selectedType` é uma de seis strings exatas, como `"Load All Entries"`.
 </Warning>
 
 ## `list_ai_models`
@@ -395,32 +393,18 @@ Encadear dois `commandTextNode` para que B rode depois de A *e* veja o texto de 
 Além da edge, o `data` do destino precisa referenciar a origem — o array companheiro `<campo>Data`,
 ex.: o `data.textData` de um `outputObjectNode`.
 
-<Tip>
-  **Para alguns tipos de destino você ganha tudo isso de graça.** Chame `connect_nodes` com os dois
-  handles omitidos e, quando o destino é um `commandTextNode`, `outputController`,
-  `outputObjectNode`, `textBox` ou `richTextBox`, uma única chamada escreve a edge de execução, a
-  edge de dado **e** a entrada no array `<campo>Data` do destino. O servidor também faz isso para
-  `imageGenerator`, `voiceBoxNode`, `webSearch`, `arrayNode`, `conditionNode` e qualquer outro tipo
-  cujo único handle de dado alimenta um campo `text`. Nunca faz isso quando a origem é um
-  `globalStarter`. Confirme com `get_agent` e não altere esse array de novo — isso acrescenta uma
-  entrada duplicada. Confira `diff.edgesAdded` e `diff.updated` na resposta para ver o que ele fez.
-</Tip>
-
-<Warning>
-  **Para qualquer outro tipo de destino, omitir os handles escreve apenas a edge de execução.** O
-  destino executa, mas não recebe nada. Ligue a edge de dado você mesmo com `sourceHandle: "output"`
-  e o handle que o destino declara (listado em `handles.targetHandles` no `get_node_type`) — o
-  servidor adiciona a referência em `<campo>Data` quando esse handle alimenta um campo, e o
-  [`check_agent_integrity`](/mcp/pt-br/tools/writing-safely#check_agent_integrity) reporta
-  `empty_companion_array` quando não adicionou. Pedir um handle de dado explicitamente também não
-  agenda o destino — não leia uma edge criada com sucesso como "o destino agora vai executar".
-</Warning>
+Quando o destino tem um único handle de dado alimentando um campo de texto, uma chamada com os dois
+handles omitidos escreve a edge de execução, a edge de dado **e** a entrada em `<campo>Data` — por
+exemplo em um `commandTextNode`, `outputObjectNode`, `textBox` ou `webSearch`. Caso contrário, só a
+edge de execução é escrita e você liga a edge de dado, com `sourceHandle: "output"` e um handle de
+`handles.targetHandles`. Isso nunca é feito a partir de um `globalStarter`. Confira `diff.edgesAdded`
+e `diff.updated`, ou rode o [`check_agent_integrity`](/mcp/pt-br/tools/writing-safely#check_agent_integrity),
+antes de alterar `<campo>Data` você mesmo — isso acrescenta uma entrada duplicada. Uma edge criada com
+sucesso não agenda o destino: não leia como "o destino agora vai executar".
 
 ### Padrões de handle
 
-Omitindo os dois handles, o servidor escolhe conforme os tipos de node. **Não existe padrão
-genérico**: ele só usa `outputFlow` / `input` quando o registro confirma que o tipo realmente tem esse
-handle, e caso contrário recusa a chamada em vez de ligar errado.
+Omitindo os dois handles, o servidor escolhe conforme os tipos de node. Ele só usa `outputFlow` / `input` quando o registro confirma que o tipo realmente tem esse handle, e caso contrário recusa a chamada em vez de ligar errado.
 
 | Situação | `sourceHandle` | `targetHandle` |
 |----------|----------------|----------------|
@@ -430,37 +414,20 @@ handle, e caso contrário recusa a chamada em vez de ligar errado.
 | Destino é node terminal de exibição (`outputObjectNode`, `richTextBox`) | A saída de dado da origem: o primeiro entre `output`, `textOutput`, `contentOut` que ela tiver | `input` |
 | Qualquer outro caso | `outputFlow`, se o tipo de origem tiver | `input`, se o tipo de destino tiver |
 
-<Warning>
-  Vários casos **não** têm padrão seguro e são rejeitados se você não for explícito:
+Dois casos exigem um handle explícito:
 
-  - A partir de um `conditionNode` você precisa passar `sourceHandle` —
-    `conditionHandle-T{n}`/`conditionHandle-F{n}` para condições SWITCH, ou
-    `outputHandle-0`/`outputHandle-1` para condições booleanas.
-  - Para dentro de um node `nodesAdd` você precisa passar `targetHandle` — `nodesInput` (payload de
-    lista de nodes) ou `edgesInput` (payload de lista de edges).
-  - A partir de, ou para dentro de, um tipo que não tem `outputFlow` ou `input` (por exemplo, um
-    `varInputNode` não tem `outputFlow`) os padrões não se aplicam — nomeie o handle a partir de
-    `handles`.
-  - Um `globalStarter` só pode conectar em um node que de fato executa
-    (`canContinueExecutionChain: true`, ex.: um `commandTextNode`). Conectá-lo a um node de entrada
-    ou de exibição, como o `varInputNode`, é recusado com `validation_error`; conecte o starter ao
-    node que executa e ligue o node de entrada a ele com uma edge de dado.
-</Warning>
+- A partir de um `conditionNode`, passe `sourceHandle` — `conditionHandle-T{n}`/`conditionHandle-F{n}`
+  para condições SWITCH, ou `outputHandle-0`/`outputHandle-1` para condições booleanas.
+- Para dentro de um node `nodesAdd`, passe `targetHandle` — `nodesInput` (payload de lista de nodes)
+  ou `edgesInput` (payload de lista de edges).
 
 ## `disconnect_nodes`
 
 Remove uma edge. Identifique-a por `edgeId`, ou por `source` + `target`.
 
-**Uma chamada desfaz um `connect_nodes`.** Quando aquele connect também escreveu uma edge companheira
-(o par que ele nomeia `<id>_exec` e `<id>_data`), as duas edges saem, e a referência que ele adicionou
-ao array `<campo>Data` do destino é removida junto — então o campo deixa de reportar uma conexão que
-não existe mais, e nos tipos em que um array companheiro não vazio sobrepõe o valor digitado (por
-exemplo `webSearch.queryData` sobre `query`) o valor que você escreveu volta a valer. Uma edge entre
-os mesmos dois nodes que nenhum `connect_nodes` emparelhou com esta permanece.
-
-Retorna `diff.edgesRemoved` — um array de ids de edge, então leia-o para saber exatamente o que saiu —
-e `diff.updated`, os nodes cujo campo alimentado pela edge foi limpo. Isso remove **apenas edges**;
-para excluir um node use `remove_node`.
+**Uma chamada desfaz um `connect_nodes`** — as duas edges e a referência em `<campo>Data` que ele
+adicionou. Leia `diff.edgesRemoved` / `diff.updated` para saber exatamente o que mudou. Isso remove
+**apenas edges**; para excluir um node use `remove_node`.
 
 ## Exemplos de prompts
 

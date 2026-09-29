@@ -165,7 +165,7 @@ DELETE /workspaces/{workspaceId}/mcp-tokens/{tokenId}
 Authorization: Bearer <jwt>
 ```
 
-Sets `revokedAt` on the token. The MCP server honours revocation within its token cache TTL (default 10 seconds, `MCP_TOKEN_CACHE_TTL`). Requires active membership, and either the ADMIN role or being the token's own creator — a non-admin cannot revoke a token they did not create, even one owned by a teammate.
+Sets `revokedAt` on the token. The MCP server honours revocation within its token cache TTL (`MCP_TOKEN_CACHE_TTL`, see [MCP environment variables](/mcp/environment-variables)). Requires active membership, and either the ADMIN role or being the token's own creator — a non-admin cannot revoke a token they did not create, even one owned by a teammate.
 
 ### Response `200 OK`
 

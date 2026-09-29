@@ -22,24 +22,14 @@ como contexto anexável; outros clientes podem expor de outra forma, ou não exp
 |--------|------------|------------------|
 | `build_flow` | `goal` | Cria uma pasta e um agente vazio, depois monta um node de geração de texto ligado a um output de dados — a edge **e** a referência de dado. |
 | `edit_agent` | `agentId` | Inspeciona um agente, depois adiciona/altera/remove nodes com segurança usando concorrência otimista (`expectedVersion`). |
-| `organize_workspace` | — | Cria pastas e move agentes para dentro delas. |
+| `organize_workspace` | — | Cria pastas e move agentes para dentro de pastas. |
 | `run_agent_recipe` | `agentId` | Valida uma execução com dry-run, dispara, consulta o `get_run_status` até terminar e depois verifica com `get_run_nodes` e `get_node_output` se todos os nodes esperados rodaram. |
 
 Eles codificam a ordem que é fácil de errar: buscar o schema real do node **antes** de escrevê-lo,
 criar as duas edges ao encadear nodes, e passar `empty: true` para um agente novo não vir com os nodes
 do template inicial.
 
-O `run_agent_recipe` reporta os `tokens` do `get_run_status` como um total de **FluxCredits** — uma
-quantidade decimal de créditos, não uma contagem de tokens do provider — e trata o status `completed`
-como não comprovado: ele manda você confirmar que todo node esperado aparece no `get_run_nodes` com
-estado `succeeded` e ler os resultados com o `get_node_output`.
-
-<Warning>
-  **O texto do prompt `organize_workspace` ainda menciona mover um agente para a raiz
-  (`targetFolderId: null`), mas o servidor recusa.** O [`move_agent`](/mcp/pt-br/tools/agents-and-folders#move_agent)
-  responde com `validation_error`, porque um agente na raiz fica inalcançável por toda ferramenta do
-  MCP. Mova agentes apenas para pastas e ignore essa parte da receita.
-</Warning>
+Para ver como o `run_agent_recipe` lê resultados e créditos, veja [Executando agentes](/mcp/pt-br/tools/running-agents).
 
 <Tip>
   Prompts são orientação, não imposição. Eles ainda executam cada mutação como dry-run primeiro, então

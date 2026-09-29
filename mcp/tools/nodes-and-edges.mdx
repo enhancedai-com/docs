@@ -62,8 +62,9 @@ No parameters required. Like `get_node_type`, it takes no `workspaceId`.
 ## `get_node_type`
 
 Returns one node type's full definition: `type`, `label`, `description`, `category`, `inputSchema`,
-`outputSchema` and `handles`. Call it before every `add_node` and before wiring with
-[`connect_nodes`](#connect_nodes).
+`outputSchema` and `handles`. Call it once per node type you use, and before wiring with
+[`connect_nodes`](#connect_nodes). To fetch every schema at once, read the
+[`fluxprompt://node-types`](/mcp/tools/prompts-and-resources#resources) resource.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -85,13 +86,11 @@ wiring.
 | `canContinueExecutionChain` | boolean | Whether the type exposes an execution-continuation source handle. A `globalStarter` may only connect directly into a type where this is `true`. |
 
 <Warning>
-  **Respect `enum` when a field declares one.** Several node fields only accept a fixed set of
-  values — for example `dynamicSettingsNode.selectedOption` is `"text"` or `"voice"`, and
-  `fluxObject.selectedType` is one of six exact strings such as `"Load All Entries"`. These fields
-  are **not** validated on write: a value outside the list is stored and then matches no branch at
-  render time, so the node ends up with no panel selected and does nothing. (`add_node` and
-  `update_node` report it back in `invalidEnumValues`, but they still apply the write.) Read the
-  field's `enum` from `inputSchema` and never guess a plausible-looking value like `"default"`.
+  **Respect `enum` when a field declares one.** Read the field's `enum` from `inputSchema` and never
+  guess a plausible-looking value like `"default"`. A value outside the list is saved anyway,
+  reported in `invalidEnumValues`, and the node does nothing — if a node is inert, verify the field
+  name and value. Examples: `dynamicSettingsNode.selectedOption` is `"text"` or `"voice"`;
+  `fluxObject.selectedType` is one of six exact strings such as `"Load All Entries"`.
 </Warning>
 
 ## `list_ai_models`
@@ -390,32 +389,18 @@ each with its own `edgeId`. Either one alone is a silent half-connection.
 On top of the edge, the target's `data` must reference the source — the companion array
 `<field>Data`, e.g. an `outputObjectNode`'s `data.textData`.
 
-<Tip>
-  **For some target types you get all of this for free.** Call `connect_nodes` with both handles
-  omitted and, when the target is a `commandTextNode`, `outputController`, `outputObjectNode`,
-  `textBox` or `richTextBox`, one call writes the execution edge, the data edge **and** the entry in
-  the target's `<field>Data` array. The server also does it for `imageGenerator`, `voiceBoxNode`,
-  `webSearch`, `arrayNode`, `conditionNode` and any other type whose single data handle feeds a
-  `text` field. It never does it when the source is a `globalStarter`. Verify with `get_agent` and do
-  not patch that array again — doing so appends a duplicate. Check the returned `diff.edgesAdded` and
-  `diff.updated` to see what it did.
-</Tip>
-
-<Warning>
-  **For any other target type, omitting the handles writes only the execution edge.** The target
-  runs but receives nothing. Wire the data edge yourself with `sourceHandle: "output"` and the
-  handle the target declares (listed under `handles.targetHandles` in `get_node_type`) — the server
-  adds the `<field>Data` reference when that handle feeds a field, and
-  [`check_agent_integrity`](/mcp/tools/writing-safely#check_agent_integrity) reports
-  `empty_companion_array` when it did not. Asking for a data handle explicitly does not schedule the
-  target either — do not read a successful edge as "the target will now run".
-</Warning>
+When the target has a single data handle feeding a text field, one call with both handles omitted
+writes the execution edge, the data edge **and** the `<field>Data` entry — for example on a
+`commandTextNode`, `outputObjectNode`, `textBox` or `webSearch`. Otherwise only the execution edge
+is written and you wire the data edge yourself, with `sourceHandle: "output"` and a handle from
+`handles.targetHandles`. It is never done from a `globalStarter`. Check `diff.edgesAdded` and
+`diff.updated`, or run [`check_agent_integrity`](/mcp/tools/writing-safely#check_agent_integrity),
+before patching `<field>Data` yourself — doing so appends a duplicate. A successful edge does not
+schedule the target: do not read it as "the target will now run".
 
 ### Handle defaults
 
-Omit both handles and the server picks based on the node types. There is **no blanket default**: it
-only uses `outputFlow` / `input` when the registry confirms the type really has that handle, and
-otherwise refuses the call instead of miswiring it.
+Omit both handles and the server picks based on the node types. It only uses `outputFlow` / `input` when the registry confirms the type really has that handle, and otherwise refuses the call instead of miswiring it.
 
 | Situation | `sourceHandle` | `targetHandle` |
 |-----------|----------------|----------------|
@@ -425,35 +410,20 @@ otherwise refuses the call instead of miswiring it.
 | Target is a terminal display node (`outputObjectNode`, `richTextBox`) | The source's data output: the first of `output`, `textOutput`, `contentOut` that it has | `input` |
 | Anything else | `outputFlow`, if the source type has it | `input`, if the target type has it |
 
-<Warning>
-  Several cases have **no** safe default and are rejected unless you are explicit:
+Two cases need an explicit handle:
 
-  - From a `conditionNode` you must pass `sourceHandle` — `conditionHandle-T{n}`/`conditionHandle-F{n}`
-    for SWITCH conditions, or `outputHandle-0`/`outputHandle-1` for boolean ones.
-  - Into a `nodesAdd` node you must pass `targetHandle` — `nodesInput` (node-list payload) or
-    `edgesInput` (edge-list payload).
-  - From or into a type that lacks `outputFlow` or `input` (for example a `varInputNode` has no
-    `outputFlow`) the defaults do not apply — name the handle from `handles`.
-  - A `globalStarter` may only connect into a node that actually executes
-    (`canContinueExecutionChain: true`, e.g. a `commandTextNode`). Connecting it into an input or
-    display node such as `varInputNode` is refused with a `validation_error`; connect the starter to
-    the node that runs and feed the input node into it with a data edge.
-</Warning>
+- From a `conditionNode`, pass `sourceHandle` — `conditionHandle-T{n}`/`conditionHandle-F{n}` for
+  SWITCH conditions, or `outputHandle-0`/`outputHandle-1` for boolean ones.
+- Into a `nodesAdd` node, pass `targetHandle` — `nodesInput` (node-list payload) or `edgesInput`
+  (edge-list payload).
 
 ## `disconnect_nodes`
 
 Removes an edge. Identify it either by `edgeId`, or by `source` + `target`.
 
-**One call undoes one `connect_nodes`.** When that connect also wrote a companion edge (the pair it
-names `<id>_exec` and `<id>_data`), both edges go, and the reference it added to the target's
-`<field>Data` array is dropped with them — so the field stops reporting a connection that no longer
-exists, and on types where a non-empty companion array overrides the typed value (for example
-`webSearch.queryData` over `query`) the value you authored takes effect again. An edge between the
-same two nodes that no `connect_nodes` paired with this one is left in place.
-
-Returns `diff.edgesRemoved` — an array of edge ids, so read it for exactly what went — and
-`diff.updated`, the nodes whose edge-fed field was cleared. This removes **only edges**; to delete a
-node use `remove_node`.
+**One call undoes one `connect_nodes`** — both edges and the `<field>Data` reference it added. Read
+`diff.edgesRemoved` / `diff.updated` for exactly what changed. This removes **only edges**; to
+delete a node use `remove_node`.
 
 ## Example prompts
 

@@ -72,16 +72,12 @@ nothing changes until you say so.
 </CardGroup>
 
 <Note>
-  Write and execute tools require a key with the `write`/`execute` scopes **and** the matching
-  workspace settings: **Let AI assistants change things** (`mcp.writes.enabled`) and **Let AI assistants run agents**
-  (`mcp.execute.enabled`). Both are on by default, and a workspace admin controls them in
-  **Settings → MCP Keys**.
+  Write and execute tools need a key with the `write`/`execute` scopes **and** the matching workspace switches; see [Workspace-level switches](/mcp/authentication#workspace-level-switches).
 </Note>
 
 ### Limits
 
-- **Run quota** — each workspace can start up to **200** agent runs per day (UTC) through MCP. Past that, `run_agent` is refused with `quota_exceeded` until the next UTC day. A dry-run does not use up the quota; it reports `quotaRemaining`.
-- **Rate limit** — each key can make 60 requests per minute and 5,000 per day by default.
+Each workspace has a daily run quota for `run_agent`, described under [`run_agent`](/mcp/tools/running-agents#run_agent). Each key is also rate limited; the defaults are in [Environment variables](/mcp/environment-variables).
 
 ## How it works
 
@@ -105,10 +101,7 @@ FluxPrompt API  ──▶  Your agents, nodes, and flows
 
 ### Transport
 
-- Every request is an HTTP `POST` to `/mcp` carrying one JSON-RPC 2.0 message. The reply is plain JSON.
-- If your client sends `Accept: text/event-stream`, the reply is a single SSE frame (one `data:` event, then the stream closes). There is no long-lived server stream, so `GET /mcp` is not supported.
-- A JSON-RPC notification (a message without an `id`) is answered with a bare `202 Accepted`.
-- `DELETE /mcp` ends a session and returns `204`. Nothing is kept server-side, so it is safe to skip.
+Streamable HTTP, JSON-RPC over `POST /mcp`. Transport details are in the [MCP server reference](/api-reference/mcp/mcp-server-oauth).
 
 ## Quick glossary
 
@@ -116,7 +109,7 @@ FluxPrompt API  ──▶  Your agents, nodes, and flows
 |------|---------|
 | **MCP** | Model Context Protocol — an open standard for connecting AI clients to external tools and data. |
 | **OAuth** | A browser-based consent flow where you log in to FluxPrompt and grant a client access to a workspace. No token is pasted. Required for Claude Desktop and Claude.ai. |
-| **Service token** | A secret string tied to your workspace (and, optionally, other workspaces you belong to) (starts with `mcp_`), generated in [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens). Sent in the `Authorization` header. Used by machine-to-machine clients, the CLI, and n8n. Different from your FluxPrompt API key. |
+| **Service token** | A secret starting with `mcp_`, tied to one or more workspaces, generated in [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens). Sent in the `Authorization` header. Used by machine-to-machine clients, the CLI, and n8n. Different from your FluxPrompt API key. |
 | **Tool** | A named action the MCP server exposes (e.g. `list_agents`). Your AI client calls tools on your behalf. |
 | **Workspace** | Your company or team context in FluxPrompt. One authorization (OAuth or service token) can cover one workspace or several — see [Authentication](/mcp/authentication#one-authorization-can-cover-multiple-workspaces). |
 | **Streamable HTTP** | The transport protocol FluxPrompt MCP uses. A single HTTPS endpoint that accepts JSON-RPC 2.0 requests. |

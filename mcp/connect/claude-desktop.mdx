@@ -53,19 +53,7 @@ Claude will call the FluxPrompt MCP tools automatically and show you the results
 
 ## What Claude can do with FluxPrompt
 
-After connecting, Claude can call the FluxPrompt tool catalog. Which tools it can actually use depends on the scopes granted when you authorized:
-
-| Scope | What it unlocks | Catalog |
-|-------|-----------------|---------|
-| `read` | List and inspect agents, folders, versions, node types, models, integrations and voices | [Agents & folders](/mcp/tools/agents-and-folders), [Nodes & edges](/mcp/tools/nodes-and-edges), [Versioning](/mcp/tools/versioning) |
-| `write` | Create and edit agents, folders, nodes and edges; snapshot and publish versions | [Writing safely](/mcp/tools/writing-safely), [Agents & folders](/mcp/tools/agents-and-folders), [Nodes & edges](/mcp/tools/nodes-and-edges), [Versioning](/mcp/tools/versioning) |
-| `execute` | Run an agent, poll a run, cancel a run | [Running agents](/mcp/tools/running-agents) |
-
-A tool your authorization does not cover is refused with `-32401 Insufficient scope`. Write and execute tools also need the matching workspace settings turned on — see [Authentication](/mcp/authentication#workspace-level-switches).
-
-### Which scopes you granted
-
-You do not pick scopes on the consent screen: FluxPrompt grants the scopes the client requested. If a client requests none, the grant is `read` only. Within each organization you selected, your role can lower the scopes further — a member who is not an admin gets `read` unless an admin allowed **Let regular members create powerful keys**. You can select several organizations in one authorization, and the scopes are set per organization; ask Claude to call [`list_workspaces`](/mcp/tools/agents-and-folders#list_workspaces) to see each one and its scopes. OAuth access does not expire; revoke it in [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
+After connecting, Claude can call the FluxPrompt tool catalog. Which tools it can use depends on the scopes of your authorization; see [Scopes](/mcp/authentication#scopes), and [What an OAuth grant includes](/mcp/authentication#what-an-oauth-grant-includes) for how long it lasts.
 
 Claude will choose the right tool automatically based on your question. You can also ask it explicitly: *"Use `get_agent` to show me the structure of agent ID abc123"*.
 

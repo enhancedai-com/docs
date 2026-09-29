@@ -6,9 +6,9 @@ description: "Dispare uma execução, acompanhe o resultado e cancele uma que ai
 ## Descrição
 
 Executar é assíncrono: o `run_agent` retorna um `runId` imediatamente e você consulta o
-`get_run_status` para o resultado. Estas ferramentas exigem o escopo `execute`, e o toggle do
-workspace `mcp.execute.enabled` precisa estar ligado — veja
-[escrevendo com segurança](/mcp/pt-br/tools/writing-safely).
+`get_run_status` para o resultado. Estas ferramentas exigem o escopo `execute`, e o interruptor de
+execução do workspace precisa estar ligado — veja
+[escrevendo com segurança](/mcp/pt-br/tools/writing-safely#permissões).
 
 ## `run_agent`
 
@@ -24,7 +24,11 @@ Dispara uma execução.
 | `idempotencyKey` | string | Sim quando `dryRun:false` | Evita execução duplicada em retry. |
 
 **Dry-run aqui significa apenas validar:** verifica o flag do workspace, seu escopo e sua cota
-restante, e resolve as entradas, sem disparar nada.
+restante, e resolve as entradas, sem disparar nada. Dry-runs não contam na cota de execuções.
+
+### Cota de execuções
+
+Cada workspace pode disparar 200 execuções por dia UTC via MCP. Esgotada a cota, o `run_agent` falha com `quota_exceeded: MCP run quota exceeded for this workspace` até o próximo dia UTC. O `quotaRemaining` na resposta mostra o que resta.
 
 ```json
 { "dryRun": false, "dispatched": true, "runId": "c7f0…", "quotaRemaining": 48 }
@@ -63,7 +67,7 @@ Retorna:
 | `triggeredBy` | string \| null | Nome da chave ou do cliente que iniciou a execução, ou `null` quando não dá para resolver. |
 
 Consulte em intervalos razoáveis — uma execução que chama vários modelos de IA leva de segundos a
-minutos, e cada consulta conta no seu rate limit (60 requisições/minuto, 5.000/dia por chave).
+minutos, e cada consulta conta no seu [rate limit](/mcp/pt-br/environment-variables).
 
 ## `get_run_nodes`
 
@@ -76,7 +80,7 @@ quando um node nunca rodou.
 | `runId` | string | Sim | O id retornado pelo `run_agent`. |
 | `limit` | number | Não | Tamanho da página. Padrão 50, limitado a 200. |
 
-Retorna `runId`, `versionId` (a FlowVersion que a execução usou, ou `null` para a cópia de trabalho),
+Retorna `runId`, `versionId` (a versão que a execução usou, ou `null` para a cópia de trabalho),
 `total` (a contagem real de nodes que começaram, não limitada pelo tamanho da página), `truncated`
 (boolean — existem mais nodes além desta página), `suspects` (contagem de entradas cujo `suspect` não
 é nulo) e um array `nodes`:
@@ -95,12 +99,9 @@ Retorna `runId`, `versionId` (a FlowVersion que a execução usou, ou `null` par
 | `suspect` | `null` \| `{ code, consumers, hint }` | Apenas heurística — definido quando um node teve sucesso com saída vazia enquanto um node downstream esperava por ele por uma edge de dado. É sempre `null` quando o grafo da execução não pôde ser carregado, em vez de adivinhado. |
 
 <Warning>
-  **Execuções sobrepostas do mesmo agente podem mostrar os nodes umas das outras.** As execuções de
-  node são associadas a uma execução pelo agente e pela janela de tempo da execução (do início ao fim,
-  com um minuto de folga), porque os nodes executados pelo worker Temporal não carregam um id de
-  execução próprio. Linhas que carregam o id da execução são associadas com exatidão, mas duas
-  execuções do **mesmo agente** que se sobrepõem no tempo não podem ser distinguidas — as mesmas
-  execuções de node aparecem nas duas. Uma execução isolada continua exata.
+  **Execuções sobrepostas do mesmo agente podem mostrar os nodes umas das outras.** Se duas
+  execuções do mesmo agente se sobrepõem no tempo, cada uma pode listar os nodes da outra. Uma
+  execução isolada é exata — evite execuções sobrepostas quando precisar de resultados por node.
 </Warning>
 
 <Note>
@@ -130,10 +131,9 @@ resultado escalar do node — com redação primeiro, depois truncado em 20.000 
 `error` e `finishedAt`.
 
 <Warning>
-  **Um erro aqui significa que nenhuma linha de execução daquele node foi encontrada na janela desta
-  execução** — o node nunca começou, foi podado por um branch de condição, ou foi pulado porque um
-  node anterior falhou. Vale o mesmo alerta de sobreposição do `get_run_nodes`: duas execuções do
-  mesmo agente que se sobrepõem no tempo compartilham execuções de node. Apenas a saída escalar é
+  **Um erro aqui significa que nenhuma execução daquele node foi encontrada para esta execução** — o
+  node nunca começou, foi podado por um branch de condição, ou foi pulado porque um node anterior
+  falhou. O alerta de sobreposição do `get_run_nodes` vale aqui também. Apenas a saída escalar é
   retornada, de propósito — o objeto do node armazenado também contém prompts resolvidos e campos de
   credencial.
 </Warning>
@@ -146,7 +146,7 @@ Solicita o cancelamento de uma execução ainda em andamento.
 |-----------|------|-------------|-----------|
 | `runId` | string | Sim | O id retornado pelo `run_agent`. |
 | `dryRun` | boolean | Não | Padrão `false` — cancela imediatamente. Defina `true` para verificar se a execução *poderia* ser cancelada, sem cancelar. |
-| `idempotencyKey` | string | Não | Aceito, mas não usado: o servidor não guarda nem repete um cancelamento. Veja a nota abaixo. |
+| `idempotencyKey` | string | Não | Desnecessário; repetir um cancelamento é inofensivo. |
 
 ```json
 { "runId": "c7f0…", "cancelled": true, "reason": "cancelled" }
@@ -163,17 +163,11 @@ A resposta não traz os campos `dryRun` nem `applied`, ao contrário das outras 
 Uma execução ainda na fila é removida da fila; uma execução já em processamento é cancelada pelo seu
 workflow, então "em processamento" não é tarde demais.
 
-<Warning>
-  **O `cancel_run` é a única ferramenta de escrita que não usa dry-run por padrão.** Todas as outras
-  ferramentas de escrita usam `dryRun: true` por padrão; o `cancel_run` usa `dryRun: false` e cancela
-  imediatamente. Veja [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely#dry-run-é-o-padrão).
-</Warning>
-
 <Note>
-  **O `cancel_run` ignora o portão de escrita e o cache de idempotência.** Ao contrário das outras
-  ferramentas de escrita, ele exige apenas o escopo `execute` — o interruptor `mcp.execute.enabled`
-  não é verificado — e um `idempotencyKey` não muda nada. Repetir simplesmente pergunta de novo: é
-  inofensivo, porque uma execução que já parou responde `cancel_unsupported`.
+  **O `cancel_run` é a única ferramenta de escrita com `dryRun: false` por padrão** e cancela
+  imediatamente. Exige apenas o escopo `execute`, não fica atrás do interruptor de escrita do
+  workspace, e repetir é inofensivo. Veja
+  [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely#dry-run-é-o-padrão).
 </Note>
 
 Trabalho já concluído não é revertido — cancelar interrompe a execução daqui para frente, não desfaz

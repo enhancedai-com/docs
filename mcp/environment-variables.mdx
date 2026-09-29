@@ -10,12 +10,12 @@ title: "Environment Variables"
 | NODE_ENV | Optional | Node environment (passthrough, not read in code) |
 | MCP_HTTP_LOG | Optional | verbose HTTP request logging for `/oauth`, `/mcp` and `/.well-known` paths. Enabled only by the exact value `on`; any other value, including `true` or `1`, leaves it off |
 | MCP_PUBLIC_URL | Optional | public origin of the server, without `/mcp` (OAuth issuer and metadata, and the `WWW-Authenticate` header). Default `http://localhost:3100` |
-| MCP_FRONT_CONSENT_URL | Optional | FluxPrompt consent screen URL. The code default and `.env.example` value is `http://localhost:5173/mcp/authorize`, which the front doesn't serve; locally, set it to the page the front serves — `http://localhost:3000/mcp-authorize.html` |
+| MCP_FRONT_CONSENT_URL | Optional | the front's consent page, e.g. `http://localhost:3000/mcp-authorize.html` locally; set it explicitly |
 | MCP_OAUTH_CONSENT_SECRET | Required | validates consent signature — must match `back`'s value |
 | MCP_OAUTH_TOKEN_TTL | Optional | Access-token lifetime in seconds. Empty or `0` (the default) issues tokens that never expire, because there is no refresh grant yet |
 | MCP_DCR_CLIENT_TTL | Optional | Dynamic Client Registration TTL in seconds (default 90 days, `7776000`) |
 | MCP_TOKEN_CACHE_TTL | Optional | token resolver cache TTL in seconds (default 10). Caps how long a revoked key can still be accepted at the edge, so keep it well under the 30s revocation SLA. |
-| BACK_BASE_URL | Optional | `back` base URL (code default `http://localhost:3000`). Set it to the port your `back` really listens on — the workspace stack runs `back` on 3001, and from Docker use `http://host.docker.internal:<port>` |
+| BACK_BASE_URL | Optional | `back` base URL (code default `http://localhost:3000`). Use `host.docker.internal` from Docker |
 | MCP_INTERNAL_SECRET | Required | secret to call `back` — must match `back`'s value |
 | MCP_BACK_RETRY_MAX | Optional | max attempts for `back` calls (default 3) |
 | MCP_BACK_RETRY_BASE_MS | Optional | retry backoff base (ms) (default 200) |

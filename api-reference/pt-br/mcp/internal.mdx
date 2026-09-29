@@ -263,8 +263,8 @@ Toda rota mutável (escopo `write`, mais `POST agents/{id}/run`) aceita estes ca
 
 | Campo | Tipo | Obrigatório | Descrição |
 |-------|------|-------------|-----------|
-| `dryRun` | boolean | Não | O padrão é **`true`**. Um dry run valida e retorna o resultado previsto sem persistir nada. Envie `false` para aplicar a mudança. |
-| `idempotencyKey` | string | Obrigatório quando `dryRun` é `false` | Repetir a chamada com a mesma chave e o mesmo payload retorna a resposta armazenada em vez de executar de novo. |
+| `dryRun` | boolean | Não | O padrão é **`true`**. Veja [Dry-run é o padrão](/mcp/pt-br/tools/writing-safely#dry-run-é-o-padrão). |
+| `idempotencyKey` | string | Obrigatório quando `dryRun` é `false` | Veja [Chaves de idempotência](/mcp/pt-br/tools/writing-safely#chaves-de-idempotência). |
 
 Erros do gate nas rotas mutáveis:
 
@@ -286,7 +286,7 @@ Todas as rotas exigem o escopo `write` e respondem `200`. Os bodies estendem os 
 | `POST /mcp/v1/internal/agents` | `name` (string, obrigatório), `folderId` (string, obrigatório), `type` (`"chat"` para um agente de chat, qualquer outro valor é um agente comum), `empty` (boolean) | Cria um agente em uma pasta. |
 | `PATCH /mcp/v1/internal/agents/{id}` | `name` (string, obrigatório, tamanho mínimo 1), `expectedVersion` | Renomeia o agente. |
 | `DELETE /mcp/v1/internal/agents/{id}` | apenas campos de gate | Remove o agente. |
-| `POST /mcp/v1/internal/agents/{id}/move` | `targetFolderId` (string ou `null` para a raiz) | Move o agente para outra pasta. |
+| `POST /mcp/v1/internal/agents/{id}/move` | `targetFolderId` (string, o id da pasta de destino; `null` é recusado) | Move o agente para outra pasta. |
 
 `{id}` deve ser um UUID (`400` caso contrário). Os formatos de resultado estão na referência de ferramentas [`agents-and-folders`](/mcp/pt-br/tools/agents-and-folders).
 
