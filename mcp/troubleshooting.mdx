@@ -12,7 +12,7 @@ Before digging into specific errors, verify these five things:
     Claude Desktop and Claude.ai use **OAuth only** — no token. If you're trying to paste a token into them, that's the problem; add FluxPrompt as a custom connector instead. The steps below apply to service-token clients (Cursor, n8n, CLI, backend services).
   </Step>
   <Step title="Token format (service-token clients)">
-    Your service token should start with `mcp_` and contain no spaces. If you copied it from [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens), check for trailing whitespace.
+    Your service token should start with `mcp_` and contain no spaces. If you copied it from [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens), check for trailing whitespace.
   </Step>
   <Step title="Authorization header format (service-token clients)">
     It must be `Bearer <token>` (capital B, one space). Not `bearer`, not `Token`, not the raw token without the prefix.
@@ -44,13 +44,18 @@ Before digging into specific errors, verify these five things:
 
 ---
 
-### "Unauthorized" / 401 (service-token clients)
+### "Unauthorized" / 401
 
-**Cause:** For token-based clients (Cursor, n8n, CLI, backend services), the service token is missing, malformed, or revoked. (Claude Desktop / Claude.ai don't use tokens — see the entry above.)
+**Cause:** The HTTP response is `401` with `{"error": "Unauthorized", "reason": "..."}` and a `WWW-Authenticate` header that points to the server's OAuth metadata. The `reason` tells you which case you hit:
+
+- `missing_token` — the request had no `Authorization: Bearer ...` header.
+- `invalid_token` — the token is unknown, revoked, expired, or has no active workspace binding.
+
+For token-based clients (Cursor, n8n, CLI, backend services), the service token is missing, malformed, or revoked. OAuth clients (Claude Desktop, Claude.ai) read the `WWW-Authenticate` header and start the login flow themselves — see the entry above if one can't sign in.
 
 **Fix:**
 1. Confirm your `Authorization` header is `Bearer mcp_xxxxx` with no extra characters.
-2. Check the token is still active in [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens), or generate a new one.
+2. Check the key is still active in [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens), or click **Generate key** to create a new one.
 
 ---
 
@@ -91,6 +96,14 @@ Earlier builds returned a bare `500 Internal server error` here, which was indis
 
 ---
 
+### "Service temporarily unavailable" / 503 `upstream_unavailable`
+
+**Cause:** The MCP server couldn't connect to the core API at all — connection refused, DNS failure, or a timeout. Your token and payload are fine. In production this means the core API is down or unreachable; in a local setup it usually means `BACK_BASE_URL` is wrong.
+
+**Fix:** Retry after a moment. If it keeps happening, check the [FluxPrompt status page](https://status.fluxprompt.ai). For local setups, see [Local development](/mcp/connect/local-dev#troubleshooting).
+
+---
+
 ### "Agent not found" (`isError: true`)
 
 **Cause:** The `agentId` you passed doesn't exist in your workspace, or belongs to a different workspace. `get_agent` reports this as a tool error (`result.isError: true`) rather than a protocol-level error code.
@@ -108,6 +121,59 @@ Earlier builds returned a bare `500 Internal server error` here, which was indis
 **Fix:**
 1. Log in to FluxPrompt and confirm you have at least one agent.
 2. If you do, contact FluxPrompt — your token may be scoped to the wrong workspace.
+
+---
+
+### "Rate limit exceeded" or "Service temporarily unavailable" / -32006
+
+**Cause:** The request was rejected before it reached a tool. The JSON-RPC `error.data.reason` says why:
+
+- `rate_limited` — your key went over its per-minute or per-day request quota.
+- `circuit_open` — too many recent calls with this key failed, so the server pauses it for a cooldown.
+
+Both include `retryAfterMs`:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32006,
+    "message": "Rate limit exceeded",
+    "data": { "reason": "rate_limited", "retryAfterMs": 12000 }
+  }
+}
+```
+
+**Fix:** Wait at least `retryAfterMs` milliseconds, then retry, and reduce your call frequency. For `circuit_open`, fix whatever is making the calls fail first (for example a wrong `agentId` or node payload).
+
+---
+
+### `-32602` `workspace_required`
+
+**Cause:** Your OAuth authorization or key covers more than one workspace, and the tool you called needs to know which one. The error includes `reason: "workspace_required"` and the list of covered workspace IDs.
+
+**Fix:** Call `list_workspaces`, then pass the chosen `workspaceId` as an argument to the tool. For resources, read them as `<uri>?workspaceId=<id>`.
+
+---
+
+### `-32401` Unauthorized / Insufficient scope
+
+**Cause:** The call was authenticated but not allowed. Check `error.data`:
+
+- `{"required": "read" | "write" | "execute"}` (message `Insufficient scope`) — the key or authorization doesn't include that scope. Read tools need `read`, running an agent needs `execute`.
+- `{"reason": "workspace_not_covered"}` — the `workspaceId` you passed isn't one this authorization covers.
+- `{"reason": "no_context"}` (message `Unauthorized`) — the request reached a task method without an authenticated context; reconnect the client.
+
+**Fix:** Generate a key with the scope you need under **MCP Keys**, or re-authorize the connector and grant the missing access. Use `list_workspaces` to see which workspaces you can use.
+
+---
+
+### "Task result not ready" / -32001
+
+**Cause:** You called `tasks/result` for a task that is still `working`. Long-running tools such as `run_agent` can run as tasks that finish later.
+
+**Fix:** Poll `tasks/get` until the status is no longer `working` (respect the `pollInterval` it returns), then call `tasks/result` again. Results stay retrievable for a limited time, so fetch them soon after the task completes.
 
 ---
 
@@ -161,6 +227,12 @@ Earlier builds returned a bare `500 Internal server error` here, which was indis
 **Fix:**
 1. Check your n8n version: **Settings → About**. Upgrade to 1.22+ if needed.
 2. From your n8n instance, verify it can reach `https://mcp.fluxprompt.ai` (no corporate firewall blocking HTTPS outbound).
+
+---
+
+## Running the server locally?
+
+Local setups add their own failure modes — a `BACK_BASE_URL` on the wrong port, a key with no workspace binding, or an OAuth consent URL the front doesn't serve. See [Local development](/mcp/connect/local-dev#troubleshooting).
 
 ---
 
