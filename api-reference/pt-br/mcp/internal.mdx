@@ -4,10 +4,12 @@ description: "Endpoints chamados pelo servidor MCP ao back/. Não são voltados 
 ---
 
 <Warning>
-  Esses endpoints são **exclusivamente internos**. Eles são chamados apenas pelo processo `mcp-server` usando o header `x-mcp-internal-secret`. Nunca os exponha publicamente.
+  Esses endpoints são **exclusivamente internos**. Eles são chamados apenas pelo processo `mcp-server` usando o header `x-mcp-internal-secret`. Nunca são chamados por usuários, clientes de IA ou integrações de terceiros.
 </Warning>
 
-Todos os endpoints são protegidos pelo `McpInternalGuard`, que valida o header `x-mcp-internal-secret` contra a variável de ambiente `MCP_INTERNAL_SECRET`.
+Todos os endpoints são protegidos pelo `McpInternalGuard`, que valida o header `x-mcp-internal-secret` contra a variável de ambiente `MCP_INTERNAL_SECRET`. Nunca os exponha publicamente.
+
+A única exceção, no sentido contrário, é [Invalidar cache de modelos](#invalidar-cache-de-modelos-servidor-mcp), que o `back/` chama no servidor MCP com o mesmo secret.
 
 ---
 
@@ -36,10 +38,22 @@ O `tokenHash` é `sha256(tokenBruto)` em hex. O token bruto (ex.: `mcp_abc…`) 
   "tokenId": "aaaaaaaa-0000-0000-0000-000000000001",
   "workspaceId": "ws-uuid-1",
   "scopes": ["read"],
+  "workspaces": [{ "workspaceId": "ws-uuid-1", "scopes": ["read"] }],
   "kind": "service",
-  "expiresAt": null
+  "expiresAt": null,
+  "userId": "user-uuid-1"
 }
 ```
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `tokenId` | UUID | Identificador do token (usado na chave de rate limiting e do circuit breaker). |
+| `workspaceId` | UUID | O primeiro workspace vinculado ao token — mantido por retrocompatibilidade. |
+| `scopes` | string[] | Escopos de `workspaceId`, ou seja, `workspaces[0].scopes`. |
+| `workspaces` | array | Todos os vínculos ativos de workspace deste token, cada um `{ workspaceId, scopes }`. Um token pode estar vinculado a mais de um workspace. |
+| `kind` | `"service"` \| `"oauth"` | Tipo do token. |
+| `expiresAt` | ISO 8601 \| null | `null` quando o token não expira. Este é o padrão para **ambos**, tokens de serviço e tokens OAuth — tokens OAuth só expiram quando `MCP_OAUTH_TOKEN_TTL` é configurado explicitamente no servidor MCP. |
+| `userId` | UUID \| null | O usuário que concedeu o token, com fallback para o criador; `null` para um token de serviço sem nenhum dos dois. |
 
 Atualiza `lastUsedAt` no registro do token a cada resolução bem-sucedida.
 
@@ -48,77 +62,299 @@ Atualiza `lastUsedAt` no registro do token a cada resolução bem-sucedida.
 | Status | Motivo |
 |--------|--------|
 | 401 | Secret interno ausente ou inválido. |
-| 404 | Token não encontrado, revogado ou expirado. |
+| 404 | Token não encontrado, revogado ou expirado (`Token not found or revoked`, `Token expired`), ou o token não tem vínculo ativo com workspace (`Token has no active workspace binding` — foi revogado em todos os workspaces). |
 
 ---
 
 ## Listar tipos de node
 
-Retorna o registro completo de tipos de node do FluxPrompt.
+Retorna o registro de tipos de node do FluxPrompt. Por padrão retorna um resumo leve por tipo; passe `?detail=true` para a entrada completa, incluindo `inputSchema`/`outputSchema`.
 
 ```http
 GET /mcp/v1/internal/node-types
 x-mcp-internal-secret: <secret>
 ```
 
-### Resposta
+| Query param | Tipo | Obrigatório | Descrição |
+|-------------|------|-------------|-----------|
+| `detail` | `"true"` | Não | Com `"true"`, retorna o formato completo `NodeTypeEntry` (schemas + handles) em vez do resumo. |
 
-Array de objetos com `type`, `label`, `description`, `category`, `inputSchema`, `outputSchema`.
+### Resposta (padrão)
+
+```json
+[
+  {
+    "type": "commandTextNode",
+    "label": "Command Text Node",
+    "category": "AI",
+    "description": "Executes a text prompt and passes output downstream."
+  }
+]
+```
+
+### Resposta (`?detail=true`)
+
+```json
+[
+  {
+    "type": "commandTextNode",
+    "label": "Command Text Node",
+    "description": "Executes a text prompt and passes output downstream.",
+    "category": "AI",
+    "inputSchema": { "type": "object", "properties": { "model": { "type": "string" }, "command": { "type": "string" } } },
+    "outputSchema": { "type": "object", "properties": { "text": { "type": "string" } } },
+    "handles": { "sourceHandles": [], "targetHandles": [], "patterned": [], "handlesPatterned": false, "unresolved": false, "canContinueExecutionChain": true }
+  }
+]
+```
+
+Cada entrada completa também inclui um objeto `handles` com os metadados de handles de origem/destino do tipo de node — fora do escopo desta página; veja o registro de tipos de node (`NodeTypeEntry` em `back/src/app-mcp/node-types/node-types.service.ts`) para o formato exato.
+
+---
+
+## Obter tipo de node
+
+Retorna a entrada completa (mesmo formato da listagem com `?detail=true`) de um único tipo de node.
+
+```http
+GET /mcp/v1/internal/node-types/{type}
+x-mcp-internal-secret: <secret>
+```
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 401 | Secret interno inválido. |
+| 404 | Tipo de node não encontrado. |
 
 ---
 
 ## Listar agentes
 
-Retorna agentes de um workspace, com busca opcional.
+Retorna agentes de um workspace, com busca opcional. Além do secret interno, este endpoint é protegido pelo `McpScopeGuard`, que resolve o workspace a partir do token MCP do chamador, e não de um query param.
 
 ```http
-GET /mcp/v1/internal/agents?workspaceId={ws}&search={q}&limit={n}&offset={n}
+GET /mcp/v1/internal/agents?search={q}&limit={n}&offset={n}&folderId={id}&folderName={name}
 x-mcp-internal-secret: <secret>
+x-mcp-token-id: <mcp-token-id>
+x-mcp-workspace-id: <workspace-id>
 ```
 
-| Parâmetro | Tipo | Obrigatório | Descrição |
-|-----------|------|-------------|-----------|
-| `workspaceId` | UUID | Sim | Workspace a consultar. |
+`x-mcp-token-id` identifica o token MCP resolvido e é obrigatório — é o que o `McpScopeGuard` usa para determinar o workspace. `x-mcp-workspace-id` só é obrigatório quando o token está vinculado a mais de um workspace; quando cobre exatamente um, o header pode ser omitido. O token precisa ter o escopo `read`.
+
+| Query param | Tipo | Obrigatório | Descrição |
+|-------------|------|-------------|-----------|
 | `search` | string | Não | Filtro de substring (case-insensitive) no nome do agente. |
 | `limit` | number | Não | Tamanho da página. Padrão 20, máximo 200. |
 | `offset` | number | Não | Offset para paginação. Padrão 0. |
+| `folderId` | UUID | Não | Restringe a agentes desta pasta. |
+| `folderName` | string | Não | Restringe a agentes da pasta com este nome. |
 
 ### Resposta
 
 ```json
-{ "agents": [ { "id": "...", "name": "...", "nodeCount": 12, "isPublic": false } ], "total": 45 }
+{
+  "agents": [
+    {
+      "id": "agent-uuid",
+      "name": "Lead Scorer",
+      "description": "Scores inbound leads",
+      "updatedAt": "2026-06-17T00:00:00Z",
+      "nodeCount": 12,
+      "isPublic": false
+    }
+  ],
+  "total": 45
+}
 ```
 
 ### Erros
 
 | Status | Motivo |
 |--------|--------|
-| 400 | `workspaceId` ausente. |
-| 401 | Secret inválido. |
+| 400 | O token cobre mais de um workspace e `x-mcp-workspace-id` foi omitido (`workspace_required`). |
+| 401 | Secret interno inválido; `x-mcp-token-id` ausente; ou o token não é resolvido (não encontrado, revogado ou expirado). |
+| 403 | O token não tem o escopo `read`, o workspace solicitado não é coberto pelo token (`workspace_not_covered`) ou (para tokens OAuth) o usuário que concedeu o acesso não é mais membro ativo do workspace. |
 
 ---
 
 ## Obter agente
 
-Retorna a estrutura completa de nodes e edges de um agente.
+Retorna a estrutura completa de nodes e edges de um agente. Mesma autenticação `McpScopeGuard` de **Listar agentes** acima — o workspace vem de `x-mcp-token-id`/`x-mcp-workspace-id`, não de um query param.
 
 ```http
-GET /mcp/v1/internal/agents/{agentId}?workspaceId={ws}
+GET /mcp/v1/internal/agents/{agentId}
 x-mcp-internal-secret: <secret>
+x-mcp-token-id: <mcp-token-id>
+x-mcp-workspace-id: <workspace-id>
+```
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | UUID (path) | Sim | Agente a buscar. |
+
+### Resposta
+
+Igual ao item de `list_agents` mais os arrays `nodes` e `edges`. Veja a [referência da ferramenta `get_agent`](/mcp/pt-br/tools/agents-and-folders#get_agent) para o formato completo.
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 400 | O token cobre mais de um workspace e `x-mcp-workspace-id` foi omitido (`workspace_required`). |
+| 401 | Secret interno inválido; `x-mcp-token-id` ausente; ou o token não é resolvido. |
+| 403 | O token não tem o escopo `read`, ou o workspace solicitado não é coberto pelo token (`workspace_not_covered`). |
+| 404 | Agente não encontrado ou não pertence ao workspace resolvido. |
+
+---
+
+## Listar workspaces
+
+Retorna todos os workspaces aos quais o token MCP do chamador está vinculado, usando apenas `x-mcp-token-id` (sem `McpScopeGuard`/verificação de escopo — um token resolvido mas sem escopos ainda pode ver quais workspaces cobre).
+
+```http
+GET /mcp/v1/internal/workspaces
+x-mcp-internal-secret: <secret>
+x-mcp-token-id: <mcp-token-id>
+```
+
+### Resposta
+
+```json
+{
+  "workspaces": [
+    { "workspaceId": "ws-uuid-1", "name": "Acme Corp", "scopes": ["read"] }
+  ]
+}
 ```
 
 ### Erros
 
 | Status | Motivo |
 |--------|--------|
-| 401 | Secret inválido. |
-| 404 | Agente não encontrado ou não pertence ao workspace. |
+| 400 | `x-mcp-token-id` ausente. |
+| 401 | Secret interno inválido. |
+| 404 | Token não encontrado, revogado ou expirado. |
+
+---
+
+## Rotas com escopo: comportamento compartilhado
+
+Toda rota nas seções abaixo (e **Listar agentes** / **Obter agente** acima) é protegida pelo `McpScopeGuard` depois do secret interno. Todas recebem os mesmos headers e compartilham os mesmos erros de autenticação.
+
+```http
+x-mcp-internal-secret: <secret>
+x-mcp-token-id: <mcp-token-id>
+x-mcp-workspace-id: <workspace-id>
+```
+
+O workspace nunca é um query param nem um campo do body. `x-mcp-workspace-id` só é obrigatório quando o token está vinculado a mais de um workspace.
+
+| Status | Motivo (qualquer rota com escopo) |
+|--------|-----------------------------------|
+| 400 | O token cobre mais de um workspace e `x-mcp-workspace-id` foi omitido (`workspace_required`). |
+| 401 | Secret interno inválido; `x-mcp-token-id` ausente; token não encontrado, revogado ou expirado; ou o token não tem vínculo ativo com workspace. |
+| 403 | O token não tem o escopo da rota (a resposta também traz `WWW-Authenticate: Bearer error="insufficient_scope", scope="<scope>"`); workspace não coberto (`workspace_not_covered`); ou, para tokens OAuth, o usuário que concedeu o acesso não é mais membro ativo. |
+
+### Campos de gate
+
+Toda rota mutável (escopo `write`, mais `POST agents/{id}/run`) aceita estes campos no body e passa pelo gate de escrita:
+
+| Campo | Tipo | Obrigatório | Descrição |
+|-------|------|-------------|-----------|
+| `dryRun` | boolean | Não | O padrão é **`true`**. Um dry run valida e retorna o resultado previsto sem persistir nada. Envie `false` para aplicar a mudança. |
+| `idempotencyKey` | string | Obrigatório quando `dryRun` é `false` | Repetir a chamada com a mesma chave e o mesmo payload retorna a resposta armazenada em vez de executar de novo. |
+
+Erros do gate nas rotas mutáveis:
+
+| Status | Motivo |
+|--------|--------|
+| 400 | `idempotencyKey is required when dryRun is false`. |
+| 403 | `feature_disabled: mcp.writes.enabled is off for this workspace` (`mcp.execute.enabled` para `run`), controlado pelas [configurações do workspace](/api-reference/pt-br/mcp/tokens#obter-ou-atualizar-configurações). |
+
+As rotas de node e edge também aceitam `expectedVersion` (string, verificação de concorrência otimista) e `versionId` (string, mira uma versão específica em vez do rascunho) — veja [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely).
+
+---
+
+## Agentes (escrita)
+
+Todas as rotas exigem o escopo `write` e respondem `200`. Os bodies estendem os campos de gate acima.
+
+| Método e caminho | Body | Observações |
+|------------------|------|-------------|
+| `POST /mcp/v1/internal/agents` | `name` (string, obrigatório), `folderId` (string, obrigatório), `type` (`"chat"` para um agente de chat, qualquer outro valor é um agente comum), `empty` (boolean) | Cria um agente em uma pasta. |
+| `PATCH /mcp/v1/internal/agents/{id}` | `name` (string, obrigatório, tamanho mínimo 1), `expectedVersion` | Renomeia o agente. |
+| `DELETE /mcp/v1/internal/agents/{id}` | apenas campos de gate | Remove o agente. |
+| `POST /mcp/v1/internal/agents/{id}/move` | `targetFolderId` (string ou `null` para a raiz) | Move o agente para outra pasta. |
+
+`{id}` deve ser um UUID (`400` caso contrário). Os formatos de resultado estão na referência de ferramentas [`agents-and-folders`](/mcp/pt-br/tools/agents-and-folders).
+
+## Nodes e edges (escrita)
+
+Todas as rotas exigem o escopo `write`, respondem `200` e retornam um resultado de escrita. Os bodies estendem os campos de gate mais `expectedVersion` e `versionId`.
+
+| Método e caminho | Body | Observações |
+|------------------|------|-------------|
+| `POST /mcp/v1/internal/agents/{id}/nodes` | `node` (objeto, obrigatório, deve conter um `id`) | Adiciona um node. |
+| `PATCH /mcp/v1/internal/agents/{id}/nodes/{nodeId}` | `patch` (objeto, obrigatório) | Atualiza os campos de um node. |
+| `DELETE /mcp/v1/internal/agents/{id}/nodes/{nodeId}` | campos de gate, `expectedVersion`, `versionId` | Remove um node. O body é lido no `DELETE`. |
+| `POST /mcp/v1/internal/agents/{id}/connect` | `source` (string, obrigatório), `target` (string, obrigatório), `sourceHandle`, `targetHandle`, `edgeId` | Conecta dois nodes. |
+| `DELETE /mcp/v1/internal/agents/{id}/connect` | `source`, `target`, `edgeId` (todos opcionais; identifique a edge por `edgeId` ou por `source` + `target`) | Desconecta dois nodes. |
+| `GET /mcp/v1/internal/agents/{id}/integrity` | Query: `versionId` (opcional) | Somente leitura. Exige o escopo `read`. Retorna um relatório de integridade do agente. |
+
+Veja [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges) para os formatos de node e as regras de handles.
+
+## Pastas
+
+| Método e caminho | Escopo | Body / query |
+|------------------|--------|--------------|
+| `GET /mcp/v1/internal/folders` | `read` | Query: `limit`, `offset` (inteiros; um valor não inteiro é ignorado). |
+| `POST /mcp/v1/internal/folders` | `write` | `name` (string, obrigatório), `parentId` (string ou `null`), campos de gate. |
+| `PATCH /mcp/v1/internal/folders/{folderId}` | `write` | `name` (string, obrigatório), campos de gate. |
+| `DELETE /mcp/v1/internal/folders/{folderId}` | `write` | Apenas campos de gate. |
+
+`{folderId}` deve ser um UUID. As rotas de escrita respondem `200`.
+
+## Catálogos
+
+As três exigem o escopo `read` e retornam um array.
+
+| Método e caminho | Query | Observações |
+|------------------|-------|-------------|
+| `GET /mcp/v1/internal/models` | nenhuma | Modelos de IA disponíveis para o workspace. |
+| `GET /mcp/v1/internal/integrations` | `provider` (opcional) | Conexões de integração visíveis ao usuário do token. |
+| `GET /mcp/v1/internal/voices` | `provider` (opcional) | Vozes disponíveis ao usuário do token. |
+
+## Versões
+
+| Método e caminho | Escopo | Body / query |
+|------------------|--------|--------------|
+| `GET /mcp/v1/internal/agents/{id}/versions` | `read` | Query: `limit`, `offset`. |
+| `POST /mcp/v1/internal/agents/{id}/versions` | `write` | `versionName` (string, opcional), campos de gate. |
+| `POST /mcp/v1/internal/agents/{id}/versions/{versionId}/publish` | `write` | Apenas campos de gate. `versionId` deve ser um UUID. |
+
+As rotas de escrita respondem `200`. Veja [Versionamento](/mcp/pt-br/tools/versioning).
+
+## Execuções
+
+Todas as rotas de execução exigem o escopo `execute`. `{processId}` deve ser um UUID.
+
+| Método e caminho | Body / query | Observações |
+|------------------|--------------|-------------|
+| `POST /mcp/v1/internal/agents/{id}/run` | `variableInputs` (array de objetos), `sessionId`, `versionId`, campos de gate | Inicia uma execução e responde `200`. Passa pelo gate de escrita contra `mcp.execute.enabled`. Retorna `403 permission_denied: cannot run this agent` quando a execução não é permitida. |
+| `GET /mcp/v1/internal/runs/{processId}` | nenhum | Status da execução. |
+| `GET /mcp/v1/internal/runs/{processId}/nodes` | Query: `limit` | Status por node da execução. |
+| `GET /mcp/v1/internal/runs/{processId}/nodes/{nodeId}/output` | nenhum | Saída de um node da execução. |
+| `POST /mcp/v1/internal/runs/{processId}/cancel` | `dryRun` (boolean) | Responde `200` com `{ runId, cancelled, reason }`, onde `reason` é `cancelled`, `cancel_unsupported` ou `dry_run`. Diferente das outras rotas mutáveis, aqui `dryRun` tem padrão **`false`**, não exige `idempotencyKey` e não passa pelo gate de escrita. |
+
+Veja [Executando agentes](/mcp/pt-br/tools/running-agents).
 
 ---
 
 ## Conceder token OAuth
 
-Persiste um token de acesso OAuth após a conclusão do fluxo de consentimento.
+Persiste um token de acesso OAuth após a conclusão do fluxo de consentimento. Chamado pelo servidor MCP depois de verificar a asserção de consentimento.
 
 ```http
 POST /mcp/v1/internal/oauth/grant
@@ -132,15 +368,25 @@ Content-Type: application/json
 {
   "tokenHash": "sha256-hex",
   "workspaceId": "ws-uuid",
+  "workspaces": [{ "workspaceId": "ws-uuid", "scopes": ["read"] }],
   "grantedUserId": "user-uuid",
-  "clientId": "client_abc",
+  "clientId": "dcr_abc",
   "scopes": ["read"],
   "name": "Claude Desktop (Acme Corp)",
   "expiresAt": "2026-07-17T10:00:00Z"
 }
 ```
 
-Idempotente no `tokenHash` — submissões duplicadas retornam o registro existente sem erro.
+| Campo | Tipo | Obrigatório | Descrição |
+|-------|------|-------------|-----------|
+| `tokenHash` | string | Sim | `sha256(tokenBruto)` em hex. |
+| `workspaceId` | UUID | Sim | Workspace principal. |
+| `workspaces` | array | Não | Concessões por workspace, cada uma `{ workspaceId, scopes }` (não vazio; escopos entre `read`/`write`/`execute`). Enviado quando o usuário autorizou vários workspaces em um único consentimento. |
+| `grantedUserId` | UUID | Sim | Usuário que aprovou o consentimento. |
+| `clientId` | string | Sim | Client ID OAuth. |
+| `scopes` | string[] | Sim | Não vazio, entre `read`/`write`/`execute`. Usado para workspaces sem entrada em `workspaces`. |
+| `name` | string | Sim | Nome de exibição do token. |
+| `expiresAt` | ISO 8601 | Não | Omita para um token que nunca expira (o padrão). |
 
 ### Resposta `201 Created`
 
@@ -148,11 +394,13 @@ Idempotente no `tokenHash` — submissões duplicadas retornam o registro existe
 { "tokenId": "token-uuid" }
 ```
 
+Idempotente no `tokenHash` — se o mesmo hash for enviado duas vezes (retry), retorna o registro existente sem erro.
+
 ---
 
 ## Registrar cliente OAuth
 
-Persiste um registro de Dynamic Client Registration.
+Persiste um registro de Dynamic Client Registration. Chamado pelo endpoint `/oauth/register` do servidor MCP.
 
 ```http
 POST /mcp/v1/internal/oauth/clients
@@ -164,31 +412,73 @@ Content-Type: application/json
 
 ```json
 {
-  "clientId": "client_abc123",
+  "clientId": "dcr_abc123",
   "redirectUris": ["https://claude.ai/callback"],
   "clientName": "Claude Desktop",
   "ttlSeconds": 7776000
 }
 ```
 
+`clientId`, um `redirectUris` não vazio e um `ttlSeconds` inteiro positivo são obrigatórios; `clientName` é opcional.
+
 ### Resposta `201 Created`
 
 ```json
-{ "clientId": "client_abc123", "redirectUris": ["https://claude.ai/callback"], "clientName": "Claude Desktop" }
+{
+  "clientId": "dcr_abc123",
+  "redirectUris": ["https://claude.ai/callback"],
+  "clientName": "Claude Desktop"
+}
 ```
 
 ---
 
 ## Obter cliente OAuth
 
+Busca um cliente OAuth registrado pelo ID. Chamado durante `/oauth/authorize` para validar o cliente.
+
 ```http
 GET /mcp/v1/internal/oauth/clients/{clientId}
 x-mcp-internal-secret: <secret>
 ```
 
+### Resposta
+
+Mesmo formato da resposta de registro.
+
 ### Erros
 
 | Status | Motivo |
 |--------|--------|
-| 401 | Secret inválido. |
+| 401 | Secret interno inválido. |
 | 404 | Cliente não encontrado ou TTL expirado. |
+
+---
+
+## Invalidar cache de modelos (servidor MCP)
+
+Esta é a única rota que roda no sentido contrário: o **`back/` chama o servidor MCP** para descartar o catálogo de modelos em cache depois que os modelos mudam. Ela fica no servidor MCP, não no `back/`.
+
+```http
+POST /internal/cache/invalidate-models
+x-mcp-internal-secret: <secret>
+Content-Type: application/json
+```
+
+Protegida pelo `InternalCallerGuard`, que compara `x-mcp-internal-secret` com o `MCP_INTERNAL_SECRET` do próprio servidor MCP (comparação em tempo constante). O secret deve ser o mesmo usado pelo `back/`.
+
+### Corpo da requisição
+
+```json
+{ "workspaceId": "ws-uuid" }
+```
+
+`workspaceId` é opcional. Quando omitido, o cache é invalidado para todos os workspaces.
+
+### Resposta `204 No Content`
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 401 | Secret ausente ou inválido, ou `MCP_INTERNAL_SECRET` não está definido no servidor MCP (todas as requisições são então rejeitadas). |

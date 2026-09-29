@@ -3,9 +3,16 @@ title: "MCP Tokens"
 description: "Crie, liste e revogue tokens de serviço para acesso ao MCP."
 ---
 
-Esses endpoints permitem que proprietários de workspace gerenciem **tokens de serviço** (`mcp_…`) — os bearer tokens estáticos usados por ferramentas CLI, n8n, Cursor, Codex e OpenCode para autenticar no servidor MCP.
+Esses endpoints permitem que membros do workspace gerenciem **tokens de serviço** (`mcp_…`) — os bearer tokens estáticos usados por ferramentas CLI, n8n, Cursor, Codex e OpenCode para autenticar no servidor MCP.
 
-Todos os endpoints exigem um JWT válido (`Authorization: Bearer <jwt>`) e papel de proprietário do workspace.
+Todos os endpoints exigem um JWT válido (`Authorization: Bearer <jwt>`). O requisito de autorização varia por endpoint — a maioria exige apenas **associação ativa** ao workspace, e não o papel de proprietário:
+
+| Endpoint | Requisito |
+|----------|-----------|
+| Listar, Criar | Associação ativa. Um não-admin só vê/cria tokens que ele mesmo criou; um admin vê todos os tokens do workspace. |
+| Revogar | Associação ativa **e** (papel ADMIN **ou** ser o criador do token). |
+| Obter/atualizar configurações, Atualizar escopos, Obter histórico de auditoria | Papel ADMIN no workspace (a verificação real de "proprietário", `assertWorkspaceOwner`). |
+| Adicionar organização | O dono do token (`grantedUserId` com fallback para `createdByUserId`) **e** associação ativa ao workspace de destino. |
 
 ---
 
@@ -20,7 +27,7 @@ GET /workspaces/{workspaceId}/mcp-tokens
 Authorization: Bearer <jwt>
 ```
 
-Retorna todos os tokens ativos (não revogados) do workspace. O valor bruto do token **nunca** é retornado nas listagens — ele é exibido apenas uma vez, no momento da criação.
+Retorna todos os tokens ativos (não revogados) do workspace — todos os tokens para um chamador admin, ou apenas os tokens criados pelo próprio chamador para um não-admin. O valor bruto do token **nunca** é retornado nas listagens — ele é exibido apenas uma vez, no momento da criação.
 
 ### Resposta
 
@@ -34,10 +41,17 @@ Retorna todos os tokens ativos (não revogados) do workspace. O valor bruto do t
       "kind": "service",
       "scopes": ["read"],
       "clientId": null,
+      "createdByUserId": "user-uuid-1",
+      "grantedUserId": null,
+      "ownerName": "Jane Doe",
       "authorizedBy": null,
       "createdAt": "2026-06-15T12:00:00.000Z",
       "lastUsedAt": "2026-06-17T08:30:00.000Z",
-      "revokedAt": null
+      "revokedAt": null,
+      "isOwner": true,
+      "organizations": [
+        { "workspaceId": "ws-uuid-1", "workspaceName": "Acme Corp", "scopes": ["read"] }
+      ]
     }
   ],
   "meta": { "total": 1 }
@@ -49,19 +63,24 @@ Retorna todos os tokens ativos (não revogados) do workspace. O valor bruto do t
 | `id` | UUID | Identificador do token. Use para revogar. |
 | `name` | string | Nome de exibição definido na criação. |
 | `kind` | `"service"` \| `"oauth"` | `service` = token estático; `oauth` = emitido via fluxo OAuth. |
-| `scopes` | string[] | Permissões concedidas. Fase 1: `["read"]` apenas. |
+| `scopes` | string[] | Escopos do vínculo com este workspace. `read`, `write` e `execute` são todos possíveis — veja a nota de escopos em [Criar token](#criar-token). |
 | `clientId` | string \| null | Client ID OAuth; `null` para tokens de serviço. |
-| `authorizedBy` | string \| null | Usuário que concedeu acesso (apenas tokens OAuth). |
+| `createdByUserId` | UUID | Usuário que criou o token. |
+| `grantedUserId` | UUID \| null | Para um token OAuth, o usuário que deu o consentimento; `null` para um token de serviço. |
+| `ownerName` | string \| null | Nome de exibição do criador do token. |
+| `authorizedBy` | string \| null | Igual a `ownerName`, mas preenchido apenas para tokens `kind: "oauth"` (`null` para tokens de serviço). |
 | `createdAt` | ISO 8601 | Data de criação. |
 | `lastUsedAt` | ISO 8601 \| null | Último uso pelo servidor MCP. |
 | `revokedAt` | ISO 8601 \| null | Data de revogação; `null` se ainda ativo. |
+| `isOwner` | boolean | Se o chamador é o dono deste token (`grantedUserId` com fallback para `createdByUserId`). Controla se `organizations` é preenchido. |
+| `organizations` | array | Todos os outros vínculos ativos de workspace deste token, cada um `{ workspaceId, workspaceName, scopes }`. Vazio, a menos que `isOwner` seja `true`. |
 
 ### Erros
 
 | Status | Motivo |
 |--------|--------|
 | 401 | JWT ausente ou inválido. |
-| 403 | Usuário autenticado não é proprietário do workspace. |
+| 403 | Usuário autenticado não é membro ativo do workspace. |
 
 ---
 
@@ -89,7 +108,11 @@ Content-Type: application/json
 | Campo | Tipo | Obrigatório | Restrições |
 |-------|------|-------------|------------|
 | `name` | string | Sim | 1–120 caracteres. |
-| `scopes` | string[] | Sim | Fase 1: deve ser `["read"]`. |
+| `scopes` | string[] | Sim | Array não vazio entre `read`, `write`, `execute`. Os três passam na validação da requisição — não há 400 por pedir `write`/`execute`. |
+
+<Note>
+Pedir `write`/`execute` não é rejeitado, mas é **reduzido silenciosamente** para `["read"]`, a menos que o chamador seja ADMIN do workspace ou o workspace tenha `nonAdminPrivilegedScopesEnabled` ativado (veja [Obter/atualizar configurações](#obter-ou-atualizar-configurações) abaixo). A resposta sempre reflete os escopos efetivos (após a redução), não os solicitados.
+</Note>
 
 ### Resposta `201 Created`
 
@@ -101,8 +124,15 @@ Content-Type: application/json
     "name": "CI pipeline",
     "kind": "service",
     "scopes": ["read"],
+    "clientId": null,
+    "createdByUserId": "user-uuid-1",
+    "grantedUserId": null,
+    "ownerName": "Jane Doe",
+    "authorizedBy": null,
     "token": "mcp_abc123xyz...",
-    "createdAt": "2026-06-17T10:00:00.000Z"
+    "createdAt": "2026-06-17T10:00:00.000Z",
+    "lastUsedAt": null,
+    "revokedAt": null
   }
 }
 ```
@@ -115,9 +145,9 @@ Content-Type: application/json
 
 | Status | Motivo |
 |--------|--------|
-| 400 | Validação falhou (`name` vazio, `scopes` inválido ou vazio). |
+| 400 | Validação falhou (`name` vazio ou com mais de 120 caracteres, `scopes` vazio ou com valor fora de `read`/`write`/`execute`). |
 | 401 | JWT ausente ou inválido. |
-| 403 | Usuário autenticado não é proprietário do workspace. |
+| 403 | Usuário autenticado não é membro ativo do workspace. |
 
 ---
 
@@ -135,7 +165,7 @@ DELETE /workspaces/{workspaceId}/mcp-tokens/{tokenId}
 Authorization: Bearer <jwt>
 ```
 
-Define `revokedAt` no token. O servidor MCP respeita a revogação dentro do TTL do cache de tokens (padrão 30 segundos).
+Define `revokedAt` no token. O servidor MCP respeita a revogação dentro do TTL do cache de tokens (padrão 10 segundos, `MCP_TOKEN_CACHE_TTL`). Exige associação ativa e o papel ADMIN ou ser o criador do token — um não-admin não pode revogar um token que não criou, mesmo que pertença a um colega.
 
 ### Resposta `200 OK`
 
@@ -148,5 +178,179 @@ Define `revokedAt` no token. O servidor MCP respeita a revogação dentro do TTL
 | Status | Motivo |
 |--------|--------|
 | 401 | JWT ausente ou inválido. |
-| 403 | Usuário autenticado não é proprietário do workspace. |
+| 403 | Não é membro ativo do workspace; ou é membro ativo, mas nem ADMIN nem o criador do token. |
 | 404 | Token não encontrado ou não pertence a este workspace. |
+
+---
+
+## Obter ou atualizar configurações
+
+Lê ou atualiza as flags de MCP token do workspace. Exige o papel ADMIN (`assertWorkspaceOwner`).
+
+```http
+GET /workspaces/{workspaceId}/mcp-tokens/settings
+PATCH /workspaces/{workspaceId}/mcp-tokens/settings
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+### Corpo da requisição do `PATCH`
+
+```json
+{
+  "writesEnabled": true,
+  "executeEnabled": false,
+  "nonAdminPrivilegedScopesEnabled": false
+}
+```
+
+Os três campos são booleanos opcionais; campos omitidos permanecem inalterados.
+
+### Resposta
+
+```json
+{
+  "status": "success",
+  "data": {
+    "writesEnabled": true,
+    "executeEnabled": false,
+    "nonAdminPrivilegedScopesEnabled": false
+  }
+}
+```
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `writesEnabled` | boolean | Se as ferramentas MCP de escopo write estão habilitadas para este workspace. |
+| `executeEnabled` | boolean | Se as ferramentas MCP de escopo execute estão habilitadas para este workspace. |
+| `nonAdminPrivilegedScopesEnabled` | boolean | Quando `true`, membros não-admin podem criar/receber tokens com escopo `write`/`execute` sem que esses escopos sejam reduzidos para `read`. |
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 401 | JWT ausente ou inválido. |
+| 403 | Usuário autenticado não é ADMIN do workspace. |
+
+---
+
+## Atualizar escopos do token
+
+Substitui os escopos de um token para este vínculo com o workspace. Exige o papel ADMIN — este é o único endpoint de gerenciamento de tokens que realmente corresponde a uma descrição de "somente proprietário".
+
+```http
+PATCH /workspaces/{workspaceId}/mcp-tokens/{tokenId}/scopes
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+### Corpo da requisição
+
+```json
+{ "scopes": ["read", "write"] }
+```
+
+`scopes` deve ser um array não vazio entre `read`/`write`/`execute`. Note que este endpoint **não** reduz escopos por papel como Criar/Adicionar organização fazem — o chamador já precisa ser ADMIN.
+
+### Resposta
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000001",
+    "name": "CI pipeline",
+    "kind": "service",
+    "scopes": ["read", "write"],
+    "clientId": null,
+    "createdByUserId": "user-uuid-1",
+    "grantedUserId": null,
+    "ownerName": "Jane Doe",
+    "authorizedBy": null,
+    "createdAt": "2026-06-15T12:00:00.000Z",
+    "lastUsedAt": "2026-06-17T08:30:00.000Z",
+    "revokedAt": null
+  }
+}
+```
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 400 | `scopes` vazio ou com valor inválido. |
+| 401 | JWT ausente ou inválido. |
+| 403 | Usuário autenticado não é ADMIN do workspace. |
+| 404 | Token não encontrado, ou encontrado mas já revogado (`token_already_revoked`). |
+
+---
+
+## Obter histórico de auditoria do token
+
+Retorna a trilha de auditoria de concessão de escopos de um token neste workspace — cada evento `created`, `scopes_changed` e `revoked`. Exige o papel ADMIN.
+
+```http
+GET /workspaces/{workspaceId}/mcp-tokens/{tokenId}/audit
+Authorization: Bearer <jwt>
+```
+
+### Resposta
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "audit-uuid-1",
+      "tokenId": "aaaaaaaa-0000-0000-0000-000000000001",
+      "action": "scopes_changed",
+      "actorUserId": "user-uuid-1",
+      "fromScopes": ["read"],
+      "toScopes": ["read", "write"],
+      "createdAt": "2026-06-17T10:05:00.000Z"
+    }
+  ],
+  "meta": { "total": 1 }
+}
+```
+
+Limitado às 50 entradas mais recentes.
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 401 | JWT ausente ou inválido. |
+| 403 | Usuário autenticado não é ADMIN do workspace. |
+| 404 | Token não encontrado, ou não vinculado a este workspace. |
+
+---
+
+## Adicionar organização
+
+Adiciona um vínculo ativo de workspace a um token que o chamador já possui, para que o mesmo token possa ser usado em mais de um workspace. Exige que o chamador seja o dono do token (`grantedUserId` com fallback para `createdByUserId`) e membro ativo do workspace de destino.
+
+```http
+POST /workspaces/{workspaceId}/mcp-tokens/{tokenId}/organizations/{targetWorkspaceId}
+Authorization: Bearer <jwt>
+```
+
+O `workspaceId` no path não é usado por este handler — os vínculos existentes do token e o destino vêm de `tokenId`/`targetWorkspaceId`. Os escopos do novo vínculo são os escopos efetivos do chamador em `targetWorkspaceId` (reduzidos por papel da mesma forma que Criar token). Chamar novamente para um vínculo que já existe e está ativo retorna os escopos atuais desse vínculo sem alteração.
+
+### Resposta `201 Created`
+
+```json
+{
+  "status": "success",
+  "data": { "workspaceId": "ws-uuid-2", "scopes": ["read"] }
+}
+```
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 401 | JWT ausente ou inválido. |
+| 403 | O chamador não é o dono deste token, ou não é membro ativo de `targetWorkspaceId`. |
+| 404 | Token não encontrado. |
+| 409 | Token já revogado (`token_already_revoked`). |
