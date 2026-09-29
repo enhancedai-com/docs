@@ -11,7 +11,7 @@ Uma vez conectado, o OpenCode pode responder perguntas sobre seu workspace FluxP
 - *"Mostre a configuração do agente Email Parser"*
 - *"Quais tipos de node estão disponíveis no FluxPrompt?"*
 
-As ferramentas da Fase 1 são somente leitura: `list_agents`, `get_agent` e `list_node_types`.
+O OpenCode pode chamar todo o catálogo de tools do FluxPrompt; quais ele consegue usar depende dos escopos da sua chave (veja [Tools e escopos](#tools-e-escopos)).
 
 ## Pré-requisitos
 
@@ -28,7 +28,7 @@ O suporte a **OAuth** do OpenCode é atualmente limitado e pode ser instável; p
 
 <Steps>
   <Step title="Obtenha um service token">
-    No FluxPrompt, vá em [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) e gere um token com escopo `read`. Ele é exibido apenas uma vez — copie-o. Veja [Autenticação](/mcp/pt-br/authentication).
+    No FluxPrompt, vá em [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens), clique em **Generate key** e escolha o escopo `read` (ou um maior se você quiser que o OpenCode altere ou execute agentes). Ela é exibida apenas uma vez — copie-a. Veja [Autenticação](/mcp/pt-br/authentication).
   </Step>
   <Step title="Abra a configuração do OpenCode">
     O OpenCode lê a configuração de `~/.config/opencode/opencode.json` (global) ou `opencode.json` na raiz do projeto. Abra o arquivo no seu editor (crie-o se não existir).
@@ -62,6 +62,16 @@ O suporte a **OAuth** do OpenCode é atualmente limitado e pode ser instável; p
     Você deverá ver seus agentes do workspace listados.
   </Step>
 </Steps>
+
+## Tools e escopos
+
+| Escopo | O que libera | Catálogo |
+|--------|--------------|----------|
+| `read` | Listar e inspecionar agentes, pastas, versões, tipos de node, modelos, integrações e vozes | [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
+| `write` | Criar e editar agentes, pastas, nodes e edges; criar snapshots e publicar versões | [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely), [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
+| `execute` | Executar um agente, acompanhar uma execução, cancelar uma execução | [Executando agentes](/mcp/pt-br/tools/running-agents) |
+
+Uma tool que a sua autorização não cobre é recusada com `-32401 Insufficient scope`. As tools de escrita e execução também exigem que as configurações correspondentes do workspace estejam ligadas — veja [Autenticação](/mcp/pt-br/authentication#interruptores-no-nível-do-workspace).
 
 ## Configuração manual (JSON)
 

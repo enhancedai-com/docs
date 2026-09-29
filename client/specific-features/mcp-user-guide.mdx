@@ -17,7 +17,7 @@ Think of it as a **bridge**: your flow stays in the product, while the heavy lif
 | **Tool** | A named action the server offers. You choose one tool per run. |
 | **Bearer token** | A secret string some servers require. Treat it like a password. |
 | **Workspace** | Your team or company context. Saved connections need a workspace. |
-| **Personal / Team (OAuth)** | **Personal** ties the connection to you; **Team** shares it with the workspace. |
+| **Connection** | A saved MCP server (URL plus optional token or OAuth sign-in) that you create under **Integrations** and pick in the node. Workspace members can use connections created by teammates; secrets stay on the server. |
 
 ## Remote HTTP vs stdio
 
@@ -37,11 +37,11 @@ Think of it as a **bridge**: your flow stays in the product, while the heavy lif
 
 ## How it fits together
 
-1. You create a **connection** (saved URL + optional token, or OAuth)
+1. You create a **connection** (saved URL + optional token; if the server requires OAuth, you sign in when you connect)
 2. You configure the **MCP Client** node to use that connection (or a custom URL)
 3. The **backend** calls the remote server; the result appears in the node output
 
-## Path A — MCP (HTTP) saved connection
+## Path A — Saved connection (URL and optional token)
 
 Use **Integrations** when you have an HTTPS MCP URL and optionally a bearer token.
 
@@ -52,31 +52,31 @@ Use **Integrations** when you have an HTTPS MCP URL and optionally a bearer toke
   <Step title="Enter credentials">
     | Field | What to enter |
     |-------|---------------|
+    | **Connection Name** | Optional label for the connection (for example `My MCP`) |
     | **MCP server web address** | Full URL including `https://` (often ends with `/mcp`) |
     | **Secret token** | Only if the server docs say to send an API key or bearer token. Paste a raw token, a full header like `Authorization: Bearer ...`, or JSON like `{"scheme":"Bearer","token":"..."}` or `{"headers":{"x-api-key":"..."}}` |
   </Step>
   <Step title="Use it in the MCP Client node">
     1. Add an **MCP Client** node to your flow
-    2. Pick the connection you created in the **MCP (HTTP)** card
-    3. Click **Load tools from URL**, optionally pick a tool
-    4. Set **Input mode** to **Prompt** or **Arguments**, then run
+    2. In the **Connection** section, pick the connection you created
+    3. In the **Tool** section, click **Load tools**, then optionally pick a tool under **Select tool**
+    4. Describe what you want in **Prompt** (under **Command**), or fill in the tool's **Arguments**, then run
   </Step>
 </Steps>
 
-<Warning>
-  Do not use **Use saved integration** (OAuth) at the same time as an **MCP (HTTP)** saved connection. Pick one authentication path per run.
-</Warning>
+## Path B — Server that requires OAuth (e.g. Magic Patterns)
 
-## Path B — OAuth MCP (e.g. Magic Patterns)
-
-Some providers use OAuth (a browser login) instead of a static API key.
+Some providers use OAuth (a browser login) instead of a static API key. You still start from **Integrations**, with the same form as Path A.
 
 <Steps>
-  <Step title="Connect via OAuth">
-    In **Integrations**, find **MCP Integrations**, choose **Personal** or **Team**, then **Connect**. Complete the browser sign-in.
+  <Step title="Connect">
+    In **Integrations**, find **MCP**, enter the server's web address, leave the token empty, and choose **Connect**. When the server asks for OAuth, a sign-in window opens. Complete the sign-in there.
+  </Step>
+  <Step title="Wait for the confirmation">
+    The window closes by itself and FluxPrompt shows **Connected successfully**. The connection is now saved. If the sign-in fails, you see the provider's error message instead.
   </Step>
   <Step title="Configure the node">
-    In the **MCP Client** node, select the OAuth integration under **Use saved integration**. Clear the **MCP (HTTP)** connection if it was set. Load tools, optionally pick one, and run.
+    In the **MCP Client** node, pick the new connection under **Connection**. Load tools, optionally pick one, and run.
   </Step>
 </Steps>
 
@@ -86,42 +86,46 @@ Some providers use OAuth (a browser login) instead of a static API key.
 
 The full HTTPS endpoint. With a workspace and a saved connection, this field is hidden. Without a workspace, enter it directly or connect another node's output to the URL handle.
 
-### MCP (HTTP) connection
+### Connection
 
-Lists connections from Integrations (yours and teammates'). The backend uses the stored URL and optional bearer token via `integrationId`.
-
-### Use saved integration
-
-OAuth-backed MCP hosts. Mutually exclusive with MCP (HTTP) for a given run.
+Lists the MCP connections from Integrations (yours and teammates'), including servers you signed in to with OAuth. The backend uses the stored URL and credentials via `integrationId`.
 
 ### Auth token
 
-Manual bearer when not using OAuth or a saved connection. Hidden with a workspace unless the `authToken` handle is wired.
+Manual bearer token when you are not using a saved connection. Hidden with a workspace and a saved connection unless the `authToken` handle is wired.
 
-### Tools
+### Tool
 
-1. **Load tools from URL** — refreshes the tool list
-2. **Select tool** — optional; if empty, the backend picks the best tool for your prompt
-3. **Tool Name** — appears when using handles from other nodes
+1. **Load tools** — fetches the tool list from the server. The button is disabled until you pick a connection or enter a server URL, and it has a short cooldown after each click.
+2. **Select tool** — optional; leave it on **Using prompt** to let the prompt pick the tool, or choose one to pin it
+3. **Tool Name** — appears when you have no tool list loaded, or when the name comes from a handle wired from another node
+4. **Arguments** — appears when the selected tool publishes a schema. Use **Show/Hide** to open the fields; required ones are marked with `*`.
 
-### Input mode
+### Command
 
-| Mode | When to use |
-|------|-------------|
-| **Prompt** | Describe what you want in plain language. The backend picks a tool and builds arguments. |
-| **Arguments** | Send a JSON object of parameters exactly as the tool expects. Requires a selected tool. |
+**Prompt** — describe what you want in plain language. The prompt is never sent to the MCP server: FluxPrompt reads it to pick the tool when none is selected, and to fill the tool arguments you leave empty. It must not be empty.
+
+### Prompt and arguments
+
+There is no mode switch. What you fill in decides how the call is built:
+
+| You set | What happens |
+|---------|--------------|
+| No tool selected (**Using prompt**) | The prompt picks the tool and builds its arguments. |
+| A tool selected, **Arguments** left empty | The prompt fills the arguments from the tool's schema. |
+| A tool selected, **Arguments** filled | The values are sent as-is; the prompt is not used to infer arguments. |
 
 ## Worked examples
 
 <Accordion title="Official MCP reference host (HTTPS)">
-  1. In **Integrations → MCP (HTTP)**, create a connection with the reference URL
-  2. In the node, select that connection, **Load tools from URL**, optionally pick a tool
-  3. Start with **Prompt** mode and a simple instruction
+  1. In **Integrations → MCP**, create a connection with the reference URL
+  2. In the node, select that connection, click **Load tools**, optionally pick a tool
+  3. Start with a simple instruction in **Prompt** and no arguments
 </Accordion>
 
 <Accordion title="Magic Patterns (OAuth)">
-  1. In **Integrations → MCP Integrations**, connect with **Personal** or **Team**
-  2. In the node, select the integration under **Use saved integration**
+  1. In **Integrations → MCP**, enter the server's web address and choose **Connect**, then complete the OAuth sign-in window
+  2. In the node, select the new connection under **Connection**
   3. Load tools, optionally pick a tool, use **Prompt** to describe the design or action
 </Accordion>
 
@@ -141,13 +145,13 @@ Use placeholders like `{{mylabel.text}}` where `mylabel` is the node's label (lo
 
 ### Feeding the MCP node from upstream nodes
 
-Connect handles into **MCP Server URL**, **Tool Name**, **Prompt**, and **Auth token** so earlier steps supply values dynamically.
+Connect handles into **MCP Server URL**, **Tool Name**, **Prompt**, **Arguments**, and **Auth token** so earlier steps supply values dynamically.
 
 ## Prompt vs Arguments decision tree
 
-1. **Do you have exact JSON from the vendor's example?** → **Arguments**
-2. **Is the tool's purpose easy to describe in a sentence?** → **Prompt**
-3. **Does the tool need very precise field names and zero interpretation?** → **Arguments**
+1. **Do you have exact values from the vendor's example?** → Select the tool and fill in **Arguments**
+2. **Is the tool's purpose easy to describe in a sentence?** → Leave **Arguments** empty and describe it in **Prompt**
+3. **Does the tool need very precise field names and zero interpretation?** → Select the tool and fill in **Arguments**
 
 ## Troubleshooting
 
@@ -155,10 +159,10 @@ Connect handles into **MCP Server URL**, **Tool Name**, **Prompt**, and **Auth t
 |---------|---------------|
 | Select a workspace | Saved HTTP and some OAuth flows need workspace context |
 | No tools / empty list | Wrong URL, missing `https://`, token missing or expired |
-| Tool not in list | Click **Load tools from URL** again after changes |
-| OAuth and HTTP both set | Clear one path before using the other |
-| Prompt mode errors | Prompt must not be empty |
-| Arguments mode errors | JSON must be a single object `{}` with at least one property |
+| Tool not in list | Click **Load tools** again after changes |
+| OAuth sign-in window shows an error | Reconnect from **Integrations**; the message names what the provider rejected |
+| Prompt errors | **Prompt** must not be empty ("Prompt is required") |
+| Arguments errors | **Arguments (JSON)** must be a single JSON object such as `{"query":"invoices"}`; an empty object counts as unset |
 | Long wait / timeout | Remote servers can be slow; retry or narrow the request |
 | Connection not ready (canvas) | Wait for the live connection to finish, then run again |
 
@@ -169,5 +173,5 @@ Connect handles into **MCP Server URL**, **Tool Name**, **Prompt**, and **Auth t
 </Warning>
 
 - Prefer saved connections over pasting secrets into the node
-- For OAuth providers, use **Team** only when your organization approves shared access
+- Workspace members can use connections created by teammates, so share a connection only when your organization approves it
 - Copying a flow to another workspace does not transfer integration access

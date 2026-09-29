@@ -13,7 +13,7 @@ Uma vez conectado, o assistente de IA do Cursor pode responder perguntas sobre s
 ## Pré-requisitos
 
 - Cursor instalado ([baixar aqui](https://cursor.sh))
-- Um **service token** de workspace do FluxPrompt (veja [Autenticação](/mcp/pt-br/authentication))
+- Um **service token** de workspace do FluxPrompt (veja [Autenticação](/mcp/pt-br/authentication)) — gere um em [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens)
 
 <Note>
 O Cursor também pode autenticar via **OAuth** (adicione a URL do servidor e conclua o fluxo de login + consentimento do FluxPrompt), igual ao Claude Code. Este guia usa um service token estático, útil para setups compartilhados ou headless. Qualquer um dos métodos funciona.
@@ -53,6 +53,18 @@ O Cursor também pode autenticar via **OAuth** (adicione a URL do servidor e con
     Você deverá ver seus agentes do workspace listados.
   </Step>
 </Steps>
+
+## Tools e escopos
+
+O Cursor pode chamar todo o catálogo de tools do FluxPrompt. Quais ele consegue usar depende dos escopos da sua chave:
+
+| Escopo | O que libera | Catálogo |
+|--------|--------------|----------|
+| `read` | Listar e inspecionar agentes, pastas, versões, tipos de node, modelos, integrações e vozes | [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
+| `write` | Criar e editar agentes, pastas, nodes e edges; criar snapshots e publicar versões | [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely), [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
+| `execute` | Executar um agente, acompanhar uma execução, cancelar uma execução | [Executando agentes](/mcp/pt-br/tools/running-agents) |
+
+Uma tool que a sua autorização não cobre é recusada com `-32401 Insufficient scope`. As tools de escrita e execução também exigem que as configurações correspondentes do workspace estejam ligadas — veja [Autenticação](/mcp/pt-br/authentication#interruptores-no-nível-do-workspace).
 
 ## Configuração manual (JSON)
 

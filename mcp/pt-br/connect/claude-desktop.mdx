@@ -38,7 +38,7 @@ O Claude chamará as tools do FluxPrompt MCP automaticamente e exibirá os resul
     Dê ao conector um nome reconhecível (ex.: `FluxPrompt`) e confirme.
   </Step>
   <Step title="Faça login e conceda acesso">
-    O Claude abre uma tela de login + consentimento do FluxPrompt. Faça login com sua conta FluxPrompt, **selecione qual workspace** você quer liberar e aprove.
+    O Claude abre uma tela de login + consentimento do FluxPrompt. Faça login com sua conta FluxPrompt. A tela de consentimento lista suas **Organizations** — todas vêm marcadas, então desmarque as que você não quer liberar — e clique em **Authorize**.
 
     Nenhum token está envolvido — a autenticação é feita inteiramente por esse fluxo OAuth.
   </Step>
@@ -53,13 +53,19 @@ O Claude chamará as tools do FluxPrompt MCP automaticamente e exibirá os resul
 
 ## O que o Claude pode fazer com o FluxPrompt
 
-Após a conexão, o Claude tem acesso a estas tools:
+Após a conexão, o Claude pode chamar o catálogo de tools do FluxPrompt. Quais tools ele realmente consegue usar depende dos escopos concedidos quando você autorizou:
 
-| Tool | O que faz |
-|------|-----------|
-| `list_agents` | Lista todos os agentes do seu workspace |
-| `get_agent` | Busca a estrutura completa de um agente específico |
-| `list_node_types` | Lista todos os tipos de node disponíveis no FluxPrompt |
+| Escopo | O que libera | Catálogo |
+|--------|--------------|----------|
+| `read` | Listar e inspecionar agentes, pastas, versões, tipos de node, modelos, integrações e vozes | [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
+| `write` | Criar e editar agentes, pastas, nodes e edges; criar snapshots e publicar versões | [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely), [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
+| `execute` | Executar um agente, acompanhar uma execução, cancelar uma execução | [Executando agentes](/mcp/pt-br/tools/running-agents) |
+
+Uma tool que a sua autorização não cobre é recusada com `-32401 Insufficient scope`. As tools de escrita e execução também exigem que as configurações correspondentes do workspace estejam ligadas — veja [Autenticação](/mcp/pt-br/authentication#interruptores-no-nível-do-workspace).
+
+### Quais escopos você concedeu
+
+Você não escolhe escopos na tela de consentimento: o FluxPrompt concede os escopos que o cliente pediu. Se um cliente não pedir nenhum, a autorização é apenas `read`. Em cada organização selecionada, o seu papel pode reduzir ainda mais os escopos — um membro que não é admin recebe `read`, a menos que um admin tenha permitido **Let regular members create powerful keys**. Você pode selecionar várias organizações em uma única autorização, e os escopos são definidos por organização; peça ao Claude para chamar [`list_workspaces`](/mcp/pt-br/tools/agents-and-folders#list_workspaces) para ver cada uma e seus escopos. O acesso OAuth não expira; revogue-o em [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
 
 O Claude escolherá a tool correta automaticamente com base na sua pergunta. Você também pode pedir explicitamente: *"Use `get_agent` para mostrar a estrutura do agente de ID abc123"*.
 
@@ -69,4 +75,4 @@ Se a conexão não estiver funcionando, consulte a página de [Solução de prob
 
 - Tentar usar um token colado em vez do fluxo OAuth (o Claude Desktop só suporta OAuth)
 - Não concluir a tela de login + consentimento do FluxPrompt
-- Selecionar o workspace errado durante o consentimento
+- Deixar as organizações erradas marcadas durante o consentimento

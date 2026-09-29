@@ -14,7 +14,7 @@ Dentro do n8n você pode construir workflows que automaticamente:
 ## Pré-requisitos
 
 - Instância n8n (cloud ou self-hosted, v1.22+)
-- Um **service token** de workspace do FluxPrompt (veja [Autenticação](/mcp/pt-br/authentication)) — gere um em [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens). Um service token estático é o método recomendado para o n8n.
+- Um **service token** de workspace do FluxPrompt (veja [Autenticação](/mcp/pt-br/authentication)) — gere um em [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens). Um service token estático é o método recomendado para o n8n.
 
 ## Passo a passo
 
@@ -35,13 +35,13 @@ Dentro do n8n você pode construir workflows que automaticamente:
     Substitua `YOUR_SERVICE_TOKEN` pelo seu service token real (começa com `mcp_`).
   </Step>
   <Step title="Escolha a tool e os parâmetros">
-    No dropdown **Tool**, selecione entre:
+    No dropdown **Tool**, selecione a tool do FluxPrompt que você quer, por exemplo:
 
-    - `list_agents` — nenhum parâmetro necessário
+    - `list_agents` — nenhum parâmetro necessário; opcionais `search`, `folderId`, `folderName` e `cursor`
     - `get_agent` — requer `agentId` (o UUID do agente)
     - `list_node_types` — nenhum parâmetro necessário
 
-    Defina os parâmetros obrigatórios na seção **Tool Parameters**.
+    Defina os parâmetros obrigatórios na seção **Tool Parameters**. A lista completa de tools e parâmetros está no [catálogo de tools](/mcp/pt-br/tools/agents-and-folders); veja [Tools e escopos](#tools-e-escopos) para saber o que a sua chave pode chamar.
   </Step>
   <Step title="Teste o node">
     Clique em **Execute node**. A saída conterá a resposta estruturada do FluxPrompt.
@@ -52,9 +52,24 @@ Dentro do n8n você pode construir workflows que automaticamente:
 
 Este workflow lista todos os agentes FluxPrompt e filtra os que têm "Parser" no nome:
 
-1. **MCP Client Tool** — chama `list_agents`
-2. **Code node** — `return $input.first().json.agents.filter(a => a.name.includes('Parser'))`
-3. **O que você precisar a seguir** — envie os resultados para o Slack, escreva em uma planilha, etc.
+1. **MCP Client Tool** — chama `list_agents` com `search` definido como `Parser`. O servidor filtra pelo nome (sem diferenciar maiúsculas de minúsculas), então você não precisa de um Code node para uma correspondência simples.
+2. **Paginação** — `list_agents` retorna uma página de até 50 agentes como `{ agents, total, nextCursor }`. `nextCursor` só está presente quando há mais resultados. Para obter a próxima página, chame a tool de novo com `cursor` definido como esse `nextCursor` e os **mesmos** `search`, `folderId` e `folderName`; repita até `nextCursor` não aparecer mais. Um cursor está vinculado aos filtros que o geraram e é rejeitado se você os alterar.
+3. **Code node** — junte as páginas, por exemplo `return $input.all().flatMap(item => item.json.agents)`.
+4. **O que você precisar a seguir** — envie os resultados para o Slack, escreva em uma planilha, etc.
+
+Se você pular o passo 2, verá apenas os 50 primeiros agentes.
+
+## Tools e escopos
+
+O n8n pode chamar todo o catálogo de tools do FluxPrompt. Quais ele consegue usar depende dos escopos da sua chave:
+
+| Escopo | O que libera | Catálogo |
+|--------|--------------|----------|
+| `read` | Listar e inspecionar agentes, pastas, versões, tipos de node, modelos, integrações e vozes | [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
+| `write` | Criar e editar agentes, pastas, nodes e edges; criar snapshots e publicar versões | [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely), [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
+| `execute` | Executar um agente, acompanhar uma execução, cancelar uma execução | [Executando agentes](/mcp/pt-br/tools/running-agents) |
+
+Uma tool que a sua autorização não cobre é recusada com `-32401 Insufficient scope`. As tools de escrita e execução também exigem que as configurações correspondentes do workspace estejam ligadas — veja [Autenticação](/mcp/pt-br/authentication#interruptores-no-nível-do-workspace).
 
 ## Solução de problemas
 

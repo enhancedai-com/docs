@@ -11,7 +11,7 @@ Uma vez conectado, o Codex CLI pode responder perguntas sobre seu workspace Flux
 - *"Mostre a configuração do agente Email Parser"*
 - *"Quais tipos de node estão disponíveis no FluxPrompt?"*
 
-As ferramentas da Fase 1 são somente leitura: `list_agents`, `get_agent` e `list_node_types`.
+O Codex pode chamar todo o catálogo de tools do FluxPrompt; quais ele consegue usar depende dos escopos da sua autorização (veja [Tools e escopos](#tools-e-escopos)).
 
 ## Pré-requisitos
 
@@ -60,7 +60,7 @@ O Codex CLI fala com o servidor do FluxPrompt via **Streamable HTTP** remoto nat
     export MCP_TOKEN=mcp_xxxxxxxxxxxx
     ```
 
-    Gere um token em FluxPrompt → [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) → com escopo `read` (exibido apenas uma vez). Veja [Autenticação](/mcp/pt-br/authentication).
+    Gere um token em FluxPrompt → [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) → **Generate key** com escopo `read`, ou um escopo maior se você quiser que o Codex altere ou execute agentes (exibido apenas uma vez). Veja [Autenticação](/mcp/pt-br/authentication).
   </Step>
   <Step title="Reinicie o Codex e verifique">
     Após editar o `config.toml`, inicie uma nova sessão do Codex para carregar o servidor.
@@ -72,6 +72,18 @@ O Codex CLI fala com o servidor do FluxPrompt via **Streamable HTTP** remoto nat
     Você deverá ver seus agentes do workspace listados.
   </Step>
 </Steps>
+
+## Tools e escopos
+
+| Escopo | O que libera | Catálogo |
+|--------|--------------|----------|
+| `read` | Listar e inspecionar agentes, pastas, versões, tipos de node, modelos, integrações e vozes | [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
+| `write` | Criar e editar agentes, pastas, nodes e edges; criar snapshots e publicar versões | [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely), [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
+| `execute` | Executar um agente, acompanhar uma execução, cancelar uma execução | [Executando agentes](/mcp/pt-br/tools/running-agents) |
+
+Uma tool que a sua autorização não cobre é recusada com `-32401 Insufficient scope`. As tools de escrita e execução também exigem que as configurações correspondentes do workspace estejam ligadas — veja [Autenticação](/mcp/pt-br/authentication#interruptores-no-nível-do-workspace).
+
+Com OAuth, o Codex pede os escopos; se não pedir nenhum, a autorização é apenas `read`.
 
 ## Configuração manual (TOML)
 

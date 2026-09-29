@@ -13,7 +13,7 @@ Once connected, the Cursor AI assistant can answer questions about your FluxProm
 ## Prerequisites
 
 - Cursor installed ([download here](https://cursor.sh))
-- A FluxPrompt workspace **service token** (see [Authentication](/mcp/authentication))
+- A FluxPrompt workspace **service token** (see [Authentication](/mcp/authentication)) — generate one in [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens)
 
 <Note>
 Cursor can also authenticate via **OAuth** (add the server URL and complete the FluxPrompt login + consent flow), the same as Claude Code. This guide uses a static service token, which is handy for shared or headless setups. Either method works.
@@ -53,6 +53,18 @@ Cursor can also authenticate via **OAuth** (add the server URL and complete the 
     You should see your workspace agents listed.
   </Step>
 </Steps>
+
+## Tools and scopes
+
+Cursor can call the full FluxPrompt tool catalog. Which tools it can use depends on the scopes on your key:
+
+| Scope | What it unlocks | Catalog |
+|-------|-----------------|---------|
+| `read` | List and inspect agents, folders, versions, node types, models, integrations and voices | [Agents & folders](/mcp/tools/agents-and-folders), [Nodes & edges](/mcp/tools/nodes-and-edges), [Versioning](/mcp/tools/versioning) |
+| `write` | Create and edit agents, folders, nodes and edges; snapshot and publish versions | [Writing safely](/mcp/tools/writing-safely), [Agents & folders](/mcp/tools/agents-and-folders), [Nodes & edges](/mcp/tools/nodes-and-edges), [Versioning](/mcp/tools/versioning) |
+| `execute` | Run an agent, poll a run, cancel a run | [Running agents](/mcp/tools/running-agents) |
+
+A tool your authorization does not cover is refused with `-32401 Insufficient scope`. Write and execute tools also need the matching workspace settings turned on — see [Authentication](/mcp/authentication#workspace-level-switches).
 
 ## Manual config (JSON)
 

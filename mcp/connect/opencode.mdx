@@ -11,7 +11,7 @@ Once connected, OpenCode can answer questions about your FluxPrompt workspace di
 - *"Show me the configuration of the Email Parser agent"*
 - *"What node types are available in FluxPrompt?"*
 
-The Phase 1 tools are read-only: `list_agents`, `get_agent`, and `list_node_types`.
+OpenCode can call the full FluxPrompt tool catalog; which tools it can use depends on the scopes on your key (see [Tools and scopes](#tools-and-scopes)).
 
 ## Prerequisites
 
@@ -28,7 +28,7 @@ OpenCode's **OAuth** support is currently limited and may be unstable; it can wo
 
 <Steps>
   <Step title="Get a service token">
-    In FluxPrompt, go to [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) and generate a token with `read` scope. It's shown only once — copy it. See [Authentication](/mcp/authentication).
+    In FluxPrompt, go to [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens), click **Generate key**, and pick `read` scope (or a wider one if you want OpenCode to change or run agents). It's shown only once — copy it. See [Authentication](/mcp/authentication).
   </Step>
   <Step title="Open your OpenCode config">
     OpenCode reads config from `~/.config/opencode/opencode.json` (global) or `opencode.json` in your project root. Open it in your editor (create it if it doesn't exist).
@@ -62,6 +62,16 @@ OpenCode's **OAuth** support is currently limited and may be unstable; it can wo
     You should see your workspace agents listed.
   </Step>
 </Steps>
+
+## Tools and scopes
+
+| Scope | What it unlocks | Catalog |
+|-------|-----------------|---------|
+| `read` | List and inspect agents, folders, versions, node types, models, integrations and voices | [Agents & folders](/mcp/tools/agents-and-folders), [Nodes & edges](/mcp/tools/nodes-and-edges), [Versioning](/mcp/tools/versioning) |
+| `write` | Create and edit agents, folders, nodes and edges; snapshot and publish versions | [Writing safely](/mcp/tools/writing-safely), [Agents & folders](/mcp/tools/agents-and-folders), [Nodes & edges](/mcp/tools/nodes-and-edges), [Versioning](/mcp/tools/versioning) |
+| `execute` | Run an agent, poll a run, cancel a run | [Running agents](/mcp/tools/running-agents) |
+
+A tool your authorization does not cover is refused with `-32401 Insufficient scope`. Write and execute tools also need the matching workspace settings turned on — see [Authentication](/mcp/authentication#workspace-level-switches).
 
 ## Manual config (JSON)
 
