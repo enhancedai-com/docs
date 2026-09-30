@@ -36,7 +36,7 @@ openid User.Read offline_access Mail.Read Mail.Send Files.ReadWrite Sites.ReadWr
 
 Scopes can be overridden with `MICROSOFT_SCOPES` (whitespace-separated). The relevant environment variables are `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID`, `MICROSOFT_SCOPES`, and `MICROSOFT_REDIRECT_URI`.
 
-The OAuth code is exchanged with `acquireTokenByCode`. The serialized MSAL token cache and the MSAL `AccountInfo` are stored in `user_integrations.metadata` under the `msalCache` and `account` keys. On every call, `getValidAccessToken` rebuilds the MSAL client with a cache plugin bound to that metadata and calls `acquireTokenSilent`, persisting the refreshed cache back to `metadata`. If silent acquisition fails, the integration is disconnected automatically and the caller is asked to reconnect.
+The OAuth code is exchanged with `acquireTokenByCode`. The serialized MSAL token cache and the MSAL `AccountInfo` are stored in `user_integrations.metadata` under the `msalCache` and `account` keys. On every call, `getValidAccessToken` rebuilds the MSAL client with a cache plugin bound to that metadata and calls `acquireTokenSilent`, persisting the refreshed cache back to `metadata`. When silent acquisition fails, the integration is disconnected only if Microsoft says the access is really gone: an `InteractionRequiredAuthError` (for example revoked consent), or an `invalid_grant` / `no_account_found` error. The caller is then asked to reconnect. Any other failure, such as a network timeout or a Microsoft outage, leaves the integration connected and throws `ServiceUnavailableException` ("Microsoft is temporarily unavailable; please try again"). The worker's token endpoint (`POST /worker/refresh-oauth-token`) answers that with `503`, so the worker retries the send instead of giving up.
 
 ### Graph access
 
@@ -62,7 +62,7 @@ The Pull Data and Push Data nodes route to `PullDataService.executePullDataNode`
 
 ### Outlook send
 
-The email/output node has a "Send from your Microsoft account" toggle (`useFromMicrosoft`). When it is on and Microsoft is connected, the node calls `POST /mail/send-microsoft`, which delegates to `MicrosoftMailService.sendMail`. That method posts to Graph `/me/sendMail`, sending HTML or templated/plain text and downloading any attachment URLs to inline them as Graph file attachments. If the toggle is on but no Microsoft account is connected, the node falls back to the system mailer and shows a warning.
+The email/output node has a "Send from your Microsoft account" toggle (`useFromMicrosoft`). When a flow run ends, its email is sent by the worker's `deliverRunOutputs` workflow, which posts the same Graph `/me/sendMail` request with retries (see [Output delivery](/worker/activities/deliver-run-outputs)). The node's **Send** button, when it is on and Microsoft is connected, calls `POST /mail/send-microsoft`, which delegates to `MicrosoftMailService.sendMail`. That method posts to Graph `/me/sendMail`, sending HTML or templated/plain text and downloading any attachment URLs to inline them as Graph file attachments. If the toggle is on but no Microsoft account is connected, the node falls back to the system mailer and shows a warning.
 
 <Info>
 `MicrosoftMailService` also exposes `getMessages` and `getMessage` for reading Outlook mail, but no controller route is wired to them yet. Reading mail through Microsoft is not exposed in the product today.
@@ -210,7 +210,11 @@ The node posts to `POST /mail/send-microsoft` with the recipients, subject, body
 ## Troubleshooting
 
 <Accordion title="The account disconnected and asks me to reconnect">
-Tokens are refreshed silently from the MSAL cache stored in the integration's metadata. If silent refresh fails (revoked consent, expired refresh token, or missing cache), the backend disconnects the integration automatically and returns a reconnect prompt. Reconnect the Microsoft account from the connection card and run the node again.
+Tokens are refreshed silently from the MSAL cache stored in the integration's metadata. The backend disconnects the integration only when Microsoft reports that the access is really gone: revoked consent, an expired or revoked refresh token, or an account missing from the cache. It then returns a reconnect prompt. Reconnect the Microsoft account from the connection card and run the node again.
+</Accordion>
+
+<Accordion title="Microsoft is temporarily unavailable">
+A network timeout or a Microsoft outage during the token refresh no longer disconnects the account. The request fails with "Microsoft is temporarily unavailable; please try again", and an email sent at the end of a flow run is retried automatically. If it still fails after its retries, a **Delivery failed** row appears in the flow's log.
 </Accordion>
 
 <Accordion title="A file does not appear in the picker">

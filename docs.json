@@ -224,7 +224,8 @@
                       "worker/activities/charge-tokens",
                       "worker/activities/generate-file",
                       "worker/activities/generate-execution-logs",
-                      "worker/activities/node-execution-error"
+                      "worker/activities/node-execution-error",
+                      "worker/activities/deliver-run-outputs"
                     ]
                   }
                 ]
@@ -514,7 +515,8 @@
                       "worker/activities/charge-tokens",
                       "worker/activities/generate-file",
                       "worker/activities/generate-execution-logs",
-                      "worker/activities/node-execution-error"
+                      "worker/activities/node-execution-error",
+                      "worker/activities/deliver-run-outputs"
                     ]
                   }
                 ]
