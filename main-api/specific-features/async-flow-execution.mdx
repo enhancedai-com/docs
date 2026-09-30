@@ -38,7 +38,7 @@ the query string (*"callback_url must be a single string value"*), is not a pars
 
 ```http
 POST /flux/api-v2?flowId=<flowId>&callback_url=https://example.com/hook
-x-api-key: <api key>
+api-key: <api key>
 Content-Type: application/json
 ```
 
@@ -73,7 +73,7 @@ recorded one, so the caller gets the real failure rather than a generic wrapper.
 
 ```http
 GET /flux/executions/:executionId
-x-api-key: <api key>
+api-key: <api key>
 ```
 
 The id must be a UUID — anything else is a `400`. The lookup is scoped to the caller, so an id that

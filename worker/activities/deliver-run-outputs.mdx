@@ -56,7 +56,7 @@ Emails keep the Redis keys used before the move:
 - `email-sent:<flowId>:<nodeId>:<runLogProcessId>`, kept for 24 h.
 - `email-content:<flowId>:<nodeId>:<contentHash>`, kept for 90 s.
 
-An attempt first **claims** the key with its own owner id (`pending:<owner>`, 300 s), then sends, then **confirms**. It **releases** the key if the send fails, so a retry is never mistaken for a duplicate. A claim held by another delivery suppresses the send. When one parent run calls the same sub-flow twice, each call gets its own scope, so both emails go out.
+An attempt first **claims** the key with its own owner id (`pending:<owner>`, 300 s), then sends, then **confirms**. It **releases** the key if the send fails, so a retry is never mistaken for a duplicate. A claim held by another delivery suppresses the send. When one parent run calls the same sub-flow twice, each call gets its own scope, so both emails go out when their content differs. Two calls that produce the same email within 90 s still share the `email-content` key, so only the first is sent and the second node's callback is held back.
 
 ## Large plans
 
