@@ -38,7 +38,7 @@ O Claude chamará as tools do FluxPrompt MCP automaticamente e exibirá os resul
     Dê ao conector um nome reconhecível (ex.: `FluxPrompt`) e confirme.
   </Step>
   <Step title="Faça login e conceda acesso">
-    O Claude abre uma tela de login + consentimento do FluxPrompt. Faça login com sua conta FluxPrompt, **selecione qual workspace** você quer liberar e aprove.
+    O Claude abre uma tela de login + consentimento do FluxPrompt. Faça login com sua conta FluxPrompt. A tela de consentimento lista suas **Organizations** — todas vêm marcadas, então desmarque as que você não quer liberar — e clique em **Authorize**.
 
     Nenhum token está envolvido — a autenticação é feita inteiramente por esse fluxo OAuth.
   </Step>
@@ -53,13 +53,7 @@ O Claude chamará as tools do FluxPrompt MCP automaticamente e exibirá os resul
 
 ## O que o Claude pode fazer com o FluxPrompt
 
-Após a conexão, o Claude tem acesso a estas tools:
-
-| Tool | O que faz |
-|------|-----------|
-| `list_agents` | Lista todos os agentes do seu workspace |
-| `get_agent` | Busca a estrutura completa de um agente específico |
-| `list_node_types` | Lista todos os tipos de node disponíveis no FluxPrompt |
+Após a conexão, o Claude pode chamar o catálogo de tools do FluxPrompt. Quais tools ele consegue usar depende dos escopos da sua autorização; veja [Escopos](/mcp/pt-br/authentication#escopos) e [O que uma autorização OAuth inclui](/mcp/pt-br/authentication#o-que-uma-autorização-oauth-inclui) para saber por quanto tempo ela dura.
 
 O Claude escolherá a tool correta automaticamente com base na sua pergunta. Você também pode pedir explicitamente: *"Use `get_agent` para mostrar a estrutura do agente de ID abc123"*.
 
@@ -69,4 +63,4 @@ Se a conexão não estiver funcionando, consulte a página de [Solução de prob
 
 - Tentar usar um token colado em vez do fluxo OAuth (o Claude Desktop só suporta OAuth)
 - Não concluir a tela de login + consentimento do FluxPrompt
-- Selecionar o workspace errado durante o consentimento
+- Deixar as organizações erradas marcadas durante o consentimento

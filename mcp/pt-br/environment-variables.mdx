@@ -8,23 +8,23 @@ title: "Variáveis de Ambiente"
 |---|---|---|
 | PORT | Opcional | porta HTTP (default 3100) |
 | NODE_ENV | Opcional | ambiente Node (passthrough, não é lida no código) |
-| MCP_HTTP_LOG | Opcional | log verboso de requisições HTTP |
-| MCP_PUBLIC_URL | Opcional | URL pública (metadata OAuth) |
-| MCP_FRONT_CONSENT_URL | Opcional | URL da tela de consentimento do FluxPrompt |
+| MCP_HTTP_LOG | Opcional | log verboso de requisições HTTP para os caminhos `/oauth`, `/mcp` e `/.well-known`. Só é ativado pelo valor exato `on`; qualquer outro valor, inclusive `true` ou `1`, mantém desligado |
+| MCP_PUBLIC_URL | Opcional | origem pública do servidor, sem `/mcp` (issuer e metadata OAuth, e o header `WWW-Authenticate`). Padrão `http://localhost:3100` |
+| MCP_FRONT_CONSENT_URL | Opcional | página de consentimento do front, ex.: `http://localhost:3000/mcp-authorize.html` localmente; defina explicitamente |
 | MCP_OAUTH_CONSENT_SECRET | Obrigatória | valida a assinatura do consentimento — precisa bater com o valor no `back` |
 | MCP_OAUTH_TOKEN_TTL | Opcional | Tempo de vida do access token em segundos. Vazio ou `0` (padrão) emite tokens que não expiram, porque ainda não existe o grant de refresh |
-| MCP_DCR_CLIENT_TTL | Opcional | TTL de clientes via Dynamic Client Registration |
+| MCP_DCR_CLIENT_TTL | Opcional | TTL de clientes via Dynamic Client Registration, em segundos (padrão 90 dias, `7776000`) |
 | MCP_TOKEN_CACHE_TTL | Opcional | TTL do cache do resolver de tokens, em segundos (default 10). Limita por quanto tempo uma chave revogada ainda pode ser aceita na borda, então mantenha bem abaixo do SLA de revogação de 30s. |
-| BACK_BASE_URL | Opcional | URL base do `back` (default localhost:3000) |
+| BACK_BASE_URL | Opcional | URL base do `back` (padrão do código `http://localhost:3000`). Use `host.docker.internal` a partir do Docker |
 | MCP_INTERNAL_SECRET | Obrigatória | segredo pra chamar o `back` — precisa bater com o valor no `back` |
-| MCP_BACK_RETRY_MAX | Opcional | número de retries nas chamadas ao `back` |
-| MCP_BACK_RETRY_BASE_MS | Opcional | base do backoff (ms) entre retries |
+| MCP_BACK_RETRY_MAX | Opcional | máximo de tentativas nas chamadas ao `back` (padrão 3) |
+| MCP_BACK_RETRY_BASE_MS | Opcional | base do backoff (ms) entre retries (padrão 200) |
 | MCP_MODELS_TTL_MS | Opcional | TTL do cache do catálogo de modelos de IA, em ms (padrão 120000) |
 | MCP_NODE_TYPES_TTL_MS | Opcional | TTL do cache do catálogo de tipos de node, em ms (padrão 600000) |
 | MCP_TASK_TTL_MS | Opcional | por quanto tempo o resultado de uma task fica recuperável, em ms (padrão 3600000) |
 | MCP_RATE_LIMIT_PER_MINUTE | Opcional | rate limit por minuto (default 60) |
 | MCP_RATE_LIMIT_PER_DAY | Opcional | rate limit por dia (default 5000) |
-| MCP_KILL_SWITCH | Opcional | interruptor global on/off |
+| MCP_KILL_SWITCH | Opcional | interruptor global on/off. Só o valor exato `on` desativa o servidor (as chamadas respondem `-32005 Service disabled`); qualquer outro valor, ou ausente, mantém ativo |
 | MCP_CB_WINDOW_MS | Opcional | janela de amostragem do circuit breaker (default 60000) |
 | MCP_CB_COOLDOWN_MS | Opcional | cooldown do circuit breaker (default 60000) |
 | MCP_CB_ERROR_THRESHOLD | Opcional | limiar de erro do circuit breaker (default 0.5) |
@@ -36,6 +36,10 @@ title: "Variáveis de Ambiente"
 ## Pegadinha cross-repo
 
 `MCP_INTERNAL_SECRET` e `MCP_OAUTH_CONSENT_SECRET` precisam ser idênticas ao valor no `back` — mesmo parâmetro SSM em todo ambiente, senão as chamadas MCP dão 500 / o consentimento OAuth falha silenciosamente.
+
+## Variáveis relacionadas no `back`
+
+O lado `back` da integração MCP tem variáveis próprias — em especial `MCP_SERVER_INTERNAL_URL` e `MCP_RESOURCE_METADATA_URL`. Elas estão documentadas em [Variáveis de ambiente da API principal](/main-api/pt-br/environment-variables); `MCP_INTERNAL_SECRET` e `MCP_OAUTH_CONSENT_SECRET` precisam bater lá. Para configurar OAuth local, veja [Desenvolvimento local](/mcp/pt-br/connect/local-dev#oauth-local).
 
 ## CI/CD
 

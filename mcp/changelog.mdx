@@ -3,6 +3,15 @@ title: "Changelog"
 description: "What's new in the FluxPrompt MCP integration."
 ---
 
+## 2026-09-28 — `list_voices` and working voice nodes
+
+**Your AI client can now discover the voices a voice node accepts, and voice nodes have a working default.**
+
+- **New tool `list_voices`** (`read` scope) returns the voices you can pick for an AI Voice Generator node — the same list the canvas voice dropdown shows. Each item has `provider` (`elevenlabs` or `groq`), `id`, `name`, `custom` (a voice you cloned), `isDefault` and `labels`. Pass `provider` to restrict the list to one provider. The list is small and returned in full, with no pagination.
+- **Set `voiceId` (ElevenLabs) or `groqVoice` (Groq) to an `id` from that list.** `add_node` and `update_node` refuse a voice id the provider does not know instead of saving a node that cannot speak.
+- **An ElevenLabs node with no `voiceId` uses the default voice** (Adam), saves it on the node, and reports it under `appliedDefaults`.
+- PlayHT is no longer offered for voice nodes.
+
 ## 2026-09-25 — `list_ai_models` exposes image capability
 
 **`list_ai_models` now reports whether each model can generate images, and how.**
@@ -18,6 +27,15 @@ description: "What's new in the FluxPrompt MCP integration."
 - A newly approved image-capable model is offered in the picker, executed with the right call and
   listed here with no code change — the capability is detected from the model catalog, not
   hand-maintained per layer.
+
+## 2026-08-21 — OAuth access tokens no longer expire by default
+
+**A connection made with OAuth keeps working until you revoke it.**
+
+- **OAuth access tokens are issued without an expiry.** Before, a token that expired had no way to renew itself — FluxPrompt MCP has no refresh-token grant (only `authorization_code`) — so the connection stopped working and the only fix was to redo the consent. Manual service keys already never expired, so the two paths now agree.
+- The token response omits `expires_in` rather than announcing a lifetime the token does not have.
+- **Revoke access in [Settings → MCP Keys](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens)** whenever you want a client to stop, then reconnect the client to authorize again.
+- Self-hosted deployments can put a lifetime back with `MCP_OAUTH_TOKEN_TTL` (seconds); see [Environment variables](/mcp/environment-variables).
 
 ## 2026-08-21 — Node types resolve by their canvas name
 
@@ -60,13 +78,22 @@ description: "What's new in the FluxPrompt MCP integration."
 - **A dry-run refuses what the apply would refuse.** `create_agent`, `create_folder` and `move_agent` returned from the dry-run before authorizing, so a dry-run could report that a call would work when the apply would have refused it. They now run the same checks in both modes.
 
 ### Tokens
-- **Settings → MCP Tokens** shows an edit icon on the scope cell, so it is clear that an existing key's scope can be changed.
+- **Settings → MCP Keys** shows an edit icon on the scope cell, so it is clear that an existing key's scope can be changed.
 - **Scope changes propagate asymmetrically.** Removing a scope takes effect immediately; adding one can take up to about 10 seconds — the MCP server's token cache TTL (`MCP_TOKEN_CACHE_TTL`, default `10`).
 
 ### Core API
 - **A missing required `spaceId` is a `400`** naming the space the request omitted, instead of a `403`. A folder that belongs to a *different* space than the `spaceId` you sent is still a `403`.
 
 *References: ClickUp `868kpwd91`, `868kpxbcm`.*
+
+## 2026-08-02 — One key, several organizations
+
+**A single OAuth authorization or service key can now cover several organizations, and each tool call says which one it targets.**
+
+- **New tool `list_workspaces`** returns every workspace the authorization covers and its scopes in each. It needs no scope and no `workspaceId`.
+- **Every other tool accepts an optional `workspaceId`** (except `list_node_types` and `get_node_type`). Omit it when the authorization covers exactly one workspace. When it covers several, a call without it is refused with `workspace_required`, and a `workspaceId` the authorization does not cover is refused as well.
+- **Scopes are per workspace**, so a key can carry `write` in one organization and only `read` in another.
+- The OAuth consent screen lets you tick several organizations, and **Generate MCP key** offers **Also grant this key access to**. See [Authentication](/mcp/authentication#one-authorization-can-cover-multiple-workspaces).
 
 ## 2026-08-02 — Phase 2 GA (authoring and running)
 
@@ -152,7 +179,7 @@ description: "What's new in the FluxPrompt MCP integration."
 
 ### Authentication
 - **Dual auth model:** OAuth 2.0 (PKCE + DCR) for Claude Desktop and Claude.ai; static service tokens (`mcp_…`) for CLI tools, n8n, Cursor, Codex, and OpenCode.
-- Service tokens are created and managed in [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
+- Service tokens are created and managed in [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
 - OAuth clients are registered automatically by your AI host via Dynamic Client Registration.
 
 ### Protection

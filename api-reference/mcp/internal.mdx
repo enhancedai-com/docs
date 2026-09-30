@@ -9,6 +9,8 @@ description: "Endpoints called by the MCP server to back/. Not user-facing."
 
 All endpoints are guarded by `McpInternalGuard`, which validates the `x-mcp-internal-secret` header against the `MCP_INTERNAL_SECRET` environment variable. Never expose these endpoints publicly.
 
+The one exception in the other direction is [Invalidate model cache](#invalidate-model-cache-mcp-server), which `back/` calls on the MCP server with the same secret.
+
 ---
 
 ## Resolve token
@@ -60,7 +62,7 @@ Updates `lastUsedAt` on the token record on every successful resolution.
 | Status | Reason |
 |--------|--------|
 | 401 | Missing or invalid `x-mcp-internal-secret`. |
-| 404 | Token not found, revoked, or expired. |
+| 404 | Token not found, revoked, or expired (`Token not found or revoked`, `Token expired`), or the token has no active workspace binding (`Token has no active workspace binding` — it was revoked in every workspace). |
 
 ---
 
@@ -237,6 +239,119 @@ x-mcp-token-id: <mcp-token-id>
 
 ---
 
+## Scoped routes: shared behavior
+
+Every route in the sections below (and **List agents** / **Get agent** above) is guarded by `McpScopeGuard` after the internal secret. They all take the same headers and share the same auth errors.
+
+```http
+x-mcp-internal-secret: <secret>
+x-mcp-token-id: <mcp-token-id>
+x-mcp-workspace-id: <workspace-id>
+```
+
+The workspace is never a query or body param. `x-mcp-workspace-id` is required only when the token is bound to more than one workspace.
+
+| Status | Reason (any scoped route) |
+|--------|---------------------------|
+| 400 | Token covers more than one workspace and `x-mcp-workspace-id` was omitted (`workspace_required`). |
+| 401 | Invalid internal secret; `x-mcp-token-id` missing; token not found, revoked or expired; or the token has no active workspace binding. |
+| 403 | Token lacks the route's scope (the response also carries `WWW-Authenticate: Bearer error="insufficient_scope", scope="<scope>"`); workspace not covered (`workspace_not_covered`); or, for OAuth tokens, the granting user is no longer an active member. |
+
+### Gate fields
+
+Every mutating route (`write` scope, plus `POST agents/{id}/run`) accepts these body fields and runs through the write gate:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `dryRun` | boolean | No | Defaults to **`true`**. See [Dry-run is the default](/mcp/tools/writing-safely#dry-run-is-the-default). |
+| `idempotencyKey` | string | Required when `dryRun` is `false` | See [Idempotency keys](/mcp/tools/writing-safely#idempotency-keys). |
+
+Gate errors on mutating routes:
+
+| Status | Reason |
+|--------|--------|
+| 400 | `idempotencyKey is required when dryRun is false`. |
+| 403 | `feature_disabled: mcp.writes.enabled is off for this workspace` (`mcp.execute.enabled` for `run`), controlled by the [workspace settings](/api-reference/mcp/tokens#getupdate-settings). |
+
+Node and edge routes also accept `expectedVersion` (string, optimistic-concurrency check) and `versionId` (string, target a specific version instead of the draft) — see [Writing safely](/mcp/tools/writing-safely).
+
+---
+
+## Agents (write)
+
+All routes require the `write` scope and respond `200`. Bodies extend the gate fields above.
+
+| Method and path | Body | Notes |
+|-----------------|------|-------|
+| `POST /mcp/v1/internal/agents` | `name` (string, required), `folderId` (string, required), `type` (`"chat"` for a chat agent, anything else is a regular agent), `empty` (boolean) | Creates an agent in a folder. |
+| `PATCH /mcp/v1/internal/agents/{id}` | `name` (string, required, min length 1), `expectedVersion` | Renames the agent. |
+| `DELETE /mcp/v1/internal/agents/{id}` | gate fields only | Removes the agent. |
+| `POST /mcp/v1/internal/agents/{id}/move` | `targetFolderId` (string, the destination folder id; `null` is refused) | Moves the agent to another folder. |
+
+`{id}` must be a UUID (`400` otherwise). Result shapes are documented in the [`agents-and-folders`](/mcp/tools/agents-and-folders) tool reference.
+
+## Nodes and edges (write)
+
+All routes require the `write` scope, respond `200`, and return a write result. Bodies extend the gate fields plus `expectedVersion` and `versionId`.
+
+| Method and path | Body | Notes |
+|-----------------|------|-------|
+| `POST /mcp/v1/internal/agents/{id}/nodes` | `node` (object, required, must carry an `id`) | Adds a node. |
+| `PATCH /mcp/v1/internal/agents/{id}/nodes/{nodeId}` | `patch` (object, required) | Updates a node's fields. |
+| `DELETE /mcp/v1/internal/agents/{id}/nodes/{nodeId}` | gate fields, `expectedVersion`, `versionId` | Removes a node. The body is read on `DELETE`. |
+| `POST /mcp/v1/internal/agents/{id}/connect` | `source` (string, required), `target` (string, required), `sourceHandle`, `targetHandle`, `edgeId` | Connects two nodes. |
+| `DELETE /mcp/v1/internal/agents/{id}/connect` | `source`, `target`, `edgeId` (all optional; identify the edge by `edgeId` or by `source` + `target`) | Disconnects two nodes. |
+| `GET /mcp/v1/internal/agents/{id}/integrity` | Query: `versionId` (optional) | Read-only. Requires the `read` scope. Returns an integrity report for the agent. |
+
+See [Nodes and edges](/mcp/tools/nodes-and-edges) for node shapes and handle rules.
+
+## Folders
+
+| Method and path | Scope | Body / query |
+|-----------------|-------|--------------|
+| `GET /mcp/v1/internal/folders` | `read` | Query: `limit`, `offset` (integers; a non-integer value is ignored). |
+| `POST /mcp/v1/internal/folders` | `write` | `name` (string, required), `parentId` (string or `null`), gate fields. |
+| `PATCH /mcp/v1/internal/folders/{folderId}` | `write` | `name` (string, required), gate fields. |
+| `DELETE /mcp/v1/internal/folders/{folderId}` | `write` | Gate fields only. |
+
+`{folderId}` must be a UUID. Write routes respond `200`.
+
+## Catalogues
+
+All three require the `read` scope and return an array.
+
+| Method and path | Query | Notes |
+|-----------------|-------|-------|
+| `GET /mcp/v1/internal/models` | none | AI models available to the workspace. |
+| `GET /mcp/v1/internal/integrations` | `provider` (optional) | Integration connections visible to the token's user. |
+| `GET /mcp/v1/internal/voices` | `provider` (optional) | Voices available to the token's user. |
+
+## Versions
+
+| Method and path | Scope | Body / query |
+|-----------------|-------|--------------|
+| `GET /mcp/v1/internal/agents/{id}/versions` | `read` | Query: `limit`, `offset`. |
+| `POST /mcp/v1/internal/agents/{id}/versions` | `write` | `versionName` (string, optional), gate fields. |
+| `POST /mcp/v1/internal/agents/{id}/versions/{versionId}/publish` | `write` | Gate fields only. `versionId` must be a UUID. |
+
+Write routes respond `200`. See [Versioning](/mcp/tools/versioning).
+
+## Runs
+
+All run routes require the `execute` scope. `{processId}` must be a UUID.
+
+| Method and path | Body / query | Notes |
+|-----------------|--------------|-------|
+| `POST /mcp/v1/internal/agents/{id}/run` | `variableInputs` (array of objects), `sessionId`, `versionId`, gate fields | Starts a run and responds `200`. Goes through the write gate against `mcp.execute.enabled`. Returns `403 permission_denied: cannot run this agent` when the run is not allowed. |
+| `GET /mcp/v1/internal/runs/{processId}` | none | Run status. |
+| `GET /mcp/v1/internal/runs/{processId}/nodes` | Query: `limit` | Per-node status for the run. |
+| `GET /mcp/v1/internal/runs/{processId}/nodes/{nodeId}/output` | none | Output of one node in the run. |
+| `POST /mcp/v1/internal/runs/{processId}/cancel` | `dryRun` (boolean) | Responds `200` with `{ runId, cancelled, reason }`, where `reason` is `cancelled`, `cancel_unsupported` or `dry_run`. Unlike other mutating routes, `dryRun` defaults to **`false`** here, no `idempotencyKey` is needed, and it is not behind the write gate. |
+
+See [Running agents](/mcp/tools/running-agents).
+
+---
+
 ## Grant OAuth token
 
 Persists an OAuth access token after the consent flow completes. Called by the MCP server after verifying the consent assertion.
@@ -253,13 +368,25 @@ Content-Type: application/json
 {
   "tokenHash": "sha256-hex",
   "workspaceId": "ws-uuid",
+  "workspaces": [{ "workspaceId": "ws-uuid", "scopes": ["read"] }],
   "grantedUserId": "user-uuid",
-  "clientId": "client_abc",
+  "clientId": "dcr_abc",
   "scopes": ["read"],
   "name": "Claude Desktop (Acme Corp)",
   "expiresAt": "2026-07-17T10:00:00Z"
 }
 ```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `tokenHash` | string | Yes | `sha256(rawToken)` in hex. |
+| `workspaceId` | UUID | Yes | Primary workspace. |
+| `workspaces` | array | No | Per-workspace grants, each `{ workspaceId, scopes }` (non-empty; scopes from `read`/`write`/`execute`). Sent when the user granted several workspaces in one consent. |
+| `grantedUserId` | UUID | Yes | User who approved consent. |
+| `clientId` | string | Yes | OAuth client ID. |
+| `scopes` | string[] | Yes | Non-empty, from `read`/`write`/`execute`. Used for workspaces without an entry in `workspaces`. |
+| `name` | string | Yes | Display name of the token. |
+| `expiresAt` | ISO 8601 | No | Omit for a token that never expires (the default). |
 
 ### Response `201 Created`
 
@@ -285,18 +412,20 @@ Content-Type: application/json
 
 ```json
 {
-  "clientId": "client_abc123",
+  "clientId": "dcr_abc123",
   "redirectUris": ["https://claude.ai/callback"],
   "clientName": "Claude Desktop",
   "ttlSeconds": 7776000
 }
 ```
 
+`clientId`, a non-empty `redirectUris` and a positive integer `ttlSeconds` are required; `clientName` is optional.
+
 ### Response `201 Created`
 
 ```json
 {
-  "clientId": "client_abc123",
+  "clientId": "dcr_abc123",
   "redirectUris": ["https://claude.ai/callback"],
   "clientName": "Claude Desktop"
 }
@@ -323,3 +452,33 @@ Same shape as the register response.
 |--------|--------|
 | 401 | Invalid internal secret. |
 | 404 | Client not found or TTL expired. |
+
+---
+
+## Invalidate model cache (MCP server)
+
+This is the one route that runs in the opposite direction: **back calls the MCP server** to drop its cached model catalogue after models change. It lives on the MCP server, not on `back/`.
+
+```http
+POST /internal/cache/invalidate-models
+x-mcp-internal-secret: <secret>
+Content-Type: application/json
+```
+
+Guarded by `InternalCallerGuard`, which compares `x-mcp-internal-secret` to the MCP server's own `MCP_INTERNAL_SECRET` (timing-safe). The secret must match the one `back/` uses.
+
+### Request body
+
+```json
+{ "workspaceId": "ws-uuid" }
+```
+
+`workspaceId` is optional. When omitted, the cache is invalidated for every workspace.
+
+### Response `204 No Content`
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 401 | Missing or invalid secret, or `MCP_INTERNAL_SECRET` is not set on the MCP server (every request is then rejected). |
