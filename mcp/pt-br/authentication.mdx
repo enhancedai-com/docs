@@ -9,8 +9,8 @@ O servidor MCP de entrada do FluxPrompt suporta **dois** modos de autenticação
 
 | Método | Quando usar | O que você faz |
 |---|---|---|
-| **OAuth 2.0** | Claude Desktop e Claude.ai (**obrigatório** — eles rejeitam tokens colados) e, opcionalmente, Claude Code / CLI e Cursor | Adiciona a URL do servidor como conector e faz login por uma tela de consentimento do FluxPrompt — **sem token** |
-| **Service token estático** | Serviços de backend / máquina-a-máquina, a CLI, Cursor e n8n — clientes que não podem ou não devem executar um fluxo de consentimento no navegador | Gera um token e o coloca no header `Authorization` |
+| **OAuth 2.0** | Claude Desktop e Claude.ai (**obrigatório** — eles rejeitam tokens colados) e, opcionalmente, Claude Code / CLI, Codex e Cursor | Adiciona a URL do servidor como conector e faz login por uma tela de consentimento do FluxPrompt — **sem token** |
+| **Service token estático** | Serviços de backend / máquina-a-máquina, a CLI, Codex, OpenCode, Cursor e n8n — clientes que não podem ou não devem executar um fluxo de consentimento no navegador | Gera um token e o coloca no header `Authorization` |
 
 <Info>
 **Usuários do Claude Desktop e do Claude.ai NÃO usam token.** Esses clientes rejeitam tokens bearer colados pelo usuário, então autenticam exclusivamente via OAuth. Se algum guia mandar você colar um token no Claude Desktop, ele está desatualizado — veja [Conectar Claude Desktop](/mcp/pt-br/connect/claude-desktop).
@@ -22,10 +22,16 @@ OAuth é a escolha certa para qualquer cliente que consegue abrir um navegador. 
 
 1. No seu cliente, adicione `https://mcp.fluxprompt.ai/mcp` como conector personalizado.
 2. O cliente abre uma tela de login + consentimento do FluxPrompt.
-3. Você faz login, **seleciona qual workspace** quer liberar e aprova.
-4. O cliente armazena a autorização resultante automaticamente e a renova quando necessário.
+3. Você faz login e vê a lista das suas **Organizations**. Todas vêm marcadas; desmarque as que você não quer liberar e clique em **Authorize** (ou **Deny**).
+4. O cliente armazena a autorização resultante automaticamente.
 
-Isso é **obrigatório** para Claude Desktop e Claude.ai, e **suportado** por Claude Code / CLI e Cursor. Veja os guias por cliente para os passos exatos.
+Isso é **obrigatório** para Claude Desktop e Claude.ai, e **suportado** por Claude Code / CLI, Codex e Cursor. Veja os guias por cliente para os passos exatos.
+
+### O que uma autorização OAuth inclui
+
+Os access tokens OAuth **não expiram**, e **não há refresh token**: o servidor só suporta o grant `authorization_code`. O cliente continua usando o mesmo token até você revogá-lo em [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens), onde as autorizações OAuth aparecem com o tipo **OAuth**. Depois de uma revogação, reconecte o cliente para autorizar de novo.
+
+O que a autorização pode fazer é calculado por workspace — veja [Os escopos são reduzidos pelo seu papel](#os-escopos-são-reduzidos-pelo-seu-papel) e [Uma autorização pode cobrir vários workspaces](#uma-autorização-pode-cobrir-vários-workspaces).
 
 ## Método 2 — Service token estático
 
@@ -33,11 +39,14 @@ Para clientes máquina-a-máquina (serviços de backend), a CLI, o Cursor e o n8
 
 ### Gerar um service token
 
-O dono do workspace gera um na interface do FluxPrompt:
+Qualquer membro ativo de um workspace pode gerar um na interface do FluxPrompt:
 
-1. Abra [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
-2. Crie um novo token e escolha o workspace a que ele dá acesso.
-3. Copie o token — ele começa com `mcp_` e é **exibido apenas uma vez**. Guarde-o em local seguro.
+1. Abra [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
+2. Clique em **Generate key**. No diálogo **Generate MCP key**, informe um **Key name** (por exemplo `n8n`). Se você pertence a outras organizações, também pode marcá-las em **Also grant this key access to**.
+3. Escolha os escopos. Admins do workspace veem as caixas de escopo, com `read` pré-selecionado. Os demais membros recebem uma chave somente de leitura por este diálogo (veja [Os escopos são reduzidos pelo seu papel](#os-escopos-são-reduzidos-pelo-seu-papel)).
+4. Clique em **Generate** e copie a chave — ela começa com `mcp_` e é **exibida apenas uma vez**. Guarde-a em local seguro.
+
+Admins veem todas as chaves e autorizações OAuth do workspace; os demais membros veem apenas as chaves que criaram.
 
 ### Usar o token
 
@@ -52,7 +61,7 @@ Normalmente você não digita esse header à mão — seu cliente o lê de um ar
 ## Segurança do service token
 
 <Warning>
-Um service token concede acesso de leitura completo aos agentes do seu workspace. Trate-o como uma senha:
+Um service token dá a quem o possui o que os escopos dele permitem — no mínimo acesso de leitura aos agentes do seu workspace e, com `write` ou `execute`, a capacidade de alterá-los ou executá-los. Trate-o como uma senha:
 - Nunca o commite em um repositório Git.
 - Nunca o cole em um documento público ou screenshot.
 - Nunca o compartilhe no Slack, e-mail ou em qualquer mensagem que outras pessoas possam ver.
@@ -60,7 +69,7 @@ Um service token concede acesso de leitura completo aos agentes do seu workspace
 
 Se você acredita que um service token foi exposto:
 
-1. Revogue-o em [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
+1. Revogue-o em [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens). Admins do workspace podem revogar qualquer chave; os demais membros só podem revogar as próprias.
 2. Gere um novo.
 3. Atualize seus arquivos de configuração do cliente com o novo token.
 
@@ -68,34 +77,50 @@ Se você acredita que um service token foi exposto:
 
 Uma chave carrega um ou mais de três escopos:
 
-| Escopo | Concede |
-|--------|---------|
-| `read` | Listar agentes e pastas, buscar a estrutura completa de um agente, navegar tipos de node e modelos de IA. |
-| `write` | Criar e editar agentes, pastas, nodes e edges; criar snapshots e publicar versões. |
-| `execute` | Executar um agente, acompanhar uma execução, cancelar uma execução. |
+| Escopo | Concede | Tools |
+|--------|---------|-------|
+| `read` | Listar agentes, pastas e versões, buscar a estrutura completa de um agente e navegar tipos de node, modelos de IA, integrações e vozes. | [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
+| `write` | Criar e editar agentes, pastas, nodes e edges; criar snapshots e publicar versões. | [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely), [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
+| `execute` | Executar um agente, acompanhar uma execução, cancelar uma execução. | [Executando agentes](/mcp/pt-br/tools/running-agents) |
 
-Nenhum escopo dá acesso a faturamento, usuários ou configurações do workspace — isso nunca é exposto
-via MCP.
+Uma tool que os escopos da chave não cobrem é recusada com `-32401 Insufficient scope`; veja [Interruptores no nível do workspace](#interruptores-no-nível-do-workspace) para distinguir isso de uma recusa por interruptor. Nenhum escopo dá acesso a faturamento, usuários ou configurações do workspace — isso nunca é exposto via MCP.
 
-### Uma chave é vinculada a um workspace
+### Uma autorização pode cobrir vários workspaces
 
-Cada chave é emitida para **uma** organização, escolhida na tela de consentimento (OAuth) ou pelo
-workspace em que o token foi criado. Para atuar em outra organização, você autoriza de novo e mantém
-uma segunda chave.
+Uma única autorização OAuth ou service token **não** se limita a uma organização — a mesma chave
+pode alcançar várias organizações de que você faz parte (marque-as na tela de consentimento, ou em
+**Also grant this key access to** ao gerar uma chave), e os escopos são definidos **por workspace**,
+então uma chave pode carregar `write` em um e apenas `read` em outro. Chame
+[`list_workspaces`](/mcp/pt-br/tools/agents-and-folders#list_workspaces) para ver todos os workspaces
+que uma autorização cobre e seus escopos em cada um.
+
+Por isso, toda ferramenta exceto `list_workspaces`, `list_node_types` e `get_node_type` aceita um
+parâmetro opcional `workspaceId`:
+
+- Omita-o quando a autorização cobre exatamente um workspace — ele é inferido automaticamente.
+- Informe-o quando a autorização cobre mais de um. Uma chamada que o omite nesse caso é recusada
+  com `workspace_required`, e o erro lista os ids dos workspaces cobertos para você escolher.
 
 ### Os escopos são reduzidos pelo seu papel
 
-Se você não é admin da organização selecionada, pedir `write`/`execute` gera uma chave reduzida a
-`read`, em vez de um erro. Um admin do workspace pode liberar isso com o toggle
-**Allow non-admin write/execute keys** em
-[Settings → MCP Tokens](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) — desligado por
-padrão.
+Um cliente pede os escopos que quer; você não os escolhe na tela de consentimento e, se ele não pedir nenhum, a autorização é apenas `read`.
+
+Se você não é admin de uma organização, pedir `write`/`execute` nela gera uma autorização reduzida a
+`read`, em vez de um erro — isso vale para cada organização separadamente. Um admin do workspace
+controla isso com o toggle **Let regular members create powerful keys** em
+[Settings → MCP Keys](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens). Ele vem **ligado por
+padrão**; quando um admin o desliga, membros não admins recebem apenas `read`.
+
+O toggle não altera o diálogo **Generate key**: só admins veem as caixas de escopo nele, então
+não admins sempre recebem uma chave somente de leitura por ali. O toggle define se um não admin pode ter
+`write`/`execute` via consentimento OAuth ou pela API. Ele só é verificado quando uma chave é criada ou um
+app é reconectado, então as chaves já existentes mantêm os escopos que receberam.
 
 ### Alterar os escopos de uma chave
 
 Um admin do workspace pode alterar os escopos de uma chave existente a qualquer momento — não é preciso
-revogá-la e emitir outra. Em [Settings → MCP Tokens](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens),
-a célula de escopos de cada chave na tabela **MCP Keys** mostra os escopos atuais como chips, com um
+revogá-la e emitir outra. Em [Settings → MCP Keys](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens),
+a célula de escopos de cada chave na tabela de chaves mostra os escopos atuais como chips, com um
 ícone de edição (lápis) ao lado. Clique nos chips ou no ícone, marque os escopos desejados e salve.
 Quem não é admin vê os mesmos chips apenas como leitura.
 
@@ -118,12 +143,14 @@ porque a API principal valida cada chamada contra os escopos atuais da chave.
 
 ### Interruptores no nível do workspace
 
-Mesmo com o escopo correto, dois interruptores do workspace precisam estar ligados:
+Mesmo com o escopo correto, dois interruptores do workspace precisam estar ligados. Um admin do
+workspace os controla em **Settings → MCP Keys**, em **What connected AI assistants are allowed to do**.
+Ambos vêm **ligados por padrão**.
 
-| Interruptor | Desliga |
-|-------------|---------|
-| `mcp.writes.enabled` | Todas as ferramentas de escrita deste workspace. |
-| `mcp.execute.enabled` | O `run_agent` deste workspace. |
+| Interruptor na interface | Nome interno nas recusas | Desliga |
+|--------------------------|--------------------------|---------|
+| **Let AI assistants change things** | `mcp.writes.enabled` | Todas as ferramentas de escrita deste workspace. |
+| **Let AI assistants run agents** | `mcp.execute.enabled` | O `run_agent` deste workspace. Execuções iniciadas pelo próprio app não são afetadas. |
 
 Esses interruptores são um portão **independente**: ter o escopo certo na chave não basta enquanto o
 interruptor estiver desligado. As duas recusas têm textos diferentes, e isso indica qual delas corrigir:
@@ -136,7 +163,7 @@ interruptor estiver desligado. As duas recusas têm textos diferentes, e isso in
 O `<id>` da segunda muda a cada chamada, então busque `feature_disabled:` nos seus logs, e não a
 linha inteira.
 
-Em qualquer um dos casos, a correção está no mesmo lugar: **Settings → MCP Tokens**.
+Em qualquer um dos casos, a correção está no mesmo lugar: **Settings → MCP Keys**.
 
 Execuções iniciadas via MCP são cobradas e auditadas no **dono da chave** que as iniciou, e o nome da
 chave/cliente que disparou aparece no histórico de execuções do agente.
@@ -148,10 +175,10 @@ chave/cliente que disparou aparece no histórico de execuções do agente.
     Se o seu cliente é Claude Desktop ou Claude.ai, você precisa usar OAuth. Para serviços de backend, a CLI ou o n8n, use um service token. Cursor e Claude Code podem usar qualquer um dos dois — OAuth é o mais simples se você consegue abrir um navegador.
   </Accordion>
   <Accordion title="Posso ter múltiplos service tokens para o mesmo workspace?">
-    Sim — cada token é independente. Você pode ter um token por cliente (ex.: um para n8n, outro para um serviço de backend) e revogá-los individualmente em [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
+    Sim — cada token é independente. Você pode ter um token por cliente (ex.: um para n8n, outro para um serviço de backend) e revogá-los individualmente em [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
   </Accordion>
   <Accordion title="O service token expira?">
-    Service tokens não expiram automaticamente. Eles permanecem válidos até serem revogados. Recomendamos revogar tokens que você não usa mais.
+    Não — nem os service tokens nem os access tokens OAuth expiram, então revogue as chaves que você não usa mais (veja [O que uma autorização OAuth inclui](#o-que-uma-autorização-oauth-inclui)).
   </Accordion>
   <Accordion title="Posso usar minha API key comum do FluxPrompt no lugar?">
     Não. O servidor MCP usa um sistema de autenticação separado. Sua API key comum não funcionará.
@@ -161,9 +188,9 @@ chave/cliente que disparou aparece no histórico de execuções do agente.
   </Accordion>
   <Accordion title="Liberei write para alguém, mas o cliente dela continua só com read">
     Verifique nesta ordem:
-    1. **Os interruptores do workspace.** `mcp.writes.enabled` e `mcp.execute.enabled` são um portão independente dos escopos da chave — uma chave que carrega `write` continua sendo recusada enquanto o interruptor estiver desligado. A recusa do interruptor contém `feature_disabled:`, não `Insufficient scope`.
+    1. **Os interruptores do workspace.** **Let AI assistants change things** (`mcp.writes.enabled`) e **Let AI assistants run agents** (`mcp.execute.enabled`) são um portão independente dos escopos da chave — uma chave que carrega `write` continua sendo recusada enquanto o interruptor estiver desligado. A recusa do interruptor contém `feature_disabled:`, não `Insufficient scope`.
     2. **Dê alguns segundos.** O servidor MCP mantém as chaves resolvidas em cache por `MCP_TOKEN_CACHE_TTL` segundos (10 por padrão), então um escopo recém-adicionado pode levar esse tempo para valer. Tente de novo depois de ~10 segundos ou reconecte o cliente.
-    3. **Confirme que a mudança foi salva.** Reabra [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) e verifique se a célula de escopos da chave mostra os escopos esperados.
+    3. **Confirme que a mudança foi salva.** Reabra [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) e verifique se a célula de escopos da chave mostra os escopos esperados.
     4. **Confirme que o cliente não está com uma sessão antiga.** Alguns clientes só releem as ferramentas e permissões disponíveis quando reconectam.
   </Accordion>
 </AccordionGroup>

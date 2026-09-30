@@ -38,7 +38,7 @@ Claude will call the FluxPrompt MCP tools automatically and show you the results
     Give the connector a recognizable name (e.g. `FluxPrompt`) and confirm.
   </Step>
   <Step title="Log in and grant access">
-    Claude opens a FluxPrompt login + consent screen. Log in with your FluxPrompt account, **select which workspace** you want to grant access to, and approve.
+    Claude opens a FluxPrompt login + consent screen. Log in with your FluxPrompt account. The consent screen lists your **Organizations** — all are checked, so uncheck any you don't want to grant — then click **Authorize**.
 
     No token is involved — authentication is handled entirely through this OAuth flow.
   </Step>
@@ -53,13 +53,7 @@ Claude will call the FluxPrompt MCP tools automatically and show you the results
 
 ## What Claude can do with FluxPrompt
 
-After connecting, Claude has access to these tools:
-
-| Tool | What it does |
-|------|-------------|
-| `list_agents` | Lists all agents in your workspace |
-| `get_agent` | Fetches the full structure of a specific agent |
-| `list_node_types` | Lists all available FluxPrompt node types |
+After connecting, Claude can call the FluxPrompt tool catalog. Which tools it can use depends on the scopes of your authorization; see [Scopes](/mcp/authentication#scopes), and [What an OAuth grant includes](/mcp/authentication#what-an-oauth-grant-includes) for how long it lasts.
 
 Claude will choose the right tool automatically based on your question. You can also ask it explicitly: *"Use `get_agent` to show me the structure of agent ID abc123"*.
 
@@ -69,4 +63,4 @@ If the connection isn't working, see the [Troubleshooting](/mcp/troubleshooting)
 
 - Trying to use a pasted token instead of the OAuth flow (Claude Desktop only supports OAuth)
 - Not completing the FluxPrompt login + consent screen
-- Selecting the wrong workspace during consent
+- Leaving the wrong organizations checked during consent

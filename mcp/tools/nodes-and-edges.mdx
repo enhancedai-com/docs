@@ -13,11 +13,14 @@ plausible-looking field that does not exist is stored happily and then ignored a
 
 ## `list_node_types`
 
-The full catalogue: every node type with its schemas and handles. Fetch it once, then use [`get_node_type`](#get_node_type) for the one you are about to build.
+A lightweight summary of every node type — `type`, `label`, `category` and `description`, and **no
+schemas and no handles**. Fetch it once to discover the exact type names, then call
+[`get_node_type`](#get_node_type) for each type you are about to build. Do not write a node from the
+summary alone.
 
 ### Input
 
-No parameters required.
+No parameters required. Like `get_node_type`, it takes no `workspaceId`.
 
 ### Output
 
@@ -28,30 +31,13 @@ No parameters required.
       "type": "commandTextNode",
       "label": "Command Text Node",
       "description": "Runs a prompt against an AI text model and passes the result downstream.",
-      "category": "AI",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "prompt": { "type": "string", "description": "The prompt to run" },
-          "aiModel": { "type": "string", "description": "AI model name, e.g. \"gemini-2.5-flash-lite\"" },
-          "aiSystem": { "type": "string", "description": "AI provider, e.g. \"gemini\", \"anthropic\", \"openAi\"" }
-        },
-        "required": ["prompt", "aiModel", "aiSystem"]
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "text": { "type": "string", "description": "Generated text output" }
-        }
-      }
+      "category": "AI"
     },
     {
       "type": "conditionNode",
       "label": "Condition Node",
       "description": "Evaluates a condition and routes flow execution along the true or false branch.",
-      "category": "Logic",
-      "inputSchema": { "..." : "..." },
-      "outputSchema": { "..." : "..." }
+      "category": "Logic"
     }
   ]
 }
@@ -66,33 +52,45 @@ No parameters required.
 | `nodeTypes[].label` | string | Human-readable name, composed as `"Front name (Technical name)"` when the canvas name and the technical name differ — e.g. `"Display Box (Output Controller)"` — or published as just the one name when they match or the type has no sidebar entry. This exact string, and the bare front name, are also valid input to [`add_node`](#add_node)'s `node.type` and to [`get_node_type`](#get_node_type)'s `type`. |
 | `nodeTypes[].description` | string | What this node does. |
 | `nodeTypes[].category` | string | Grouping: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. |
-| `nodeTypes[].inputSchema` | JSON Schema | The configuration this node accepts. |
-| `nodeTypes[].outputSchema` | JSON Schema | The data this node produces for downstream nodes. |
 
-<Warning>
-  **Respect `enum` when a field declares one.** Several node fields only accept a fixed set of
-  values — for example `dynamicSettingsNode.selectedOption` is `"text"` or `"voice"`, and
-  `fluxObject.selectedType` is one of six exact strings such as `"Load All Entries"`. These fields
-  are **not** validated on write: a value outside the list is stored happily and then matches no
-  branch at render time, so the node ends up with no panel selected and does nothing. Always read
-  the field's `enum` from `inputSchema` before writing it, and never guess a plausible-looking
-  value like `"default"`.
-</Warning>
+<Note>
+  The schemas live behind [`get_node_type`](#get_node_type). The `fluxprompt://node-types`
+  [resource](/mcp/tools/prompts-and-resources#resources) is the exception: it returns the full
+  entries, schemas and handles included.
+</Note>
 
 ## `get_node_type`
 
-Returns one node type's `label`, `description`, `category`, `inputSchema` and `outputSchema` — the
-same entry [`list_node_types`](/mcp/tools/nodes-and-edges#list_node_types) returns, without downloading the whole
-catalogue.
+Returns one node type's full definition: `type`, `label`, `description`, `category`, `inputSchema`,
+`outputSchema` and `handles`. Call it once per node type you use, and before wiring with
+[`connect_nodes`](#connect_nodes). To fetch every schema at once, read the
+[`fluxprompt://node-types`](/mcp/tools/prompts-and-resources#resources) resource.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `type` | string | Yes | The technical type (e.g. `commandTextNode`), the frontend/sidebar name (e.g. "Display Box"), or the composed label [`list_node_types`](#list_node_types) publishes (e.g. "Display Box (Output Controller)"). Matching is case-insensitive and collapses whitespace. A value that matches none of these returns an error instead of a schema. |
+| `type` | string | Yes | The technical type (e.g. `commandTextNode`), the frontend/sidebar name (e.g. "Display Box"), or the composed label [`list_node_types`](#list_node_types) publishes (e.g. "Display Box (Output Controller)"). Matching is case-insensitive and collapses whitespace. A value that matches none of these returns an error (`isError: true`) instead of a schema. |
+
+### The `handles` object
+
+`handles` is the derived handle registry for the type — the most reliable source of connectable
+handle names, and far better than guessing from `inputSchema` field names, which describe data, not
+wiring.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sourceHandles` | array | `{ handle, role }` — output ports. `role` is `global`, `control`, `condition` or `data`. Global, control and condition handles continue the execution chain; data handles carry a value. |
+| `targetHandles` | array | `{ handle, dataField? }` — input ports. `dataField` is the base `inputSchema` field the incoming edge value feeds, when there is one. The value lands in the companion array `<dataField>Data`, not in `dataField` itself. |
+| `patterned` | array | `{ direction, pattern, discriminating }` — handles generated at render time that cannot be listed. `discriminating: false` means the pattern is a non-selective catch-all: evidence that some dynamic handle exists, not proof of any specific string. |
+| `handlesPatterned` | boolean | `true` when the type has render-time handles beyond the two lists. Treat the lists as incomplete, not wrong: an unlisted handle is unproven, not invalid. |
+| `unresolved` | boolean | `true` when the handles for this type could not be determined at all. |
+| `canContinueExecutionChain` | boolean | Whether the type exposes an execution-continuation source handle. A `globalStarter` may only connect directly into a type where this is `true`. |
 
 <Warning>
-  Respect `enum` when a field declares one, and never guess a value. These fields are not validated
-  on write: an unrecognised value is stored and then matches nothing, leaving the node rendered with
-  nothing selected. See the enum note on [`list_node_types`](/mcp/tools/nodes-and-edges#list_node_types).
+  **Respect `enum` when a field declares one.** Read the field's `enum` from `inputSchema` and never
+  guess a plausible-looking value like `"default"`. A value outside the list is saved anyway,
+  reported in `invalidEnumValues`, and the node does nothing — if a node is inert, verify the field
+  name and value. Examples: `dynamicSettingsNode.selectedOption` is `"text"` or `"voice"`;
+  `fluxObject.selectedType` is one of six exact strings such as `"Load All Entries"`.
 </Warning>
 
 ## `list_ai_models`
@@ -156,6 +154,63 @@ a separate source: it always agrees with the booleans.
   Results are cached for a short period and may lag a few minutes behind an admin approving or
   toggling a model. Don't treat a model listed here as a guarantee it will still be available at
   execution time — `run_agent` reports it if a model becomes unavailable.
+</Warning>
+
+## `list_voices`
+
+Returns the voices this user can pick for a `voiceBoxNode` (AI Voice Generator) — the same list the
+canvas voice dropdown shows. Call it before setting a voice instead of guessing an id. It needs the
+`read` scope.
+
+### Input
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspaceId` | string | Only when this authorization covers more than one workspace | Call [`list_workspaces`](/mcp/tools/agents-and-folders#list_workspaces) to discover which workspaces this key covers. |
+| `provider` | `"elevenlabs"` \| `"groq"` | No | Restrict the result to one provider. Omit to list both. |
+
+### Output
+
+```json
+{
+  "voices": [
+    { "provider": "elevenlabs", "id": "pNInz6obpgDQGcFmaJgB", "name": "Adam", "custom": false, "isDefault": true,
+      "labels": { "accent": "american", "gender": "male" } },
+    { "provider": "elevenlabs", "id": "Zk3c…", "name": "My cloned voice", "custom": true, "isDefault": false, "labels": null }
+  ],
+  "total": 2
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `voices[].provider` | `"elevenlabs"` \| `"groq"` | Which provider the voice belongs to. |
+| `voices[].id` | string | The value to set on the node. |
+| `voices[].name` | string | What to show the user. |
+| `voices[].custom` | boolean | `true` for a voice the user cloned. |
+| `voices[].isDefault` | boolean | `true` for the default voice. |
+| `voices[].labels` | object \| null | Extra descriptors such as accent and gender. |
+| `total` | number | `voices.length`. |
+
+The list is small and returned in full — there is **no pagination** and no `cursor`. PlayHT is not
+offered.
+
+### Setting the voice on a node
+
+| Node `aiSystem` | Field that takes the `id` |
+|-----------------|---------------------------|
+| `elevenlabs` | `voiceId` |
+| `groq` | `groqVoice` |
+
+Show the names to the user and let them choose. When an elevenlabs node is written with no `voiceId`,
+the server fills in the voice flagged `isDefault` (Adam, `pNInz6obpgDQGcFmaJgB`) and reports it in
+`appliedDefaults`. A groq node gets no default.
+
+<Warning>
+  **`add_node` and `update_node` refuse a voice id the provider does not know**, with a
+  `validation_error` telling you to call `list_voices` and use one of the returned ids. Always take
+  the id from this list. If ElevenLabs cannot confirm a voice either way (a lookup failure other
+  than "not found"), the write is accepted and the id is reported back in `unverifiedVoices`.
 </Warning>
 
 ## `list_integrations`
@@ -261,6 +316,15 @@ dimensions used to pile every node on the same spot. Omitting `position` is both
     "position": { "x": 435, "y": -240 }, "width": 825, "height": 789 } ], "updated": [], "removed": [] } }
 ```
 
+### Referencing another node's output
+
+On the node types whose catalogue field description says so — for example `webSearch.query`,
+`commandContentNode.queryData`, `voiceBoxNode.text` and `imageGenerator.prompt` — a string field may
+embed `{{<nodeId>.<key>}}`, and at run time the runtime substitutes that node's output for `<key>`
+(typically `text`) before the node executes. Not every field supports this: read each field's own
+description in [`get_node_type`](#get_node_type) before relying on it. The same syntax works in the
+`patch` of [`update_node`](#update_node).
+
 <Warning>
   A `globalStarter` node's id **must** contain the literal substring `flow-global-starter` (e.g.
   `flow-global-starter_main`). The backend resolves the flow's entry point by matching that
@@ -296,15 +360,18 @@ Removes a node **and every edge touching it**.
 
 ## `connect_nodes`
 
-Creates an edge from a source node to a target node.
+Creates an edge from a source node to a target node. Handles are validated against the derived
+registry for the two node types: an unknown `(type, handle)` pair is refused with a
+`validation_error` naming the valid handles for that type — call [`get_node_type`](#get_node_type)
+and read `handles` instead of guessing from `inputSchema` field names.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `agentId` | string (UUID) | Yes | Target agent. |
 | `source` | string | Yes | Source node id. |
 | `target` | string | Yes | Target node id. |
-| `sourceHandle` | string | No | Source port. Omit for the context-aware default. |
-| `targetHandle` | string | No | Target port. Omit for the context-aware default. |
+| `sourceHandle` | string | No | Source port. Omit for the context-aware default (see below). Required from a `conditionNode`. |
+| `targetHandle` | string | No | Target port. Omit for the context-aware default (see below). Required into a `nodesAdd` node. |
 | `edgeId` | string | No | Explicit edge id. |
 
 ### Execution order vs data — the two-edge model
@@ -313,7 +380,7 @@ This is the single most common source of "I connected it but nothing happens":
 
 - An edge from **`outputFlow` → `input`** makes the target **execute** after the source. It carries
   no data.
-- An edge from **`output` → `<field>In`** (e.g. `contentIn`, `promptIn`, `textIn`) carries the
+- An edge from **`output` → `<field>In`** (e.g. `contentIn`, `inputText`, `text-input` — the name differs per node type) carries the
   **data**. It does not trigger execution.
 
 Chaining two `commandTextNode`s so B runs after A *and* sees A's text therefore needs **both** edges,
@@ -322,40 +389,41 @@ each with its own `edgeId`. Either one alone is a silent half-connection.
 On top of the edge, the target's `data` must reference the source — the companion array
 `<field>Data`, e.g. an `outputObjectNode`'s `data.textData`.
 
-<Tip>
-  **You usually get all of this for free.** When you call `connect_nodes` with both handles omitted
-  and the target has exactly one unambiguous data field, the server adds the companion edge *and*
-  fills the target's `<field>Data` entry for you. Check the returned `diff.edgesAdded` and
-  `diff.updated` to see what it did.
-</Tip>
+When the target has a single data handle feeding a text field, one call with both handles omitted
+writes the execution edge, the data edge **and** the `<field>Data` entry — for example on a
+`commandTextNode`, `outputObjectNode`, `textBox` or `webSearch`. Otherwise only the execution edge
+is written and you wire the data edge yourself, with `sourceHandle: "output"` and a handle from
+`handles.targetHandles`. It is never done from a `globalStarter`. Check `diff.edgesAdded` and
+`diff.updated`, or run [`check_agent_integrity`](/mcp/tools/writing-safely#check_agent_integrity),
+before patching `<field>Data` yourself — doing so appends a duplicate. A successful edge does not
+schedule the target: do not read it as "the target will now run".
 
 ### Handle defaults
 
-Omit both handles and the server picks based on the node types:
+Omit both handles and the server picks based on the node types. It only uses `outputFlow` / `input` when the registry confirms the type really has that handle, and otherwise refuses the call instead of miswiring it.
 
 | Situation | `sourceHandle` | `targetHandle` |
 |-----------|----------------|----------------|
 | Source is `globalStarter` | `a` | `input` |
 | Either side is a `mediaBox` | `mediaOutput` | `mediaInput` |
-| Source is `dynamicSettingsNode` | `outputModelTextSettings` | `modelVoiceSettings` for a `voiceBoxNode`, else `modelSettings` |
-| Target is a terminal display node (`outputObjectNode`, `richTextBox`) | `output` | `textIn` |
-| Anything else | `outputFlow` | `input` |
+| Source is `dynamicSettingsNode` | `outputModelTextSettings` | `modelSettings` — including into a `voiceBoxNode`; refused if the target has no such handle |
+| Target is a terminal display node (`outputObjectNode`, `richTextBox`) | The source's data output: the first of `output`, `textOutput`, `contentOut` that it has | `input` |
+| Anything else | `outputFlow`, if the source type has it | `input`, if the target type has it |
 
-<Warning>
-  Two cases have **no** safe default and are rejected unless you are explicit:
+Two cases need an explicit handle:
 
-  - From a `conditionNode` you must pass `sourceHandle` — `conditionHandle-T{n}`/`conditionHandle-F{n}`
-    for SWITCH conditions, or `outputHandle-0`/`outputHandle-1` for boolean ones.
-  - Into a `nodesAdd` node you must pass `targetHandle` — `nodesInput` (node-list payload) or
-    `edgesInput` (edge-list payload).
-</Warning>
+- From a `conditionNode`, pass `sourceHandle` — `conditionHandle-T{n}`/`conditionHandle-F{n}` for
+  SWITCH conditions, or `outputHandle-0`/`outputHandle-1` for boolean ones.
+- Into a `nodesAdd` node, pass `targetHandle` — `nodesInput` (node-list payload) or `edgesInput`
+  (edge-list payload).
 
 ## `disconnect_nodes`
 
 Removes an edge. Identify it either by `edgeId`, or by `source` + `target`.
 
-Returns `diff.edgesRemoved` — an array of edge ids. This removes **only the edge**; to delete a node
-use `remove_node`.
+**One call undoes one `connect_nodes`** — both edges and the `<field>Data` reference it added. Read
+`diff.edgesRemoved` / `diff.updated` for exactly what changed. This removes **only edges**; to
+delete a node use `remove_node`.
 
 ## Example prompts
 
@@ -366,6 +434,7 @@ use `remove_node`.
 ## Related
 
 - [Writing safely](/mcp/tools/writing-safely) — dry-run, idempotency, `versionId`
-- [`list_node_types`](/mcp/tools/nodes-and-edges#list_node_types) — the full catalogue and the enum contract
+- [`list_node_types`](/mcp/tools/nodes-and-edges#list_node_types) — the catalogue of node type names
+- [`get_node_type`](/mcp/tools/nodes-and-edges#get_node_type) — schemas, handles and the enum contract
 - [`get_agent`](/mcp/tools/agents-and-folders#get_agent) — read the nodes and edges you just wrote
 - [Versioning](/mcp/tools/versioning) — snapshot the working copy once you are happy

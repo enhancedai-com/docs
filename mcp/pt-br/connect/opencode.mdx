@@ -11,8 +11,6 @@ Uma vez conectado, o OpenCode pode responder perguntas sobre seu workspace FluxP
 - *"Mostre a configuração do agente Email Parser"*
 - *"Quais tipos de node estão disponíveis no FluxPrompt?"*
 
-As ferramentas da Fase 1 são somente leitura: `list_agents`, `get_agent` e `list_node_types`.
-
 ## Pré-requisitos
 
 - OpenCode instalado
@@ -28,7 +26,7 @@ O suporte a **OAuth** do OpenCode é atualmente limitado e pode ser instável; p
 
 <Steps>
   <Step title="Obtenha um service token">
-    No FluxPrompt, vá em [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) e gere um token com escopo `read`. Ele é exibido apenas uma vez — copie-o. Veja [Autenticação](/mcp/pt-br/authentication).
+    Gere uma chave em [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens); veja [Gerar um service token](/mcp/pt-br/authentication#gerar-um-service-token). Ela é exibida apenas uma vez — copie-a.
   </Step>
   <Step title="Abra a configuração do OpenCode">
     O OpenCode lê a configuração de `~/.config/opencode/opencode.json` (global) ou `opencode.json` na raiz do projeto. Abra o arquivo no seu editor (crie-o se não existir).
@@ -62,6 +60,10 @@ O suporte a **OAuth** do OpenCode é atualmente limitado e pode ser instável; p
     Você deverá ver seus agentes do workspace listados.
   </Step>
 </Steps>
+
+## Tools e escopos
+
+Quais tools o OpenCode pode chamar depende dos escopos da sua chave; veja [Escopos](/mcp/pt-br/authentication#escopos).
 
 ## Configuração manual (JSON)
 

@@ -11,8 +11,6 @@ Once connected, Codex CLI can answer questions about your FluxPrompt workspace d
 - *"Show me the configuration of the Email Parser agent"*
 - *"What node types are available in FluxPrompt?"*
 
-The Phase 1 tools are read-only: `list_agents`, `get_agent`, and `list_node_types`.
-
 ## Prerequisites
 
 - Codex CLI installed and signed in
@@ -60,7 +58,7 @@ Codex CLI talks to the FluxPrompt server over remote **Streamable HTTP** nativel
     export MCP_TOKEN=mcp_xxxxxxxxxxxx
     ```
 
-    Get a token from FluxPrompt → [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) → generate one with `read` scope (it's shown only once). See [Authentication](/mcp/authentication).
+    Generate the key under [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens); see [Generate a service token](/mcp/authentication#generate-a-service-token).
   </Step>
   <Step title="Restart Codex and verify">
     After editing `config.toml`, start a new Codex session so the server loads.
@@ -72,6 +70,10 @@ Codex CLI talks to the FluxPrompt server over remote **Streamable HTTP** nativel
     You should see your workspace agents listed.
   </Step>
 </Steps>
+
+## Tools and scopes
+
+Which tools Codex can call depends on the scopes of your authorization; see [Scopes](/mcp/authentication#scopes), and [Scopes are clamped by your role](/mcp/authentication#scopes-are-clamped-by-your-role) for what an OAuth grant receives.
 
 ## Manual config (TOML)
 

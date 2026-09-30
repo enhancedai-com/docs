@@ -14,6 +14,11 @@ quatro convenções. Aprenda uma vez e todas as ferramentas de escrita passam a 
 que *aconteceria*, para você inspecionar antes. Para aplicar de verdade, você precisa passar
 `dryRun: false` **e** um `idempotencyKey`.
 
+<Warning>
+  **`cancel_run` é a única exceção:** ele usa `dryRun: false` por padrão. Veja
+  [Executando agentes](/mcp/pt-br/tools/running-agents#cancel_run).
+</Warning>
+
 ```json
 // 1. Inspecionar
 { "agentId": "a1b2…", "nodeId": "textBox_1", "patch": { "data": { "text": "hi" } } }
@@ -50,7 +55,15 @@ timeout de rede ou um retry do cliente não consegue duplicar um node nem dispar
 execução.
 
 Use uma chave que descreva a intenção e seja única por mudança, ex.: `add-summary-node-2026-07-27-1`.
-Reutilizar a chave com um payload **diferente** é um erro: não vai fazer o que você espera.
+
+- **Escopo.** Uma chave é única por **(workspace, ferramenta, chave)**. A mesma string pode ser
+  reutilizada entre ferramentas diferentes — `add_node` e `update_node` nunca colidem nela.
+- **Duração.** Um resultado em cache vive por **24 horas**. Depois disso a mesma chave é tratada como
+  nova e a chamada executa de novo, então gere uma chave nova por operação lógica em vez de reciclar
+  uma.
+- **Payload diferente, mesma chave.** Reutilizar uma chave dentro das 24 horas com um payload
+  **diferente** é recusado com um conflito (`Idempotency key reused with a different payload`) em vez
+  de repetir o resultado.
 
 ## Conflitos de versão (`expectedVersion`)
 
@@ -79,19 +92,13 @@ As ferramentas de node e edge aceitam `versionId`, e ele decide *o que* você es
 ## Permissões
 
 As ferramentas de escrita exigem o escopo `write` na sua chave; executar agentes exige `execute`. Os
-dois também são controlados **por workspace** pelo dono do workspace:
-
-- `mcp.writes.enabled` — desliga todas as ferramentas de escrita do workspace.
-- `mcp.execute.enabled` — desliga o `run_agent` do workspace.
-
-Esses interruptores são um portão independente, não fazem parte do escopo da sua chave, e as duas
-falhas são diferentes: escopo faltando é o erro JSON-RPC `-32401`, enquanto um interruptor desligado
-volta como resultado de tool com `isError: true`, cujo texto contém
-`feature_disabled:`.
+donos do workspace também podem desligar cada um deles por workspace — veja os
+[interruptores no nível do workspace](/mcp/pt-br/authentication#interruptores-no-nível-do-workspace).
+As duas falhas são diferentes: escopo faltando é o erro JSON-RPC `-32401`, enquanto um interruptor
+desligado volta como resultado de tool com `isError: true`, cujo texto contém `feature_disabled:`.
 
 Se sua chave foi emitida por um membro não-admin, os escopos podem ter sido reduzidos para apenas
-`read`. Um admin do workspace pode liberar chaves de write/execute para não-admins em
-**Settings → MCP Tokens**. Veja [Autenticação](/mcp/pt-br/authentication).
+`read`. Veja [Autenticação](/mcp/pt-br/authentication).
 
 ## Erros que você deve esperar
 
@@ -100,11 +107,43 @@ Se sua chave foi emitida por um membro não-admin, os escopos podem ter sido red
 | `-32401` insufficient scope | Sua chave não tem `write`/`execute`. O `data.required` nomeia o escopo que faltou. | Reautorize com os escopos necessários, ou peça a um admin para ampliar o escopo da chave. |
 | `feature_disabled` (erro de tool) | O interruptor do workspace está desligado. Chega como resultado de tool com `isError: true`, com o texto `Tool execution failed: ERROR <id>: feature_disabled: mcp.writes.enabled is off for this workspace` — e não como erro JSON-RPC. O `<id>` muda a cada chamada, então busque por `feature_disabled:`. | Peça a um admin do workspace para ligar o interruptor de novo. Reautorizar não muda nada. |
 | `version_conflict` | O agente mudou depois do seu `expectedVersion`. | Releia com `get_agent` e repita. |
-| `validation_error` | O payload quebra uma regra (ex.: id de `globalStarter` sem `flow-global-starter`). | Corrija o payload; a escrita **não** foi parcialmente aplicada. |
+| `validation_error` | O payload quebra uma regra (ex.: id de `globalStarter` sem `flow-global-starter`, ou um handle que o tipo de node não tem). | Corrija o payload; a escrita **não** foi parcialmente aplicada. |
+| `validation_error` — voz indisponível | Um `voiceBoxNode` nomeia um `voiceId` (elevenlabs) ou `groqVoice` (groq) que o provider não conhece. `add_node` e `update_node` recusam. | Chame o [`list_voices`](/mcp/pt-br/tools/nodes-and-edges#list_voices) e use um `id` daquela lista. |
 | `integrationId` inalcançável | O nó nomeia uma conexão de terceiro que este usuário não possui nem recebeu por compartilhamento da organização. | Chame o [`list_integrations`](/mcp/pt-br/tools/nodes-and-edges#list_integrations) e use um id daquela lista. |
 | `provider_not_ready` | O provider não está habilitado para escritas via MCP neste ambiente. | Peça a um admin; o allowlist é por ambiente. |
-| `-32006` rate limited | 60 requisições/minuto ou 5.000/dia por chave. | Respeite o `retryAfterMs`. |
+| `-32006` rate limited | Você excedeu o [rate limit](/mcp/pt-br/environment-variables) por chave. | Respeite o `retryAfterMs`. |
 | `-32602` invalid params | Um parâmetro obrigatório foi omitido. `data.missing` os nomeia. | Envie o parâmetro; o schema de cada ferramenta lista os obrigatórios. |
+
+## `check_agent_integrity`
+
+Verifica se o grafo atual de nodes/edges de um agente vai realmente renderizar e executar do jeito que
+parece — sem alterar nada. Exige apenas o escopo `read` e é seguro de chamar em qualquer agente,
+inclusive um que este MCP não criou.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | string (UUID) | Sim | Agente a verificar. Vem do `list_agents`. |
+| `versionId` | string | Não | Verifica um snapshot de versão específico em vez do rascunho atual. |
+
+Retorna:
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `ok` | boolean | `false` quando `flowEntryIssues`, `unrenderableEdges`, `missingInputs`, `unreachableNodes` ou `wrongEdgeTypes` tem pelo menos uma entrada. **Não** depende de `unverifiableEdges`. `ok: true` nunca significa que o fluxo produz a saída correta — ele não enxerga uma chamada de terceiro sem dados que ainda reporta sucesso, nem um campo de dado sem alimentação em um tipo de node que este MCP não criou. |
+| `flowEntryIssues` | array | `{ code, reason }` — não há ponto de entrada de execução utilizável; o fluxo não vai rodar. `code` é `no_global_starter`, `global_starter_id_not_resolvable` ou `global_starter_not_connected`. |
+| `unrenderableEdges` | array | `{ edgeId, source, target, sourceHandle, targetHandle, reason, validSourceHandles?, validTargetHandles? }` — edges cujo handle não existe no node e que por isso não serão desenhadas. |
+| `missingInputs` | array | `{ code, nodeId, nodeType, targetHandle, companionField?, sourceEdgeId, reason }` — dado que está ligado mas nunca vai chegar. `code` é `empty_companion_array` ou `control_classified_data_handle`. |
+| `missingRequiredFields` | array | `{ nodeId, nodeType, field, reason }` — um campo que o schema do tipo de node marca como obrigatório e que está vazio (ausente, `null`, `""` ou `[]`). Apenas reportado: **não** afeta `ok`, porque alguns campos declarados como obrigatórios não são necessários em execução. Nodes decorativos que nunca executam são ignorados. |
+| `unreachableNodes` | array | `{ nodeId, nodeType }` — nodes sem caminho de control/global/condition a partir do global starter. |
+| `wrongEdgeTypes` | array | `{ edgeId, sourceHandle, expectedType, actualType }` — edges control/global que não foram desenhadas como edges de execução. |
+| `unverifiableEdges` | array | `{ edgeId, source, target, sourceHandle, targetHandle, reason }` — edges que o caminho de escrita aceitou porque o tipo de node de destino aceita qualquer handle, então o registro não consegue confirmar nem negar que o handle é válido. Presente só para visibilidade; não afeta `ok`. |
+
+<Warning>
+  **Chame isto também em agentes que você acabou de criar ou editar, não só nos pré-existentes.** Uma
+  escrita pode passar na validação de cada edge individual e ainda assim deixar o agente errado como
+  um todo — por exemplo, uma edge de controle onde era necessária uma edge de dado. `ok: true` só
+  significa que este conjunto específico de verificações não achou nada, não que o fluxo funciona.
+</Warning>
 
 ## O que a resposta diz além do diff
 
@@ -114,7 +153,12 @@ Uma escrita pode ter sucesso e ainda assim não fazer o que você queria. Estes 
 |-------|-------------|
 | `unknownArguments` | Argumentos enviados que a ferramenta não declara. Foram **ignorados**, então ela fez algo diferente do que você pediu. |
 | `invalidEnumValues` | Campo de node com valor fora do enum declarado. A escrita foi aplicada, mas o executor não reconhece o valor e o node não fará nada em execução. |
-| `missingRequiredFields` | No `check_agent_integrity`: campo obrigatório do node deixado vazio. É aviso, não recusa, porque alguns campos declarados como obrigatórios não são necessários em execução. |
+| `unknownFields` | No `update_node`: chaves do seu patch que o schema do tipo de node não declara (e chaves de topo diferentes de `id`, `type`, `data`, `position`, `width`, `height`, `extras`). Foram gravadas mesmo assim, para um erro de digitação não se perder em silêncio, mas nada as lê. |
+| `warnings` | No `add_node` e `update_node`: mensagens de aviso, por exemplo quando o modelo de um node de IA não tem uma capacidade da qual o node depende (como geração de imagem). A escrita foi aplicada. |
+| `conditionRouting` | No `add_node`, `update_node` e `connect_nodes` para um `conditionNode`: quais handles o node pode emitir e quais deles um fluxo criado via MCP consegue de fato alcançar. Leia antes de ligar branches. |
+| `appliedDefaults` | No `add_node` e `update_node` para um `voiceBoxNode`: padrões que o servidor preencheu — um node elevenlabs sem `voiceId` recebe a voz padrão. |
+| `unverifiedVoices` | No `add_node` e `update_node` para um `voiceBoxNode`: um id de voz que o ElevenLabs não conseguiu confirmar nem negar (falha de consulta diferente de "não encontrada"). Foi aceito; confira com o [`list_voices`](/mcp/pt-br/tools/nodes-and-edges#list_voices). |
+| `truncated` | `true` quando um node grande no diff foi reduzido na resposta. |
 | `placementAdjusted` | O servidor moveu seu node para não sobrepor outro. |
 
 ## Relacionados
