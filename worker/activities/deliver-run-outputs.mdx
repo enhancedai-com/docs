@@ -1,0 +1,75 @@
+---
+title: "deliverRunOutputs"
+description: "Sends a finished run's output emails and callbacks with per-channel retries, deduplication and a visible failure"
+---
+
+## Overview
+
+When a flow run ends, the back no longer sends its output emails and callbacks inline. `OutputDeliveryService` builds a **delivery plan** and starts one `deliverRunOutputs` workflow per run, without waiting for it to finish. The worker then sends everything and retries each channel on its own schedule. If a delivery still fails after its retries, the worker reports it back to the back, which records it where the customer can see it.
+
+Two kinds of run use it:
+
+- **Flow runs.** Every output node's email and its callback.
+- **API v2 runs.** The consolidated callback posted to `callback_url` (see [Async flow execution](/main-api/specific-features/async-flow-execution)).
+
+## What gets delivered
+
+The back decides this before the workflow starts (`output-delivery-plan.ts`):
+
+| Run | Output node email | Output node callback |
+|---|---|---|
+| Finished | Sent when email is on | Sent when a callback URL is set |
+| Batch run, or a run of the flow as a sub-flow (Library or flow-caller node) | Not sent | Sent: once per batch row or per sub-run, by design |
+| Cancelled by the user, or stopped by an execution ceiling ([Execution limits](/main-api/specific-features/execution-limits)) | Not sent | Not sent |
+| A node failed; this output node ran | Sent | Sent |
+| A node failed; this output node did not run | Sent only if it carries attachments (its body is empty, because the output text is reset at run start) | Not sent |
+
+A callback is sent whenever a URL is set on the node (`callbackUrl`, or `callbackUrlInputData` when it comes from an edge). There is no separate on/off flag.
+
+## Order
+
+Each output node is handled in parallel with the others. Within a node, the email goes first and the callback second. The node's callback is held back when its email was suppressed as a duplicate, and when a Gmail or Microsoft email failed. The consolidated API v2 callback is sent last, after every node callback.
+
+## Activities and retries
+
+| Activity | Timeout per attempt | Attempts | Backoff |
+|---|---|---|---|
+| `deliverEmailActivity` | 2 min | 3 | 30 s, doubling, capped at 2 min |
+| `deliverCallbackActivity` | 15 s (HTTP timeout 10 s) | 8 | 5 s, doubling, capped at 2 min |
+| `reportDeliveryOutcomeActivity` | 30 s | 5 | 1 s, doubling, capped at 30 s |
+| `deleteDeliveryPlanActivity` | 30 s | 5 | 1 s, doubling, capped at 30 s |
+
+What is retried:
+
+- **Callback.** A network error, a timeout, `5xx`, `408`, `425` or `429` is retried. Any other `4xx`, a value that is not a URL, or an address the egress guard refuses is tried once.
+- **SMTP email.** Connection errors and the SMTP codes `421`, `450`, `451` and `452` are retried. Authentication failures (`530`, `534`, `535`) are not.
+- **Gmail and Microsoft email.** `429` and `5xx` are retried, honouring `Retry-After`. A `401` clears the cached token first. A temporary failure while refreshing the token (the back answers `503`) is retried too. See [Google](/main-api/specific-features/integrations/google) and [Microsoft](/main-api/specific-features/integrations/microsoft) for how each account is connected.
+
+## Callback idempotency
+
+Every callback carries the header `X-FluxPrompt-Delivery-Id`. Its value is the same on every retry of one callback and different for every other callback, so a receiver can drop a repeat.
+
+## No duplicate emails
+
+Emails keep the Redis keys used before the move:
+
+- `email-sent:<flowId>:<nodeId>:<runLogProcessId>`, kept for 24 h.
+- `email-content:<flowId>:<nodeId>:<contentHash>`, kept for 90 s.
+
+An attempt first **claims** the key with its own owner id (`pending:<owner>`, 300 s), then sends, then **confirms**. It **releases** the key if the send fails, so a retry is never mistaken for a duplicate. A claim held by another delivery suppresses the send. When one parent run calls the same sub-flow twice, each call gets its own scope, so both emails go out when their content differs. Two calls that produce the same email within 90 s still share the `email-content` key, so only the first is sent and the second node's callback is held back.
+
+## Large plans
+
+A plan up to 256 KB (`CLAIM_CHECK_THRESHOLD_BYTES`, default `262144`) travels inside the workflow input. A larger one is uploaded to S3 under `delivery-plans/`. The activities read it from there, one read per worker, and the workflow deletes it when it ends.
+
+## Egress guard
+
+Callbacks and attachment downloads go through a minimal egress guard, `EGRESS_POLICY_MODE` (see [environment variables](/worker/environment-variables)):
+
+- `report` (the default) logs `egress_would_refuse` for a private, loopback or metadata address, but still sends.
+- `enforce` refuses such an address and does not retry.
+- `off` disables the guard.
+
+## When a delivery fails for good
+
+`reportDeliveryOutcomeActivity` posts to `POST /worker/delivery-outcome` on the back. The back adds a **Delivery failed** row to the flow's log. The row has an "Error info" button showing the channel, the host and the last status code, but no URL path, recipients or payload. If Temporal cannot be reached when the run ends, the back writes those rows itself. A failed delivery never changes the run's own status: an API v2 run stays `completed`.
