@@ -13,8 +13,12 @@ Uma vez conectado, você pode perguntar ao Claude coisas como:
 
 O Claude chamará as tools do FluxPrompt MCP automaticamente e exibirá os resultados inline.
 
+<Note>
+**OAuth é a forma recomendada de conectar, em todos os ambientes.** O Claude Desktop adiciona o FluxPrompt como um **conector** por uma **URL HTTPS** e faz seu login com OAuth: você entra por uma tela de consentimento do FluxPrompt e nunca manipula um token. Veja [Autenticação](/mcp/pt-br/authentication).
+</Note>
+
 <Warning>
-**O Claude Desktop não aceita tokens colados.** Ele rejeita tokens bearer fornecidos pelo usuário, então o FluxPrompt conecta via **OAuth** — você faz login por uma tela de consentimento do FluxPrompt e nunca manipula um token. Não tente adicionar um header `Authorization` em um arquivo de configuração; não vai funcionar. Veja [Autenticação](/mcp/pt-br/authentication).
+Conectores são adicionados no aplicativo, não em um arquivo de configuração. Não adicione uma `url` do FluxPrompt nem um header `Authorization` ao `claude_desktop_config.json`; esse arquivo não é a forma de o Claude Desktop se conectar a um servidor remoto.
 </Warning>
 
 ## Pré-requisitos
@@ -26,16 +30,16 @@ O Claude chamará as tools do FluxPrompt MCP automaticamente e exibirá os resul
 
 <Steps>
   <Step title="Abra as configurações de conectores">
-    No Claude Desktop, vá em **Settings → Connectors** e clique em **Add custom connector**.
+    No Claude Desktop, vá em **Customize → Connectors** e clique em **Add custom connector**.
   </Step>
   <Step title="Informe a URL do servidor FluxPrompt">
-    Cole a URL do servidor FluxPrompt MCP:
+    Cole a URL HTTPS do servidor FluxPrompt MCP:
 
     ```
     https://mcp.fluxprompt.ai/mcp
     ```
 
-    Dê ao conector um nome reconhecível (ex.: `FluxPrompt`) e confirme.
+    Dê ao conector um nome reconhecível (ex.: `FluxPrompt`). Em autenticação, escolha **Sign in**: **Use Claude's published identity** (recomendado) ou **Register automatically**. Ambos funcionam com o FluxPrompt. Depois confirme.
   </Step>
   <Step title="Faça login e conceda acesso">
     O Claude abre uma tela de login + consentimento do FluxPrompt. Faça login com sua conta FluxPrompt. A tela de consentimento lista suas **Organizations** — todas vêm marcadas, então desmarque as que você não quer liberar — e clique em **Authorize**.
@@ -51,6 +55,10 @@ O Claude chamará as tools do FluxPrompt MCP automaticamente e exibirá os resul
   </Step>
 </Steps>
 
+## Usar um servidor local
+
+O Claude Desktop chama o conector a partir do backend da Anthropic, não da sua máquina, então `http://localhost:3100/mcp` é inacessível. Para testar um `mcp-server` local, exponha-o por um túnel HTTPS público (cloudflared ou ngrok) e adicione `https://<seu-túnel>/mcp` como URL do conector. Veja [Túneis](/mcp/pt-br/connect/local-dev#túneis) e [Testar com o Claude Desktop](/mcp/pt-br/connect/local-dev#passo-3-testar-com-o-claude-desktop-via-túnel). Para um cliente de terminal que alcança o `localhost` diretamente, use o [Claude Code](/mcp/pt-br/connect/claude-code).
+
 ## O que o Claude pode fazer com o FluxPrompt
 
 Após a conexão, o Claude pode chamar o catálogo de tools do FluxPrompt. Quais tools ele consegue usar depende dos escopos da sua autorização; veja [Escopos](/mcp/pt-br/authentication#escopos) e [O que uma autorização OAuth inclui](/mcp/pt-br/authentication#o-que-uma-autorização-oauth-inclui) para saber por quanto tempo ela dura.
@@ -61,6 +69,7 @@ O Claude escolherá a tool correta automaticamente com base na sua pergunta. Voc
 
 Se a conexão não estiver funcionando, consulte a página de [Solução de problemas](/mcp/pt-br/troubleshooting). Os problemas mais comuns são:
 
-- Tentar usar um token colado em vez do fluxo OAuth (o Claude Desktop só suporta OAuth)
+- Tentar usar um token colado ou uma entrada em arquivo de configuração em vez do fluxo **Sign in** (OAuth)
+- Adicionar uma URL `localhost`: o Claude Desktop não a alcança, use um túnel
 - Não concluir a tela de login + consentimento do FluxPrompt
 - Deixar as organizações erradas marcadas durante o consentimento

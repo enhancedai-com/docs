@@ -5,27 +5,31 @@ description: "As duas formas de autenticar no FluxPrompt MCP — OAuth e service
 
 ## Dois métodos de autenticação
 
-O servidor MCP de entrada do FluxPrompt suporta **dois** modos de autenticação. Qual deles você usa depende do seu cliente:
+O servidor MCP de entrada do FluxPrompt suporta **dois** modos de autenticação. Qual deles você usa depende do seu cliente.
+
+<Note>
+**OAuth é o método recomendado para usuários e desenvolvedores em todos os ambientes** (local, dev, staging e produção); ele foi validado de ponta a ponta em todos eles. Mantenha os service tokens estáticos para clientes que só aceitam headers e para clientes máquina-a-máquina, como n8n, CI e scripts.
+</Note>
 
 | Método | Quando usar | O que você faz |
 |---|---|---|
-| **OAuth 2.0** | Claude Desktop e Claude.ai (**obrigatório** — eles rejeitam tokens colados) e, opcionalmente, Claude Code / CLI, Codex e Cursor | Adiciona a URL do servidor como conector e faz login por uma tela de consentimento do FluxPrompt — **sem token** |
-| **Service token estático** | Serviços de backend / máquina-a-máquina, a CLI, Codex, OpenCode, Cursor e n8n — clientes que não podem ou não devem executar um fluxo de consentimento no navegador | Gera um token e o coloca no header `Authorization` |
+| **OAuth 2.0** | **Recomendado para todos:** Claude Desktop e Claude.ai (login do conector), Claude Code / CLI, Codex e Cursor | Adiciona a URL do servidor como conector e faz login por uma tela de consentimento do FluxPrompt — **sem token** |
+| **Service token estático** | Serviços de backend / máquina-a-máquina, scripts, OpenCode, n8n e qualquer cliente que não pode ou não deve executar um fluxo de consentimento no navegador (Claude Code, Codex e Cursor também aceitam uma chave) | Gera um token e o coloca no header `Authorization` |
 
 <Info>
-**Usuários do Claude Desktop e do Claude.ai NÃO usam token.** Esses clientes rejeitam tokens bearer colados pelo usuário, então autenticam exclusivamente via OAuth. Se algum guia mandar você colar um token no Claude Desktop, ele está desatualizado — veja [Conectar Claude Desktop](/mcp/pt-br/connect/claude-desktop).
+**Usuários do Claude Desktop e do Claude.ai não usam token.** Eles adicionam o FluxPrompt como conector por URL HTTPS e escolhem **Sign in** (OAuth). Se algum guia mandar você colar um token ou uma URL no `claude_desktop_config.json`, ele está desatualizado — veja [Conectar Claude Desktop](/mcp/pt-br/connect/claude-desktop). O Claude Code tem seu próprio guia: [Conectar Claude Code](/mcp/pt-br/connect/claude-code).
 </Info>
 
 ## Método 1 — OAuth 2.0
 
 OAuth é a escolha certa para qualquer cliente que consegue abrir um navegador. Você nunca vê nem manipula um token.
 
-1. No seu cliente, adicione `https://mcp.fluxprompt.ai/mcp` como conector personalizado.
+1. No seu cliente, adicione `https://mcp.fluxprompt.ai/mcp` como conector personalizado (ou, no Claude Code, execute `claude mcp add --transport http fluxprompt https://mcp.fluxprompt.ai/mcp` e depois `/mcp` → **Authenticate**).
 2. O cliente abre uma tela de login + consentimento do FluxPrompt.
 3. Você faz login e vê a lista das suas **Organizations**. Todas vêm marcadas; desmarque as que você não quer liberar e clique em **Authorize** (ou **Deny**).
 4. O cliente armazena a autorização resultante automaticamente.
 
-Isso é **obrigatório** para Claude Desktop e Claude.ai, e **suportado** por Claude Code / CLI, Codex e Cursor. Veja os guias por cliente para os passos exatos.
+Este é o método **recomendado** para Claude Desktop, Claude.ai, Claude Code / CLI, Codex e Cursor, em todos os ambientes. O servidor suporta client ID metadata documents (CIMD) e dynamic client registration (DCR) com PKCE `S256`, então os clientes podem se registrar sozinhos. Veja os guias por cliente para os passos exatos.
 
 ### O que uma autorização OAuth inclui
 
@@ -83,7 +87,7 @@ Uma chave carrega um ou mais de três escopos:
 | `write` | Criar e editar agentes, pastas, nodes e edges; criar snapshots e publicar versões. | [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely), [Agentes e pastas](/mcp/pt-br/tools/agents-and-folders), [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges), [Versionamento](/mcp/pt-br/tools/versioning) |
 | `execute` | Executar um agente, acompanhar uma execução, cancelar uma execução. | [Executando agentes](/mcp/pt-br/tools/running-agents) |
 
-Uma tool que os escopos da chave não cobrem é recusada com `-32401 Insufficient scope`; veja [Interruptores no nível do workspace](#interruptores-no-nível-do-workspace) para distinguir isso de uma recusa por interruptor. Nenhum escopo dá acesso a faturamento, usuários ou configurações do workspace — isso nunca é exposto via MCP.
+`list_workspaces` e `list_node_types` não exigem nenhum escopo. `get_node_type` exige `read`. Uma tool que os escopos da chave não cobrem é recusada com `-32401 Insufficient scope`; veja [Interruptores no nível do workspace](#interruptores-no-nível-do-workspace) para distinguir isso de uma recusa por interruptor. Nenhum escopo dá acesso a faturamento, usuários ou configurações do workspace — isso nunca é exposto via MCP.
 
 ### Uma autorização pode cobrir vários workspaces
 
@@ -172,7 +176,7 @@ chave/cliente que disparou aparece no histórico de execuções do agente.
 
 <AccordionGroup>
   <Accordion title="Qual método devo usar?">
-    Se o seu cliente é Claude Desktop ou Claude.ai, você precisa usar OAuth. Para serviços de backend, a CLI ou o n8n, use um service token. Cursor e Claude Code podem usar qualquer um dos dois — OAuth é o mais simples se você consegue abrir um navegador.
+    Use OAuth sempre que o seu cliente puder abrir um navegador — é o método recomendado para usuários e desenvolvedores. Use um service token para serviços de backend, scripts, n8n ou qualquer cliente que só consegue enviar um header.
   </Accordion>
   <Accordion title="Posso ter múltiplos service tokens para o mesmo workspace?">
     Sim — cada token é independente. Você pode ter um token por cliente (ex.: um para n8n, outro para um serviço de backend) e revogá-los individualmente em [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).

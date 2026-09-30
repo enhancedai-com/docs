@@ -3,6 +3,16 @@ title: "Changelog"
 description: "Novidades na integração MCP do FluxPrompt."
 ---
 
+## 2026-09-30 — Guia do Claude Code, Claude Desktop via Connectors, OAuth recomendado
+
+**A documentação de conexão agora corresponde a como os clientes realmente se conectam.**
+
+- **Nova página [Conectar Claude Code](/mcp/pt-br/connect/claude-code).** OAuth primeiro (`claude mcp add --transport http …` e depois `/mcp` → **Authenticate**), a alternativa de chave com `--header`, escopos de configuração e solução de problemas.
+- **O Claude Desktop se conecta por Connectors, não por arquivo de configuração.** Use **Customize → Connectors → Add custom connector** com uma URL HTTPS e **Sign in**. A requisição vem do backend da Anthropic, então um servidor local precisa de um túnel público. As instruções de `claude_desktop_config.json` e `pnpm claude:register` foram removidas de [Desenvolvimento local](/mcp/pt-br/connect/local-dev).
+- **OAuth é o método recomendado para usuários e desenvolvedores em todos os ambientes**, inclusive o local. As chaves estáticas continuam para clientes que só aceitam headers e para clientes máquina-a-máquina.
+- **Novo `pnpm mcp:dev-token`** no `back/` cria uma chave local funcional para clientes com header, substituindo o `create-dev-mcp-token.mjs`, cuja chave era sempre rejeitada.
+- Correções: apenas o `run_agent` é controlado pelo interruptor de execução do workspace; `list_workspaces` e `list_node_types` não exigem escopo; `list_integrations` segue o usuário por trás da chave; `MCP_THIRDPARTY_ALLOWLIST` vazio significa todos os providers do registro de despacho.
+
 ## 2026-09-28 — `list_voices` e nodes de voz funcionando
 
 **Seu cliente de IA agora pode descobrir as vozes que um node de voz aceita, e os nodes de voz têm um padrão funcional.**

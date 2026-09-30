@@ -1,11 +1,11 @@
 ---
 title: "FluxPrompt MCP — Overview"
-description: "Connect Claude Desktop, Codex, OpenCode, Cursor, n8n, and other AI clients directly to your FluxPrompt workspace via the Model Context Protocol."
+description: "Connect Claude Desktop, Claude Code, Codex, OpenCode, Cursor, n8n, and other AI clients directly to your FluxPrompt workspace via the Model Context Protocol."
 ---
 
 ## What is FluxPrompt MCP?
 
-**FluxPrompt MCP** is an inbound [Model Context Protocol](https://modelcontextprotocol.io) server. It lets external AI clients — Claude Desktop, Codex, OpenCode, Cursor, n8n, and others — connect to your FluxPrompt workspace and interact with your agents through natural language.
+**FluxPrompt MCP** is an inbound [Model Context Protocol](https://modelcontextprotocol.io) server. It lets external AI clients — Claude Desktop, Claude Code, Codex, OpenCode, Cursor, n8n, and others — connect to your FluxPrompt workspace and interact with your agents through natural language.
 
 Instead of navigating the FluxPrompt UI, your AI client can ask things like:
 
@@ -15,16 +15,20 @@ Instead of navigating the FluxPrompt UI, your AI client can ask things like:
 
 ## Authentication at a glance
 
-FluxPrompt MCP supports **two** authentication methods, and the right one depends on your client:
+FluxPrompt MCP supports **two** authentication methods, and the right one depends on your client.
 
-- **OAuth 2.0** — you add the server URL as a connector, log in through a FluxPrompt consent screen, and pick one or more workspaces. No token is ever pasted. This is **required** for Claude Desktop and Claude.ai (they reject pasted tokens) and is also supported by Claude Code / CLI, Codex, and Cursor.
+<Note>
+**OAuth is the recommended method for users and developers in every environment** (local, dev, staging and production). Static keys remain for header-only and machine-to-machine clients such as n8n, CI and scripts.
+</Note>
+
+- **OAuth 2.0** — you add the server URL as a connector, log in through a FluxPrompt consent screen, and pick one or more workspaces. No token is ever pasted. This is the **recommended** method everywhere: it is how Claude Desktop and Claude.ai connect (as a connector by HTTPS URL), and Claude Code / CLI, Codex, and Cursor support it too.
 - **Static service token** — any active member of a workspace generates a key (starts with `mcp_`) in [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) and puts it in the `Authorization` header. This is for machine-to-machine clients, the CLI, Codex, OpenCode, Cursor, and n8n — clients that can't or shouldn't run a browser consent flow.
 
 | Client | OAuth | Static service token |
 |--------|-------|----------------------|
-| Claude Desktop | ✅ required | ❌ not supported |
-| Claude.ai | ✅ required | ❌ not supported |
-| Claude Code / CLI | ✅ | ✅ |
+| Claude Desktop | ✅ recommended | not supported |
+| Claude.ai | ✅ recommended | not supported |
+| Claude Code / CLI | ✅ recommended | ✅ supported |
 | Codex CLI | ✅ | ✅ |
 | OpenCode | limited | ✅ recommended |
 | Cursor | ✅ | ✅ |
@@ -108,7 +112,7 @@ Streamable HTTP, JSON-RPC over `POST /mcp`. Transport details are in the [MCP se
 | Term | Meaning |
 |------|---------|
 | **MCP** | Model Context Protocol — an open standard for connecting AI clients to external tools and data. |
-| **OAuth** | A browser-based consent flow where you log in to FluxPrompt and grant a client access to a workspace. No token is pasted. Required for Claude Desktop and Claude.ai. |
+| **OAuth** | A browser-based consent flow where you log in to FluxPrompt and grant a client access to a workspace. No token is pasted. Recommended everywhere; how Claude Desktop and Claude.ai connect. |
 | **Service token** | A secret starting with `mcp_`, tied to one or more workspaces, generated in [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens). Sent in the `Authorization` header. Used by machine-to-machine clients, the CLI, and n8n. Different from your FluxPrompt API key. |
 | **Tool** | A named action the MCP server exposes (e.g. `list_agents`). Your AI client calls tools on your behalf. |
 | **Workspace** | Your company or team context in FluxPrompt. One authorization (OAuth or service token) can cover one workspace or several — see [Authentication](/mcp/authentication#one-authorization-can-cover-multiple-workspaces). |
@@ -131,6 +135,9 @@ This guide assumes the FluxPrompt MCP server is at `https://mcp.fluxprompt.ai/mc
 <CardGroup cols={3}>
   <Card title="Claude Desktop" icon="message-circle" href="/mcp/connect/claude-desktop">
     Add FluxPrompt to Claude Desktop in under 2 minutes.
+  </Card>
+  <Card title="Claude Code" icon="terminal" href="/mcp/connect/claude-code">
+    Use FluxPrompt from the Claude Code CLI with OAuth, against production or localhost.
   </Card>
   <Card title="Codex CLI" icon="terminal" href="/mcp/connect/codex">
     Use FluxPrompt from the Codex terminal assistant, with OAuth or a service token.

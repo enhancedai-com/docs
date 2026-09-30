@@ -1,18 +1,23 @@
 ---
 title: "Desenvolvimento local"
-description: "Rode o FluxPrompt MCP no localhost e teste com MCP Inspector ou Claude Desktop — sem precisar de deploy."
+description: "Rode o FluxPrompt MCP no localhost e teste com MCP Inspector, Claude Desktop ou Claude Code — sem precisar de deploy."
 ---
 
 ## Visão geral
 
 O servidor MCP usa Streamable HTTP, que funciona normalmente no `localhost`. Você não precisa de um transport separado para desenvolvimento local — o mesmo endpoint que vai para staging e produção funciona durante o desenvolvimento.
 
-As duas ferramentas recomendadas são:
+<Note>
+**OAuth é a forma recomendada de autenticar, inclusive para desenvolvedores, em todos os ambientes** (local, dev, staging e produção). Use uma chave MCP apenas para clientes que só conseguem enviar um header (n8n, CI, scripts).
+</Note>
 
-| Ferramenta | Melhor para |
-|------------|-------------|
-| **MCP Inspector** | Explorar tools, inspecionar JSON-RPC bruto, iteração rápida |
-| **Claude Desktop** | Teste end-to-end exatamente como um usuário real experimenta (OAuth) |
+As ferramentas recomendadas são:
+
+| Ferramenta | Alcança o `localhost`? | Melhor para |
+|------------|------------------------|-------------|
+| **MCP Inspector** | Sim (roda na sua máquina) | Explorar tools, inspecionar JSON-RPC bruto, iteração rápida |
+| **Claude Code (CLI)** | Sim (roda na sua máquina) | Testar como desenvolvedor com OAuth, sem túnel |
+| **Claude Desktop** | Não, precisa de um túnel HTTPS público | Teste end-to-end exatamente como um usuário real experimenta (OAuth) |
 
 ## Pré-requisitos
 
@@ -106,18 +111,25 @@ Os endpoints de saúde são `/healthz` e `/readyz` (não existe `/health`).
 
 ### Obter uma credencial de cliente
 
-O `mcp-server` local resolve todo token de cliente através do `back/`, então use um destes dois caminhos suportados:
+O `mcp-server` local resolve todo token de cliente através do `back/`, então use um destes caminhos suportados:
 
 <Steps>
-  <Step title="Gere uma chave MCP no front local">
+  <Step title="Use OAuth (recomendado)">
+    Clientes com suporte a OAuth (Claude Desktop, Claude Code, fluxo OAuth do MCP Inspector) não precisam de chave. Defina os valores do [OAuth local](#oauth-local) e deixe o cliente executar a tela de consentimento. O servidor local suporta client ID metadata documents (CIMD), dynamic client registration (DCR) e PKCE `S256`.
+  </Step>
+  <Step title="Ou gere uma chave MCP no front local">
     Abra `http://localhost:3000`, vá em **Settings → MCP Keys** (ou abra `http://localhost:3000/dashboard-beta?settings=mcpTokens`) e clique em **Generate key**. Copie a chave que começa com `mcp_` e use como `Authorization: Bearer <chave>`.
   </Step>
-  <Step title="Ou use OAuth">
-    Clientes com suporte a OAuth (Claude Desktop, Claude Code, fluxo OAuth do MCP Inspector) não precisam de chave. Defina os valores do [OAuth local](#oauth-local) e deixe o cliente executar a tela de consentimento.
+  <Step title="Ou crie uma chave pela linha de comando">
+    Para clientes que só aceitam header, a partir do `back/` (depois de `pnpm build`, porque o comando executa a saída compilada):
+
+    ```bash
+    pnpm mcp:dev-token --email <email do seu usuário> [--workspace <id>] [--scopes read,write,execute] [--name <nome>]
+    ```
+
+    Ele cria a chave pelo próprio serviço de tokens da aplicação, então a verificação de membro, a redução pelo papel, o vínculo com o workspace e a auditoria se aplicam. O workspace padrão é a sua primeira associação como admin. Ele imprime uma chave `mcp_…` aleatória **uma única vez** — copie-a nesse momento.
   </Step>
 </Steps>
-
-Não use `back/scripts/create-dev-mcp-token.mjs`: o token dele é rejeitado.
 
 <Note>
 As chaves são criadas no banco que o seu `back/` local usa, então a chave só funciona com um `mcp-server` local apontando para esse mesmo `back/`.
@@ -173,58 +185,52 @@ As chaves são criadas no banco que o seu `back/` local usa, então a chave só 
   </Tab>
 </Tabs>
 
-## Passo 3 — Testar com o Claude Desktop
+## Passo 3 — Testar com o Claude Desktop (via túnel)
 
-O Claude Desktop é somente OAuth: ele não envia headers personalizados, então não há token para colocar na configuração dele nem bloco `headers` para adicionar. Defina os valores do [OAuth local](#oauth-local) no Passo 1 e confirme que o front está rodando; depois registre o servidor. Clientes que aceitam headers (Claude Code, Cursor, o Inspector, `curl`) podem usar uma chave MCP no lugar. Veja também [Autenticação](/mcp/pt-br/authentication).
-
-### Opção A — Registrar com um comando
-
-A partir do diretório `mcp-server/` (o servidor já precisa estar rodando):
-
-```bash
-pnpm claude:register
-```
-
-Este script lê `PORT` do `.env` (usado apenas quando você não passa `--url`) e escreve a entrada
-`fluxprompt-mcp` — `{ "url": "<destino>" }` — no `claude_desktop_config.json`. É idempotente — rodar de novo com a
-mesma URL mostra o estado atual e sai sem alterações.
-
-Depois de rodar, **reinicie completamente o Claude Desktop**. A entrada `fluxprompt-mcp` aparece no painel de tools (ícone de martelo), e o Claude Desktop inicia o fluxo OAuth no primeiro uso.
-
-### Opção B — Editar o arquivo de configuração manualmente
+O Claude Desktop adiciona servidores MCP remotos como **conectores**, por uma **URL HTTPS**, e a requisição é feita a partir do backend da Anthropic, não da sua máquina. O `localhost` é, portanto, inacessível: você precisa de um túnel HTTPS público. Não há arquivo de configuração local para editar neste caso.
 
 <Steps>
-  <Step title="Abra o arquivo de configuração do Claude Desktop">
-    | SO | Caminho |
-    |----|---------|
-    | **macOS** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-    | **Windows** | `%APPDATA%\Claude\claude_desktop_config.json` |
-    | **Linux** | `~/.config/Claude/claude_desktop_config.json` |
-
-    Crie o arquivo se ele não existir.
+  <Step title="Inicie um túnel">
+    Exponha a porta `3100` com cloudflared ou ngrok e alinhe os três valores de URL, como descrito em [Túneis](#túneis). Reinicie o front e o `mcp-server` depois.
   </Step>
-  <Step title="Adicione a entrada do servidor local">
-    ```json
-    {
-      "mcpServers": {
-        "fluxprompt-local": {
-          "url": "http://localhost:3100/mcp"
-        }
-      }
-    }
-    ```
-
-    <Warning>
-    Se o arquivo já tiver uma chave `mcpServers`, adicione `"fluxprompt-local": { ... }` dentro dela — não crie um segundo bloco `mcpServers`.
-    </Warning>
+  <Step title="Adicione um conector personalizado">
+    No Claude Desktop, vá em **Customize → Connectors → Add custom connector** e informe `https://<seu-túnel>/mcp`.
   </Step>
-  <Step title="Reinicie o Claude Desktop">
-    Feche completamente o Claude Desktop e reabra. A entrada **fluxprompt-local** aparece no painel de tools (ícone de martelo).
+  <Step title="Faça login com OAuth">
+    Em autenticação, escolha **Sign in** e depois **Use Claude's published identity** (recomendado) ou **Register automatically**. Conclua a tela de consentimento do FluxPrompt servida pelo seu front local.
   </Step>
   <Step title="Peça ao Claude para usar uma tool">
     Tente: *"Liste meus agentes do FluxPrompt"* ou *"Quais tipos de node estão disponíveis no FluxPrompt?"*
   </Step>
 </Steps>
+
+<Warning>
+Não adicione uma `url` do FluxPrompt nem um header ao `claude_desktop_config.json`. O Claude Desktop não se conecta a servidores remotos por esse arquivo.
+</Warning>
+
+## Passo 4 — Testar com o Claude Code (CLI)
+
+O Claude Code roda na sua máquina, então alcança o `localhost` diretamente e não precisa de túnel. Veja [Conectar Claude Code](/mcp/pt-br/connect/claude-code) para o guia completo.
+
+<Steps>
+  <Step title="Adicione o servidor local">
+    ```bash
+    claude mcp add --transport http fluxprompt http://localhost:3100/mcp
+    ```
+  </Step>
+  <Step title="Autentique com OAuth">
+    Dentro do Claude Code execute `/mcp`, selecione **fluxprompt**, escolha **Authenticate** e conclua a tela de consentimento no navegador. O Claude Code recebe o resultado por um redirecionamento loopback para uma porta efêmera.
+  </Step>
+</Steps>
+
+Para usar uma chave no lugar (alternativa por header), passe-a com `--header`:
+
+```bash
+claude mcp add --transport http fluxprompt http://localhost:3100/mcp \
+  --header "Authorization: Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+Mantenha a chave fora do `--scope project`, que escreve um `.mcp.json` compartilhado.
 
 ## OAuth local
 
@@ -239,13 +245,13 @@ O `back/` também precisa de `MCP_SERVER_INTERNAL_URL` e `MCP_RESOURCE_METADATA_
 
 ## Túneis
 
-Claude Desktop, Claude.ai e qualquer cliente remoto não alcançam o `localhost`. Exponha o servidor por um túnel — tanto o **ngrok** quanto o **cloudflared** (quick tunnels `trycloudflare.com`) funcionam.
+Claude Desktop, Claude.ai e qualquer cliente remoto não alcançam o `localhost`, porque as requisições vêm dos servidores do fornecedor. Claude Code e o Inspector rodam na sua máquina e não precisam de túnel. Exponha o servidor por um túnel — tanto o **ngrok** quanto o **cloudflared** (quick tunnels `trycloudflare.com`) funcionam.
 
 Quick tunnels recebem uma **URL nova a cada vez que você os inicia**. Quando a URL pública muda, atualize três valores juntos:
 
 | Valor | Onde | Formato |
 |-------|------|---------|
-| URL na config do cliente | ex.: a entrada `fluxprompt-mcp-local` em `~/.claude.json` | Origem **mais** `/mcp` |
+| URL no cliente | A URL do conector do Claude Desktop, ou ex.: a entrada `fluxprompt-mcp-local` em `~/.claude.json` | Origem **mais** `/mcp` |
 | `VITE_MCP_SERVER_URL` | `front/.env` (em tempo de build) | Origem **mais** `/mcp` |
 | `MCP_PUBLIC_URL` | `mcp-server/.env` | Origem pura, **sem** `/mcp` |
 
@@ -288,7 +294,7 @@ Os três precisam passar antes de qualquer commit.
     - `missing_token` — não há header `Authorization: Bearer ...`.
     - `invalid_token` — o token não é aceito: é desconhecido, foi revogado, expirou ou não tem vínculo ativo com um workspace. Localmente, `MCP_INTERNAL_SECRET` também não é um token de cliente.
 
-    Gere uma nova chave em **MCP Keys** no front local (veja [Obter uma credencial de cliente](#obter-uma-credencial-de-cliente)). Para os motivos genéricos de 401, veja [Solução de problemas](/mcp/pt-br/troubleshooting).
+    Gere uma nova chave em **MCP Keys** no front local ou com `pnpm mcp:dev-token` (veja [Obter uma credencial de cliente](#obter-uma-credencial-de-cliente)), ou use OAuth no lugar. Para os motivos genéricos de 401, veja [Solução de problemas](/mcp/pt-br/troubleshooting).
   </Accordion>
   <Accordion title='Erro "Service disabled" (-32005)'>
     `MCP_KILL_SWITCH=on` está definido no seu `.env`. Mude para `off` e reinicie.

@@ -1,0 +1,101 @@
+---
+title: "Conectar Claude Code"
+description: "Adicione o FluxPrompt à CLI do Claude Code com OAuth (recomendado) ou uma chave MCP, em produção ou em um servidor local."
+---
+
+## O que isso habilita
+
+Uma vez conectado, o Claude Code pode ler e, com os escopos certos, criar e executar seus agentes FluxPrompt pelo terminal:
+
+- *"Quais agentes tenho no FluxPrompt?"*
+- *"Adicione um node de IA ao meu agente Lead Scorer e conecte-o"*
+
+<Note>
+**OAuth é a forma recomendada de conectar, para usuários e desenvolvedores, em todos os ambientes** (local, dev, staging e produção). Você faz login pela tela de consentimento do FluxPrompt e nunca manipula uma chave. Use uma chave MCP apenas quando o cliente não puder abrir um navegador ou quando você precisar de um header fixo. Veja [Autenticação](/mcp/pt-br/authentication).
+</Note>
+
+## Pré-requisitos
+
+- Claude Code instalado ([guia de instalação](https://code.claude.com/docs/en/quickstart))
+- Uma conta FluxPrompt com acesso a pelo menos um workspace
+
+## Conectar com OAuth (recomendado)
+
+<Steps>
+  <Step title="Adicione o servidor">
+    O Claude Code roda na sua máquina, então alcança a produção ou o `localhost`:
+
+    <CodeGroup>
+    ```bash Produção
+    claude mcp add --transport http fluxprompt https://mcp.fluxprompt.ai/mcp
+    ```
+
+    ```bash Local
+    claude mcp add --transport http fluxprompt http://localhost:3100/mcp
+    ```
+    </CodeGroup>
+
+    Para dev ou staging, use a URL do MCP daquele ambiente.
+  </Step>
+  <Step title="Autentique">
+    Inicie o Claude Code e execute `/mcp`. Selecione o servidor **fluxprompt** e escolha **Authenticate**. O navegador abre a tela de login e consentimento do FluxPrompt.
+  </Step>
+  <Step title="Conceda acesso">
+    Faça login e revise suas **Organizations**. Todas vêm marcadas, então desmarque as que você não quer liberar e clique em **Authorize**. O Claude Code recebe o resultado por um redirecionamento loopback para uma porta local temporária, então nenhum token é exibido para você.
+  </Step>
+  <Step title="Verifique a conexão">
+    Peça ao Claude Code para listar seus agentes FluxPrompt. O `claude mcp list` deve mostrar o servidor como conectado.
+  </Step>
+</Steps>
+
+Para o servidor local, você também precisa da stack local rodando e configurada para OAuth; veja [Desenvolvimento local](/mcp/pt-br/connect/local-dev).
+
+## Conectar com uma chave MCP (alternativa)
+
+Use uma chave para scripts e outras configurações sem interface. Gere uma em [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) (veja [Gerar um service token](/mcp/pt-br/authentication#gerar-um-service-token)) e passe-a como header:
+
+```bash
+claude mcp add --transport http fluxprompt https://mcp.fluxprompt.ai/mcp \
+  --header "Authorization: Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+<Warning>
+Uma chave é um segredo. Nunca a coloque em um `.mcp.json` de escopo de projeto, que é versionado e compartilhado.
+</Warning>
+
+## Escolha onde a configuração fica
+
+| `--scope` | Armazenado em | Quem enxerga |
+|-----------|---------------|--------------|
+| `local` (padrão) | `~/.claude.json`, para o projeto atual | Só você, neste projeto |
+| `project` | `.mcp.json` no repositório | Todos que usam o repositório. Use apenas com OAuth, nunca com uma chave |
+| `user` | `~/.claude.json`, para todos os projetos | Só você, em todos os projetos |
+
+## Gerenciar o servidor
+
+```bash
+claude mcp list
+claude mcp get fluxprompt
+claude mcp remove fluxprompt
+```
+
+## Tools e escopos
+
+Quais tools o Claude Code consegue chamar depende dos escopos da sua autorização; veja [Escopos](/mcp/pt-br/authentication#escopos). As tools de escrita e execução também exigem os [interruptores do workspace](/mcp/pt-br/authentication#interruptores-no-nível-do-workspace) correspondentes.
+
+## Solução de problemas
+
+<AccordionGroup>
+  <Accordion title="401 ou o servidor aparece como precisando de autenticação">
+    A autorização OAuth não existe ou foi revogada. Execute `/mcp`, selecione **fluxprompt** e escolha **Authenticate** de novo. Se você usa uma chave, confira se ela começa com `mcp_`, não foi revogada e é enviada como `Bearer <chave>`.
+  </Accordion>
+  <Accordion title="Um escopo recém-concedido ainda é recusado">
+    O servidor MCP mantém as chaves resolvidas em cache por cerca de 10 segundos (`MCP_TOKEN_CACHE_TTL`). Tente de novo depois disso ou reconecte.
+  </Accordion>
+  <Accordion title="Um novo tipo de node não aparece na lista">
+    O catálogo de tipos de node fica em cache por 10 minutos (`MCP_NODE_TYPES_TTL_MS`). Espere o cache expirar ou reinicie o servidor MCP ao trabalhar localmente.
+  </Accordion>
+  <Accordion title="O servidor local está inacessível ou o OAuth falha">
+    Confira se o `mcp-server` e o `back/` estão rodando, e os valores de [OAuth local](/mcp/pt-br/connect/local-dev#oauth-local). Mais causas estão em [Solução de problemas](/mcp/pt-br/troubleshooting).
+  </Accordion>
+</AccordionGroup>

@@ -13,8 +13,12 @@ Once connected, you can ask Claude things like:
 
 Claude will call the FluxPrompt MCP tools automatically and show you the results inline.
 
+<Note>
+**OAuth is the recommended way to connect, in every environment.** Claude Desktop adds FluxPrompt as a **connector** by an **HTTPS URL** and signs you in with OAuth: you log in through a FluxPrompt consent screen and never handle a token. See [Authentication](/mcp/authentication).
+</Note>
+
 <Warning>
-**Claude Desktop does not accept pasted tokens.** It rejects user-supplied bearer tokens, so FluxPrompt connects via **OAuth** instead — you log in through a FluxPrompt consent screen and never handle a token. Do not try to add an `Authorization` header in a config file; it will not work. See [Authentication](/mcp/authentication).
+Connectors are added in the app, not in a config file. Do not add a FluxPrompt `url` or an `Authorization` header to `claude_desktop_config.json`; that file is not how Claude Desktop connects to a remote server.
 </Warning>
 
 ## Prerequisites
@@ -26,16 +30,16 @@ Claude will call the FluxPrompt MCP tools automatically and show you the results
 
 <Steps>
   <Step title="Open the connector settings">
-    In Claude Desktop, go to **Settings → Connectors** and click **Add custom connector**.
+    In Claude Desktop, go to **Customize → Connectors** and click **Add custom connector**.
   </Step>
   <Step title="Enter the FluxPrompt server URL">
-    Paste the FluxPrompt MCP server URL:
+    Paste the FluxPrompt MCP server HTTPS URL:
 
     ```
     https://mcp.fluxprompt.ai/mcp
     ```
 
-    Give the connector a recognizable name (e.g. `FluxPrompt`) and confirm.
+    Give the connector a recognizable name (e.g. `FluxPrompt`). Under authentication, choose **Sign in**: either **Use Claude's published identity** (recommended) or **Register automatically**. Both work with FluxPrompt. Then confirm.
   </Step>
   <Step title="Log in and grant access">
     Claude opens a FluxPrompt login + consent screen. Log in with your FluxPrompt account. The consent screen lists your **Organizations** — all are checked, so uncheck any you don't want to grant — then click **Authorize**.
@@ -51,6 +55,10 @@ Claude will call the FluxPrompt MCP tools automatically and show you the results
   </Step>
 </Steps>
 
+## Use a local server
+
+Claude Desktop calls the connector from Anthropic's backend, not from your machine, so `http://localhost:3100/mcp` is unreachable. To test a local `mcp-server`, expose it through a public HTTPS tunnel (cloudflared or ngrok) and add `https://<your-tunnel>/mcp` as the connector URL. See [Tunnels](/mcp/connect/local-dev#tunnels) and [Test with Claude Desktop](/mcp/connect/local-dev#step-3-test-with-claude-desktop-via-a-tunnel). For a terminal client that reaches `localhost` directly, use [Claude Code](/mcp/connect/claude-code).
+
 ## What Claude can do with FluxPrompt
 
 After connecting, Claude can call the FluxPrompt tool catalog. Which tools it can use depends on the scopes of your authorization; see [Scopes](/mcp/authentication#scopes), and [What an OAuth grant includes](/mcp/authentication#what-an-oauth-grant-includes) for how long it lasts.
@@ -61,6 +69,7 @@ Claude will choose the right tool automatically based on your question. You can 
 
 If the connection isn't working, see the [Troubleshooting](/mcp/troubleshooting) page. The most common issues are:
 
-- Trying to use a pasted token instead of the OAuth flow (Claude Desktop only supports OAuth)
+- Trying to use a pasted token or a config-file entry instead of the **Sign in** (OAuth) flow
+- Adding a `localhost` URL: Claude Desktop cannot reach it, use a tunnel
 - Not completing the FluxPrompt login + consent screen
 - Leaving the wrong organizations checked during consent
