@@ -20,7 +20,7 @@ The back decides this before the workflow starts (`output-delivery-plan.ts`):
 |---|---|---|
 | Finished | Sent when email is on | Sent when a callback URL is set |
 | Batch run, or a run of the flow as a sub-flow (Library or flow-caller node) | Not sent | Sent: once per batch row or per sub-run, by design |
-| Cancelled by the user, or stopped by an execution ceiling | Not sent | Not sent |
+| Cancelled by the user, or stopped by an execution ceiling ([Execution limits](/main-api/specific-features/execution-limits)) | Not sent | Not sent |
 | A node failed; this output node ran | Sent | Sent |
 | A node failed; this output node did not run | Sent only if it carries attachments (its body is empty, because the output text is reset at run start) | Not sent |
 
@@ -43,7 +43,7 @@ What is retried:
 
 - **Callback.** A network error, a timeout, `5xx`, `408`, `425` or `429` is retried. Any other `4xx`, a value that is not a URL, or an address the egress guard refuses is tried once.
 - **SMTP email.** Connection errors and the SMTP codes `421`, `450`, `451` and `452` are retried. Authentication failures (`530`, `534`, `535`) are not.
-- **Gmail and Microsoft email.** `429` and `5xx` are retried, honouring `Retry-After`. A `401` clears the cached token first. A temporary failure while refreshing the token (the back answers `503`) is retried too.
+- **Gmail and Microsoft email.** `429` and `5xx` are retried, honouring `Retry-After`. A `401` clears the cached token first. A temporary failure while refreshing the token (the back answers `503`) is retried too. See [Google](/main-api/specific-features/integrations/google) and [Microsoft](/main-api/specific-features/integrations/microsoft) for how each account is connected.
 
 ## Callback idempotency
 
