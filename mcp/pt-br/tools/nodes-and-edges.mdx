@@ -230,9 +230,10 @@ Cada item traz `id` (o valor que o `integrationId` recebe), `name`, `provider`, 
 conexão é referenciada apenas pelo id.
 
 A lista são as conexões **próprias** do usuário mais as que um membro ativo do workspace compartilhou
-com a organização. Nada além disso aparece, e uma chave que não foi concedida via OAuth não tem
-usuário por trás e portanto não tem conexão alcançável: a chamada é recusada, não ampliada para o
-workspace inteiro.
+com a organização. Nada além disso aparece. O usuário é quem está por trás da chave: a pessoa que
+concedeu a autorização OAuth ou o membro que criou a chave de serviço. A chamada é recusada, em vez
+de ampliada para o workspace inteiro, apenas quando esse usuário não é mais membro ativo do workspace
+(ou quando a chave não tem nenhum usuário por trás).
 
 <Warning>
   Escrever um `integrationId` que não está nessa lista é recusado por `add_node` e `update_node`.

@@ -229,9 +229,10 @@ Each item carries `id` (the value `integrationId` takes), `name`, `provider`, `o
 connection is referenced only by its id.
 
 The list is the user's **own** connections plus those an active member of the workspace shared with
-the organisation. Nothing else appears, and a key that was not granted through OAuth has no user
-behind it and therefore no reachable connections: the call is refused rather than widened to the
-whole workspace.
+the organisation. Nothing else appears. The user is the one behind the key: the person who granted
+the OAuth authorization, or the member who created the service key. The call is refused, rather than
+widened to the whole workspace, only when that user is no longer an active member of the workspace
+(or the key has no user behind it at all).
 
 <Warning>
   Writing an `integrationId` that is not in this list is refused by `add_node` and `update_node`.

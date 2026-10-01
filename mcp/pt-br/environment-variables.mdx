@@ -10,12 +10,12 @@ title: "Variáveis de Ambiente"
 | NODE_ENV | Opcional | ambiente Node (passthrough, não é lida no código) |
 | MCP_HTTP_LOG | Opcional | log verboso de requisições HTTP para os caminhos `/oauth`, `/mcp` e `/.well-known`. Só é ativado pelo valor exato `on`; qualquer outro valor, inclusive `true` ou `1`, mantém desligado |
 | MCP_PUBLIC_URL | Opcional | origem pública do servidor, sem `/mcp` (issuer e metadata OAuth, e o header `WWW-Authenticate`). Padrão `http://localhost:3100` |
-| MCP_FRONT_CONSENT_URL | Opcional | página de consentimento do front, ex.: `http://localhost:3000/mcp-authorize.html` localmente; defina explicitamente |
+| MCP_FRONT_CONSENT_URL | Opcional | página de consentimento do front, padrão do código `http://localhost:3000/mcp-authorize.html` (o front local); defina explicitamente em todos os outros ambientes |
 | MCP_OAUTH_CONSENT_SECRET | Obrigatória | valida a assinatura do consentimento — precisa bater com o valor no `back` |
 | MCP_OAUTH_TOKEN_TTL | Opcional | Tempo de vida do access token em segundos. Vazio ou `0` (padrão) emite tokens que não expiram, porque ainda não existe o grant de refresh |
 | MCP_DCR_CLIENT_TTL | Opcional | TTL de clientes via Dynamic Client Registration, em segundos (padrão 90 dias, `7776000`) |
 | MCP_TOKEN_CACHE_TTL | Opcional | TTL do cache do resolver de tokens, em segundos (default 10). Limita por quanto tempo uma chave revogada ainda pode ser aceita na borda, então mantenha bem abaixo do SLA de revogação de 30s. |
-| BACK_BASE_URL | Opcional | URL base do `back` (padrão do código `http://localhost:3000`). Use `host.docker.internal` a partir do Docker |
+| BACK_BASE_URL | Opcional | URL base do `back` (padrão do código `http://localhost:3001`). Use `host.docker.internal` a partir do Docker |
 | MCP_INTERNAL_SECRET | Obrigatória | segredo pra chamar o `back` — precisa bater com o valor no `back` |
 | MCP_BACK_RETRY_MAX | Opcional | máximo de tentativas nas chamadas ao `back` (padrão 3) |
 | MCP_BACK_RETRY_BASE_MS | Opcional | base do backoff (ms) entre retries (padrão 200) |

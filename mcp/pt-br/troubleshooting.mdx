@@ -5,11 +5,11 @@ description: "Problemas comuns de conexão e como resolvê-los."
 
 ## Lista de verificação de conexão
 
-Antes de investigar erros específicos, verifique estas cinco coisas:
+Antes de investigar erros específicos, verifique estas seis coisas:
 
 <Steps>
   <Step title="O método de autenticação combina com o cliente">
-    Claude Desktop e Claude.ai usam **somente OAuth** — sem token. Se você está tentando colar um token neles, esse é o problema; adicione o FluxPrompt como conector personalizado. Os passos abaixo valem para clientes que usam service token (Cursor, n8n, CLI, serviços de backend).
+    OAuth é o método recomendado. Claude Desktop e Claude.ai se conectam por um conector personalizado com **Sign in** (sem token). Se você está tentando colar um token ou uma entrada de arquivo de configuração neles, esse é o problema. Os passos abaixo valem para clientes que usam service token (n8n, scripts, serviços de backend, ou Claude Code / Cursor quando você escolheu uma chave).
   </Step>
   <Step title="Formato do token (clientes com service token)">
     Seu service token deve começar com `mcp_` e não conter espaços. Se você o copiou de [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens), verifique se há espaços em branco no final.
@@ -28,7 +28,7 @@ Antes de investigar erros específicos, verifique estas cinco coisas:
     Para o Claude Desktop: feche completamente (bandeja do sistema → Sair) e reabra — fechar a janela não é suficiente.
   </Step>
   <Step title="Sintaxe JSON">
-    Os arquivos de configuração (claude_desktop_config.json, cursor/mcp.json) devem ser JSON válido. Use [jsonlint.com](https://jsonlint.com) para validar se você editou manualmente.
+    Os arquivos de configuração (`~/.claude.json`, `cursor/mcp.json`) devem ser JSON válido. Use [jsonlint.com](https://jsonlint.com) para validar se você editou manualmente.
   </Step>
 </Steps>
 
@@ -110,7 +110,7 @@ Builds anteriores devolviam um `500 Internal server error` seco aqui, indistingu
 
 **Solução:**
 1. Use `list_agents` para obter IDs válidos do seu workspace.
-2. Confirme que você está usando o token de workspace correto (se tiver tokens para múltiplos workspaces).
+2. Confirme que você está consultando o workspace certo. Uma chave pode cobrir vários workspaces, então chame `list_workspaces` para vê-los e passe o `workspaceId` daquele que contém o agente.
 
 ---
 
@@ -215,7 +215,7 @@ Ambos incluem `retryAfterMs`:
 
 **Solução:**
 1. Feche completamente o Claude Desktop (clique com o botão direito na bandeja do sistema → Sair no Windows, ou Dock → Sair no macOS).
-2. Valide seu `claude_desktop_config.json` em [jsonlint.com](https://jsonlint.com).
+2. Valide o arquivo de configuração do seu cliente (por exemplo `~/.claude.json` ou `cursor/mcp.json`) em [jsonlint.com](https://jsonlint.com).
 3. Reabra o Claude Desktop e inicie uma nova conversa.
 
 ---

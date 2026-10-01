@@ -261,6 +261,7 @@
                     "group": "Connect your AI client",
                     "pages": [
                       "mcp/connect/claude-desktop",
+                      "mcp/connect/claude-code",
                       "mcp/connect/codex",
                       "mcp/connect/cursor",
                       "mcp/connect/n8n",
@@ -551,6 +552,7 @@
                     "group": "Conectar seu cliente de IA",
                     "pages": [
                       "mcp/pt-br/connect/claude-desktop",
+                      "mcp/pt-br/connect/claude-code",
                       "mcp/pt-br/connect/codex",
                       "mcp/pt-br/connect/cursor",
                       "mcp/pt-br/connect/n8n",

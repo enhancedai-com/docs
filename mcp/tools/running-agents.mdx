@@ -6,8 +6,9 @@ description: "Dispatch a run, poll it for the result, and cancel one that is sti
 ## Description
 
 Running is asynchronous: `run_agent` returns a `runId` immediately and you poll `get_run_status` for
-the outcome. These tools need the `execute` scope, and the workspace's execute switch must be on —
-see [writing safely](/mcp/tools/writing-safely#permissions).
+the outcome. All of these tools need the `execute` scope. Only `run_agent` is also gated by the
+workspace's execute switch, which must be on — see [writing safely](/mcp/tools/writing-safely#permissions).
+The other run tools (`get_run_status`, `get_run_nodes`, `get_node_output`, `cancel_run`) need the scope alone.
 
 ## `run_agent`
 

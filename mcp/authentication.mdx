@@ -5,27 +5,31 @@ description: "The two ways to authenticate with FluxPrompt MCP — OAuth and ser
 
 ## Two authentication methods
 
-FluxPrompt's inbound MCP server supports **two** ways to authenticate. Which one you use depends on your client:
+FluxPrompt's inbound MCP server supports **two** ways to authenticate. Which one you use depends on your client.
+
+<Note>
+**OAuth is the recommended method for users and developers in every environment** (local, dev, staging and production); it was validated end to end in all of them. Keep static service tokens for header-only and machine-to-machine clients such as n8n, CI and scripts.
+</Note>
 
 | Method | When to use it | What you do |
 |---|---|---|
-| **OAuth 2.0** | Claude Desktop and Claude.ai (**required** — they reject pasted tokens), and optionally Claude Code / CLI, Codex, and Cursor | Add the server URL as a connector and log in through a FluxPrompt consent screen — **no token** |
-| **Static service token** | Backend / machine-to-machine services, the CLI, Codex, OpenCode, Cursor, and n8n — clients that can't or shouldn't run a browser consent flow | Generate a token and put it in the `Authorization` header |
+| **OAuth 2.0** | **Recommended for everyone:** Claude Desktop and Claude.ai (connector sign-in), Claude Code / CLI, Codex, and Cursor | Add the server URL as a connector and log in through a FluxPrompt consent screen — **no token** |
+| **Static service token** | Backend / machine-to-machine services, scripts, OpenCode, n8n, and any client that can't or shouldn't run a browser consent flow (Claude Code, Codex and Cursor also accept a key) | Generate a token and put it in the `Authorization` header |
 
 <Info>
-**Claude Desktop and Claude.ai users do NOT use a token.** Those clients reject user-pasted bearer tokens, so they authenticate exclusively via OAuth. If a guide tells you to paste a token into Claude Desktop, it is out of date — see [Connect Claude Desktop](/mcp/connect/claude-desktop).
+**Claude Desktop and Claude.ai users do not use a token.** They add FluxPrompt as a connector by HTTPS URL and choose **Sign in** (OAuth). If a guide tells you to paste a token or a URL into `claude_desktop_config.json`, it is out of date — see [Connect Claude Desktop](/mcp/connect/claude-desktop). Claude Code has its own guide: [Connect Claude Code](/mcp/connect/claude-code).
 </Info>
 
 ## Method 1 — OAuth 2.0
 
 OAuth is the right choice for any client that can open a browser. You never see or handle a token.
 
-1. In your client, add `https://mcp.fluxprompt.ai/mcp` as a custom connector.
+1. In your client, add `https://mcp.fluxprompt.ai/mcp` as a custom connector (or, in Claude Code, run `claude mcp add --transport http fluxprompt https://mcp.fluxprompt.ai/mcp` and then `/mcp` → **Authenticate**).
 2. The client opens a FluxPrompt login + consent screen.
 3. You log in and see the list of your **Organizations**. All of them are checked; uncheck the ones you don't want to grant, then click **Authorize** (or **Deny**).
 4. The client stores the resulting authorization automatically.
 
-This is **required** for Claude Desktop and Claude.ai, and **supported** by Claude Code / CLI, Codex, and Cursor. See the per-client guides for the exact steps.
+This is the **recommended** method for Claude Desktop, Claude.ai, Claude Code / CLI, Codex, and Cursor, in every environment. The server supports client ID metadata documents (CIMD) and dynamic client registration (DCR) with PKCE `S256`, so clients can register themselves. See the per-client guides for the exact steps.
 
 ### What an OAuth grant includes
 
@@ -83,7 +87,7 @@ A key carries one or more of three scopes:
 | `write` | Create and edit agents, folders, nodes and edges; snapshot and publish versions. | [Writing safely](/mcp/tools/writing-safely), [Agents & folders](/mcp/tools/agents-and-folders), [Nodes & edges](/mcp/tools/nodes-and-edges), [Versioning](/mcp/tools/versioning) |
 | `execute` | Run an agent, poll a run, cancel a run. | [Running agents](/mcp/tools/running-agents) |
 
-A tool the key's scopes do not cover is refused with `-32401 Insufficient scope`; see [Workspace-level switches](#workspace-level-switches) to tell that apart from a switch refusal. No scope grants access to billing, users, or workspace settings — those are never exposed over MCP.
+`list_workspaces` and `list_node_types` need no scope at all. `get_node_type` needs `read`. A tool the key's scopes do not cover is refused with `-32401 Insufficient scope`; see [Workspace-level switches](#workspace-level-switches) to tell that apart from a switch refusal. No scope grants access to billing, users, or workspace settings — those are never exposed over MCP.
 
 ### One authorization can cover multiple workspaces
 
@@ -171,7 +175,7 @@ the triggering key/client name appears in the agent's execution history.
 
 <AccordionGroup>
   <Accordion title="Which method should I use?">
-    If your client is Claude Desktop or Claude.ai, you must use OAuth. For backend services, the CLI, or n8n, use a service token. Cursor and Claude Code can use either — OAuth is simplest if you can open a browser.
+    Use OAuth whenever your client can open a browser — it is the recommended method for users and developers alike. Use a service token for backend services, scripts, n8n, or any client that can only send a header.
   </Accordion>
   <Accordion title="Can I have multiple service tokens for the same workspace?">
     Yes — each token is independent. You can have one token per client (e.g. one for n8n, one for a backend service) and revoke them individually from [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).

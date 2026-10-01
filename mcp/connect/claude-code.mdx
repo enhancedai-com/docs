@@ -1,0 +1,101 @@
+---
+title: "Connect Claude Code"
+description: "Add FluxPrompt to the Claude Code CLI with OAuth (recommended) or an MCP key, against production or a local server."
+---
+
+## What this enables
+
+Once connected, Claude Code can read and, with the right scopes, build and run your FluxPrompt agents from the terminal:
+
+- *"What agents do I have in FluxPrompt?"*
+- *"Add an AI node to my Lead Scorer agent and connect it"*
+
+<Note>
+**OAuth is the recommended way to connect, for users and developers, in every environment** (local, dev, staging and production). You log in through the FluxPrompt consent screen and never handle a key. Use an MCP key only when a client cannot open a browser, or when you need a fixed header. See [Authentication](/mcp/authentication).
+</Note>
+
+## Prerequisites
+
+- Claude Code installed ([install guide](https://code.claude.com/docs/en/quickstart))
+- A FluxPrompt account with access to at least one workspace
+
+## Connect with OAuth (recommended)
+
+<Steps>
+  <Step title="Add the server">
+    Claude Code runs on your machine, so it can reach production or `localhost`:
+
+    <CodeGroup>
+    ```bash Production
+    claude mcp add --transport http fluxprompt https://mcp.fluxprompt.ai/mcp
+    ```
+
+    ```bash Local
+    claude mcp add --transport http fluxprompt http://localhost:3100/mcp
+    ```
+    </CodeGroup>
+
+    For dev or staging, use that environment's MCP URL instead.
+  </Step>
+  <Step title="Authenticate">
+    Start Claude Code and run `/mcp`. Select the **fluxprompt** server and choose **Authenticate**. Your browser opens the FluxPrompt login and consent screen.
+  </Step>
+  <Step title="Grant access">
+    Log in and review your **Organizations**. All are checked, so uncheck any you don't want to grant, then click **Authorize**. Claude Code receives the result on a loopback redirect to a temporary local port, so no token is shown to you.
+  </Step>
+  <Step title="Verify the connection">
+    Ask Claude Code to list your FluxPrompt agents. `claude mcp list` should show the server as connected.
+  </Step>
+</Steps>
+
+For the local server you also need the local stack running and configured for OAuth; see [Local development](/mcp/connect/local-dev).
+
+## Connect with an MCP key (alternative)
+
+Use a key for scripts and other headless setups. Generate one under [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) (see [Generate a service token](/mcp/authentication#generate-a-service-token)), then pass it as a header:
+
+```bash
+claude mcp add --transport http fluxprompt https://mcp.fluxprompt.ai/mcp \
+  --header "Authorization: Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+<Warning>
+A key is a secret. Never put it in a project-scoped `.mcp.json`, which is committed and shared.
+</Warning>
+
+## Choose where the config is stored
+
+| `--scope` | Stored in | Who sees it |
+|-----------|-----------|-------------|
+| `local` (default) | `~/.claude.json`, for the current project | Only you, in this project |
+| `project` | `.mcp.json` in the repository | Everyone who uses the repository. Use it only with OAuth, never with a key |
+| `user` | `~/.claude.json`, for all projects | Only you, in every project |
+
+## Manage the server
+
+```bash
+claude mcp list
+claude mcp get fluxprompt
+claude mcp remove fluxprompt
+```
+
+## Tools and scopes
+
+Which tools Claude Code can call depends on the scopes of your authorization; see [Scopes](/mcp/authentication#scopes). Write and run tools also need the matching [workspace switches](/mcp/authentication#workspace-level-switches).
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="401 or the server shows as needing authentication">
+    The OAuth authorization is missing or was revoked. Run `/mcp`, select **fluxprompt** and choose **Authenticate** again. If you use a key, check that it starts with `mcp_`, is not revoked and is sent as `Bearer <key>`.
+  </Accordion>
+  <Accordion title="A newly granted scope is still refused">
+    The MCP server caches resolved keys for about 10 seconds (`MCP_TOKEN_CACHE_TTL`). Retry after that, or reconnect.
+  </Accordion>
+  <Accordion title="A new node type is not listed">
+    The node-type catalog is cached for 10 minutes (`MCP_NODE_TYPES_TTL_MS`). Wait for the cache to expire or restart the MCP server when working locally.
+  </Accordion>
+  <Accordion title="The local server is unreachable or OAuth fails">
+    Check that `mcp-server` and `back/` are running, and the [Local OAuth](/mcp/connect/local-dev#local-oauth) values. More causes are in [Troubleshooting](/mcp/troubleshooting).
+  </Accordion>
+</AccordionGroup>
