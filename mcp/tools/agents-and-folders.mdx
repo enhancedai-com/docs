@@ -72,23 +72,30 @@ the parent folder, and the call is refused if you are not a member of that space
 
 ## `create_agent`
 
-Creates an agent (flow) inside a folder.
+Creates an agent (flow) inside a folder. Every agent is created with exactly one `globalStarter`
+node — its execution entry point — the same way the builder creates it.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `name` | string | Yes | Agent name. |
 | `folderId` | string (UUID) | Yes | Destination folder — from `create_folder` or `list_folders`. |
-| `empty` | boolean | No | `true` starts with a blank canvas. Otherwise a starter template is applied. |
+| `empty` | boolean | No | `true` starts with only the `globalStarter` node. Otherwise a starter template is applied. |
 | `type` | string | No | `"agent"` (default) or `"chat"`. |
 | `dryRun` / `idempotencyKey` | | | See [writing safely](/mcp/tools/writing-safely). |
 
 ```json
-{ "dryRun": false, "applied": true, "agent": { "id": "d2c2…", "name": "Lead Scorer" } }
+{
+  "dryRun": false,
+  "applied": true,
+  "agent": { "id": "d2c2…", "name": "Lead Scorer", "globalStarterId": "flow-global-starter_0.41" }
+}
 ```
 
 <Tip>
   Pass `empty: true` whenever you intend to build the flow yourself with `add_node`. Without it you
-  inherit the starter template and end up with duplicate nodes alongside the ones you add.
+  inherit the starter template and end up with duplicate nodes alongside the ones you add. Either way,
+  connect from `agent.globalStarterId` — do not add a `globalStarter` yourself: an agent never has
+  more than one, so a second is refused.
 </Tip>
 
 ## `list_folders`

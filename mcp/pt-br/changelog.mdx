@@ -3,6 +3,15 @@ title: "Changelog"
 description: "Novidades na integração MCP do FluxPrompt."
 ---
 
+## 2026-10-02 — Todo agente mantém exatamente um global node
+
+**Um agente criado pelo MCP sempre tem um `globalStarter`, como no builder.**
+
+- **`create_agent` com `empty: true` cria o agente com o seu `globalStarter`**, em vez de sem nodes. O resultado devolve o id dele em `agent.globalStarterId`; conecte a partir dele.
+- **`add_node` recusa um segundo `globalStarter`** com `duplicate_global_starter`, que agora nomeia o existente.
+- **`remove_node` nunca remove um `globalStarter`** (`global_starter_not_removable`), e **`update_node` não muda o tipo dele** (`global_starter_not_retypable`).
+- O prompt `build_flow` conecta a partir do `globalStarterId` em vez de adicionar o seu próprio `globalStarter`.
+
 ## 2026-09-30 — Guia do Claude Code, Claude Desktop via Connectors, OAuth recomendado
 
 **A documentação de conexão agora corresponde a como os clientes realmente se conectam.**

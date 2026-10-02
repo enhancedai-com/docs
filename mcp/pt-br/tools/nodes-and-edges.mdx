@@ -334,6 +334,12 @@ funciona no `patch` do [`update_node`](#update_node).
   então qualquer outro id é rejeitado com `validation_error` de saída.
 </Warning>
 
+<Note>
+  Um agente tem **exatamente um** `globalStarter`, e o `create_agent` já o cria. Adicionar um segundo é
+  recusado com `duplicate_global_starter`, que nomeia o node existente de onde conectar. Só um agente
+  que não tem nenhum pode receber um.
+</Note>
+
 ## `update_node`
 
 Mescla um patch em um node existente.
@@ -348,6 +354,7 @@ Mescla um patch em um node existente.
 - `patch.data` é mesclado **um nível de profundidade**, então chaves de data omitidas são preservadas,
   não apagadas.
 - Envie o mínimo: para mudar um campo, envie só aquele campo.
+- O `type` de um `globalStarter` não pode ser alterado (`global_starter_not_retypable`); edite o `data` dele.
 
 Diferente do `add_node`, o `update_node` **respeita exatamente a posição enviada** — sem resolução
 anti-sobreposição. Isso é deliberado: permite que um cliente organize o fluxo de forma determinística,
@@ -355,7 +362,9 @@ node por node, sem o servidor questionar um movimento intencional.
 
 ## `remove_node`
 
-Remove um node **e todas as edges que o tocam**.
+Remove um node **e todas as edges que o tocam**. Um `globalStarter` nunca é removido
+(`global_starter_not_removable`): todo agente mantém exatamente um, como no builder. Para mudar onde a
+execução começa, mova a edge dele com `disconnect_nodes` e `connect_nodes`.
 
 | Parâmetro | Tipo | Obrigatório |
 |-----------|------|-------------|
