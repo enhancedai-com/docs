@@ -9,7 +9,7 @@ Bull's job retention removes it. The delivery dedup keys (`email-sent:`, `email-
 `pop3-processed:`) survive memory pressure, which is the point of the policy. The trade-off is that
 a key written **without** a TTL stays in memory until something deletes it.
 
-`GET /redis-monitor/ttl-audit` answers two questions without scripts or shell access to the
+`GET /internal/redis-monitor/ttl-audit` answers two questions without scripts or shell access to the
 cluster:
 
 1. Which eviction policy is the instance actually running?
@@ -19,7 +19,7 @@ cluster:
 
 ```bash
 curl -H "Authorization: Bearer <master-user-jwt>" \
-  https://<api-host>/redis-monitor/ttl-audit
+  https://<api-host>/internal/redis-monitor/ttl-audit
 ```
 
 The route sits behind `JwtAuthGuard` and `MasterUserGuard`, like every other `redis-monitor`
