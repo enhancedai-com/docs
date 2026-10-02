@@ -67,7 +67,7 @@ endpoint. A non-master JWT gets a 403.
 | `evictedKeys` | `evicted_keys` from `INFO stats`. Under `noeviction` it should stay at 0 |
 | `keyspaceKeys` / `keyspaceKeysWithTtl` | Totals from `INFO keyspace`. The difference is the number of keys without a TTL |
 | `families` | Keys grouped by shape. Segments that look like identifiers (UUIDs, numbers, long hex, e-mail Message-IDs, anything with three or more digits) become `<id>`. The list is sorted by `withoutTtl`, then by `bytes` |
-| `familiesWithoutTtlOutsideBull` | **The result to read.** It should be empty |
+| `familiesWithoutTtlOutsideBull` | **The result to read.** It should be empty. When `truncated` is `true` it covers only the scanned keys, so an empty list does not prove the keyspace is clean |
 
 <Note>
   The endpoint never returns a key's value, only family names and counts. It is safe to run against
@@ -91,12 +91,12 @@ A full scan touches every key, so the endpoint protects the shared instance on i
 | Guard | Behaviour |
 |---|---|
 | Global cooldown | One audit per 60 seconds **across all users**. A second call inside the window, from anyone, gets `429 Too Many Requests` with the same body as the run-entry rate limits. The cooldown key is `redis-ttl-audit:cooldown` and it holds the id of the user who ran the last audit |
-| Scan ceiling | The scan stops at 200,000 keys and sets `truncated: true` |
+| Scan ceiling | The scan stops at 200,000 keys and sets `truncated: true`. The families then describe only the keys scanned |
 | Pacing | Keys are scanned in batches of 500 with a 10 ms pause between batches, so the scan never holds the server for long |
 | Audit trail | Every call logs `Redis Monitor: TTL audit requested` with the calling user |
 
 The cooldown is enforced in Redis rather than per process, so it holds across every API replica.
-It fails closed: if Redis cannot accept the cooldown write, no audit runs.
+It fails closed: if Redis cannot accept the cooldown write, no audit runs. If the audit itself fails after claiming the cooldown, the cooldown is released, so the next call can retry at once instead of waiting 60 seconds behind a 429.
 
 ## Without the endpoint
 
