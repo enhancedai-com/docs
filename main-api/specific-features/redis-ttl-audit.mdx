@@ -1,0 +1,111 @@
+---
+title: "Redis TTL audit"
+description: "A master-only endpoint that reports the Redis eviction policy in effect and every key family, with how many of its keys have no TTL. Use it to confirm that nothing outside Bull can grow without a bound under maxmemory-policy noeviction."
+---
+
+Every environment's Redis runs `maxmemory-policy = noeviction` (task E5). Under that policy Redis
+never throws a key away to make room. Memory is reclaimed only when a key's TTL expires or when
+Bull's job retention removes it. The delivery dedup keys (`email-sent:`, `email-content:`,
+`pop3-processed:`) survive memory pressure, which is the point of the policy. The trade-off is that
+a key written **without** a TTL stays in memory until something deletes it.
+
+`GET /redis-monitor/ttl-audit` answers two questions without scripts or shell access to the
+cluster:
+
+1. Which eviction policy is the instance actually running?
+2. Is any key outside Bull living without a TTL?
+
+## Calling it
+
+```bash
+curl -H "Authorization: Bearer <master-user-jwt>" \
+  https://<api-host>/redis-monitor/ttl-audit
+```
+
+The route sits behind `JwtAuthGuard` and `MasterUserGuard`, like every other `redis-monitor`
+endpoint. A non-master JWT gets a 403.
+
+## What it returns
+
+```json
+{
+  "maxmemoryPolicy": "noeviction",
+  "usedMemoryBytes": 35512304,
+  "maxmemoryBytes": 2470000000,
+  "evictedKeys": 0,
+  "keyspaceKeys": 68,
+  "keyspaceKeysWithTtl": 18,
+  "scannedKeys": 68,
+  "truncated": false,
+  "families": [
+    {
+      "family": "bull:api-v2:<id>",
+      "type": "hash",
+      "isBull": true,
+      "count": 3,
+      "withoutTtl": 3,
+      "bytes": 49447,
+      "maxTtlSeconds": 0
+    },
+    {
+      "family": "email-sent:<id>:<id>:<id>",
+      "type": "string",
+      "isBull": false,
+      "count": 1,
+      "withoutTtl": 0,
+      "bytes": 176,
+      "maxTtlSeconds": 7341
+    }
+  ],
+  "familiesWithoutTtlOutsideBull": []
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `maxmemoryPolicy` | Read from `INFO memory`, so it is the policy the server is running, not the one the console intends. ElastiCache blocks `CONFIG GET`, which is why the endpoint reads `INFO` |
+| `evictedKeys` | `evicted_keys` from `INFO stats`. Under `noeviction` it should stay at 0 |
+| `keyspaceKeys` / `keyspaceKeysWithTtl` | Totals from `INFO keyspace`. The difference is the number of keys without a TTL |
+| `families` | Keys grouped by shape. Segments that look like identifiers (UUIDs, numbers, long hex, e-mail Message-IDs, anything with three or more digits) become `<id>`. The list is sorted by `withoutTtl`, then by `bytes` |
+| `familiesWithoutTtlOutsideBull` | **The result to read.** It should be empty |
+
+<Note>
+  The endpoint never returns a key's value, only family names and counts. It is safe to run against
+  production.
+</Note>
+
+## Reading the result
+
+- **Bull keys without a TTL are expected.** Bull's queue structures and job hashes carry no TTL by
+  design. Their size is bounded by each queue's `removeOnComplete` and `removeOnFail` settings.
+- **Anything in `familiesWithoutTtlOutsideBull` is a finding.** Find the code that writes that
+  prefix and give the write a TTL (`SET … EX`, or `EXPIRE`/`PEXPIRE` right after it). Under
+  `noeviction`, such a key never leaves memory on its own.
+- **A policy other than `noeviction`** means the parameter group is not in effect on that cluster.
+  Check `ParameterApplyStatus` on its nodes.
+
+## Abuse protection
+
+A full scan touches every key, so the endpoint protects the shared instance on its own terms:
+
+| Guard | Behaviour |
+|---|---|
+| Global cooldown | One audit per 60 seconds **across all users**. A second call inside the window, from anyone, gets `429 Too Many Requests` with the same body as the run-entry rate limits. The cooldown key is `redis-ttl-audit:cooldown` and it holds the id of the user who ran the last audit |
+| Scan ceiling | The scan stops at 200,000 keys and sets `truncated: true` |
+| Pacing | Keys are scanned in batches of 500 with a 10 ms pause between batches, so the scan never holds the server for long |
+| Audit trail | Every call logs `Redis Monitor: TTL audit requested` with the calling user |
+
+The cooldown is enforced in Redis rather than per process, so it holds across every API replica.
+It fails closed: if Redis cannot accept the cooldown write, no audit runs.
+
+## Without the endpoint
+
+CloudWatch publishes `CurrItems` and `CurrVolatileItems` for every ElastiCache node.
+`CurrItems − CurrVolatileItems` is the count of keys without a TTL over time. It shows whether the
+count is growing, but not which family is responsible.
+
+## Source
+
+- `back/src/internal/services/redis_ttl_audit.service.ts`: the scan, the family grouping and the cooldown
+- `back/src/internal/controllers/redis_monitor.controller.ts`: the route
+- `back/src/shared/responses/redis-ttl-audit-response.dto.ts`: the response shape
