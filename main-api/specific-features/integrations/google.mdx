@@ -66,7 +66,7 @@ A separate server-side capability (`back/src/app-api/google_ocr/`) runs Google D
 
 ### Gmail send
 
-The email/output node sends through the user's Gmail when `useFromPersonalGmail` is set on the node. `flux.service` calls `MailService.sendGmailEmail`, which refreshes the user's `googleRefreshToken` into an access token, sends through `gmail('v1')` `users.messages.send` using the `gmail.send` scope, and supports HTML bodies and URL attachments (downloaded and base64-encoded into a multipart message).
+The email/output node sends through the user's Gmail when `useFromPersonalGmail` is set on the node. At the end of a flow run, the worker's `deliverRunOutputs` workflow sends it with retries (see [Output delivery](/worker/activities/deliver-run-outputs)). The node's **Send** button calls `MailService.sendGmailEmail`, which refreshes the user's `googleRefreshToken` into an access token, sends through `gmail('v1')` `users.messages.send` using the `gmail.send` scope, and supports HTML bodies and URL attachments (downloaded and base64-encoded into a multipart message). Both paths address the message to **every** recipient in the list, as SMTP and Microsoft do. Surrounding spaces are trimmed, and empty entries and entries containing a line break are dropped. If no valid recipient is left, nothing is sent and the send fails with "No valid recipients".
 
 ## Prerequisites and credentials
 
@@ -211,7 +211,7 @@ Uploads one or more files to Drive by URL.
 
 ### Send email from Gmail
 
-Gmail send is not part of the Push Data node. It lives on the email/output node. When that node's `useFromPersonalGmail` toggle is on, the flow sends the email through your connected Google account using the `gmail.send` scope, instead of the default FluxPrompt mail transport or Microsoft. The message supports an HTML body (the node template, unless `useTemplate` is `false`) and URL attachments, which are downloaded and attached as a multipart message.
+Gmail send is not part of the Push Data node. It lives on the email/output node. When that node's `useFromPersonalGmail` toggle is on, the flow sends the email through your connected Google account using the `gmail.send` scope, instead of the default FluxPrompt mail transport or Microsoft. The message goes to every address in the recipient list. It supports an HTML body (the node template, unless `useTemplate` is `false`) and URL attachments, which are downloaded and attached as a multipart message.
 
 <Note>
 Gmail send requires a connected Google account with a stored refresh token. If the toggle is off, the email is sent through the default transport, not your Gmail.

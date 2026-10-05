@@ -75,6 +75,7 @@ error, carrying the ceiling message.
 | `mcp_run_status` | `error`, `errorMessage` = the ceiling message |
 | `flow_execution_status` | `markError`, not `markCompleted` |
 | API / webhook callback | `success: false`, `error` = the ceiling message |
+| Output node email and callback | Not sent. A run stopped by a ceiling delivers none of its output nodes ([Output delivery](/worker/activities/deliver-run-outputs)) |
 | Socket event `run-budget-limit` | `{ processId, flowId, ceiling, limit, status, message, nodeId, nodeLabel }` |
 | CloudWatch | `flux.budget.<ceiling>` with `status` and `reason` |
 

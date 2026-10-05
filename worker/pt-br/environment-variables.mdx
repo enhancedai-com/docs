@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-42 env vars no `worker/.env.example`. O schema Zod do `src/env.ts` valida essas mais 18 outras vars que não estão no `.env.example` (várias Obrigatórias) — os dois conjuntos estão na tabela abaixo, 60 linhas no total. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+49 env vars no `worker/.env.example`. O schema Zod do `src/env.ts` valida essas mais 18 outras vars que não estão no `.env.example` (várias Obrigatórias) — os dois conjuntos estão na tabela abaixo, 67 linhas no total. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 | Var | Obrigatória? | Propósito |
 |---|---|---|
@@ -67,8 +67,15 @@ title: "Variáveis de Ambiente"
 | VOYAGE_API_KEY | Opcional | cliente de embeddings Voyage AI (`embeddings.ts`) |
 | RABBITMQ_URL | Opcional | connection string do RabbitMQ para eventos de ingestão do vector DB (`rabbitmq-emit.ts`) — obrigatória em conjunto com `RABBITMQ_QUEUE_VECTOR_DB`, lança erro se só uma das duas estiver definida |
 | RABBITMQ_QUEUE_VECTOR_DB | Opcional | nome da fila RabbitMQ para eventos de ingestão do vector DB, mesmo par de `RABBITMQ_URL` |
+| EMAIL_SERVICE | Opcional | `service` do nodemailer para a activity de entrega SMTP (emails do output node) — mesmo valor do `back` |
+| EMAIL_HOST | Opcional | host SMTP dos emails do output node — mesmo valor do `back`; sem ele e sem `EMAIL_SERVICE`, a entrega SMTP falha sem retry |
+| EMAIL_PORT | Opcional | porta SMTP — mesmo valor do `back` |
+| EMAIL_USER | Opcional | usuário SMTP — mesmo valor do `back` |
+| EMAIL_PASSWORD | Opcional | senha SMTP — mesmo valor do `back` |
+| EMAIL_FROM_ADDRESS | Opcional | remetente dos emails do output node enviados por SMTP — mesmo valor do `back` |
+| EGRESS_POLICY_MODE | Opcional | guarda de egress da entrega de saída (`egress-policy.ts`): `off`, `report` ou `enforce` (padrão `report` — loga `egress_would_refuse`, não bloqueia nada) |
 
-Todas as 60 vars estão em uso ativo, exceto `AWS_REGION` e `PINECONE_ENV`, que são validadas pelo schema Zod mas nunca lidas em nenhum lugar do código da aplicação (veja as linhas acima). `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES`, `MCP_MAX_RESULT_BYTES`, `LOG_PROVIDER_OPTIONS`, `FAL_KEY`, `STABILITY_AI_API_KEY` e `IDEOGRAM_API_KEY` são lidas direto via `process.env`, fora do schema Zod — sem type-safety aí, mas é esperado já que todas são opcionais com fallback.
+Todas as 67 vars estão em uso ativo, exceto `AWS_REGION` e `PINECONE_ENV`, que são validadas pelo schema Zod mas nunca lidas em nenhum lugar do código da aplicação (veja as linhas acima). `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES`, `MCP_MAX_RESULT_BYTES`, `LOG_PROVIDER_OPTIONS`, `FAL_KEY`, `STABILITY_AI_API_KEY` e `IDEOGRAM_API_KEY` são lidas direto via `process.env`, fora do schema Zod — sem type-safety aí, mas é esperado já que todas são opcionais com fallback.
 
 ## Pegadinha cross-repo
 
@@ -90,6 +97,8 @@ Revisões anteriores desta página diziam que o worker **nunca** pode receber o 
 </Warning>
 
 O parâmetro SSM existir não é a mesma coisa que a task definition do worker referenciá-lo. Staging e prod foram encontrados (durante o rollout do P6 HubSpot, `868ke6jb7`) rodando revisões que nunca declararam esse secret, mesmo já rodando Stripe/WordPress. `.specs/features/worker-thirdparty-integration-migration/p6-hubspot/verify-worker-hubspot-secrets.sh` valida (e corrige) isso por ambiente — rode antes de qualquer deploy que toque um adapter migrado.
+
+`EMAIL_*` no worker precisam ser **as mesmas configurações de SMTP do `back`** — os emails do output node saíram do `back` para a activity de entrega do worker (A9, `868m0vmux`), e o remetente que o cliente vê não pode mudar. `REDIS_HOST`/`REDIS_PORT` precisam apontar para **o mesmo Redis do `back`**: as chaves de dedup de email (`email-sent:*`, `email-content:*`) são compartilhadas, e uma chave gravada pelo código antigo do back (`'1'`) continua valendo como enviado.
 
 ## CI/CD
 
