@@ -332,6 +332,12 @@ description in [`get_node_type`](#get_node_type) before relying on it. The same 
   substring, so any other id is rejected with `validation_error` up front.
 </Warning>
 
+<Note>
+  An agent has **exactly one** `globalStarter`, and `create_agent` already creates it. Adding a second
+  one is refused with `duplicate_global_starter`, which names the existing node to connect from. Only
+  an agent that has none can receive one.
+</Note>
+
 ## `update_node`
 
 Merges a patch into an existing node.
@@ -345,6 +351,7 @@ Merges a patch into an existing node.
 - Top-level fields (`type`, `position`, …) are **shallow-merged**.
 - `patch.data` is merged **one level deep**, so data keys you omit are preserved, not deleted.
 - Send the minimum: to change one field, send only that field.
+- A `globalStarter`'s `type` cannot be changed (`global_starter_not_retypable`); edit its `data` instead.
 
 Unlike `add_node`, `update_node` **honours the position you send exactly** — no anti-overlap
 resolution. That is deliberate: it lets a client lay out a flow deterministically, one node at a
@@ -352,7 +359,9 @@ time, without the server second-guessing an intentional move.
 
 ## `remove_node`
 
-Removes a node **and every edge touching it**.
+Removes a node **and every edge touching it**. A `globalStarter` is never removed
+(`global_starter_not_removable`): every agent keeps exactly one, as in the builder. To change where a
+run starts, move its edge with `disconnect_nodes` and `connect_nodes`.
 
 | Parameter | Type | Required |
 |-----------|------|----------|

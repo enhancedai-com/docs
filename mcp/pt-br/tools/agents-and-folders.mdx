@@ -72,23 +72,30 @@ derivado da pasta-pai, e a chamada é recusada se você não for membro desse sp
 
 ## `create_agent`
 
-Cria um agente (fluxo) dentro de uma pasta.
+Cria um agente (fluxo) dentro de uma pasta. Todo agente é criado com exatamente um node
+`globalStarter` — o ponto de entrada da execução — do mesmo jeito que o builder cria.
 
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |-----------|------|-------------|-----------|
 | `name` | string | Sim | Nome do agente. |
 | `folderId` | string (UUID) | Sim | Pasta de destino — do `create_folder` ou `list_folders`. |
-| `empty` | boolean | Não | `true` começa com canvas em branco. Caso contrário, aplica um template inicial. |
+| `empty` | boolean | Não | `true` começa só com o node `globalStarter`. Caso contrário, aplica um template inicial. |
 | `type` | string | Não | `"agent"` (padrão) ou `"chat"`. |
 | `dryRun` / `idempotencyKey` | | | Veja [escrevendo com segurança](/mcp/pt-br/tools/writing-safely). |
 
 ```json
-{ "dryRun": false, "applied": true, "agent": { "id": "d2c2…", "name": "Lead Scorer" } }
+{
+  "dryRun": false,
+  "applied": true,
+  "agent": { "id": "d2c2…", "name": "Lead Scorer", "globalStarterId": "flow-global-starter_0.41" }
+}
 ```
 
 <Tip>
   Passe `empty: true` sempre que for construir o fluxo você mesmo com `add_node`. Sem isso você herda
-  o template inicial e acaba com nodes duplicados junto dos que você adicionou.
+  o template inicial e acaba com nodes duplicados junto dos que você adicionou. Nos dois casos,
+  conecte a partir de `agent.globalStarterId` — não adicione um `globalStarter` você mesmo: um agente
+  nunca tem mais de um, então um segundo é recusado.
 </Tip>
 
 ## `list_folders`

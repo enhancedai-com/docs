@@ -26,8 +26,8 @@ attachable context; other clients may expose them differently or not at all.
 | `run_agent_recipe` | `agentId` | Validate a run with dry-run, dispatch it, poll `get_run_status` until it finishes, then verify with `get_run_nodes` and `get_node_output` that every expected node ran. |
 
 These encode the ordering that is easy to get wrong: fetching a node's real schema **before** writing
-it, creating both edges when chaining nodes, and passing `empty: true` so a new agent does not arrive
-with starter-template nodes.
+it, creating both edges when chaining nodes, and passing `empty: true` so a new agent arrives with only
+its `globalStarter`, which the recipe connects from instead of adding its own.
 
 For how `run_agent_recipe` reads results and credits, see [Running agents](/mcp/tools/running-agents).
 
