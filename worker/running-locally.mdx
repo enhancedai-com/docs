@@ -1,0 +1,78 @@
+---
+title: Running and debugging locally
+description: Bring the local stack up, find a run in Temporal, read node_executions, read worker logs.
+state: production
+state_verified: 2026-10-07
+state_verified_against: worker@develop 5fe389f, back@master 9609806b
+---
+
+## Stack overview
+
+The local stack is defined in `docker/devdb/docker-compose.devdb.yaml` and brings up the following services:
+
+- **back** — the NestJS API.
+- **worker** — the Temporal worker process.
+- **temporal** — the Temporal server (auto-setup image).
+- **temporal-ui** — the Temporal Web UI, exposed on host port `8080`.
+- **temporal_db** — PostgreSQL used by the Temporal server itself.
+- **app_db** — PostgreSQL for the application data (contains `node_executions`).
+- **redis** — Redis for queue and signals.
+- **tunnel** — an SSH tunnel container used to reach the dev database; not required for a fully local-only run.
+
+## Starting the stack
+
+1. From the workspace root:
+
+   ```bash
+   docker compose -f docker/devdb/docker-compose.devdb.yaml up -d
+   ```
+
+2. Verify the containers are running:
+
+   ```bash
+   docker ps --filter 'label=com.docker.compose.project=enhanced-devdb'
+   ```
+
+3. The front dev server runs separately. In a second terminal:
+
+   ```bash
+   cd apps/Flux-Prompt-Frontend && pnpm dev
+   ```
+
+## Finding a run in Temporal UI
+
+Open the local Temporal UI at `http://localhost:8080/` (served by the `temporal-ui` container). Workflows are named after the workflow function — `processSingleNode`, `processAgent`, etc. — and you can search by `workflowId`, which looks like `exec-<execId>` or `node-<execId>-<nodeId>` depending on the workflow. Clicking a workflow opens its event timeline; each activity and its retries are visible there.
+
+## Reading `node_executions`
+
+Connect to the local `app_db` database (host `localhost`, port `5434`, user `postgres`) and run:
+
+```sql
+SELECT "execId", "nodeId", "type", "isError", "input", "outputData", "output", "createdAt"
+FROM node_executions
+WHERE "execId" = '<execId>'
+ORDER BY "createdAt";
+```
+
+How to read a row:
+
+- `isError = false` and `outputData` populated — the activity finished successfully and the next node can read from it.
+- `isError = false` and `outputData` null/empty — the activity returned, but no payload was written. See [When a node silently did nothing](#when-a-node-silently-did-nothing) below.
+- `isError = true` — the activity threw; see the [Error taxonomy](/worker/error-taxonomy) page for which subclass.
+- `cancelledAt` is set — the run was cancelled from the API before the activity completed.
+
+The entity is defined in `back/src/entities/node_execution.entity.ts`. Note that the table name is snake_case (`node_executions`) but the columns are camelCase and must be quoted in SQL — the TypeORM naming strategy on this project does not translate property names.
+
+## Reading worker logs
+
+Worker logs are printed to the `worker` container's stdout. Follow them with `docker logs -f fluxprompt-worker-local` (the container name set in the compose file). To isolate a single run, pipe through grep by `execId`: `docker logs fluxprompt-worker-local 2>&1 | grep '<execId>'`. The log setup lives in `worker/src/main.ts`.
+
+## When a node silently did nothing
+
+If the row has `isError = false` but `outputData` is empty (or missing a field you expected), check in this order:
+
+1. Did the workflow have a `case` for your type? Open `worker/src/modules/temporal/workflows/process-single-node.workflow.ts` and search for `NodeType.<YOUR_TYPE>`.
+2. Did the activity run? Look at the Temporal event timeline for `<node>Activity` — if it is missing, step 5 of [How to add a node type](/worker/how-to-add-a-node-type) was skipped (binding or proxy).
+3. Did `persistNodeSuccess` write? Look at the worker log for a `persistNodeSuccess` line with the matching `(execId, nodeId)`.
+
+The silent no-op is almost always a missing binding in `worker.service.ts` or a missing proxy entry in `workflows/configs.ts` — the two layers it is easiest to forget.

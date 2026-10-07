@@ -1,0 +1,38 @@
+---
+title: Persistence contract
+description: Own-row writes only — the rule that lets parallelism be safe.
+state: production
+state_verified: 2026-10-07
+state_verified_against: worker@develop 5fe389f, back@master 9609806b
+---
+
+## The rule
+
+An activity writes only to the `node_executions` row keyed by its own `(execId, nodeId)`.
+
+## Why the rule exists
+
+Parallel siblings in a flow run at the same time, so the only way they do not race on the database is for each one to write to a row that no other activity touches. The identity key `(execId, nodeId)` is unique per row — one activity owns one row — and that is enough to guarantee no lost update: there is no second writer to race against.
+
+## The JSONB merge
+
+`persistNodeSuccess` (defined in `worker/src/modules/nodes/shared/persist-node-success.ts`) delegates to `persistNodeOutcome`, which issues `UPDATE node_executions SET "outputData" = $1::jsonb`. On the success path this is a **full replace** of `outputData` with the serialized payload, not a JSONB merge — each successful call rewrites the row's output from scratch. The merge-with-concat operator (`coalesce("outputData", '{}'::jsonb) || $1::jsonb`) is only used by `persistCancelledNodeOutcome` and by `recordNodeExecutionMetadata` (which merges into `metadata`, not `outputData`). The rule in [The rule](#the-rule) is still what keeps parallelism safe: because only the row's own activity writes to it, the full replace is always writing over its own prior value, so there is no cross-activity clobber.
+
+## The 256 KB claim check
+
+Payloads larger than 256 KB are not stored on the row directly. Instead the activity uploads the payload via [`/worker/store-payload`](/worker/callback-reference#store-payload) and stores only the resulting claim-check key on the row. The reader resolves the key via [`/worker/get-payload`](/worker/callback-reference#get-payload).
+
+See [TASK-S5 — Claim-check authorization](https://github.com/enhancedai-com/Workflow/blob/main/.claude/tasks/worker-flow-execution-epic/TASK-S5-CLAIM-CHECK-AUTHZ.md) for why the key is scoped to its run.
+
+The threshold is controlled by `CLAIM_CHECK_THRESHOLD_BYTES` in `worker/src/modules/nodes/shared/persist-node-outcome.ts` — defaulted to 262144 bytes (256 KB) and overridable per environment via the `CLAIM_CHECK_THRESHOLD_BYTES` env var.
+
+## What breaks if you violate the rule
+
+1. **Lost update in a parallel run.** Two activities both write to the same row's `outputData`; whichever lands last clobbers the other. In sequential testing you may never see it, because the two writes serialize into a predictable order; in production parallel it shows up as a dropped field — the losing activity's output is simply gone.
+
+2. **Cross-node write that corrupts parallel.** An activity for node A reaches over and writes into node B's row. Works fine sequentially until B is also executing in parallel; then B's own `persistNodeSuccess` collides with A's write, and because the success path is a full replace of `outputData`, whichever call lands second erases the other's work entirely.
+
+## See also
+
+- [Callback reference](/worker/callback-reference) — the claim-check endpoints.
+- [TASK-S5 — Claim-check authorization](https://github.com/enhancedai-com/Workflow/blob/main/.claude/tasks/worker-flow-execution-epic/TASK-S5-CLAIM-CHECK-AUTHZ.md)

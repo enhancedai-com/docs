@@ -173,6 +173,17 @@
                   "worker/overview",
                   "worker/development",
                   {
+                    "group": "Developer guides",
+                    "pages": [
+                      "worker/execution-lifecycle",
+                      "worker/how-to-add-a-node-type",
+                      "worker/callback-reference",
+                      "worker/error-taxonomy",
+                      "worker/persistence-contract",
+                      "worker/running-locally"
+                    ]
+                  },
+                  {
                     "group": "Node",
                     "pages": [
                       "worker/node/scripting",
@@ -450,6 +461,17 @@
                 "pages": [
                   "worker/overview",
                   "worker/development",
+                  {
+                    "group": "Guias para desenvolvedor",
+                    "pages": [
+                      "worker/pt-br/execution-lifecycle",
+                      "worker/pt-br/how-to-add-a-node-type",
+                      "worker/pt-br/callback-reference",
+                      "worker/pt-br/error-taxonomy",
+                      "worker/pt-br/persistence-contract",
+                      "worker/pt-br/running-locally"
+                    ]
+                  },
                   {
                     "group": "Node",
                     "pages": [

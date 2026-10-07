@@ -1,0 +1,264 @@
+---
+title: Callback reference
+description: HTTP endpoints the worker calls on the back, when to use each, and when not to.
+state: production
+state_verified: 2026-10-07
+state_verified_against: worker@develop 5fe389f, back@master 9609806b
+---
+
+## Overview
+
+The worker never touches the back's database directly. Instead, the back exposes a small set of HTTP endpoints under `/worker/*` that the worker calls to persist payloads, authorize access, record billing, and upload generated artifacts. Every handler lives in `back/src/temporal/worker.controller.ts` behind `InternalApiGuard`, which requires the shared `INTERNAL_API_KEY` header.
+
+## Reference
+
+### `/worker/store-payload` {#store-payload}
+
+Claim-check write for payloads larger than 256 KB (the threshold is overridable via `CLAIM_CHECK_THRESHOLD_BYTES`).
+
+**Request**
+
+```ts
+interface StorePayloadRequest {
+  execId: string;
+  nodeId: string;
+  payload: unknown;
+  runToken?: string;
+}
+```
+
+**Response**
+
+```ts
+interface StorePayloadResponse {
+  success: true;
+  key: string;
+}
+```
+
+**Auth model**
+
+Guarded by `InternalApiGuard` (shared `INTERNAL_API_KEY` header). Keys are additionally bound to their run by `ClaimCheckAuthzService.authorizeWrite`, which validates the `(execId, nodeId, runToken)` triple before any S3 write. See [TASK-S5 — Claim-check authorization](https://github.com/enhancedai-com/Workflow/blob/main/.claude/tasks/worker-flow-execution-epic/TASK-S5-CLAIM-CHECK-AUTHZ.md).
+
+**Side effects**
+
+Serializes the payload and uploads it to the private claim-check S3 bucket under a deterministic key. Returns the key the worker stores inside a `{ __claimRef: key }` envelope on `outputData`.
+
+**When to use**
+
+A payload the activity needs to persist whose serialized size exceeds the threshold.
+
+**When not to use**
+
+Small payloads: write them directly into `outputData` via `persistNodeSuccess`.
+
+### `/worker/get-payload` {#get-payload}
+
+Claim-check read: resolves a `{ __claimRef: key }` envelope back into the original payload stored in private S3.
+
+**Request**
+
+```ts
+interface GetPayloadRequest {
+  key: string;
+  execId?: string;
+  nodeId?: string;
+  runToken?: string;
+}
+```
+
+**Response**
+
+```ts
+interface GetPayloadResponse {
+  success: true;
+  payload: unknown;
+}
+```
+
+**Auth model**
+
+Guarded by `InternalApiGuard`. The `key` must start with the `CLAIM_CHECK_KEY_PREFIX` or the request is rejected as a `BadRequestException`. `ClaimCheckAuthzService.authorizeRead` then checks that the key belongs to the declared `(execId, nodeId, runToken)` before the S3 read.
+
+**Side effects**
+
+Reads the object from the claim-check bucket, streams it, and JSON-parses it. Read-only.
+
+**When to use**
+
+An activity is about to consume an upstream node's output whose value is a claim-check reference instead of the inline payload.
+
+**When not to use**
+
+Inline payloads (the common case): the value is already available on `outputData` and no HTTP call is needed.
+
+### `/worker/validate-model-access` {#validate-model-access}
+
+Pre-execution authorization check: confirms the user behind the flow is entitled to call the requested model.
+
+**Request**
+
+```ts
+interface ValidateModelAccessRequest {
+  flowId: string;
+  model: string;
+  aiSystem: string;
+}
+```
+
+**Response**
+
+```ts
+interface ValidateModelAccessResponse {
+  success: boolean;
+  message: string;
+}
+```
+
+Returns HTTP 200 with `success: true` when the entitlement check passes, HTTP 403 with `success: false` when the user has no matching `user_product` for the resolved provider.
+
+**Auth model**
+
+Guarded by `InternalApiGuard`. Model entitlement itself is derived from the flow's owning user product in `ProductService.getUserProductFromFlow` after the provider is resolved from the canonical model registry.
+
+**Side effects**
+
+None. Read-only check against `user_products` and `system_ai_models`.
+
+**When to use**
+
+Before invoking any paid AI model from an activity, so a 403 surfaces as a `UserConfigError` instead of a provider-side billing failure.
+
+**When not to use**
+
+Deterministic, non-billed operations (local scripting, math, pure data transforms) — there is no entitlement to check.
+
+### `/worker/charge-tokens` {#charge-tokens}
+
+Post-execution billing: records the tokens a model actually consumed, including the three-part breakdown OpenAI image models require.
+
+**Request**
+
+```ts
+interface ChargeTokensRequest {
+  flowId: string;
+  userId: string;
+  inputTokens: number;
+  outputTokens: number;
+  model: string;
+  aiSystem: string;
+  execId?: string;
+  nodeId?: string;
+  label?: string;
+  usedTokens?: number;
+  billingFlowId?: string;
+  imageInputTokens?: number;
+  imageTextTokens?: number;
+}
+```
+
+**Response**
+
+```ts
+interface ChargeTokensResponse {
+  success: boolean;
+  message: string;
+  tokens?: number;
+  cost?: number;
+}
+```
+
+Returns HTTP 200 with `tokens` and `cost` on success, HTTP 500 with `success: false` when `ProductService.updateTokens` cannot apply the charge.
+
+**Auth model**
+
+Guarded by `InternalApiGuard`. The user product is resolved from the flow via `ProductService.getUserProductFromFlow`, with the catalog name derived from the model (image models split into `<model>-image` and `<model>-text` keys so the catalog lookup can resolve them).
+
+**Side effects**
+
+Writes a `token_transaction` row and updates the user product's running token and cost totals. Not idempotent — calling twice charges twice.
+
+**When to use**
+
+A model call succeeded and real tokens were consumed. `execId` and `nodeId` should be passed so the transaction is traceable back to the specific run.
+
+**When not to use**
+
+Any failure path where the user did not consume tokens — in particular, a `UserConfigError` means the model never ran, so charging would inflate the user's bill.
+
+### `/worker/generate-file` {#generate-file}
+
+Takes text and renders it into a file, uploads the file to durable storage, and (optionally) updates the node's `data.fileLink`/`data.fileLinks`.
+
+**Request**
+
+```ts
+interface GenerateFileRequest {
+  nodeId: string;
+  fileType: string;
+  text?: string;
+  customFileName?: string;
+  useDocRaptor?: boolean;
+  userId?: string;
+  flowId?: string;
+  flowVersionHistoryId?: string | null;
+  spaceId?: string;
+  provider?: string;
+}
+```
+
+When `text` is omitted, the back resolves it from the node's own `data.text` via `FlowNodeService` (scoped to `flowVersionHistoryId` when provided).
+
+**Response**
+
+```ts
+interface GenerateFileResponse {
+  success: boolean;
+  message: string;
+  file: string;
+  fileLink: {
+    src: string;
+    name: string;
+  };
+}
+```
+
+Returns HTTP 400 with `success: false` when no text is available (neither passed in nor resolvable from the node), HTTP 500 with `success: false` when upload fails.
+
+**Auth model**
+
+Guarded by `InternalApiGuard`. No per-user entitlement is checked at this layer — the file is attributed to `userId` for persistence into `generated_files`, but access control is the caller's responsibility.
+
+**Side effects**
+
+Uploads the rendered file to S3 (or routes through DocRaptor when `useDocRaptor` is set), persists a `generated_files` row when `userId` is provided, and when `flowId` is provided also writes `data.fileLink` and appends to `data.fileLinks` on the target `flow_nodes` row.
+
+**When to use**
+
+A node needs to produce a durable file artifact (PDF, DOCX, etc.) and have the resulting URL propagated back onto its own `data`.
+
+**When not to use**
+
+Writing an arbitrary payload to storage: this endpoint renders text into a file format, it is not a general-purpose upload. For arbitrary large payloads use `/worker/store-payload`.
+
+## When to use which
+
+| Situation | Correct endpoint |
+|---|---|
+| About to persist a payload > 256 KB | `/worker/store-payload` |
+| About to read a payload > 256 KB written by a previous activity | `/worker/get-payload` |
+| About to invoke a model whose user may not have access | `/worker/validate-model-access` |
+| Model call succeeded and tokens were consumed | `/worker/charge-tokens` |
+| Need to upload a generated file to S3/GCS | `/worker/generate-file` |
+
+## When NOT to use
+
+- Do not call `/worker/charge-tokens` on user error — a `UserConfigError` means the user did not consume tokens; charging anyway inflates their bill.
+- Do not call `/worker/generate-file` for payloads smaller than the claim-check threshold — the claim check is for size, not for every file.
+- Do not call `/worker/store-payload` to bypass `persistNodeSuccess` — the row still has to be written; the claim check is additional, not alternative.
+
+## A7 note
+
+<Note>
+TASK-A7 (object-caller) may add new endpoints to this surface. Verify the current list against `back/src/temporal/worker.controller.ts` before relying on this reference.
+</Note>

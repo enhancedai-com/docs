@@ -1,0 +1,108 @@
+---
+title: How to add a node type
+description: The seven layers (plus the registry entry) that a node type needs to run. Miss one and the node either silently does nothing or throws "Node type X not supported".
+state: production
+state_verified: 2026-10-07
+state_verified_against: worker@develop 5fe389f, back@master 9609806b
+---
+
+## Before you start
+
+- A ClickUp card with a task code (`868xxxxxxxx`).
+- A feature branch in each repo you will touch: `feat/<task_code>` in `back`, `worker`, and `front`. **Same branch name in each repo.**
+- The local stack running. See [Running and debugging locally](/worker/running-locally).
+
+If any of the three repos is on an environment branch (`production`, `staging`, `master`, `main`, `develop`), stash and switch to the feature branch before writing anything.
+
+## The seven layers
+
+<Steps>
+  <Step title="1. Worker module">
+    Create `worker/src/modules/nodes/<node>/` with four files: `<node>.module.ts`, `<node>.service.ts`, `<node>.type.ts`, `<node>.service.spec.ts`.
+
+    **If you skip this:** the workflow throws `Cannot find module` at execute.
+  </Step>
+
+  <Step title="2. Enum entry">
+    Add the new type to `worker/src/modules/nodes/nodes.types.ts`.
+
+    **If you skip this:** TypeScript compiles, but the workflow's `case` for your type never matches.
+  </Step>
+
+  <Step title="3. Temporal module import">
+    Import your module in `worker/src/modules/temporal/temporal.module.ts`.
+
+    **If you skip this:** injection fails at worker boot.
+  </Step>
+
+  <Step title="4. Activities wrapper">
+    Add `<node>Activity` in `worker/src/modules/temporal/activities/activities.service.ts`, wrapped by `runNodeActivity`.
+
+    **If you skip this:** Temporal reports `activity not registered`.
+  </Step>
+
+  <Step title="5. Worker binding and proxy">
+    Bind the activity in `worker/src/modules/temporal/worker.service.ts` and add the proxy entry in `worker/src/modules/temporal/workflows/configs.ts`.
+
+    **If you skip this:** the workflow has the `case` but calls an activity absent from the proxy — the activity never runs, no error is raised, the run completes with no output. This is the silent no-op the task spec warns about.
+  </Step>
+
+  <Step title="6. Workflow case">
+    Add a `case NodeType.<YOUR_TYPE>:` branch in `worker/src/modules/temporal/workflows/process-single-node.workflow.ts`.
+
+    **If you skip this:** the workflow throws `Node type X not supported` from the default branch.
+  </Step>
+
+  <Step title="7. Backend inline twin">
+    Delete the inline twin in `back/src/app-api/flux/flux.service.ts`, or guard it so it cannot double-fire.
+
+    **If you skip this:** either the back and the worker both run the node (double-fire), or the back runs it and the worker module is dead code.
+  </Step>
+</Steps>
+
+## The registry entry (step 8)
+
+Add an entry for your type to `back/src/shared/node-dispatch/node-dispatch-registry.ts` with all four fields set on purpose:
+
+- `flowDispatch: "worker"` (your type is dispatched to the worker in a full flow run)
+- `legacyEndpoint: true | false` (does the legacy single-node endpoint accept it)
+- `prefetchSafe: true | false` (is prefetch resolution safe for your type)
+- `workerModule: true`
+
+Then regenerate the machine-readable contract:
+
+```bash
+cd apps/Flux-Prompt && pnpm generate:node-dispatch-contract
+```
+
+Two Jest specs fail if the registry and the contract drift: `node-dispatch-contract.spec.ts`, `node-types-contract.spec.ts`.
+
+**If you skip this:** the contract lies, A1/D2 gates fail, and dispatch may fall through to the inline path.
+
+## Verify
+
+1. Regenerate the contract and run its spec:
+
+   ```bash
+   cd apps/Flux-Prompt && pnpm generate:node-dispatch-contract
+   pnpm test -- --testPathPattern=node-dispatch-contract
+   ```
+
+2. Run the worker's node module spec (scoped):
+
+   ```bash
+   cd apps/Flux-Prompt-Worker && pnpm test -- --testPathPattern=modules/nodes/<node>
+   ```
+
+3. Trigger a run locally that uses your type and read the row from `node_executions` — see [Running and debugging locally](/worker/running-locally).
+
+## Checklist
+
+<Check>Worker module created with the four files.</Check>
+<Check>Enum entry in `nodes.types.ts`.</Check>
+<Check>Import in `temporal.module.ts`.</Check>
+<Check>Activity wrapper in `activities.service.ts`.</Check>
+<Check>Binding in `worker.service.ts` and proxy in `workflows/configs.ts`.</Check>
+<Check>`case` in `process-single-node.workflow.ts`.</Check>
+<Check>Inline twin in `flux.service.ts` removed or guarded.</Check>
+<Check>Registry entry + contract regenerated.</Check>
