@@ -14,11 +14,14 @@ execução.
 
 ## `list_node_types`
 
-O catálogo completo: todos os tipos de node com seus schemas e handles. Busque uma vez e use o [`get_node_type`](#get_node_type) para o tipo que você vai construir.
+Um resumo leve de cada tipo de node — `type`, `label`, `category` e `description`, e **nenhum schema e
+nenhum handle**. Busque uma vez para descobrir os nomes exatos dos tipos e depois chame o
+[`get_node_type`](#get_node_type) para cada tipo que você vai construir. Não escreva um node só a
+partir do resumo.
 
 ### Entrada
 
-Nenhum parâmetro necessário.
+Nenhum parâmetro necessário. Assim como o `get_node_type`, não recebe `workspaceId`.
 
 ### Saída
 
@@ -29,30 +32,13 @@ Nenhum parâmetro necessário.
       "type": "commandTextNode",
       "label": "Command Text Node",
       "description": "Runs a prompt against an AI text model and passes the result downstream.",
-      "category": "AI",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "prompt": { "type": "string", "description": "The prompt to run" },
-          "aiModel": { "type": "string", "description": "AI model name, e.g. \"gemini-2.5-flash-lite\"" },
-          "aiSystem": { "type": "string", "description": "AI provider, e.g. \"gemini\", \"anthropic\", \"openAi\"" }
-        },
-        "required": ["prompt", "aiModel", "aiSystem"]
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "text": { "type": "string", "description": "Generated text output" }
-        }
-      }
+      "category": "AI"
     },
     {
       "type": "conditionNode",
       "label": "Condition Node",
       "description": "Evaluates a condition and routes flow execution along the true or false branch.",
-      "category": "Logic",
-      "inputSchema": { "..." : "..." },
-      "outputSchema": { "..." : "..." }
+      "category": "Logic"
     }
   ]
 }
@@ -67,34 +53,45 @@ Nenhum parâmetro necessário.
 | `nodeTypes[].label` | string | Nome legível por humanos, composto como `"Nome front (Nome técnico)"` quando o nome do canvas e o nome técnico diferem — ex.: `"Display Box (Output Controller)"` — ou publicado como apenas um dos dois quando coincidem ou o tipo não tem entrada no sidebar. Essa string exata, e o nome front isolado, também são entrada válida para o `node.type` do [`add_node`](#add_node) e para o `type` do [`get_node_type`](#get_node_type). |
 | `nodeTypes[].description` | string | O que este node faz. |
 | `nodeTypes[].category` | string | Agrupamento: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. |
-| `nodeTypes[].inputSchema` | JSON Schema | A configuração que este node aceita. |
-| `nodeTypes[].outputSchema` | JSON Schema | Os dados que este node produz para nodes downstream. |
 
-<Warning>
-  **Respeite o `enum` quando o campo declarar um.** Vários campos de node aceitam apenas um
-  conjunto fixo de valores — por exemplo, `dynamicSettingsNode.selectedOption` é `"text"` ou
-  `"voice"`, e `fluxObject.selectedType` é uma de seis strings exatas, como `"Load All Entries"`.
-  Esses campos **não** são validados na escrita: um valor fora da lista é gravado sem erro e depois
-  não casa com nenhum branch na renderização, então o node fica sem painel selecionado e não faz
-  nada. Sempre leia o `enum` do campo no `inputSchema` antes de escrevê-lo, e nunca chute um valor
-  que pareça plausível, como `"default"`.
-</Warning>
+<Note>
+  Os schemas ficam atrás do [`get_node_type`](#get_node_type). O
+  [resource](/mcp/pt-br/tools/prompts-and-resources#resources) `fluxprompt://node-types` é a exceção:
+  ele retorna as entradas completas, com schemas e handles.
+</Note>
 
 ## `get_node_type`
 
-Retorna `label`, `description`, `category`, `inputSchema` e `outputSchema` de um tipo de node — a
-mesma entrada que o [`list_node_types`](/mcp/pt-br/tools/nodes-and-edges#list_node_types) devolve, sem baixar o
-catálogo inteiro.
+Retorna a definição completa de um tipo de node: `type`, `label`, `description`, `category`,
+`inputSchema`, `outputSchema` e `handles`. Chame uma vez por tipo de node que você usa, e antes de ligar com o
+[`connect_nodes`](#connect_nodes). Para buscar todos os schemas de uma vez, leia o resource
+[`fluxprompt://node-types`](/mcp/pt-br/tools/prompts-and-resources#resources).
 
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |-----------|------|-------------|-----------|
-| `type` | string | Sim | O tipo técnico (ex.: `commandTextNode`), o nome do sidebar/frontend (ex.: "Display Box"), ou o label composto que o [`list_node_types`](#list_node_types) publica (ex.: "Display Box (Output Controller)"). A comparação ignora maiúsculas/minúsculas e colapsa espaços. Um valor que não casa com nenhum dos três retorna um erro em vez de um schema. |
+| `type` | string | Sim | O tipo técnico (ex.: `commandTextNode`), o nome do sidebar/frontend (ex.: "Display Box"), ou o label composto que o [`list_node_types`](#list_node_types) publica (ex.: "Display Box (Output Controller)"). A comparação ignora maiúsculas/minúsculas e colapsa espaços. Um valor que não casa com nenhum dos três retorna um erro (`isError: true`) em vez de um schema. |
+
+### O objeto `handles`
+
+`handles` é o registro de handles derivado para o tipo — a fonte mais confiável de nomes de handles
+conectáveis, muito melhor do que chutar a partir dos nomes de campo do `inputSchema`, que descrevem
+dados, não ligações.
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `sourceHandles` | array | `{ handle, role }` — portas de saída. `role` é `global`, `control`, `condition` ou `data`. Handles global, control e condition continuam a cadeia de execução; handles data carregam um valor. |
+| `targetHandles` | array | `{ handle, dataField? }` — portas de entrada. `dataField` é o campo base do `inputSchema` que o valor da edge de entrada alimenta, quando existe. O valor cai no array companheiro `<dataField>Data`, não no próprio `dataField`. |
+| `patterned` | array | `{ direction, pattern, discriminating }` — handles gerados em tempo de renderização que não dá para listar. `discriminating: false` significa que o padrão é um coringa não seletivo: indício de que existe algum handle dinâmico, não prova de nenhuma string específica. |
+| `handlesPatterned` | boolean | `true` quando o tipo tem handles de renderização além das duas listas. Trate as listas como incompletas, não erradas: um handle não listado é não comprovado, não inválido. |
+| `unresolved` | boolean | `true` quando não foi possível determinar os handles deste tipo. |
+| `canContinueExecutionChain` | boolean | Se o tipo expõe um handle de origem que continua a cadeia de execução. Um `globalStarter` só pode conectar direto em um tipo em que isto é `true`. |
 
 <Warning>
-  Respeite o `enum` quando o campo declarar um, e nunca chute um valor. Esses campos não são validados
-  na escrita: um valor não reconhecido é gravado e depois não casa com nada, deixando o node
-  renderizado sem nada selecionado. Veja a nota sobre enum em
-  [`list_node_types`](/mcp/pt-br/tools/nodes-and-edges#list_node_types).
+  **Respeite o `enum` quando o campo declarar um.** Leia o `enum` do campo no `inputSchema` e nunca
+  chute um valor que pareça plausível, como `"default"`. Um valor fora da lista é gravado mesmo
+  assim, reportado em `invalidEnumValues`, e o node não faz nada — se um node ficar inerte, confira o
+  nome e o valor do campo. Exemplos: `dynamicSettingsNode.selectedOption` é `"text"` ou `"voice"`;
+  `fluxObject.selectedType` é uma de seis strings exatas, como `"Load All Entries"`.
 </Warning>
 
 ## `list_ai_models`
@@ -160,6 +157,63 @@ de capacidade, não é uma fonte separada: sempre concorda com os booleanos.
   ainda estará disponível no momento da execução — o `run_agent` avisa se um modelo ficar indisponível.
 </Warning>
 
+## `list_voices`
+
+Retorna as vozes que este usuário pode escolher para um `voiceBoxNode` (AI Voice Generator) — a mesma
+lista que o dropdown de voz do canvas mostra. Chame antes de definir uma voz, em vez de chutar um id.
+Exige o escopo `read`.
+
+### Entrada
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `workspaceId` | string | Só quando esta autorização cobre mais de um workspace | Chame [`list_workspaces`](/mcp/pt-br/tools/agents-and-folders#list_workspaces) para descobrir quais workspaces esta chave cobre. |
+| `provider` | `"elevenlabs"` \| `"groq"` | Não | Restringe o resultado a um provider. Omita para listar os dois. |
+
+### Saída
+
+```json
+{
+  "voices": [
+    { "provider": "elevenlabs", "id": "pNInz6obpgDQGcFmaJgB", "name": "Adam", "custom": false, "isDefault": true,
+      "labels": { "accent": "american", "gender": "male" } },
+    { "provider": "elevenlabs", "id": "Zk3c…", "name": "My cloned voice", "custom": true, "isDefault": false, "labels": null }
+  ],
+  "total": 2
+}
+```
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `voices[].provider` | `"elevenlabs"` \| `"groq"` | A qual provider a voz pertence. |
+| `voices[].id` | string | O valor a definir no node. |
+| `voices[].name` | string | O que mostrar ao usuário. |
+| `voices[].custom` | boolean | `true` para uma voz que o usuário clonou. |
+| `voices[].isDefault` | boolean | `true` para a voz padrão. |
+| `voices[].labels` | object \| null | Descritores extras, como sotaque e gênero. |
+| `total` | number | `voices.length`. |
+
+A lista é pequena e retornada por inteiro — **sem paginação** e sem `cursor`. O PlayHT não é oferecido.
+
+### Definindo a voz em um node
+
+| `aiSystem` do node | Campo que recebe o `id` |
+|--------------------|-------------------------|
+| `elevenlabs` | `voiceId` |
+| `groq` | `groqVoice` |
+
+Mostre os nomes ao usuário e deixe-o escolher. Quando um node elevenlabs é escrito sem `voiceId`, o
+servidor preenche a voz marcada com `isDefault` (Adam, `pNInz6obpgDQGcFmaJgB`) e informa em
+`appliedDefaults`. Um node groq não recebe padrão.
+
+<Warning>
+  **`add_node` e `update_node` recusam um id de voz que o provider não conhece**, com um
+  `validation_error` mandando chamar `list_voices` e usar um dos ids retornados. Sempre pegue o id
+  desta lista. Se o ElevenLabs não consegue confirmar uma voz nem para um lado nem para o outro (uma
+  falha de consulta diferente de "não encontrada"), a escrita é aceita e o id volta em
+  `unverifiedVoices`.
+</Warning>
+
 ## `list_integrations`
 
 Retorna as conexões de terceiros que o usuário autorizador pode usar, para você preencher o
@@ -176,9 +230,10 @@ Cada item traz `id` (o valor que o `integrationId` recebe), `name`, `provider`, 
 conexão é referenciada apenas pelo id.
 
 A lista são as conexões **próprias** do usuário mais as que um membro ativo do workspace compartilhou
-com a organização. Nada além disso aparece, e uma chave que não foi concedida via OAuth não tem
-usuário por trás e portanto não tem conexão alcançável: a chamada é recusada, não ampliada para o
-workspace inteiro.
+com a organização. Nada além disso aparece. O usuário é quem está por trás da chave: a pessoa que
+concedeu a autorização OAuth ou o membro que criou a chave de serviço. A chamada é recusada, em vez
+de ampliada para o workspace inteiro, apenas quando esse usuário não é mais membro ativo do workspace
+(ou quando a chave não tem nenhum usuário por trás).
 
 <Warning>
   Escrever um `integrationId` que não está nessa lista é recusado por `add_node` e `update_node`.
@@ -346,11 +401,26 @@ nodes empilhavam todos no mesmo ponto. Omitir `position` é mais simples e melho
     "position": { "x": 435, "y": -240 }, "width": 825, "height": 789 } ], "updated": [], "removed": [] } }
 ```
 
+### Referenciando a saída de outro node
+
+Nos tipos de node cuja descrição de campo no catálogo diz que sim — por exemplo `webSearch.query`,
+`commandContentNode.queryData`, `voiceBoxNode.text` e `imageGenerator.prompt` — um campo string pode
+embutir `{{<nodeId>.<key>}}`, e em tempo de execução o runtime substitui isso pela saída daquele node
+para a `<key>` (normalmente `text`) antes de o node executar. Nem todo campo suporta isso: leia a
+descrição de cada campo no [`get_node_type`](#get_node_type) antes de contar com isso. A mesma sintaxe
+funciona no `patch` do [`update_node`](#update_node).
+
 <Warning>
   O id de um node `globalStarter` **precisa** conter a substring literal `flow-global-starter` (ex.:
   `flow-global-starter_main`). O backend resolve o ponto de entrada do fluxo casando essa substring,
   então qualquer outro id é rejeitado com `validation_error` de saída.
 </Warning>
+
+<Note>
+  Um agente tem **exatamente um** `globalStarter`, e o `create_agent` já o cria. Adicionar um segundo é
+  recusado com `duplicate_global_starter`, que nomeia o node existente de onde conectar. Só um agente
+  que não tem nenhum pode receber um.
+</Note>
 
 ## `update_node`
 
@@ -366,6 +436,7 @@ Mescla um patch em um node existente.
 - `patch.data` é mesclado **um nível de profundidade**, então chaves de data omitidas são preservadas,
   não apagadas.
 - Envie o mínimo: para mudar um campo, envie só aquele campo.
+- O `type` de um `globalStarter` não pode ser alterado (`global_starter_not_retypable`); edite o `data` dele.
 
 Diferente do `add_node`, o `update_node` **respeita exatamente a posição enviada** — sem resolução
 anti-sobreposição. Isso é deliberado: permite que um cliente organize o fluxo de forma determinística,
@@ -373,7 +444,9 @@ node por node, sem o servidor questionar um movimento intencional.
 
 ## `remove_node`
 
-Remove um node **e todas as edges que o tocam**.
+Remove um node **e todas as edges que o tocam**. Um `globalStarter` nunca é removido
+(`global_starter_not_removable`): todo agente mantém exatamente um, como no builder. Para mudar onde a
+execução começa, mova a edge dele com `disconnect_nodes` e `connect_nodes`.
 
 | Parâmetro | Tipo | Obrigatório |
 |-----------|------|-------------|
@@ -382,15 +455,19 @@ Remove um node **e todas as edges que o tocam**.
 
 ## `connect_nodes`
 
-Cria uma edge de um node de origem para um node de destino.
+Cria uma edge de um node de origem para um node de destino. Os handles são validados contra o registro
+derivado dos dois tipos de node: um par `(tipo, handle)` desconhecido é recusado com
+`validation_error` nomeando os handles válidos daquele tipo — chame o
+[`get_node_type`](#get_node_type) e leia `handles` em vez de chutar a partir dos nomes de campo do
+`inputSchema`.
 
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |-----------|------|-------------|-----------|
 | `agentId` | string (UUID) | Sim | Agente de destino. |
 | `source` | string | Sim | Id do node de origem. |
 | `target` | string | Sim | Id do node de destino. |
-| `sourceHandle` | string | Não | Porta de origem. Omita para o padrão contextual. |
-| `targetHandle` | string | Não | Porta de destino. Omita para o padrão contextual. |
+| `sourceHandle` | string | Não | Porta de origem. Omita para o padrão contextual (veja abaixo). Obrigatório a partir de um `conditionNode`. |
+| `targetHandle` | string | Não | Porta de destino. Omita para o padrão contextual (veja abaixo). Obrigatório para dentro de um node `nodesAdd`. |
 | `edgeId` | string | Não | Id explícito da edge. |
 
 ### Ordem de execução vs dados — o modelo de duas edges
@@ -399,7 +476,7 @@ Esta é a maior causa de "eu conectei, mas nada acontece":
 
 - Uma edge de **`outputFlow` → `input`** faz o destino **executar** depois da origem. Não carrega
   dado.
-- Uma edge de **`output` → `<campo>In`** (ex.: `contentIn`, `promptIn`, `textIn`) carrega o **dado**.
+- Uma edge de **`output` → `<campo>In`** (ex.: `contentIn`, `inputText`, `text-input` — o nome muda conforme o tipo de node) carrega o **dado**.
   Não dispara execução.
 
 Encadear dois `commandTextNode` para que B rode depois de A *e* veja o texto de A exige, portanto,
@@ -408,41 +485,41 @@ Encadear dois `commandTextNode` para que B rode depois de A *e* veja o texto de 
 Além da edge, o `data` do destino precisa referenciar a origem — o array companheiro `<campo>Data`,
 ex.: o `data.textData` de um `outputObjectNode`.
 
-<Tip>
-  **Normalmente você ganha tudo isso de graça.** Quando você chama `connect_nodes` com os dois handles
-  omitidos e o destino tem exatamente um campo de dado inequívoco, o servidor adiciona a edge
-  companheira *e* preenche a entrada `<campo>Data` do destino por você. Confira `diff.edgesAdded` e
-  `diff.updated` na resposta para ver o que ele fez.
-</Tip>
+Quando o destino tem um único handle de dado alimentando um campo de texto, uma chamada com os dois
+handles omitidos escreve a edge de execução, a edge de dado **e** a entrada em `<campo>Data` — por
+exemplo em um `commandTextNode`, `outputObjectNode`, `textBox` ou `webSearch`. Caso contrário, só a
+edge de execução é escrita e você liga a edge de dado, com `sourceHandle: "output"` e um handle de
+`handles.targetHandles`. Isso nunca é feito a partir de um `globalStarter`. Confira `diff.edgesAdded`
+e `diff.updated`, ou rode o [`check_agent_integrity`](/mcp/pt-br/tools/writing-safely#check_agent_integrity),
+antes de alterar `<campo>Data` você mesmo — isso acrescenta uma entrada duplicada. Uma edge criada com
+sucesso não agenda o destino: não leia como "o destino agora vai executar".
 
 ### Padrões de handle
 
-Omitindo os dois handles, o servidor escolhe conforme os tipos de node:
+Omitindo os dois handles, o servidor escolhe conforme os tipos de node. Ele só usa `outputFlow` / `input` quando o registro confirma que o tipo realmente tem esse handle, e caso contrário recusa a chamada em vez de ligar errado.
 
 | Situação | `sourceHandle` | `targetHandle` |
 |----------|----------------|----------------|
 | Origem é `globalStarter` | `a` | `input` |
 | Um dos lados é `mediaBox` | `mediaOutput` | `mediaInput` |
-| Origem é `dynamicSettingsNode` | `outputModelTextSettings` | `modelVoiceSettings` para `voiceBoxNode`, senão `modelSettings` |
-| Destino é node terminal de exibição (`outputObjectNode`, `richTextBox`) | `output` | `textIn` |
-| Qualquer outro caso | `outputFlow` | `input` |
+| Origem é `dynamicSettingsNode` | `outputModelTextSettings` | `modelSettings` — inclusive para dentro de um `voiceBoxNode`; recusado se o destino não tem esse handle |
+| Destino é node terminal de exibição (`outputObjectNode`, `richTextBox`) | A saída de dado da origem: o primeiro entre `output`, `textOutput`, `contentOut` que ela tiver | `input` |
+| Qualquer outro caso | `outputFlow`, se o tipo de origem tiver | `input`, se o tipo de destino tiver |
 
-<Warning>
-  Dois casos **não** têm padrão seguro e são rejeitados se você não for explícito:
+Dois casos exigem um handle explícito:
 
-  - A partir de um `conditionNode` você precisa passar `sourceHandle` —
-    `conditionHandle-T{n}`/`conditionHandle-F{n}` para condições SWITCH, ou
-    `outputHandle-0`/`outputHandle-1` para condições booleanas.
-  - Para dentro de um node `nodesAdd` você precisa passar `targetHandle` — `nodesInput` (payload de
-    lista de nodes) ou `edgesInput` (payload de lista de edges).
-</Warning>
+- A partir de um `conditionNode`, passe `sourceHandle` — `conditionHandle-T{n}`/`conditionHandle-F{n}`
+  para condições SWITCH, ou `outputHandle-0`/`outputHandle-1` para condições booleanas.
+- Para dentro de um node `nodesAdd`, passe `targetHandle` — `nodesInput` (payload de lista de nodes)
+  ou `edgesInput` (payload de lista de edges).
 
 ## `disconnect_nodes`
 
 Remove uma edge. Identifique-a por `edgeId`, ou por `source` + `target`.
 
-Retorna `diff.edgesRemoved` — um array de ids de edge. Isso remove **apenas a edge**; para excluir um
-node use `remove_node`.
+**Uma chamada desfaz um `connect_nodes`** — as duas edges e a referência em `<campo>Data` que ele
+adicionou. Leia `diff.edgesRemoved` / `diff.updated` para saber exatamente o que mudou. Isso remove
+**apenas edges**; para excluir um node use `remove_node`.
 
 ## Exemplos de prompts
 
@@ -453,6 +530,7 @@ node use `remove_node`.
 ## Relacionados
 
 - [Escrevendo com segurança](/mcp/pt-br/tools/writing-safely) — dry-run, idempotência, `versionId`
-- [`list_node_types`](/mcp/pt-br/tools/nodes-and-edges#list_node_types) — o catálogo completo e o contrato de enum
+- [`list_node_types`](/mcp/pt-br/tools/nodes-and-edges#list_node_types) — o catálogo de nomes de tipos de node
+- [`get_node_type`](/mcp/pt-br/tools/nodes-and-edges#get_node_type) — schemas, handles e o contrato de enum
 - [`get_agent`](/mcp/pt-br/tools/agents-and-folders#get_agent) — ler os nodes e edges que você acabou de escrever
 - [Versionamento](/mcp/pt-br/tools/versioning) — snapshot da cópia de trabalho quando estiver satisfeito

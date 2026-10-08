@@ -22,12 +22,14 @@ attachable context; other clients may expose them differently or not at all.
 |--------|-----------|-----------------------|
 | `build_flow` | `goal` | Create a folder and an empty agent, then build a text-gen node wired to a data output — both the edge **and** the data reference. |
 | `edit_agent` | `agentId` | Inspect an agent, then add/update/remove nodes safely with optimistic concurrency (`expectedVersion`). |
-| `organize_workspace` | — | Create folders and move agents into them, or back to the root. |
-| `run_agent_recipe` | `agentId` | Validate a run with dry-run, dispatch it, then poll `get_run_status` until it finishes. |
+| `organize_workspace` | — | Create folders and move agents into folders. |
+| `run_agent_recipe` | `agentId` | Validate a run with dry-run, dispatch it, poll `get_run_status` until it finishes, then verify with `get_run_nodes` and `get_node_output` that every expected node ran. |
 
 These encode the ordering that is easy to get wrong: fetching a node's real schema **before** writing
-it, creating both edges when chaining nodes, and passing `empty: true` so a new agent does not arrive
-with starter-template nodes.
+it, creating both edges when chaining nodes, and passing `empty: true` so a new agent arrives with only
+its `globalStarter`, which the recipe connects from instead of adding its own.
+
+For how `run_agent_recipe` reads results and credits, see [Running agents](/mcp/tools/running-agents).
 
 <Tip>
   Prompts are guidance, not enforcement. They still perform each mutation as a dry-run first, so you
@@ -39,10 +41,12 @@ with starter-template nodes.
 | URI | Contents |
 |-----|----------|
 | `fluxprompt://models` | The AI models available to this workspace: `provider`, `modelName`, `displayName`, `description`, `modelType`, `contextWindow`, `supportsVision`, `supportsReasoning`. |
-| `fluxprompt://node-types` | The node type catalogue: `type`, `label`, `description`, `category`, `inputSchema`, `outputSchema`. |
+| `fluxprompt://node-types` | The full node type catalogue: `type`, `label`, `description`, `category`, `inputSchema`, `outputSchema` and `handles` for every type. |
 
-Both mirror what `list_ai_models` and `list_node_types` return. Reach for the resource when you want
-the catalogue sitting in context for a whole conversation, and for the tool when you want one lookup
+`fluxprompt://models` mirrors what `list_ai_models` returns. `fluxprompt://node-types` does **not**
+mirror `list_node_types`: that tool returns summaries only, while the resource returns the full
+entries — what `get_node_type` returns for each type, all at once. Reach for a resource when you want
+the catalogue sitting in context for a whole conversation, and for a tool when you want one lookup
 mid-task.
 
 <Warning>
@@ -55,4 +59,4 @@ mid-task.
 
 - [Writing safely](/mcp/tools/writing-safely) — the conventions every recipe follows
 - [Nodes & edges](/mcp/tools/nodes-and-edges) — what `build_flow` and `edit_agent` automate
-- [`list_node_types`](/mcp/tools/nodes-and-edges#list_node_types) — the tool form of `fluxprompt://node-types`
+- [`list_node_types`](/mcp/tools/nodes-and-edges#list_node_types) — the summary form of `fluxprompt://node-types`

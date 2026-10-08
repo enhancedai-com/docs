@@ -82,9 +82,9 @@ title: "Environment Variables"
 | MCP_INTERNAL_SECRET | Required | internal guard for MCP calls — must match `mcp-server`'s value |
 | MCP_OAUTH_CONSENT_SECRET | Required | MCP OAuth consent signing — must match `mcp-server`'s value |
 | MCP_RESOURCE_METADATA_URL | Required | MCP resource metadata URL |
-| MCP_RUN_QUOTA_PER_DAY | Optional | MCP daily run quota (has fallback) |
+| MCP_RUN_QUOTA_PER_DAY | Optional | MCP daily run quota (default 200) |
 | MCP_SERVER_INTERNAL_URL | Required | internal URL of the MCP server |
-| MCP_THIRDPARTY_ALLOWLIST | Optional | integration providers an MCP client may write to; empty means the six released ones, "none" blocks all |
+| MCP_THIRDPARTY_ALLOWLIST | Optional | integration providers an MCP client may write to; empty means every provider in the dispatch registry (`stripe`, `wordpress`, `slack`, `notion`, `zapier`, `hubspot`, `supabase`, `pinecone` and `mcp`), "none" blocks all |
 | MCP_TOKEN_EXPIRED_GRACE_DAYS | Optional | grace period before purging expired MCP tokens |
 | MCP_TOKEN_PURGE_BATCH_SIZE | Optional | batch size for MCP token purge cron |
 | MCP_TOKEN_REVOKED_RETENTION_DAYS | Optional | retention for revoked MCP tokens |

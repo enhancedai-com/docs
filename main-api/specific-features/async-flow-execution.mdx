@@ -38,7 +38,7 @@ the query string (*"callback_url must be a single string value"*), is not a pars
 
 ```http
 POST /flux/api-v2?flowId=<flowId>&callback_url=https://example.com/hook
-x-api-key: <api key>
+api-key: <api key>
 Content-Type: application/json
 ```
 
@@ -73,7 +73,7 @@ recorded one, so the caller gets the real failure rather than a generic wrapper.
 
 ```http
 GET /flux/executions/:executionId
-x-api-key: <api key>
+api-key: <api key>
 ```
 
 The id must be a UUID — anything else is a `400`. The lookup is scoped to the caller, so an id that
@@ -127,6 +127,20 @@ does not. `callbackUrl` is stored on the row, which is why a callback still fire
 request was abandoned long ago.
 
 Created by migration `CreateFlowExecutionStatus`.
+
+## How the callback is delivered
+
+When the run finishes, the back hands the callback to the worker's `deliverRunOutputs` workflow (see
+[Output delivery](/worker/activities/deliver-run-outputs)); it is not posted inline. That gives it:
+
+- **Retries.** A timeout, a network error, a `5xx`, `408`, `425` or `429` is retried up to 8 times with backoff
+  (5 s doubling, capped at 2 min). Any other `4xx`, or a value that is not a URL, is tried once.
+- **One idempotency key.** Every attempt carries `X-FluxPrompt-Delivery-Id`, identical across the
+  retries of one callback and different between callbacks. Use it to ignore a repeated delivery.
+- **Ordering.** The consolidated callback is sent after the output nodes' own callbacks.
+- **A visible failure.** A callback that still fails after its retries adds a **Delivery failed** row to
+  the flow's log, with its "Error info" button (host and last status code; no URL path or payload).
+  The run itself stays `completed`, and no second `success: false` callback is posted.
 
 ## Tuning
 

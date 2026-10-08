@@ -8,6 +8,42 @@ description: "Crie, renomeie, mova e exclua agentes e as pastas que os contêm."
 Agentes ficam dentro de pastas, então criar um agente começa por uma pasta. Todas as ferramentas desta
 página seguem as convenções de escrita — [dry-run por padrão, `idempotencyKey` para aplicar](/mcp/pt-br/tools/writing-safely).
 
+## `list_workspaces`
+
+Retorna todos os workspaces (organizações) que esta autorização cobre. Chame primeiro quando outra
+ferramenta responder `workspace_required`, e depois passe o id do workspace desejado como `workspaceId`
+para essa ferramenta. Não exige escopo e não recebe `workspaceId` — é uma das três ferramentas isentas
+desse parâmetro (as outras são `list_node_types` e `get_node_type`; veja
+[Autenticação](/mcp/pt-br/authentication#uma-autorização-pode-cobrir-vários-workspaces)).
+
+### Entrada
+
+Não recebe parâmetros.
+
+### Saída
+
+```json
+{
+  "workspaces": [
+    { "workspaceId": "3023e5f4-9099-4a56-bc28-538eb517a47f", "name": "Acme Inc", "scopes": ["read", "write"] },
+    { "workspaceId": "b2c3d4e5-f6a7-8901-bcde-f12345678901", "name": "", "scopes": ["read"] }
+  ],
+  "total": 2
+}
+```
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `workspaces[].workspaceId` | string (UUID) | Passe este valor como `workspaceId` para qualquer outra ferramenta. |
+| `workspaces[].name` | string | Nome da organização; pode vir vazio quando a organização não tem nome. |
+| `workspaces[].scopes` | array de `"read"` \| `"write"` \| `"execute"` | Escopos que esta autorização tem **naquele workspace** — podem variar entre workspaces, pois o admin de cada organização os controla de forma independente. Não presuma acesso de escrita/execução só porque um workspace aparece na lista. |
+| `total` | number | Quantidade de workspaces retornados. |
+
+<Note>
+  Não guarde isto em cache por muito tempo. O admin de uma organização pode reduzir escopos ou revogar
+  esta autorização a qualquer momento, e a mudança vale apenas para aquela organização.
+</Note>
+
 ## `create_folder`
 
 Cria uma pasta no workspace.
@@ -26,7 +62,7 @@ Cria uma pasta no workspace.
 ### Criando dentro de um space
 
 O `parentId` é o caminho para uma pasta chegar a um space. Não existe parâmetro `spaceId`: o space é
-derivado da pasta-pai, e a chamada é recusada se você não tiver acesso de escrita a esse space.
+derivado da pasta-pai, e a chamada é recusada se você não for membro desse space.
 
 <Note>
   Não é possível criar uma pasta direto na raiz de um space. Aninhe-a sob uma pasta que já existe lá —
@@ -36,23 +72,30 @@ derivado da pasta-pai, e a chamada é recusada se você não tiver acesso de esc
 
 ## `create_agent`
 
-Cria um agente (fluxo) dentro de uma pasta.
+Cria um agente (fluxo) dentro de uma pasta. Todo agente é criado com exatamente um node
+`globalStarter` — o ponto de entrada da execução — do mesmo jeito que o builder cria.
 
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |-----------|------|-------------|-----------|
 | `name` | string | Sim | Nome do agente. |
 | `folderId` | string (UUID) | Sim | Pasta de destino — do `create_folder` ou `list_folders`. |
-| `empty` | boolean | Não | `true` começa com canvas em branco. Caso contrário, aplica um template inicial. |
+| `empty` | boolean | Não | `true` começa só com o node `globalStarter`. Caso contrário, aplica um template inicial. |
 | `type` | string | Não | `"agent"` (padrão) ou `"chat"`. |
 | `dryRun` / `idempotencyKey` | | | Veja [escrevendo com segurança](/mcp/pt-br/tools/writing-safely). |
 
 ```json
-{ "dryRun": false, "applied": true, "agent": { "id": "d2c2…", "name": "Lead Scorer" } }
+{
+  "dryRun": false,
+  "applied": true,
+  "agent": { "id": "d2c2…", "name": "Lead Scorer", "globalStarterId": "flow-global-starter_0.41" }
+}
 ```
 
 <Tip>
   Passe `empty: true` sempre que for construir o fluxo você mesmo com `add_node`. Sem isso você herda
-  o template inicial e acaba com nodes duplicados junto dos que você adicionou.
+  o template inicial e acaba com nodes duplicados junto dos que você adicionou. Nos dois casos,
+  conecte a partir de `agent.globalStarterId` — não adicione um `globalStarter` você mesmo: um agente
+  nunca tem mais de um, então um segundo é recusado.
 </Tip>
 
 ## `list_folders`
@@ -369,7 +412,7 @@ Excluem um agente ou uma pasta. Ambos são destrutivos e ambos usam dry-run por 
 
 - *"Crie uma pasta chamada Sales agents e um agente vazio chamado Lead Scorer dentro dela"*
 - *"Renomeie a pasta 30be… para Archive"*
-- *"Mova o agente Lead Scorer para a raiz"*
+- *"Mova o agente Lead Scorer para a pasta Archive"*
 
 ## Relacionados
 

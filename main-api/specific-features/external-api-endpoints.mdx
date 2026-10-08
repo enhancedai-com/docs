@@ -109,6 +109,8 @@ The queueing contract behind `api-v2` — the `202` shape, the poll endpoint, an
 
 Run a flow once per row of an uploaded CSV. The CSV is registered first through the UI, which produces the batch id these endpoints take.
 
+With several Variable Input nodes, the CSV columns map to them in the order the nodes were created, and by canvas position (top to bottom, then left to right) when they were created together. A batch that cannot go on ends with `status: error` and the reason in `errorMessage`: the flow has no Variable Input node, or a row's run failed.
+
 | Method | Path | Purpose | Auth |
 | --- | --- | --- | --- |
 | `POST` | `/flux/batch-process` | Start processing a registered batch file. Refuses a batch that is already in progress, completed, or fully processed. | api-key |

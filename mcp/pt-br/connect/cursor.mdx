@@ -13,7 +13,7 @@ Uma vez conectado, o assistente de IA do Cursor pode responder perguntas sobre s
 ## Pré-requisitos
 
 - Cursor instalado ([baixar aqui](https://cursor.sh))
-- Um **service token** de workspace do FluxPrompt (veja [Autenticação](/mcp/pt-br/authentication))
+- Um **service token** de workspace do FluxPrompt — gere um em [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens); veja [Gerar um service token](/mcp/pt-br/authentication#gerar-um-service-token)
 
 <Note>
 O Cursor também pode autenticar via **OAuth** (adicione a URL do servidor e conclua o fluxo de login + consentimento do FluxPrompt), igual ao Claude Code. Este guia usa um service token estático, útil para setups compartilhados ou headless. Qualquer um dos métodos funciona.
@@ -53,6 +53,10 @@ O Cursor também pode autenticar via **OAuth** (adicione a URL do servidor e con
     Você deverá ver seus agentes do workspace listados.
   </Step>
 </Steps>
+
+## Tools e escopos
+
+Quais tools o Cursor pode chamar depende dos escopos da sua chave; veja [Escopos](/mcp/pt-br/authentication#escopos).
 
 ## Configuração manual (JSON)
 

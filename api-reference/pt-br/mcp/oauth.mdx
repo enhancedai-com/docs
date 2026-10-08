@@ -62,28 +62,77 @@ Content-Type: application/json
 
 | Campo | Tipo | Obrigatório | Descrição |
 |-------|------|-------------|-----------|
-| `workspaceId` | UUID | Sim | Workspace ao qual o usuário está concedendo acesso. |
-| `scopes` | string[] | Sim | Escopos concedidos. Fase 1: `["read"]`. |
+| `workspaceId` | UUID | Um entre `workspaceId`/`workspaceIds` | Workspace único ao qual o usuário está concedendo acesso. |
+| `workspaceIds` | UUID[] | Um entre `workspaceId`/`workspaceIds` | Concede acesso a vários workspaces em um único consentimento. Tem precedência sobre `workspaceId` quando ambos são enviados. |
+| `scopes` | string[] | Sim | Escopos solicitados, entre `read`/`write`/`execute`. Por workspace, pedidos de `write`/`execute` de não-admins são reduzidos silenciosamente para `["read"]`, a menos que o workspace tenha `nonAdminPrivilegedScopesEnabled`. |
 | `clientId` | string | Sim | Client ID OAuth da solicitação de autorização. |
 | `nonce` | string | Sim | O `request_id` do fluxo `/oauth/authorize`, usado para vincular o consentimento à solicitação original. |
+
+Pelo menos um entre `workspaceId` ou `workspaceIds` é obrigatório; caso contrário a requisição falha.
 
 ### Resposta
 
 ```json
 {
-  "assertion": "<jwt-hs256-assinado>"
+  "status": "success",
+  "data": {
+    "assertion": "<jwt-hs256-assinado>",
+    "expiresInSeconds": 300,
+    "scopes": ["read"],
+    "workspaces": [{ "workspaceId": "ws-uuid-1", "scopes": ["read"] }]
+  }
 }
 ```
 
-A `assertion` é um JWT de curta duração assinado que a página de consentimento envia de volta ao endpoint `/oauth/consent-callback` do servidor MCP para concluir o fluxo.
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `assertion` | string | JWT HS256 assinado de curta duração que a página de consentimento envia de volta ao `/oauth/consent-callback` do servidor MCP para concluir o fluxo. Não é um token voltado ao usuário. |
+| `expiresInSeconds` | number | Duração da assertion (5 minutos). |
+| `scopes` | string[] | Os escopos efetivos (possivelmente reduzidos) do primeiro workspace concedido. |
+| `workspaces` | array | Escopos efetivos por workspace concedido, cada um `{ workspaceId, scopes }` — uma entrada por id em `workspaceId`/`workspaceIds`. |
 
 ### Erros
 
 | Status | Motivo |
 |--------|--------|
-| 400 | Campos ausentes ou inválidos. |
+| 400 | Campos ausentes ou inválidos, ou nem `workspaceId` nem `workspaceIds` foi informado. |
 | 401 | JWT ausente ou inválido. |
-| 403 | Usuário sem papel suficiente no workspace. |
+| 403 | Usuário não é membro ativo de um dos workspaces solicitados. Pedir `write`/`execute` como não-admin **não** é um 403 — é reduzido silenciosamente para `["read"]` na resposta. |
+
+---
+
+## Concessão anterior
+
+Retorna os escopos que um usuário concedeu anteriormente a um cliente para um workspace, para que a página de consentimento possa pré-selecioná-los (ou pular o consentimento quando o pedido não mudou).
+
+```http
+GET /mcp/v1/oauth/prior-grant?workspaceId={ws}&clientId={id}
+Authorization: Bearer <jwt>
+```
+
+| Query param | Tipo | Obrigatório | Descrição |
+|-------------|------|-------------|-----------|
+| `workspaceId` | UUID | Sim | Workspace a verificar. |
+| `clientId` | string | Sim | Client ID OAuth da solicitação de autorização. |
+
+### Resposta
+
+```json
+{
+  "status": "success",
+  "data": { "scopes": ["read"] }
+}
+```
+
+`scopes` é `null` quando o usuário nunca concedeu acesso deste cliente a este workspace.
+
+### Erros
+
+| Status | Motivo |
+|--------|--------|
+| 400 | Query params ausentes ou inválidos. |
+| 401 | JWT ausente ou inválido. |
+| 403 | Usuário não é membro ativo de `workspaceId`. |
 
 ---
 
@@ -95,7 +144,7 @@ A `assertion` é um JWT de curta duração assinado que a página de consentimen
 3. Cliente IA → GET /oauth/authorize                          (mcp-server → redireciona para página de consentimento)
 4. Página de consentimento → GET /mcp/v1/oauth/workspaces     (back — esta API)
 5. Usuário aprova → POST /mcp/v1/oauth/consent                (back — esta API)
-6. Página de consentimento → POST /oauth/consent-callback     (mcp-server)
+6. Página de consentimento → GET /oauth/consent-callback?request_id=&assertion=&decision=approve   (mcp-server)
 7. mcp-server → POST /oauth/token                             (mcp-server)
 8. Cliente IA recebe token de acesso (mcp_oauth_…)
 ```

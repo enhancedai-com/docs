@@ -1,25 +1,30 @@
 ---
 title: "Desenvolvimento local"
-description: "Rode o FluxPrompt MCP no localhost e teste com MCP Inspector ou Claude Desktop — sem precisar de deploy."
+description: "Rode o FluxPrompt MCP no localhost e teste com MCP Inspector, Claude Desktop ou Claude Code — sem precisar de deploy."
 ---
 
 ## Visão geral
 
 O servidor MCP usa Streamable HTTP, que funciona normalmente no `localhost`. Você não precisa de um transport separado para desenvolvimento local — o mesmo endpoint que vai para staging e produção funciona durante o desenvolvimento.
 
-As duas ferramentas recomendadas são:
+<Note>
+**OAuth é a forma recomendada de autenticar, inclusive para desenvolvedores, em todos os ambientes** (local, dev, staging e produção). Use uma chave MCP apenas para clientes que só conseguem enviar um header (n8n, CI, scripts).
+</Note>
 
-| Ferramenta | Melhor para |
-|------------|-------------|
-| **MCP Inspector** | Explorar tools, inspecionar JSON-RPC bruto, iteração rápida |
-| **Claude Desktop** | Teste end-to-end exatamente como um usuário real experimenta |
+As ferramentas recomendadas são:
+
+| Ferramenta | Alcança o `localhost`? | Melhor para |
+|------------|------------------------|-------------|
+| **MCP Inspector** | Sim (roda na sua máquina) | Explorar tools, inspecionar JSON-RPC bruto, iteração rápida |
+| **Claude Code (CLI)** | Sim (roda na sua máquina) | Testar como desenvolvedor com OAuth, sem túnel |
+| **Claude Desktop** | Não, precisa de um túnel HTTPS público | Teste end-to-end exatamente como um usuário real experimenta (OAuth) |
 
 ## Pré-requisitos
 
-- Node.js ≥ 22.13 e pnpm ≥ 11 **ou** Docker Desktop (veja opção A abaixo)
+- Node.js ≥ 22.13 e pnpm ≥ 11 **ou** Docker Desktop (veja a opção A abaixo)
 - `mcp-server/` clonado
 - Uma instância local do `back/` rodando (ou túnel para o ambiente dev)
-- Um **service token** dev válido na tabela `mcp_tokens` (veja [Criar um token dev](#criar-um-token-dev) abaixo). O desenvolvimento local sempre usa um service token estático; veja [Autenticação](/mcp/pt-br/authentication) para entender como os service tokens funcionam em produção.
+- O front local (`front/`, em `http://localhost:3000`) rodando, para você gerar uma **chave MCP** (veja [Obter uma credencial de cliente](#obter-uma-credencial-de-cliente)) ou concluir a tela de consentimento OAuth. Para OAuth ele precisa ter sido iniciado com `VITE_MCP_SERVER_URL=http://localhost:3100/mcp` definido — veja [Variáveis de ambiente do client](/client/pt-br/environment-variables)
 
 ## Passo 1 — Iniciar o servidor
 
@@ -27,26 +32,34 @@ Escolha uma das opções. Docker Compose é recomendado para novos colaboradores
 
 <Tabs>
   <Tab title="Opção A — Docker Compose (recomendado)">
-    Inicia o `mcp-server` + MCP Inspector em um único comando.
+    Inicia apenas o `mcp-server` — sem necessidade de instalar Node/pnpm no host.
 
     ```bash
     cp .env.example .env
-    # Preencha BACK_BASE_URL e MCP_INTERNAL_SECRET (veja tabela abaixo)
+    # Preencha BACK_BASE_URL e MCP_INTERNAL_SECRET (veja abaixo)
     docker compose up
     ```
 
-    A interface web do MCP Inspector abre em **http://localhost:5173**.
+    O servidor escuta em **http://localhost:3100** (porta publicada pelo container).
 
     <Note>
-    **`BACK_BASE_URL` no Docker** — o valor depende de onde o `back/` está rodando:
+    **Imagem arm64 em host x86.** A imagem do compose é construída para `linux/arm64` para espelhar a produção (AWS Fargate Graviton). Em uma máquina x86 ela roda sob emulação QEMU — instale o emulador uma única vez:
 
-    | Onde o `back/` roda | Valor de `BACK_BASE_URL` |
-    |---------------------|--------------------------|
-    | Host (pnpm start:dev) — macOS / Windows | `http://host.docker.internal:<porta>` |
-    | Host — Linux | IP do host, ou adicione `extra_hosts: [host.docker.internal:host-gateway]` |
-    | Docker (mesmo compose, rede `back_default`) | `http://<nome-do-serviço-back>:<porta>` |
+    ```bash
+    docker run --privileged --rm tonistiigi/binfmt --install arm64
+    ```
+    </Note>
 
-    Nunca use `http://localhost:...` como `BACK_BASE_URL` dentro do Docker — dentro de um container, `localhost` aponta para o próprio container, não para a máquina host.
+    <Note>
+    **O MCP Inspector não roda no Docker Compose.** O serviço `inspector:` no `docker-compose.yml`
+    está definido mas comentado — dentro do Docker o issuer OAuth dele (`http://mcp-server:3100`) não
+    bateria com o `localhost` que o navegador e os redirects usam, então ele não funciona ali. Rode o
+    Inspector no host, tanto com o `mcp-server` no Docker (esta opção) quanto standalone (Opção B) — veja
+    o [Passo 2](#passo-2-testar-com-o-mcp-inspector).
+    </Note>
+
+    <Note>
+    No Docker, defina `BACK_BASE_URL` como `http://host.docker.internal:<porta em que o seu back/ escuta>` — o compose já mapeia `host.docker.internal` para o host em qualquer SO.
     </Note>
   </Tab>
   <Tab title="Opção B — Standalone (pnpm start:dev)">
@@ -63,221 +76,254 @@ Escolha uma das opções. Docker Compose é recomendado para novos colaboradores
   </Tab>
 </Tabs>
 
-### `.env` mínimo para desenvolvimento local
+### `.env` mínimo para trabalho local
 
 ```env
 PORT=3100
 NODE_ENV=development
 
-BACK_BASE_URL=http://host.docker.internal:3001   # Docker; use http://localhost:3001 para pnpm
-MCP_INTERNAL_SECRET=mcp_dev_local
+BACK_BASE_URL=http://host.docker.internal:3001   # Docker; use http://localhost:3001 com pnpm
+MCP_INTERNAL_SECRET=<mesmo valor do back/.env>
+
+# OAuth local (Claude Desktop, Claude Code, fluxo OAuth do Inspector)
+MCP_PUBLIC_URL=http://localhost:3100
+MCP_OAUTH_CONSENT_SECRET=<mesmo valor do back/.env>
+MCP_FRONT_CONSENT_URL=http://localhost:3000/mcp-authorize.html
 
 MCP_KILL_SWITCH=off
 
-# Deixe em branco para não enviar logs ao Datadog localmente
-DD_API_KEY=
-DD_SITE=datadoghq.com
+# Deixe vazio para não escrever no Datadog localmente
+DATADOG_API_KEY=
 ```
 
-`MCP_INTERNAL_SECRET` deve ser o mesmo valor configurado no `back/`.
+`MCP_INTERNAL_SECRET` precisa ser igual ao valor no `.env` do `back/`. É o segredo que o `mcp-server` usa para chamar o `back/` — **não** é um token de cliente, e enviá-lo como `Authorization: Bearer ...` retorna `401 invalid_token`.
 
-### Criar um token dev
+Veja [Variáveis de ambiente](/mcp/pt-br/environment-variables) para a lista completa.
 
-Execute o script auxiliar uma vez a partir da pasta `back/`. Ele busca o primeiro workspace e usuário no banco de dados local e insere um token pronto para uso:
+### Verifique se o servidor está no ar
 
 ```bash
-# A partir da pasta back/
-node scripts/create-dev-mcp-token.mjs
+curl -s http://localhost:3100/healthz
+curl -s http://localhost:3100/readyz
 ```
 
-O token gerado é `mcp_dev_local`. Use-o como `Authorization: Bearer mcp_dev_local` em todas as requisições abaixo.
+Os endpoints de saúde são `/healthz` e `/readyz` (não existe `/health`).
+
+### Obter uma credencial de cliente
+
+O `mcp-server` local resolve todo token de cliente através do `back/`, então use um destes caminhos suportados:
+
+<Steps>
+  <Step title="Use OAuth (recomendado)">
+    Clientes com suporte a OAuth (Claude Desktop, Claude Code, fluxo OAuth do MCP Inspector) não precisam de chave. Defina os valores do [OAuth local](#oauth-local) e deixe o cliente executar a tela de consentimento. O servidor local suporta client ID metadata documents (CIMD), dynamic client registration (DCR) e PKCE `S256`.
+  </Step>
+  <Step title="Ou gere uma chave MCP no front local">
+    Abra `http://localhost:3000`, vá em **Settings → MCP Keys** (ou abra `http://localhost:3000/dashboard-beta?settings=mcpTokens`) e clique em **Generate key**. Copie a chave que começa com `mcp_` e use como `Authorization: Bearer <chave>`.
+  </Step>
+  <Step title="Ou crie uma chave pela linha de comando">
+    Para clientes que só aceitam header, a partir do `back/` (depois de `pnpm build`, porque o comando executa a saída compilada):
+
+    ```bash
+    pnpm mcp:dev-token --email <email do seu usuário> [--workspace <id>] [--scopes read,write,execute] [--name <nome>]
+    ```
+
+    Ele cria a chave pelo próprio serviço de tokens da aplicação, então a verificação de membro, a redução pelo papel, o vínculo com o workspace e a auditoria se aplicam. O workspace padrão é a sua primeira associação como admin. Ele imprime uma chave `mcp_…` aleatória **uma única vez** — copie-a nesse momento.
+  </Step>
+</Steps>
 
 <Note>
-O script é idempotente — executá-lo novamente substitui o token anterior com o mesmo hash.
+As chaves são criadas no banco que o seu `back/` local usa, então a chave só funciona com um `mcp-server` local apontando para esse mesmo `back/`.
 </Note>
 
-## Passo 2 — Testar com MCP Inspector
+## Passo 2 — Testar com o MCP Inspector
 
 <Tabs>
   <Tab title="Docker Compose (Opção A)">
-    O MCP Inspector já está rodando. Abra **http://localhost:5173** e conecte:
+    O Inspector não faz parte da stack do Docker Compose (veja a nota no [Passo 1](#passo-1-iniciar-o-servidor)) — rode-o no host da mesma forma que na Opção B, conectando na porta publicada pelo Docker:
 
     | Campo | Valor |
     |-------|-------|
     | Transport | Streamable HTTP |
-    | URL | `http://mcp-server:3100/mcp` |
-    | Header | `Authorization: Bearer mcp_dev_local` |
+    | URL | `http://localhost:3100/mcp` |
+    | Header | `Authorization: Bearer <sua chave MCP>` |
 
-    <Warning>
-    Use `http://mcp-server:3100/mcp`, **não** `http://localhost:3100/mcp`. O proxy do Inspector roda dentro do Docker — `localhost` lá se refere ao próprio container do Inspector. O Docker resolve `mcp-server` para o container correto via rede interna.
-    </Warning>
-
-    Clique em **Connect**, depois em **Tools → List**. Você deve ver `list_agents`, `get_agent` e `list_node_types`.
+    Siga a aba **Standalone (Opção B)** para os passos exatos — troque para Streamable HTTP, defina a URL acima, adicione o header e clique em **Connect**.
   </Tab>
   <Tab title="Standalone (Opção B)">
-    O [MCP Inspector](https://github.com/modelcontextprotocol/inspector) também pode ser executado diretamente. Execute **sem argumentos** — passar uma URL diretamente faz o Inspector tratá-la como processo stdio, o que falha para servidores HTTP:
+    O [MCP Inspector](https://github.com/modelcontextprotocol/inspector) roda direto no host. A partir de `mcp-server/`, `pnpm inspect` inicia o Inspector na porta `5173` (apenas uso local):
+
+    ```bash
+    pnpm inspect
+    ```
+
+    Ou rode o Inspector por conta própria. Rode **sem argumentos** — passar uma URL diretamente faz o Inspector tratá-la como um processo stdio a ser iniciado, o que falha para servidores HTTP:
 
     ```bash
     npx @modelcontextprotocol/inspector
     ```
 
-    A interface web abre em `http://localhost:6274`.
+    O comando `npx` abre a UI web em `http://localhost:6274`.
 
     <Steps>
       <Step title="Troque para o transport Streamable HTTP">
-        No dropdown **Transport Type**, mude de `STDIO` para `Streamable HTTP`.
+        No dropdown **Transport Type**, mude `STDIO` para `Streamable HTTP`.
       </Step>
-      <Step title="Configure a URL do servidor">
+      <Step title="Defina a URL do servidor">
         Digite `http://localhost:3100/mcp` no campo de URL.
       </Step>
-      <Step title="Adicione o header de autorização">
+      <Step title="Adicione o header Authorization">
         No painel **Headers**, adicione:
 
         ```
-        Authorization: Bearer mcp_dev_local
+        Authorization: Bearer <sua chave MCP>
         ```
       </Step>
       <Step title="Conecte e explore">
-        Clique em **Connect**, depois em **Tools → List**. Você deve ver `list_agents`, `get_agent` e `list_node_types`. Selecione qualquer tool e clique em **Call** para ver a requisição e resposta JSON-RPC brutas.
+        Clique em **Connect** e depois em **Tools → List**. A lista de tools não está vazia — veja as [páginas de tools](/mcp/pt-br/tools/agents-and-folders) para o que cada uma faz. Selecione qualquer tool e clique em **Call** para ver a requisição e a resposta JSON-RPC brutas.
       </Step>
     </Steps>
   </Tab>
 </Tabs>
 
-## Passo 3 — Testar com Claude Desktop
+## Passo 3 — Testar com o Claude Desktop (via túnel)
 
-### Opção A — Registrar com um comando
-
-A partir da pasta `mcp-server/` (o servidor já deve estar rodando):
-
-```bash
-pnpm claude:register
-```
-
-Este script lê `PORT` e `MCP_INTERNAL_SECRET` do `.env` e escreve a entrada `fluxprompt-mcp` no `claude_desktop_config.json` automaticamente. É idempotente — executá-lo novamente exibe o estado atual e sai sem alterações.
-
-Após executar, **reinicie completamente o Claude Desktop**. A entrada `fluxprompt-mcp` aparece no painel de tools (ícone de martelo).
-
-### Opção B — Editar o arquivo de configuração manualmente
+O Claude Desktop adiciona servidores MCP remotos como **conectores**, por uma **URL HTTPS**, e a requisição é feita a partir do backend da Anthropic, não da sua máquina. O `localhost` é, portanto, inacessível: você precisa de um túnel HTTPS público. Não há arquivo de configuração local para editar neste caso.
 
 <Steps>
-  <Step title="Abra o arquivo de configuração do Claude Desktop">
-    | SO | Caminho |
-    |----|---------|
-    | **macOS** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-    | **Windows** | `%APPDATA%\Claude\claude_desktop_config.json` |
-    | **Linux** | `~/.config/Claude/claude_desktop_config.json` |
-
-    Crie o arquivo se ele não existir.
+  <Step title="Inicie um túnel">
+    Exponha a porta `3100` com cloudflared ou ngrok e alinhe os três valores de URL, como descrito em [Túneis](#túneis). Reinicie o front e o `mcp-server` depois.
   </Step>
-  <Step title="Adicione a entrada do servidor local">
-    ```json
-    {
-      "mcpServers": {
-        "fluxprompt-local": {
-          "url": "http://localhost:3100/mcp",
-          "headers": {
-            "Authorization": "Bearer mcp_dev_local"
-          }
-        }
-      }
-    }
-    ```
-
-    <Warning>
-    Se o arquivo já tiver uma chave `mcpServers`, adicione `"fluxprompt-local": { ... }` dentro dela — não crie um segundo bloco `mcpServers`.
-    </Warning>
-
-    <Note>
-    **Expondo o servidor via ngrok?** Aponte a `url` para o endereço do ngrok e adicione o header `ngrok-skip-browser-warning` — valor **`1`**, não `true` (veja [Troubleshooting](#troubleshooting)). Caso contrário, toda chamada falha com `Unexpected content type: text/html`:
-
-    ```json
-    {
-      "mcpServers": {
-        "fluxprompt-local": {
-          "url": "https://<seu-subdominio>.ngrok-free.dev/mcp",
-          "headers": {
-            "Authorization": "Bearer mcp_dev_local",
-            "ngrok-skip-browser-warning": "1"
-          }
-        }
-      }
-    }
-    ```
-    </Note>
+  <Step title="Adicione um conector personalizado">
+    No Claude Desktop, vá em **Customize → Connectors → Add custom connector** e informe `https://<seu-túnel>/mcp`.
   </Step>
-  <Step title="Reinicie o Claude Desktop">
-    Feche completamente o Claude Desktop e reabra. A entrada **fluxprompt-local** aparece no painel de tools (ícone de martelo).
+  <Step title="Faça login com OAuth">
+    Em autenticação, escolha **Sign in** e depois **Use Claude's published identity** (recomendado) ou **Register automatically**. Conclua a tela de consentimento do FluxPrompt servida pelo seu front local.
   </Step>
-  <Step title="Peça para o Claude usar uma tool">
-    Tente: *"Liste meus agentes no FluxPrompt"* ou *"Quais tipos de nó estão disponíveis no FluxPrompt?"*
+  <Step title="Peça ao Claude para usar uma tool">
+    Tente: *"Liste meus agentes do FluxPrompt"* ou *"Quais tipos de node estão disponíveis no FluxPrompt?"*
   </Step>
 </Steps>
 
-## Smoke test rápido com curl
+<Warning>
+Não adicione uma `url` do FluxPrompt nem um header ao `claude_desktop_config.json`. O Claude Desktop não se conecta a servidores remotos por esse arquivo.
+</Warning>
+
+## Passo 4 — Testar com o Claude Code (CLI)
+
+O Claude Code roda na sua máquina, então alcança o `localhost` diretamente e não precisa de túnel. Veja [Conectar Claude Code](/mcp/pt-br/connect/claude-code) para o guia completo.
+
+<Steps>
+  <Step title="Adicione o servidor local">
+    ```bash
+    claude mcp add --transport http fluxprompt http://localhost:3100/mcp
+    ```
+  </Step>
+  <Step title="Autentique com OAuth">
+    Dentro do Claude Code execute `/mcp`, selecione **fluxprompt**, escolha **Authenticate** e conclua a tela de consentimento no navegador. O Claude Code recebe o resultado por um redirecionamento loopback para uma porta efêmera.
+  </Step>
+</Steps>
+
+Para usar uma chave no lugar (alternativa por header), passe-a com `--header`:
+
+```bash
+claude mcp add --transport http fluxprompt http://localhost:3100/mcp \
+  --header "Authorization: Bearer mcp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+Mantenha a chave fora do `--scope project`, que escreve um `.mcp.json` compartilhado.
+
+## OAuth local
+
+O lado `mcp-server` do OAuth local (`MCP_PUBLIC_URL`, `MCP_OAUTH_CONSENT_SECRET`, `MCP_FRONT_CONSENT_URL`) está no `.env` do Passo 1. O restante:
+
+| Onde | Variável | Valor local |
+|------|----------|-------------|
+| `back` | `MCP_OAUTH_CONSENT_SECRET` | O **mesmo** valor do `mcp-server` — senão a assinatura do consentimento falha |
+| `front` | `VITE_MCP_SERVER_URL` | `http://localhost:3100/mcp` (em tempo de build — reinicie o servidor Vite depois de mudar; veja [Variáveis de ambiente do client](/client/pt-br/environment-variables)) |
+
+O `back/` também precisa de `MCP_SERVER_INTERNAL_URL` e `MCP_RESOURCE_METADATA_URL` — veja [Variáveis de ambiente da API principal](/main-api/pt-br/environment-variables). Reinicie o `mcp-server` depois de editar o `.env` dele.
+
+## Túneis
+
+Claude Desktop, Claude.ai e qualquer cliente remoto não alcançam o `localhost`, porque as requisições vêm dos servidores do fornecedor. Claude Code e o Inspector rodam na sua máquina e não precisam de túnel. Exponha o servidor por um túnel — tanto o **ngrok** quanto o **cloudflared** (quick tunnels `trycloudflare.com`) funcionam.
+
+Quick tunnels recebem uma **URL nova a cada vez que você os inicia**. Quando a URL pública muda, atualize três valores juntos:
+
+| Valor | Onde | Formato |
+|-------|------|---------|
+| URL no cliente | A URL do conector do Claude Desktop, ou ex.: a entrada `fluxprompt-mcp-local` em `~/.claude.json` | Origem **mais** `/mcp` |
+| `VITE_MCP_SERVER_URL` | `front/.env` (em tempo de build) | Origem **mais** `/mcp` |
+| `MCP_PUBLIC_URL` | `mcp-server/.env` | Origem pura, **sem** `/mcp` |
+
+Depois reinicie o front e o `mcp-server` e reconecte o cliente. Se os valores divergirem, a descoberta OAuth retorna um issuer que não bate com a URL que o cliente usou e o login falha.
+
+<Tip>
+A skill `mcp-tunnel-url` do workspace atualiza os três arquivos de uma vez. Ela só edita arquivos — você reinicia os serviços por conta própria.
+</Tip>
+
+No plano gratuito do ngrok, envie o header `ngrok-skip-browser-warning: 1` em toda requisição — veja [Solução de problemas](#solução-de-problemas). O cloudflared não precisa de header extra.
+
+## Teste rápido com curl
 
 ```bash
 curl -s -X POST http://localhost:3100/mcp \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer mcp_dev_local" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-  | jq .result.tools[].name
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer <sua chave MCP>" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
-Saída esperada:
-```
-"list_agents"
-"get_agent"
-"list_node_types"
-```
+Uma configuração funcionando retorna um array JSON-RPC `result.tools` com o catálogo de tools. O `tools/list` não é filtrado por escopo, então uma lista vazia não é problema de permissão.
 
-## Executar a suíte de testes
+## Rodar a suíte de testes
 
 ```bash
 pnpm test              # testes unitários — rápidos, sem rede
-pnpm test:e2e          # testes e2e — Supertest, servidor em processo
-npx tsc --noEmit       # verificação de tipos
+pnpm test:e2e          # testes e2e — Supertest, servidor in-process
+npx tsc --noEmit       # checagem de tipos
 ```
 
-Os três devem passar antes de qualquer commit.
+Os três precisam passar antes de qualquer commit.
 
 ## Solução de problemas
 
 <AccordionGroup>
   <Accordion title="401 Unauthorized">
-    O token é inválido, revogado, ou o header `Authorization` está ausente. Verifique se o token existe e está ativo na tabela `mcp_tokens` no banco de dados local/dev.
-  </Accordion>
-  <Accordion title='Erro "service_disabled" (-32005)'>
-    `MCP_KILL_SWITCH=on` está configurado no seu `.env`. Altere para `off` e reinicie.
-  </Accordion>
-  <Accordion title="Não consegue acessar o back/ (ECONNREFUSED)">
-    `BACK_BASE_URL` aponta para um host que não está rodando. Se estiver rodando no Docker, use `http://host.docker.internal:<porta>` (não `http://localhost:...`). Se estiver rodando standalone, inicie sua instância local do `back/`.
-  </Accordion>
-  <Accordion title="Inspector mostra porta errada ou ECONNREFUSED (Docker)">
-    O cache npm dentro do container do Inspector pode ter uma versão desatualizada. Limpe e reinicie:
+    O corpo da resposta tem um `reason`:
 
-    ```bash
-    docker compose down -v && docker compose up
-    ```
+    - `missing_token` — não há header `Authorization: Bearer ...`.
+    - `invalid_token` — o token não é aceito: é desconhecido, foi revogado, expirou ou não tem vínculo ativo com um workspace. Localmente, `MCP_INTERNAL_SECRET` também não é um token de cliente.
 
-    O flag `-v` remove os volumes nomeados, incluindo o cache npm do Inspector.
+    Gere uma nova chave em **MCP Keys** no front local ou com `pnpm mcp:dev-token` (veja [Obter uma credencial de cliente](#obter-uma-credencial-de-cliente)), ou use OAuth no lugar. Para os motivos genéricos de 401, veja [Solução de problemas](/mcp/pt-br/troubleshooting).
   </Accordion>
-  <Accordion title="Inspector não consegue acessar o servidor MCP (Docker)">
-    Verifique a URL na interface do Inspector. Deve ser `http://mcp-server:3100/mcp`, não `http://localhost:3100/mcp`. O proxy do Inspector roda dentro do Docker — `localhost` lá é o container do Inspector, não o seu host.
+  <Accordion title='Erro "Service disabled" (-32005)'>
+    `MCP_KILL_SWITCH=on` está definido no seu `.env`. Mude para `off` e reinicie.
   </Accordion>
-  <Accordion title="tools/list retorna array vazio">
-    O scope do token não inclui `read`. O token dev precisa ter `scope: 'read'` na tabela `mcp_tokens`.
+  <Accordion title="503 upstream_unavailable / não alcança o back/ (ECONNREFUSED)">
+    O `mcp-server` não conseguiu alcançar o `back/`, então responde `503` com `reason: "upstream_unavailable"`. Confira `BACK_BASE_URL` (veja o [Passo 1](#env-mínimo-para-trabalho-local)) e se o `back/` está rodando.
+  </Accordion>
+  <Accordion title="502 upstream_auth_rejected">
+    `MCP_INTERNAL_SECRET` é diferente entre o `mcp-server` e o `back/`. Defina o mesmo valor nos dois e reinicie o `mcp-server`.
+  </Accordion>
+  <Accordion title="O Inspector mostra ECONNREFUSED ou não conecta">
+    O Inspector roda no host (veja o [Passo 2](#passo-2-testar-com-o-mcp-inspector)), não dentro do Docker
+    Compose — o serviço `inspector:` no `docker-compose.yml` está comentado. Confirme que você o iniciou
+    no host e que a URL informada é `http://localhost:3100/mcp` (a porta em que o Docker publica o
+    `mcp-server`).
+  </Accordion>
+  <Accordion title="A página de consentimento OAuth não carrega ou o login falha">
+    Confira os valores do [OAuth local](#oauth-local) e o `.env` do Passo 1: `MCP_OAUTH_CONSENT_SECRET` precisa ser idêntico no `mcp-server` e no `back`, e `MCP_PUBLIC_URL` / `VITE_MCP_SERVER_URL` precisam apontar para a mesma origem que o cliente usa (veja [Túneis](#túneis)).
   </Accordion>
   <Accordion title='Expondo o servidor via ngrok — respostas voltam como HTML ("Unexpected content type: text/html")'>
-    Ao expor o servidor local através do **ngrok** (plano free), o ngrok devolve a própria página de aviso do navegador (HTTP 200, `Content-Type: text/html`) em vez de encaminhar para o servidor MCP. O cliente MCP então falha com `Unexpected content type: text/html`.
+    Quando você expõe o servidor local pelo **ngrok** (plano gratuito), o ngrok serve a página intersticial de aviso do navegador (HTTP 200, `Content-Type: text/html`) em vez de repassar para o servidor MCP. O cliente MCP então falha com `Unexpected content type: text/html`.
 
-    Envie o header de skip em toda requisição — e atenção: o valor precisa ser **`1`**, não `true` (o ngrok só reconhece `1`):
+    Envie o header de bypass em toda requisição — e note que o valor precisa ser **`1`**, não `true` (o ngrok só respeita `1`):
 
     ```
     ngrok-skip-browser-warning: 1
     ```
 
-    Na config do Claude Desktop / Claude Code, adicione junto ao `Authorization`:
+    Em uma configuração que suporta headers (por exemplo uma entrada do Claude Code em `~/.claude.json`), adicione-o junto com `Authorization`:
 
     ```json
     "headers": {
@@ -285,6 +331,8 @@ Os três devem passar antes de qualquer commit.
       "ngrok-skip-browser-warning": "1"
     }
     ```
+
+    Para um cliente que não envia headers, use o cloudflared, ou deixe o ngrok injetar o header (`ngrok http 3100 --request-header-add "ngrok-skip-browser-warning: 1"`).
 
     Verifique com curl (note o valor `1`):
 
@@ -297,6 +345,6 @@ Os três devem passar antes de qualquer commit.
       -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
     ```
 
-    Uma resposta correta tem `Content-Type: text/event-stream`. Se ainda vier `text/html`, o valor do header está errado (`true` em vez de `1`) ou ausente.
+    Uma resposta correta tem `Content-Type: text/event-stream`. Se você ainda recebe `text/html`, o valor do header está errado (`true` em vez de `1`) ou ausente.
   </Accordion>
 </AccordionGroup>

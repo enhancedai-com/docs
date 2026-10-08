@@ -5,27 +5,37 @@ description: "The two ways to authenticate with FluxPrompt MCP — OAuth and ser
 
 ## Two authentication methods
 
-FluxPrompt's inbound MCP server supports **two** ways to authenticate. Which one you use depends on your client:
+FluxPrompt's inbound MCP server supports **two** ways to authenticate. Which one you use depends on your client.
+
+<Note>
+**OAuth is the recommended method for users and developers in every environment** (local, dev, staging and production); it was validated end to end in all of them. Keep static service tokens for header-only and machine-to-machine clients such as n8n, CI and scripts.
+</Note>
 
 | Method | When to use it | What you do |
 |---|---|---|
-| **OAuth 2.0** | Claude Desktop and Claude.ai (**required** — they reject pasted tokens), and optionally Claude Code / CLI and Cursor | Add the server URL as a connector and log in through a FluxPrompt consent screen — **no token** |
-| **Static service token** | Backend / machine-to-machine services, the CLI, Cursor, and n8n — clients that can't or shouldn't run a browser consent flow | Generate a token and put it in the `Authorization` header |
+| **OAuth 2.0** | **Recommended for everyone:** Claude Desktop and Claude.ai (connector sign-in), Claude Code / CLI, Codex, and Cursor | Add the server URL as a connector and log in through a FluxPrompt consent screen — **no token** |
+| **Static service token** | Backend / machine-to-machine services, scripts, OpenCode, n8n, and any client that can't or shouldn't run a browser consent flow (Claude Code, Codex and Cursor also accept a key) | Generate a token and put it in the `Authorization` header |
 
 <Info>
-**Claude Desktop and Claude.ai users do NOT use a token.** Those clients reject user-pasted bearer tokens, so they authenticate exclusively via OAuth. If a guide tells you to paste a token into Claude Desktop, it is out of date — see [Connect Claude Desktop](/mcp/connect/claude-desktop).
+**Claude Desktop and Claude.ai users do not use a token.** They add FluxPrompt as a connector by HTTPS URL and choose **Sign in** (OAuth). If a guide tells you to paste a token or a URL into `claude_desktop_config.json`, it is out of date — see [Connect Claude Desktop](/mcp/connect/claude-desktop). Claude Code has its own guide: [Connect Claude Code](/mcp/connect/claude-code).
 </Info>
 
 ## Method 1 — OAuth 2.0
 
 OAuth is the right choice for any client that can open a browser. You never see or handle a token.
 
-1. In your client, add `https://mcp.fluxprompt.ai/mcp` as a custom connector.
+1. In your client, add `https://mcp.fluxprompt.ai/mcp` as a custom connector (or, in Claude Code, run `claude mcp add --transport http fluxprompt https://mcp.fluxprompt.ai/mcp` and then `/mcp` → **Authenticate**).
 2. The client opens a FluxPrompt login + consent screen.
-3. You log in, **select which workspace** to grant access to, and approve.
-4. The client stores the resulting authorization automatically and refreshes it as needed.
+3. You log in and see the list of your **Organizations**. All of them are checked; uncheck the ones you don't want to grant, then click **Authorize** (or **Deny**).
+4. The client stores the resulting authorization automatically.
 
-This is **required** for Claude Desktop and Claude.ai, and **supported** by Claude Code / CLI and Cursor. See the per-client guides for the exact steps.
+This is the **recommended** method for Claude Desktop, Claude.ai, Claude Code / CLI, Codex, and Cursor, in every environment. The server supports client ID metadata documents (CIMD) and dynamic client registration (DCR) with PKCE `S256`, so clients can register themselves. See the per-client guides for the exact steps.
+
+### What an OAuth grant includes
+
+OAuth access tokens **do not expire**, and there is **no refresh token**: the server only supports the `authorization_code` grant. The client keeps using the same token until you revoke it in [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens), where OAuth grants appear with the type **OAuth**. After a revocation, reconnect the client to authorize again.
+
+What the grant can do is worked out per workspace — see [Scopes are clamped by your role](#scopes-are-clamped-by-your-role) and [One authorization can cover multiple workspaces](#one-authorization-can-cover-multiple-workspaces).
 
 ## Method 2 — Static service token
 
@@ -33,11 +43,14 @@ For machine-to-machine clients (backend services), the CLI, Cursor, and n8n, you
 
 ### Generate a service token
 
-The workspace owner generates one in the FluxPrompt UI:
+Any active member of a workspace can generate one in the FluxPrompt UI:
 
-1. Open [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
-2. Create a new token and pick the workspace it grants access to.
-3. Copy the token — it starts with `mcp_` and is **shown only once**. Store it somewhere safe.
+1. Open [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
+2. Click **Generate key**. In the **Generate MCP key** dialog, enter a **Key name** (for example `n8n`). If you belong to other organizations, you can also tick them under **Also grant this key access to**.
+3. Choose the scopes. Workspace admins see the scope checkboxes, with `read` preselected. Other members get a read-only key from this dialog (see [Scopes are clamped by your role](#scopes-are-clamped-by-your-role)).
+4. Click **Generate**, then copy the key — it starts with `mcp_` and is **shown only once**. Store it somewhere safe.
+
+Admins see every key and OAuth grant in the workspace; other members see only the keys they created.
 
 ### Use the token
 
@@ -52,7 +65,7 @@ You usually don't type this header by hand — your client reads it from its con
 ## Service token security
 
 <Warning>
-A service token gives full read access to your workspace agents. Treat it like a password:
+A service token gives its holder whatever its scopes allow — at minimum read access to your workspace agents, and with `write` or `execute` the ability to change or run them. Treat it like a password:
 - Never commit it to a Git repository.
 - Never paste it in a public document or screenshot.
 - Never share it on Slack, email, or in any message that others can see.
@@ -60,7 +73,7 @@ A service token gives full read access to your workspace agents. Treat it like a
 
 If you believe a service token has been exposed:
 
-1. Revoke it from [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
+1. Revoke it from [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens). Workspace admins can revoke any key; other members can revoke only their own.
 2. Generate a new one.
 3. Update your client config files with the new token.
 
@@ -68,18 +81,19 @@ If you believe a service token has been exposed:
 
 A key carries one or more of three scopes:
 
-| Scope | Grants |
-|-------|--------|
-| `read` | List agents and folders, fetch an agent's full structure, browse node types and AI models. |
-| `write` | Create and edit agents, folders, nodes and edges; snapshot and publish versions. |
-| `execute` | Run an agent, poll a run, cancel a run. |
+| Scope | Grants | Tools |
+|-------|--------|-------|
+| `read` | List agents, folders and versions, fetch an agent's full structure, and browse node types, AI models, integrations and voices. | [Agents & folders](/mcp/tools/agents-and-folders), [Nodes & edges](/mcp/tools/nodes-and-edges), [Versioning](/mcp/tools/versioning) |
+| `write` | Create and edit agents, folders, nodes and edges; snapshot and publish versions. | [Writing safely](/mcp/tools/writing-safely), [Agents & folders](/mcp/tools/agents-and-folders), [Nodes & edges](/mcp/tools/nodes-and-edges), [Versioning](/mcp/tools/versioning) |
+| `execute` | Run an agent, poll a run, cancel a run. | [Running agents](/mcp/tools/running-agents) |
 
-No scope grants access to billing, users, or workspace settings — those are never exposed over MCP.
+`list_workspaces` and `list_node_types` need no scope at all. `get_node_type` needs `read`. A tool the key's scopes do not cover is refused with `-32401 Insufficient scope`; see [Workspace-level switches](#workspace-level-switches) to tell that apart from a switch refusal. No scope grants access to billing, users, or workspace settings — those are never exposed over MCP.
 
 ### One authorization can cover multiple workspaces
 
-A single OAuth authorization or service token is **not** limited to one organization — an admin can
-let the same key reach several of their organizations, and scopes are set **per workspace**, so a
+A single OAuth authorization or service token is **not** limited to one organization — the same key
+can reach several organizations you belong to (tick them on the consent screen, or under
+**Also grant this key access to** when you generate a key), and scopes are set **per workspace**, so a
 key can carry `write` in one and only `read` in another. Call
 [`list_workspaces`](/mcp/tools/agents-and-folders#list_workspaces) to see every workspace an
 authorization covers and its scopes in each.
@@ -93,17 +107,24 @@ an optional `workspaceId` parameter:
 
 ### Scopes are clamped by your role
 
-If you are not an admin of the selected organization, requesting `write`/`execute` yields a key
-clamped to `read` instead of an error. A workspace admin can lift this with the
-**Allow non-admin write/execute keys** toggle in
-[Settings → MCP Tokens](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) — it is off by
-default.
+A client asks for the scopes it wants; you don't pick them on the consent screen, and if it asks for none the grant is `read` only.
+
+If you are not an admin of an organization, requesting `write`/`execute` there yields a grant
+clamped to `read` instead of an error — this applies to each organization separately. A workspace
+admin controls this with the **Let regular members create powerful keys** toggle in
+[Settings → MCP Keys](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens). It is **on by
+default**; when an admin turns it off, non-admin members get `read` only.
+
+The toggle does not change the **Generate key** dialog: only admins see the scope checkboxes there, so
+non-admins always get a read-only key from it. The toggle governs whether a non-admin can hold
+`write`/`execute` through OAuth consent or the API. It is checked only when a key is created or an app
+is reconnected, so keys that already exist keep the scopes they were given.
 
 ### Change a key's scopes
 
 A workspace admin can change the scopes of an existing key at any time — there is no need to revoke it
-and issue a new one. In [Settings → MCP Tokens](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens),
-the scopes cell of each key in the **MCP Keys** table shows the current scopes as chips with an edit
+and issue a new one. In [Settings → MCP Keys](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens),
+the scopes cell of each key in the keys table shows the current scopes as chips with an edit
 (pencil) icon next to them. Click either the chips or the icon, tick the scopes you want, and save.
 Non-admins see the same chips as read-only.
 
@@ -125,12 +146,14 @@ because the core API validates every call against the key's current scopes.
 
 ### Workspace-level switches
 
-Even with the right scope, two workspace switches must be on:
+Even with the right scope, two workspace switches must be on. A workspace admin controls them in
+**Settings → MCP Keys**, under **What connected AI assistants are allowed to do**. Both are **on by
+default**.
 
-| Switch | Turns off |
-|--------|-----------|
-| `mcp.writes.enabled` | Every write tool for this workspace. |
-| `mcp.execute.enabled` | `run_agent` for this workspace. |
+| Switch in the UI | Internal name in refusals | Turns off |
+|------------------|---------------------------|-----------|
+| **Let AI assistants change things** | `mcp.writes.enabled` | Every write tool for this workspace. |
+| **Let AI assistants run agents** | `mcp.execute.enabled` | `run_agent` for this workspace. Runs started from the app itself are not affected. |
 
 These switches are an **independent** gate: the right scope on the key is not enough while the switch is
 off. The two refusals read differently, which tells you which one to fix:
@@ -143,7 +166,7 @@ off. The two refusals read differently, which tells you which one to fix:
 The `<id>` in the second one is a different value on every call, so search your logs for
 `feature_disabled:` rather than for the whole line.
 
-Either way, the fix is in the same place: **Settings → MCP Tokens**.
+Either way, the fix is in the same place: **Settings → MCP Keys**.
 
 Runs started through MCP are billed and audited against the **owner of the key** that started them, and
 the triggering key/client name appears in the agent's execution history.
@@ -152,13 +175,13 @@ the triggering key/client name appears in the agent's execution history.
 
 <AccordionGroup>
   <Accordion title="Which method should I use?">
-    If your client is Claude Desktop or Claude.ai, you must use OAuth. For backend services, the CLI, or n8n, use a service token. Cursor and Claude Code can use either — OAuth is simplest if you can open a browser.
+    Use OAuth whenever your client can open a browser — it is the recommended method for users and developers alike. Use a service token for backend services, scripts, n8n, or any client that can only send a header.
   </Accordion>
   <Accordion title="Can I have multiple service tokens for the same workspace?">
-    Yes — each token is independent. You can have one token per client (e.g. one for n8n, one for a backend service) and revoke them individually from [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
+    Yes — each token is independent. You can have one token per client (e.g. one for n8n, one for a backend service) and revoke them individually from [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens).
   </Accordion>
   <Accordion title="Does a service token expire?">
-    Service tokens do not expire automatically. They remain valid until revoked. We recommend revoking tokens you no longer use.
+    No — neither service tokens nor OAuth access tokens expire, so revoke keys you no longer use (see [What an OAuth grant includes](#what-an-oauth-grant-includes)).
   </Accordion>
   <Accordion title="Can I use my regular FluxPrompt API key instead?">
     No. The MCP server uses a separate authentication system. Your regular API key will not work.
@@ -168,9 +191,9 @@ the triggering key/client name appears in the agent's execution history.
   </Accordion>
   <Accordion title="I granted someone write access but their client still only has read">
     Check these in order:
-    1. **The workspace switches.** `mcp.writes.enabled` and `mcp.execute.enabled` are an independent gate from the key's scopes — a key that carries `write` is still refused while the switch is off. A switch refusal contains `feature_disabled:`, not `Insufficient scope`.
+    1. **The workspace switches.** **Let AI assistants change things** (`mcp.writes.enabled`) and **Let AI assistants run agents** (`mcp.execute.enabled`) are an independent gate from the key's scopes — a key that carries `write` is still refused while the switch is off. A switch refusal contains `feature_disabled:`, not `Insufficient scope`.
     2. **Give it a few seconds.** The MCP server caches resolved keys for `MCP_TOKEN_CACHE_TTL` seconds (10 by default), so a newly added scope can take that long to apply. Retry after ~10 seconds, or reconnect the client.
-    3. **Confirm the change saved.** Reopen [**Settings → MCP Tokens**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) and check that the key's scopes cell shows the scopes you expect.
+    3. **Confirm the change saved.** Reopen [**Settings → MCP Keys**](https://app.fluxprompt.ai/dashboard-beta?settings=mcpTokens) and check that the key's scopes cell shows the scopes you expect.
     4. **Confirm the client is not holding an old session.** Some clients only re-read the available tools and permissions when they reconnect.
   </Accordion>
 </AccordionGroup>

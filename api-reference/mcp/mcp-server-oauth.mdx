@@ -32,9 +32,13 @@ All three paths return the same metadata document (path-aware, per MCP spec).
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code"],
   "code_challenge_methods_supported": ["S256"],
+  "token_endpoint_auth_methods_supported": ["none"],
+  "scopes_supported": ["read", "write", "execute"],
   "client_id_metadata_document_supported": true
 }
 ```
+
+Only the `authorization_code` grant is supported (no refresh tokens), and clients are public: `token_endpoint_auth_methods_supported` is `["none"]`, so PKCE (`S256`) replaces a client secret. `issuer` is the server's `MCP_PUBLIC_URL`. `client_id_metadata_document_supported: true` means a `client_id` that is an `https://` URL is fetched as a Client ID Metadata Document instead of being looked up as a registered client.
 
 ### OAuth Protected Resource metadata
 
@@ -48,10 +52,14 @@ All three paths return the same metadata document.
 
 ```json
 {
-  "resource": "https://mcp.fluxprompt.ai",
-  "authorization_servers": ["https://mcp.fluxprompt.ai"]
+  "resource": "https://mcp.fluxprompt.ai/mcp",
+  "authorization_servers": ["https://mcp.fluxprompt.ai"],
+  "scopes_supported": ["read", "write", "execute"],
+  "bearer_methods_supported": ["header"]
 }
 ```
+
+`resource` is the MCP endpoint itself (`{issuer}/mcp`), not the bare host. Unauthenticated MCP requests receive `401` with `WWW-Authenticate: Bearer resource_metadata="{issuer}/.well-known/oauth-protected-resource"`, which is how clients find this document.
 
 ---
 
@@ -79,11 +87,14 @@ Content-Type: application/json
 
 ```json
 {
-  "client_id": "client_abc123",
+  "client_id": "dcr_3f9a1c…",
   "redirect_uris": ["https://claude.ai/callback"],
-  "client_name": "Claude Desktop"
+  "client_name": "Claude Desktop",
+  "token_endpoint_auth_method": "none"
 }
 ```
+
+Generated `client_id` values are prefixed `dcr_`. `client_name` is optional and is returned as `null` when omitted. Registration lifetime is set by `MCP_DCR_CLIENT_TTL` (see [MCP environment variables](/mcp/environment-variables)).
 
 DCR clients are **persisted in Postgres** via `back/` and survive mcp-server restarts.
 
@@ -94,7 +105,7 @@ DCR clients are **persisted in Postgres** via `back/` and survive mcp-server res
 ```http
 GET /oauth/authorize
   ?response_type=code
-  &client_id=client_abc123
+  &client_id=dcr_3f9a1c…
   &redirect_uri=https://claude.ai/callback
   &code_challenge=BASE64URL(SHA256(verifier))
   &code_challenge_method=S256
@@ -102,7 +113,25 @@ GET /oauth/authorize
   &scope=read
 ```
 
-Redirects the user's browser to the FluxPrompt consent page (`/mcp-authorize.html`). After the user approves, the consent page posts the signed assertion back to `/oauth/consent-callback`.
+| Param | Required | Description |
+|-------|----------|-------------|
+| `response_type` | Yes | Must be `code`. |
+| `client_id` | Yes | A DCR `client_id`, or an `https://` Client ID Metadata Document URL. |
+| `redirect_uri` | Yes | Must match a registered redirect URI. Loopback URIs (`localhost`, `127.0.0.1`, `::1`) match on scheme, host and path regardless of port. |
+| `code_challenge` | Yes | PKCE challenge. |
+| `code_challenge_method` | Yes | Must be `S256`. |
+| `state` | No | Echoed back on every redirect. |
+| `scope` | No | Space-separated scopes. Defaults to `read` when omitted. |
+
+Redirects the user's browser to the FluxPrompt consent page (configured by `MCP_FRONT_CONSENT_URL`) with `request_id`, `client_id`, `client_name` and `scope`. After the user approves, the consent page posts the signed assertion back to `/oauth/consent-callback`.
+
+### Errors
+
+| Response | Reason |
+|----------|--------|
+| `400 { "error": "invalid_request" }` | `client_id` or `redirect_uri` missing. |
+| `400 { "error": "invalid_client" }` | Unknown or expired client, or `redirect_uri` does not match. These two cases return JSON because the `redirect_uri` cannot be trusted. |
+| Redirect to `redirect_uri?error=invalid_request&state=…` | `response_type` is not `code`, or `code_challenge` is missing, or `code_challenge_method` is not `S256`. |
 
 ---
 
@@ -118,11 +147,19 @@ Called by the FluxPrompt consent page after the user approves or denies. The `as
 
 | Param | Required | Description |
 |-------|----------|-------------|
-| `request_id` | Yes | The original `request_id` from `/oauth/authorize`. `400` if missing or expired. |
+| `request_id` | Yes | The original `request_id` from `/oauth/authorize`. `400 { "error": "invalid_request" }` if missing, or with `"reason": "expired"` if it is unknown, expired or already used. |
 | `decision` | Yes | Must be exactly `approve` to continue the flow. Any other value (or a missing `assertion`) redirects back to `redirect_uri` with `error=access_denied`. |
 | `assertion` | Yes, when `decision=approve` | The HS256 JWT from `POST /mcp/v1/oauth/consent`. |
 
 On success, redirects to `redirect_uri?code=<auth-code>&state=<state>`.
+
+Failures redirect to `redirect_uri` with an `error` param and the original `state`:
+
+| `error` | Reason |
+|---------|--------|
+| `access_denied` | `decision` is not `approve`, or `assertion` is missing. |
+| `access_denied` (with `reason=invalid_consent`) | The assertion signature, issuer, audience or expiry is invalid, or its `nonce`/`clientId` does not match the pending request. |
+| `invalid_scope` | None of the granted scopes were among the scopes requested in `/oauth/authorize`. Granted scopes are the intersection of both. |
 
 ---
 
@@ -137,7 +174,7 @@ Content-Type: application/x-www-form-urlencoded
 grant_type=authorization_code
 &code=<auth-code>
 &redirect_uri=https://claude.ai/callback
-&client_id=client_abc123
+&client_id=dcr_3f9a1c…
 &code_verifier=<pkce-verifier>
 ```
 
@@ -151,10 +188,21 @@ grant_type=authorization_code
 }
 ```
 
-The `access_token` is an opaque `mcp_oauth_…` token persisted in Postgres. It is used as a `Bearer` token in all subsequent MCP requests.
+`code`, `code_verifier` and `client_id` are required. Authorization codes are single-use. The `access_token` is an opaque `mcp_oauth_…` token whose hash is persisted in Postgres. It is used as a `Bearer` token in all subsequent MCP requests.
+
+### Errors
+
+All errors are `400` with a JSON body.
+
+| `error` | Reason |
+|---------|--------|
+| `unsupported_grant_type` | `grant_type` is not `authorization_code`. |
+| `invalid_request` | `code`, `code_verifier` or `client_id` missing. |
+| `invalid_grant` | Code unknown, expired or already used; `client_id` does not match the code; or `redirect_uri` was sent and does not match. |
+| `invalid_grant` (with `reason: "pkce_mismatch"`) | `code_verifier` does not hash to the `code_challenge`. |
 
 <Note>
-OAuth access tokens **do not expire by default** (`expires_in` is omitted from the response entirely, per RFC 6749). Set `MCP_OAUTH_TOKEN_TTL` (seconds) on the MCP server to opt into an expiry — with it configured, the response includes `expires_in: <MCP_OAUTH_TOKEN_TTL>`.
+OAuth access tokens **do not expire by default** (`expires_in` is omitted from the response entirely, per RFC 6749). Set `MCP_OAUTH_TOKEN_TTL` (seconds) on the MCP server to opt into an expiry — with it configured, the response includes `expires_in` set to that value.
 </Note>
 
 ---
@@ -176,10 +224,10 @@ JSON-RPC 2.0 over Streamable HTTP. All tool calls go here.
 
 ```http
 DELETE /mcp
-Authorization: Bearer <token>
+DELETE /
 ```
 
-Returns `204 No Content`. Signals session end to the server.
+Returns `204 No Content`. No `Authorization` header is required and nothing is stored server-side: the endpoint exists so clients that send a session-termination request get a clean response.
 
 ### Health check
 
@@ -202,4 +250,4 @@ Access-Control-Allow-Credentials: (not sent — credentials: false)
 Access-Control-Expose-Headers: Mcp-Session-Id, WWW-Authenticate
 ```
 
-CORS preflight (`OPTIONS /mcp`) returns `204` with the appropriate `Access-Control-Allow-*` headers.
+Allowed methods are `GET`, `POST`, `OPTIONS` and `DELETE`. Allowed request headers are `Authorization`, `Content-Type`, `Mcp-Session-Id`, `mcp-protocol-version` and `Accept`. CORS preflight (`OPTIONS /mcp`) returns `204` with the appropriate `Access-Control-Allow-*` headers.
