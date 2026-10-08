@@ -240,11 +240,91 @@ widened to the whole workspace, only when that user is no longer an active membe
   connection is not usable even when it is valid.
 </Warning>
 
+## `list_integration_options`
+
+Returns the values a `thirdPartyIntegration` picker offers for one field of a saved connection — the
+same list the canvas dropdown shows — as `{label, value}` items. Set the node field to `value`, show
+`label` to the user.
+
+### Input
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `integrationId` | string | Yes | Connection to query, from [`list_integrations`](#list_integrations). The provider is taken from the connection — you never pass one separately. |
+| `field` | string | Yes | The node field whose values you want — for example `team`, `space`, `folder`, `list`, `status`, `statusFilter` or `assignees` for clickup. [`get_node_type`](#get_node_type) `thirdPartyIntegration` names the fields for every provider. |
+| `context` | object | No | Values already chosen for the parent pickers, keyed by node field name, e.g. `{"team": "9011479430", "space": "90110000001"}`. Only string, number and boolean values are sent, as strings. |
+
+### Output
+
+```json
+{
+  "integrationId": "5b1e2f3a-1111-4c2d-9a3e-abc123456789",
+  "provider": "clickup",
+  "field": "list",
+  "options": [
+    { "label": "Sprint backlog", "value": "901100234567" },
+    { "label": "Bug triage", "value": "901100234599" }
+  ],
+  "total": 2
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `integrationId` | string | Echoes the connection you queried. |
+| `provider` | string | Provider of that connection, e.g. `clickup`. |
+| `field` | string | Echoes the field you asked about. |
+| `options` | array | `{label, value}` items. |
+| `total` | number | `options.length`. |
+
+### The clickup picker chain
+
+Pickers depend on the ones above them — pass the parent's chosen value in `context`, keyed by node
+field name:
+
+| Field | Needs in `context` | Notes |
+|-------|---------------------|-------|
+| `team` | none | ClickUp calls this the workspace. |
+| `space` | `{team}` | |
+| `folder` | `{space}` | Optional — a list can also live directly under a space. |
+| `list` | `{folder}`, or `{space}` for a folderless list | |
+| `status` / `statusFilter` | `{list}` | |
+| `assignees` | `{team}` | |
+| `taskId` | — | No picker. Read ids from a `tasks` pull instead. |
+
+Other providers expose their own pickers the same way — for example a slack `channel` or a notion
+`database` — and [`get_node_type`](#get_node_type) `thirdPartyIntegration` names the fields for each.
+
+<Warning>
+  **The connection must be reachable by the user, or the call is refused.** Same rule as
+  [`list_integrations`](#list_integrations): a connection that is not this user's own, and not
+  shared with the organisation by an active member, is refused with a 403 instead of returning
+  options.
+</Warning>
+
+<Warning>
+  **A provider error surfaces as a bad request.** When the provider itself rejects the call (a 4xx,
+  for example an expired token), `list_integration_options` returns a bad request telling the user
+  to reconnect the integration — it does not retry or fall back silently.
+</Warning>
+
+<Note>
+  **An empty list means one of two things**: there is nothing to choose, or a parent value is
+  missing from `context`. Check the chain above before assuming the picker is broken.
+</Note>
+
+<Warning>
+  **Do not invent ids.** A value not taken from this list's `options` will fail at run time — this
+  applies to clickup's `team`, `space`, `folder`, `list` and `assignees` as much as to any other
+  provider's pickers.
+</Warning>
+
 ## Authoring an integration node
 
 `thirdPartyIntegration` talks to a configured service, and `hubSpotCRM` is the same node with the
 provider fixed to `hubspot` — same fields, same execution engine, interchangeable for reads and
-writes. Six providers execute today: `hubspot`, `notion`, `slack`, `stripe`, `wordpress`, `zapier`.
+writes. Seven providers execute today: `clickup`, `hubspot`, `notion`, `slack`, `stripe`, `wordpress`,
+`zapier`.
 
 The order that works:
 
@@ -254,7 +334,10 @@ The order that works:
    decide which of the remaining fields apply, so read them from
    [`get_node_type`](/mcp/tools/nodes-and-edges#get_node_type) rather than guessing.
 4. Set `integrationId` from `list_integrations`.
-5. Set the fields that provider and that object type or action names.
+5. Resolve picker fields with [`list_integration_options`](#list_integration_options) — for example
+   clickup's `team`, `space`, `folder`, `list`, `status`/`statusFilter` and `assignees` are ids from
+   the connected account, not values to guess.
+6. Set the fields that provider and that object type or action names.
 
 Two things clients get wrong:
 

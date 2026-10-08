@@ -241,11 +241,90 @@ de ampliada para o workspace inteiro, apenas quando esse usuário não é mais m
   outro usuário não é utilizável, mesmo sendo válido.
 </Warning>
 
+## `list_integration_options`
+
+Retorna os valores que um picker do `thirdPartyIntegration` oferece para um campo de uma conexão
+salva — a mesma lista que o dropdown do canvas mostra — como itens `{label, value}`. Defina o campo
+do node com `value`; mostre o `label` ao usuário.
+
+### Entrada
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `integrationId` | string | Sim | Conexão a consultar, do [`list_integrations`](#list_integrations). O provider vem da conexão — você nunca passa um separadamente. |
+| `field` | string | Sim | O campo do node cujos valores você quer — por exemplo `team`, `space`, `folder`, `list`, `status`, `statusFilter` ou `assignees` para clickup. O [`get_node_type`](#get_node_type) de `thirdPartyIntegration` nomeia os campos de cada provider. |
+| `context` | object | Não | Valores já escolhidos nos pickers pai, indexados pelo nome do campo do node, ex.: `{"team": "9011479430", "space": "90110000001"}`. Só valores string, number e boolean são enviados, como strings. |
+
+### Saída
+
+```json
+{
+  "integrationId": "5b1e2f3a-1111-4c2d-9a3e-abc123456789",
+  "provider": "clickup",
+  "field": "list",
+  "options": [
+    { "label": "Sprint backlog", "value": "901100234567" },
+    { "label": "Bug triage", "value": "901100234599" }
+  ],
+  "total": 2
+}
+```
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `integrationId` | string | Repete a conexão consultada. |
+| `provider` | string | Provider dessa conexão, ex.: `clickup`. |
+| `field` | string | Repete o campo perguntado. |
+| `options` | array | Itens `{label, value}`. |
+| `total` | number | `options.length`. |
+
+### A cadeia de pickers do clickup
+
+Os pickers dependem dos que vêm antes deles — passe o valor escolhido no pai via `context`, indexado
+pelo nome do campo do node:
+
+| Campo | Precisa no `context` | Observações |
+|-------|-----------------------|-------------|
+| `team` | nenhum | O ClickUp chama isso de workspace. |
+| `space` | `{team}` | |
+| `folder` | `{space}` | Opcional — uma lista também pode viver direto sob um space. |
+| `list` | `{folder}`, ou `{space}` para uma lista sem pasta | |
+| `status` / `statusFilter` | `{list}` | |
+| `assignees` | `{team}` | |
+| `taskId` | — | Sem picker. Leia os ids de um pull de `tasks`. |
+
+Outros providers expõem seus próprios pickers da mesma forma — por exemplo um `channel` do slack ou
+um `database` do notion — e o [`get_node_type`](#get_node_type) de `thirdPartyIntegration` nomeia os
+campos de cada um.
+
+<Warning>
+  **A conexão precisa ser alcançável pelo usuário, ou a chamada é recusada.** Mesma regra do
+  [`list_integrations`](#list_integrations): uma conexão que não é do próprio usuário, e não foi
+  compartilhada com a organização por um membro ativo, é recusada com 403 em vez de devolver opções.
+</Warning>
+
+<Warning>
+  **Um erro do provider aparece como bad request.** Quando o próprio provider recusa a chamada (um
+  4xx, por exemplo um token expirado), o `list_integration_options` retorna um bad request dizendo
+  ao usuário para reconectar a integração — não tenta de novo nem faz fallback silencioso.
+</Warning>
+
+<Note>
+  **Uma lista vazia significa uma de duas coisas**: não há nada para escolher, ou falta um valor de
+  pai no `context`. Confira a cadeia acima antes de assumir que o picker está quebrado.
+</Note>
+
+<Warning>
+  **Não invente ids.** Um valor que não veio de `options` desta lista vai falhar na execução — isso
+  vale tanto para `team`, `space`, `folder`, `list` e `assignees` do clickup quanto para os pickers de
+  qualquer outro provider.
+</Warning>
+
 ## Autorando um nó de integração
 
 `thirdPartyIntegration` fala com um serviço configurado, e `hubSpotCRM` é o mesmo nó com o provider
 fixo em `hubspot` — mesmos campos, mesmo motor de execução, intercambiáveis para leitura e escrita.
-Seis providers executam hoje: `hubspot`, `notion`, `slack`, `stripe`, `wordpress`, `zapier`.
+Sete providers executam hoje: `clickup`, `hubspot`, `notion`, `slack`, `stripe`, `wordpress`, `zapier`.
 
 A ordem que funciona:
 
@@ -255,7 +334,10 @@ A ordem que funciona:
    provider e decidem quais dos campos restantes se aplicam, então leia-os do
    [`get_node_type`](/mcp/pt-br/tools/nodes-and-edges#get_node_type) em vez de adivinhar.
 4. Defina o `integrationId` a partir do `list_integrations`.
-5. Defina os campos que aquele provider e aquele objeto ou ação nomeiam.
+5. Resolva os campos de picker com o [`list_integration_options`](#list_integration_options) — por
+   exemplo, `team`, `space`, `folder`, `list`, `status`/`statusFilter` e `assignees` do clickup são
+   ids da conta conectada, não valores para adivinhar.
+6. Defina os campos que aquele provider e aquele objeto ou ação nomeiam.
 
 Duas coisas que os clientes erram:
 
