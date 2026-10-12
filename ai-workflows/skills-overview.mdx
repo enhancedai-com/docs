@@ -1,0 +1,71 @@
+---
+title: "Skills overview"
+description: "The workspace skill standard and the active skill catalog."
+---
+
+## What is a skill
+
+A procedural, trigger-driven playbook the agent loads when the task matches its triggers. Lives at `.claude/skills/<name>/SKILL.md`.
+
+## The standard
+
+Shape:
+
+- One folder per skill: `.claude/skills/<kebab-case-name>/`
+- Required: `SKILL.md` with frontmatter.
+- Optional sub-folders: `templates/`, `references/`, `scripts/`.
+
+Frontmatter:
+
+```yaml
+---
+name: <kebab-case-name>
+description: One sentence. Start with "Use when..." or "Triggers on...".
+triggers: [list, of, keywords, or, phrases]
+---
+```
+
+The authoritative source is `.claude/skills/_STANDARD.md`. The linter is `scripts/skills-lint.mjs`.
+
+## Active skills
+
+{/* Keep in sync with .claude/skills/ */}
+
+| Skill | What it does |
+|---|---|
+| `completions-api` | Call the Flux-Prompt unified, OpenAI-compatible completions API (`POST /v1/chat/completions`) across any supported provider — covers auth, request/response shapes, environments, error codes, and the reasoning-model `max_tokens` gotcha. |
+| `completions-api-validation` | Validate the unified completions API — that reasoning/thinking params reach each provider's SDK correctly, with a per-model sweep across every available model. |
+| `db-migration` | Drive PostgreSQL data migrations between prod, dev, and staging — copy spaces/flows, refresh staging, migrate libraries, grant access, clean dangling edges, disable auto-execution in a sandbox. |
+| `docs-bilingual` | Enforce the EN + pt-BR bilingual standard whenever a Mintlify page in `apps/docs` is created, edited, or moved — including wiring both versions into `docs.json`. |
+| `e2e-debug-frontend` | Drive the deployed front with Playwright + a known JWT to capture network and console activity while reproducing a user-reported bug on dev/staging. |
+| `ec2-tunnel` | Manage SSH access on the AWS bastion EC2 and run queries against dev/staging/prod Postgres through a programmatic SSH tunnel — no manual `ssh -L`. |
+| `ec2-tunnel-prod` | Read-only PRODUCTION PostgreSQL access through the AWS prod bastion — refuses any write statement with triple-layer defense. |
+| `feature-delivery` | Drive a ClickUp task through the delivery lifecycle (in progress → in dev → ready for QA), delegating to implementation/E2E/PR agents and owning the card + handoff comments. |
+| `flux-access` | Grant and inspect Flux-Prompt user access on dev/staging — add a person to a company/spaces, mirror one user's access onto another, encode the space-owned-flow model. |
+| `flux-cost-report` | Build a per-customer AI cost & usage report from PROD — per flow, per week, per model, with the reconciliation gate that catches wrong splits before publishing. |
+| `flux-execution-scheduler` | How the apiV2 (Temporal) flow executor schedules nodes after the 2026-06-15 refactor — topological scheduler, join/fan-in sync, conditionNode pruning, apiCaller 1 MB claim-check. |
+| `flux-impersonate` | Mint short-lived impersonation JWTs for other FluxPrompt users via the official audited endpoint — for authorized debugging/QA across dev/staging/prod. |
+| `flux-plan` | Change a user's plan / account type (products.type on their active user_product) on dev/staging directly in the DB. |
+| `flux-run-testing` | Test the 4 execution fronts end-to-end — API, Webhook, Chatbot, Editor — covering node_executions, run-scoping, live status, and concurrency isolation. |
+| `flux-support-admin` | Put a support engineer into an existing account as a company admin (and revoke it) — every write is dry-run first and reversible with one command. |
+| `mcp-node-schema-sync` | Validate that a node type's MCP schema matches the real data shape used by front/worker/back — critical when a node has an edge/variable-fed input or when handles change. |
+| `mcp-node-validation` | Validate that a node type can be authored through the MCP and actually produce a value the next node receives, against a real local stack. |
+| `mcp-validation` | Locally validate the FluxPrompt MCP integration before shipping — unit/coverage, e2e, migration apply/revert, local-stack acceptance, protection checks, OAuth handshake. |
+| `node-run-flush-check` | Verify that a node type's manual Run/Get Data button flushes every pending field edit before dispatching, so the run uses on-screen values instead of stale DB data. |
+| `node-worker-migration` | Profile a node type across front/back/worker, decide whether it should migrate into the Temporal worker, and (on go) kick off the migration spec + docs. |
+| `presentation-deck` | Build a self-contained HTML slide deck for a real meeting — one file, offline, keyboard-driven, with charts and diagrams derived from defendable data. |
+| `submodule-workflow` | Safely make and commit changes in the workspace that tracks product repos as git submodules — prevents the classic pointer/detached-HEAD/push-order mistakes. |
+| `system-ai-model-capability-sync` | Check whether a new or changed capability field on `system_ai_models` needs to be wired into the AI Models admin UI. |
+| `terraform-infra` | Fill the per-environment `<env>.tfvars` placeholders for the mcp Terraform by querying the real AWS account, then validate the config against the target account/region before plan/apply. |
+| `third-party-integrations` | Add a new provider to the Third Party Integration node or change adapter/config contracts — loads the KB first so API contracts stay consistent across backend adapters and frontend configs. |
+
+## How to add a skill
+
+1. Create the folder: `.claude/skills/<kebab-name>/`.
+2. Write `SKILL.md` with the frontmatter per `_STANDARD.md`.
+3. Run `node scripts/skills-lint.mjs .claude/skills`.
+4. Open a PR.
+
+## How to change the standard
+
+Edit `.claude/skills/_STANDARD.md` **and** this page in the same PR.

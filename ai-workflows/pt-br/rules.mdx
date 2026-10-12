@@ -1,0 +1,50 @@
+---
+title: "Rules"
+description: "Regras de código por repo que o agent segue automaticamente."
+---
+
+## O que é uma rule
+
+Um arquivo `.md` em `apps/<repo>/.claude/rules/` que documenta um padrão que o agent deve seguir quando trabalha naquele repo. As rules são carregadas automaticamente pelo Claude Code; você não precisa invocá-las.
+
+## Quando escrever uma
+
+- Um padrão foi violado e teve que ser corrigido em review.
+- Um gotcha levou horas para ser debugado.
+- Uma convenção não é óbvia a partir do código.
+
+## Formato
+
+```markdown
+---
+description: One-sentence summary. Starts with "Apply when..." so the agent knows the trigger.
+---
+
+# <Rule name>
+
+## When this applies
+<concrete scenario>
+
+## What to do
+<pattern>
+
+## What NOT to do
+<antipattern>
+
+## Why
+<reason, often linking to the incident that produced the rule>
+```
+
+## Exemplos reais
+
+- `apps/Flux-Prompt-Frontend/.claude/rules/node-run-flush.md`
+- `apps/Flux-Prompt-Frontend/.claude/rules/react-query.md`
+- `apps/Flux-Prompt/.claude/rules/code-standards.md`
+
+## Rules vs skills vs hooks
+
+- **Rule** — orientação passiva, carregada automaticamente. O agent lê; nada força o cumprimento.
+- **Skill** — procedural, acionada por gatilho. Carregada quando a task bate com os triggers.
+- **Hook** — código que roda antes/depois de uma chamada de ferramenta. Pode bloquear.
+
+Se você precisa de enforcement, escreva um hook. Se precisa de um procedimento, escreva uma skill. Para padrões a seguir, uma rule basta.

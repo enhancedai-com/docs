@@ -28,6 +28,8 @@ As páginas abaixo te levam ao workflow compartilhado. Reserve **meio dia** pra 
     Agora pule para a seção interna: [Onboarding](/ai-workflows/internal-developer-workflows/onboarding). O agent `db-setup` faz o bootstrap do seu `.workflow/.env`, gera uma chave SSH se você não tem, imprime a pública pro admin autorizar, e roda um smoke test contra staging.
 
     Esse é o momento em que você sai de "Claude Code instalado" pra "Claude Code conseguindo consultar os bancos do time".
+
+    **Smoke test — done when:** depois que o admin autorizar sua chave pública no bastion, rode `SELECT now()` em **dev**, depois em **staging**. Cada um deve retornar um timestamp. Prod é um grant separado e posterior — não teste prod ainda.
   </Step>
   <Step title="Conheça os agents customizados">
     Dê uma passada na [seção de agents](/ai-workflows/internal-developer-workflows/agents/db-investigator). Os quatro agents que a gente usa no dia a dia:

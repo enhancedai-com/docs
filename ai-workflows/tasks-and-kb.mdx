@@ -1,0 +1,30 @@
+---
+title: "Tasks and KB"
+description: "Difference between in-flight work plans and shared operational knowledge."
+---
+
+Two folders under `.claude/` look similar but have very different lifecycles.
+
+## `.claude/tasks/`
+
+**In-flight work plans.** Scratchpads for the current task — specs, plans, inventories, merge decisions, anything the agent and reviewer need to see together while the work is open.
+
+- Expected lifetime: hours to a week.
+- Deleted when the task ships.
+- Not meant to be a reference; nobody should quote `.claude/tasks/` in a review.
+
+Example: `.claude/tasks/workspace-cleanup/skills-inventory.md`.
+
+## `.claude/kb/`
+
+**Stable operational knowledge.** Things the team already learned and does not want to rediscover.
+
+- Expected lifetime: months to years.
+- Peer-reviewed edits.
+- Fair game to link from a PR or a Mintlify page.
+
+Example: `.claude/kb/ec2-ssh-access.md`.
+
+## Rule of thumb
+
+If a teammate opening the workspace a month from now would be helped by it → `kb/`. If it is only useful while this specific task is open → `tasks/`.

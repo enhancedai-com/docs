@@ -1,0 +1,30 @@
+---
+title: "Tasks e KB"
+description: "Diferença entre planos de trabalho em andamento e conhecimento operacional compartilhado."
+---
+
+Duas pastas sob `.claude/` parecem similares mas têm ciclos de vida bem diferentes.
+
+## `.claude/tasks/`
+
+**Planos de trabalho em andamento.** Rascunhos para a task atual — specs, planos, inventários, decisões de merge, qualquer coisa que o agent e o revisor precisam ver juntos enquanto o trabalho está aberto.
+
+- Tempo de vida esperado: horas a uma semana.
+- Deletados quando a task sobe.
+- Não servem como referência; ninguém deveria citar `.claude/tasks/` em um review.
+
+Exemplo: `.claude/tasks/workspace-cleanup/skills-inventory.md`.
+
+## `.claude/kb/`
+
+**Conhecimento operacional estável.** Coisas que o time já aprendeu e não quer redescobrir.
+
+- Tempo de vida esperado: meses a anos.
+- Edições revisadas por pares.
+- Pode ser linkado em um PR ou em uma página do Mintlify.
+
+Exemplo: `.claude/kb/ec2-ssh-access.md`.
+
+## Regra geral
+
+Se um colega abrindo o workspace daqui a um mês seria ajudado por isso → `kb/`. Se só é útil enquanto esta task específica está aberta → `tasks/`.

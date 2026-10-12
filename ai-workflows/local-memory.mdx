@@ -1,0 +1,27 @@
+---
+title: "Local memory"
+description: "How per-user, per-conversation memory works and when to use it."
+---
+
+Claude Code supports a persistent, file-based memory under the user's profile (not under this repo). Each entry carries a type (user, feedback, project, reference) and lives across conversations for that user.
+
+## When memory is the right tool
+
+- Something you want future-you to recall across sessions, not just this one.
+- Cheap context compared to re-reading large files.
+- Preferences you give the agent once and expect to stick ("don't run git commands without asking").
+
+## When memory is the wrong tool
+
+- Something the whole team should know → that is **KB** or a **Mintlify page**.
+- Something that only matters for this task → that is **tasks/** or just the conversation.
+- Project-wide conventions → `CLAUDE.md` (root or per-repo), **not** memory.
+
+## Freshness
+
+Memory is a snapshot. Verify before acting if the memory describes code or infra that may have changed.
+
+## Scope
+
+- Memory is per-user. One developer's memory does not transfer to a teammate.
+- Memory is private; nothing in this folder is checked in.

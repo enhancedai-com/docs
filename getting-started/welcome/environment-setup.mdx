@@ -41,6 +41,9 @@ Install in this order. None of these are optional.
   <Step title="Docker">
     [Docker Desktop](https://www.docker.com/products/docker-desktop/). On Windows, Docker runs inside WSL — install WSL first if you don't have it (`wsl --install`).
   </Step>
+  <Step title="AWS CLI">
+    The team's `.workflow/` skills (SSH tunnel to the bastion, read-only DB queries against dev/staging/prod) assume the AWS CLI is on your `PATH`. Install from [aws.amazon.com/cli](https://aws.amazon.com/cli/) and verify with `aws --version`. The `db-setup` agent walks you through creating your own read-only access key — don't configure a profile by hand yet.
+  </Step>
   <Step title="Patience">
     Still required. Some things will not work on the first try. This is not a failure of the docs — it's the nature of multi-service stacks. Pause, read the error, ask your buddy. Don't power through.
   </Step>
@@ -48,17 +51,46 @@ Install in this order. None of these are optional.
 
 ## Clone the workspace
 
-The workspace contains two **separate git repositories** plus the docs and shared tooling:
+The workspace root is the `Workflow` repo (`enhanced/` on disk). The product code lives in **four separate git repositories** that are gitignored here and cloned independently *inside* the workspace. The last argument to `git clone` is the folder name on disk, and it is **load-bearing** — the workspace file, every `.workflow/` skill, the Docker stack, and the custom agents all expect these exact folder names.
+
+```bash
+# 1. Clone THIS repo as your workspace root
+git clone <Workflow-url> enhanced
+cd enhanced
+
+# 2. Clone the four product repos INSIDE it — the FOLDER NAME (last arg) matters
+git clone <Flux-Prompt-url>           back
+git clone <Flux-Prompt-Frontend-url>  front
+git clone <Flux-Prompt-Worker-url>    worker
+git clone <docs-url>                  docs
+
+# 3. Open the multi-root workspace
+code enhanced.code-workspace
+```
+
+Final layout:
 
 ```
 enhanced/
-├─ back/        Flux-Prompt           NestJS backend
-├─ front/       Flux-Prompt-Frontend  React frontend
-├─ docs/                              Mintlify documentation
-└─ .workflow/                         Team-shared Claude Code tooling
+├─ back/        Flux-Prompt            NestJS backend
+├─ front/       Flux-Prompt-Frontend   React frontend
+├─ worker/      Flux-Prompt-Worker     Temporal worker
+├─ docs/                               Mintlify documentation
+└─ .workflow/                          Team-shared Claude Code tooling
 ```
 
-Your buddy points you to the exact clone commands and where they want it on disk.
+| Repo | Clone into folder |
+| --- | --- |
+| `Flux-Prompt` | `back/` |
+| `Flux-Prompt-Frontend` | `front/` |
+| `Flux-Prompt-Worker` | `worker/` |
+| `docs` | `docs/` |
+
+<Warning>
+  **Use the folder names, not the repo names.** If you omit the last argument, git names the folder after the repo (`Flux-Prompt`, `Flux-Prompt-Frontend`, `Flux-Prompt-Worker`) and **everything breaks**: the workspace file, the skills, the docker stack, and the agents all expect the exact folder names `back/ front/ worker/ docs/`. As a backstop the original repo names are gitignored so a mistaken clone can't pollute the workspace repo — but the tooling still won't find your code.
+</Warning>
+
+Your buddy points you to the exact clone URLs and where they want the workspace on disk.
 
 ## Backend — `back/`
 
@@ -98,6 +130,18 @@ pnpm dev   # starts Vite dev server on port 3000
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Log in with a dev account (ask your buddy for one or create one via your local backend).
+
+## One-shot: `./devdb-up.ps1`
+
+Instead of running `pnpm infra:up`, `pnpm dev:api`, and `pnpm dev` in three different terminals, the workspace root ships a single script that boots Postgres, Redis, the backend, the worker, and the frontend together:
+
+```bash
+./devdb-up.ps1
+```
+
+**Done when:** `Back OK: http://localhost:3001` prints and `http://localhost:3000` loads.
+
+Use this once your `.env` files are filled; it's the fastest path to "all four processes up".
 
 ## What "running" means
 

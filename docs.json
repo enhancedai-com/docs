@@ -47,6 +47,20 @@
                   "ai-workflows/claude-code-setup",
                   "ai-workflows/create-docs-agent",
                   {
+                    "group": "How we use AI",
+                    "pages": [
+                      "ai-workflows/pt-br/workspace-structure",
+                      "ai-workflows/pt-br/where-things-live",
+                      "ai-workflows/pt-br/claude-md-per-repo",
+                      "ai-workflows/pt-br/rules",
+                      "ai-workflows/pt-br/hooks",
+                      "ai-workflows/pt-br/skills-overview",
+                      "ai-workflows/pt-br/tasks-and-kb",
+                      "ai-workflows/pt-br/local-memory",
+                      "ai-workflows/pt-br/claude-code-guardrails"
+                    ]
+                  },
+                  {
                     "group": "Internal developer workflows",
                     "pages": [
                       "ai-workflows/internal-developer-workflows/overview",
@@ -336,6 +350,20 @@
                 "pages": [
                   "ai-workflows/claude-code-setup",
                   "ai-workflows/create-docs-agent",
+                  {
+                    "group": "How we use AI",
+                    "pages": [
+                      "ai-workflows/workspace-structure",
+                      "ai-workflows/where-things-live",
+                      "ai-workflows/claude-md-per-repo",
+                      "ai-workflows/rules",
+                      "ai-workflows/hooks",
+                      "ai-workflows/skills-overview",
+                      "ai-workflows/tasks-and-kb",
+                      "ai-workflows/local-memory",
+                      "ai-workflows/claude-code-guardrails"
+                    ]
+                  },
                   {
                     "group": "Internal developer workflows",
                     "pages": [

@@ -1,0 +1,75 @@
+---
+title: "Claude Code — Guardrails"
+description: "What the agent can and can't do in this workspace, and how to change it."
+---
+
+The workspace enforces two layers of guardrails on Claude Code.
+
+## Allow / Deny lists
+
+`.claude/settings.json` enumerates:
+
+- **`permissions.allow`** — common read-only and build commands that run without prompting (`pnpm install`, `pnpm dev:*`, `pnpm test*`, `git status`, `git diff`, `git log`, `git fetch`, `gh pr list`, etc.).
+- **`permissions.deny`** — destructive commands that never run (`rm -rf`, `git reset --hard`, `git push --force`, `git clean -f`, `git branch -D`, `DROP TABLE`, `DROP DATABASE`, `TRUNCATE`).
+
+Anything not on either list prompts for confirmation the first time it is used in a session.
+
+## PreToolUse hooks
+
+Two Node ESM scripts under `scripts/guardrails/`, wired via `.claude/settings.json` under `hooks.PreToolUse`.
+
+### `block-sensitive-writes.mjs`
+
+Denies `Edit`, `Write`, `MultiEdit`, and `NotebookEdit` on paths matching:
+
+- `.env*` (except `.env.example`)
+- `*credentials*`
+- `*secrets*`
+- `*.pem`
+- `*.key`
+- `id_rsa*`
+
+### `confirm-shared-state.mjs`
+
+Prompts for confirmation before shell commands that touch shared state:
+
+- `git push`
+- `git merge`
+- `git rebase`
+- `gh pr merge`
+- deploy scripts (enumerated at setup time by grepping `apps/*/package.json` + `scripts/`)
+
+## Prerequisites
+
+- Node must be on `PATH` (hooks are `.mjs` run as `node scripts/guardrails/<hook>.mjs`).
+- No npm dependencies — pure Node ESM + `node:test`.
+
+## `settings.json` vs `settings.local.json`
+
+- **`settings.json`** — the team baseline. Committed. Changes go through PR.
+- **`settings.local.json`** — personal overrides. Gitignored. Escape hatch for individual workflows.
+
+## Changing the standard
+
+1. Edit `.claude/settings.json` and/or the hook scripts under `scripts/guardrails/`.
+2. Add or update tests under `scripts/guardrails/tests/`.
+3. Run `node --test scripts/guardrails/tests/`.
+4. Open a PR.
+
+Personal escape hatches that should NOT be part of the shared standard go in `.claude/settings.local.json`.
+
+## Smoke-testing locally
+
+The hooks read JSON events on stdin and write a decision on stdout. Use Bash (not PowerShell — its pipe injects a BOM that breaks JSON parsing):
+
+```bash
+printf '%s' '{"tool_name":"Edit","tool_input":{"file_path":".env"}}' \
+  | node scripts/guardrails/block-sensitive-writes.mjs
+echo "exit=$?"
+# Expected: {"permissionDecision":"deny",...} then exit=2
+
+printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git push"}}' \
+  | node scripts/guardrails/confirm-shared-state.mjs
+echo "exit=$?"
+# Expected: {"permissionDecision":"ask",...} then exit=2
+```
