@@ -13,13 +13,25 @@ The edge propagation system is responsible for moving data between connected nod
 | `modifyData` | Updates target nodes that are connected via edges, propagating changes through the graph |
 | `addConnectToNodes` | Orchestrates the full propagation -- calls `getOutputByType` and `modifyData` together |
 
+## Where the code lives
+
+`getOutputByType`, `modifyData`, `givingDataToNode` and their helpers live in
+`back/src/app-api/folw/helpers/edge-projection.ts`. It is a pure module: it takes nodes, edges and
+the loop iteration as arguments and reads no service state. `helpers.ts` wraps it and fills the
+loop iteration from the request context, so existing callers keep their imports.
+
+The module is part of the ported-engine sync (`scripts/sync-ported-engine.ts`), so the worker runs
+the same code when it builds a node's inputs itself. A drift test fails if the worker's copy
+differs. See [Node input projection](/worker/node-input-projection).
+
 ## getOutputByType
 
-This function lives in `helpers.ts` and is the first step in propagation. Given a source node, it inspects the node type and returns the appropriate output data.
+This function is the first step in propagation. Given a source node, it inspects the node type and returns the appropriate output data.
 
 Different node types produce output in different ways, so `getOutputByType` contains type-specific handling for:
 
 - `commandTextNode` -- returns the text content
+- `commandTextNode` on the `logs` handle -- returns the logs as text, formatted by `formatNodeLogs` the same way the Logs panel shows them
 - `nodesBox` -- returns the grouped output of contained nodes
 - `mathFunction` -- returns the computed result
 - `scripting` -- returns the script execution result
@@ -76,7 +88,7 @@ When propagation runs, the system matches source handles to target handles to de
 When a third-party integration node (such as Stripe or Zapier) is involved, the propagation system prunes connections that are no longer valid. If a node's configuration changes in a way that removes an output handle, edges connected to that handle are cleaned up so downstream nodes do not receive stale or invalid data.
 
 <Tip>
-When you add a new node type, you need to add handling in both `getOutputByType` (so the system knows how to extract its output) and `modifyData` (so the system knows how to write data into it). Missing either one will cause propagation to silently skip the node.
+When you add a new node type, you need to add handling in both `getOutputByType` (so the system knows how to extract its output) and `modifyData` (so the system knows how to write data into it). Missing either one will cause propagation to silently skip the node. Change them in `edge-projection.ts` and run the ported-engine sync, so the worker gets the same change.
 </Tip>
 
 ## Helper functions

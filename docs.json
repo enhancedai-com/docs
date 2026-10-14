@@ -192,6 +192,7 @@
                   "worker/overview",
                   "worker/development",
                   "worker/environment-variables",
+                  "worker/node-input-projection",
                   {
                     "group": "Node",
                     "pages": [
@@ -485,6 +486,7 @@
                   "worker/overview",
                   "worker/development",
                   "worker/pt-br/environment-variables",
+                  "worker/node-input-projection",
                   {
                     "group": "Node",
                     "pages": [

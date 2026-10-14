@@ -103,7 +103,7 @@ Extracts output data from a source node based on its type and source handle.
 | `mediaBox` | `mediaOutput` | Returns joined URLs |
 | `commandTextNode` | `output` | Returns `data.text` |
 | `commandTextNode` | `fileLink` | Returns `data.fileLink.src` |
-| `commandTextNode` | `logs` | Returns `data.logs` |
+| `commandTextNode` | `logs` | Returns `data.logs` as text, formatted by `formatNodeLogs` the same way the Logs panel shows them |
 | `commandTextNode` | `output-memory` | Returns filtered memories |
 | `outputController` / `reportBuilder` | — | Returns processed `textData` with filters |
 | **Default** | — | Returns `data.text` |
