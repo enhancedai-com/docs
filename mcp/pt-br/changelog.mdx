@@ -3,6 +3,16 @@ title: "Changelog"
 description: "Novidades na integração MCP do FluxPrompt."
 ---
 
+## 2026-10-14 — Resultados da execução casam pelo id da execução
+
+**`get_run_nodes` e `get_node_output` ligam um node à sua execução pelo id da execução.**
+
+- Execuções sobrepostas do mesmo agente deixam de mostrar os nodes umas das outras. Uma execução
+  gravada antes desta versão ainda é encontrada pela sua janela de tempo.
+- As descrições das ferramentas deixam de avisar que nodes rodados pelo worker podem faltar.
+- **`conditionNode`** descreve as duas saídas como alcançáveis: `true` sai por `outputHandle-0` e
+  `false` por `outputHandle-1`, com `loopBehavior` decidindo o que acontece num loop.
+
 ## 2026-10-08 — Nós de ClickUp e valores de picker de integração
 
 **O `thirdPartyIntegration` agora fala com o ClickUp, e os pickers deixam de precisar de ids adivinhados.**

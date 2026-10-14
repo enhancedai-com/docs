@@ -1,0 +1,104 @@
+---
+title: "Node input projection"
+description: "How the worker builds a node's connected inputs from the run's stored outputs and seed, behind the worker_edge_projection feature flag."
+---
+
+Before a node runs, the values of its incoming edges must be written into its data: a Text
+Generator connected to a script receives the script's console in `instructionData`, a Data Output
+receives the upstream text in `textData`, and so on. This step is the **edge projection**
+(`getOutputByType` and `modifyData`, see [Edge propagation (backend)](/main-api/specific-features/edge-propagation-backend)).
+
+By default the main API projects the inputs before it dispatches the node. With the
+`worker_edge_projection` flag on, the worker projects them itself, from data the run already
+stored. The flags are off by default; with them off, nothing changes.
+
+## Feature flags
+
+| Flag | Effect |
+|---|---|
+| `worker_input_resolution_shadow` | The API resolves and projects as before. The worker also resolves and records in `metadata.inputResolution.shadow` whether its result matches. It never fails a node. |
+| `worker_input_resolution` | The worker's result is the one the node runs with. |
+| `worker_edge_projection` | Adds the edge projection to the worker's resolution. It acts only when one of the two flags above is on. |
+
+Toggle them per environment from **Admin Dashboard → Feature Flags**.
+
+<Warning>
+  Keep the three flags off while the API and the worker deploy. During a rolling deploy the old API
+  task keeps processing runs for several minutes, and the rows it writes have no `runId`. A run
+  that touches both versions with the flags on can fail on a missing row.
+</Warning>
+
+## What the API sends
+
+When the projection applies, each dispatch carries a `NodeInputProjection`:
+
+| Field | Meaning |
+|---|---|
+| `runId`, `flowId`, `flowVersionHistoryId` | Identify the run and the flow version whose edges are read |
+| `seedSnapshotId` | The run snapshot that holds the run's seed |
+| `starterSourceId` | The run's starter node; the worker ignores its edges |
+| `completedSourceIds` | The nearest completed nodes upstream of the target |
+| `iteration` | The loop index and the loop's body nodes, when the node runs inside a loop |
+
+The API sends no projection, and keeps projecting itself, when:
+
+- The flow has a connected node of a type the worker cannot project: `arrayNode`, `fluxObject`,
+  `nodesBox`, `libraryNode`, `fluxBox`, `tableProcessor` or `dynamicSettingsNode`.
+- The node belongs to another flow than the one that opened the run, such as a sub-flow.
+
+## The run seed
+
+A source that did not run in this run still passes its stored data, such as the text typed into a
+Text Box. The worker reads that data from the run's **seed**, never from `flows_nodes`.
+
+At run start the API writes the seed with the run's snapshot, one row per node, in
+`run_seed_nodes`: each node's type and its data, merged with the inputs the run started with. The
+rows reference `run_substitution_snapshots` with `ON DELETE CASCADE`, so they are removed with the
+snapshot at the end of the run and by the retention passes.
+
+## What the worker does
+
+`projectNodeInput` (`worker/src/modules/nodes/shared/project-node-input.ts`) runs before
+placeholder resolution:
+
+1. Reads the flow's edges for the run's version from `flows_nodes_edges`, and drops the edges
+   whose source is the run's starter.
+2. Reads the run's outputs from `node_executions` by `runId` and `flowId`, keeping the completed
+   sources the API named. A claim-check reference is read back from S3 (see
+   [Claim-check authorization](/main-api/specific-features/claim-check-authorization)).
+3. Reads every source that did not run from `run_seed_nodes`, and projects its own upstream
+   sources into it first.
+4. Projects each source into the target with the same `modifyData` the API runs. The code is
+   synced from the API through the ported engine, and a drift test fails if the copies differ.
+
+## Errors
+
+The worker fails the node with a system error instead of running it with a partial input:
+
+| Case | Log message starts with |
+|---|---|
+| The run's snapshot has no seed rows | `Edge projection: run <runId> has no seed in snapshot <id>` |
+| A completed source has no stored output | `Edge projection: upstream node <id> completed in run <runId> but has no stored output` |
+
+The user sees: *"This step could not load the results of the steps before it. Run the agent
+again."*
+
+If the projection misbehaves in an environment, turn `worker_edge_projection` off: the API projects
+the inputs again on the next dispatch.
+
+## Database
+
+| Migration | What it does |
+|---|---|
+| `AddRunIdToNodeExecutions1791927401634` | Adds the indexed `node_executions.runId` column. Older rows are not backfilled; they are never read by `runId` |
+| `SeedWorkerEdgeProjectionFlag1791990600000` | Seeds `worker_edge_projection` as **disabled** |
+| `AddRunSeedNodes1791996414397` | Creates `run_seed_nodes` (primary key `snapshotId` + `nodeId`) |
+
+## Files
+
+`back/src/app-api/flux/node-input-projection.ts` (`buildNodeInputProjection`, `buildRunSeed`,
+`BACK_ONLY_PROJECTION_NODE_TYPES`) ·
+`back/src/app-api/flux/worker-input-resolution.ts` (`INSERT_RUN_SNAPSHOT_SQL`) ·
+`back/src/app-api/folw/helpers/edge-projection.ts` ·
+`worker/src/modules/nodes/shared/project-node-input.ts` ·
+`worker/src/modules/nodes/shared/resolve-node-input.ts`

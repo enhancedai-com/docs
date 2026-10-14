@@ -99,11 +99,12 @@ Retorna `runId`, `versionId` (a versão que a execução usou, ou `null` para a 
 | `outputExpired` | boolean | `true` quando a retenção já descartou o conteúdo. |
 | `suspect` | `null` \| `{ code, consumers, hint }` | Apenas heurística — definido quando um node teve sucesso com saída vazia enquanto um node downstream esperava por ele por uma edge de dado. É sempre `null` quando o grafo da execução não pôde ser carregado, em vez de adivinhado. |
 
-<Warning>
-  **Execuções sobrepostas do mesmo agente podem mostrar os nodes umas das outras.** Se duas
-  execuções do mesmo agente se sobrepõem no tempo, cada uma pode listar os nodes da outra. Uma
-  execução isolada é exata — evite execuções sobrepostas quando precisar de resultados por node.
-</Warning>
+<Note>
+  Toda execução de node carrega o id da execução, inclusive os nodes de IA e de integração que o
+  worker roda, então a lista é exata mesmo quando execuções do mesmo agente se sobrepõem. Uma
+  execução gravada antes desse id existir é encontrada pela sua janela de tempo no mesmo agente, e
+  uma execução sobreposta desse agente pode aparecer nela.
+</Note>
 
 <Note>
   Um node ausente ainda não prova que ele não rodou: ele pode ter sido podado por um branch de
@@ -134,7 +135,7 @@ resultado escalar do node — com redação primeiro, depois truncado em 20.000 
 <Warning>
   **Um erro aqui significa que nenhuma execução daquele node foi encontrada para esta execução** — o
   node nunca começou, foi podado por um branch de condição, ou foi pulado porque um node anterior
-  falhou. O alerta de sobreposição do `get_run_nodes` vale aqui também. Apenas a saída escalar é
+  falhou. Apenas a saída escalar é
   retornada, de propósito — o objeto do node armazenado também contém prompts resolvidos e campos de
   credencial.
 </Warning>

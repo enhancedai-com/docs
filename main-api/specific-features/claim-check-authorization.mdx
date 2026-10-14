@@ -64,6 +64,24 @@ Five things end the check:
 A row whose `runToken` is `NULL` is accepted. Those are executions that started before the column
 existed; they fail closed only in the sense that no *new* row is written without a token.
 
+### Reading an output from the same run
+
+A node often reads the large output of another node: the worker builds a node's connected inputs
+from the outputs stored for the run (see [Node input projection](/worker/node-input-projection)).
+That reader holds its own run token, not the token of the row that owns the key.
+
+When a read presents a token that does not match the owner row, the service accepts it if both
+rows belong to the same run:
+
+1. The presented token is a UUID.
+2. The owner row stores the key in its `outputData` (or `input`) envelope and has a `runId`.
+3. Another `node_executions` row with the same `runId` and `flowId` carries the presented token.
+
+A parent run and the sub-flows it calls share one `runId`, so the `flowId` match keeps a sub-flow
+from reading its parent's payloads, and the reverse. If the same-run lookup fails, the read is
+treated as a mismatch and settled by the `claim_check_authz_enforce` flag, as described below.
+Writes still require the owner row's own token.
+
 ## The `claim_check_authz_enforce` flag
 
 The flag decides what happens once the check has failed. It never changes what is checked.
@@ -97,6 +115,7 @@ same run still carries it.
 |---|---|
 | `AddRunTokenToNodeExecutions1788974723883` | Adds the nullable `node_executions.runToken` column |
 | `AddFeatureFlagAdminColumns1788975461171` | Adds `feature_flags.label`/`adminVisible` and seeds `claim_check_authz_enforce` as **disabled** |
+| `AddRunIdToNodeExecutions1791927401634` | Adds the indexed `node_executions.runId` column, which the same-run read joins on. Rows written before it have no `runId` and keep the token check above |
 
 ## Files
 
