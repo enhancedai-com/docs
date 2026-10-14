@@ -30,7 +30,7 @@ Both Pull Data and Push Data nodes share a **Provider** dropdown with two values
 
 ### Authentication and scopes
 
-Connecting uses the login Google OAuth client (env `GOOGLE_LOGIN_CLIENT_ID` / `GOOGLE_LOGIN_CLIENT_SECRECT`), consented with broad data scopes through the Google connection card. The card uses `useGoogleLogin` from `@react-oauth/google` with `flow: 'auth-code'`. On success the authorization code is exchanged through `POST /auth/google-get-refresh-token`, and the resulting tokens are stored on the `User` entity as `googleAccessToken` and `googleRefreshToken` (via `UserService.updateUser`).
+Connecting uses the login Google OAuth client (env `GOOGLE_LOGIN_CLIENT_ID` / `GOOGLE_LOGIN_CLIENT_SECRECT`), consented with broad data scopes through the Google connection card. The card uses `useGoogleLogin` from `@react-oauth/google` with `flow: 'auth-code'`. On success the card sends the authorization code to `POST /auth/google-get-refresh-token`. The route requires a JWT, exchanges the code, and stores the tokens on the authenticated user's `User` entity as `googleAccessToken` and `googleRefreshToken`. It returns only the access token, its expiry and the Google account email; the refresh token never reaches the browser. `GET /auth/me` reports the connection as `googleConnected` and does not return either token.
 
 The requested scopes are:
 
@@ -49,7 +49,7 @@ https://www.googleapis.com/auth/gmail.send
 
 ### Token refresh at execution
 
-When a flow runs, `flux.service` checks whether it contains a Pull Data or Push Data node on the Google provider. If so, and the user has a `googleRefreshToken`, it builds an `OAuth2Client` from the login client credentials, sets the stored refresh token, calls `refreshAccessToken()`, and injects the fresh access token into the pull/push executors as `context.accessToken`. In the editor, the node components refresh tokens client-side through `AuthService.googleRefreshToken` and validate the access token against `https://oauth2.googleapis.com/tokeninfo`.
+When a flow runs, `flux.service` checks whether it contains a Pull Data or Push Data node on the Google provider. If so, and the user has a `googleRefreshToken`, it builds an `OAuth2Client` from the login client credentials, sets the stored refresh token, calls `refreshAccessToken()`, and injects the fresh access token into the pull/push executors as `context.accessToken`. In the editor, the app gets a fresh access token from `POST /auth/google-access-token` (JWT), which refreshes the stored refresh token on the server and returns only `access_token` and `expiry_date`. The app calls it at boot when `googleConnected` is true, and the Pull Data, Push Data and File Save nodes call it when their token is no longer valid; they validate the access token against `https://oauth2.googleapis.com/tokeninfo`. The legacy `POST /auth/google-refresh-token` also requires a JWT and refreshes only the caller's stored token.
 
 ### Pull and push modules
 
