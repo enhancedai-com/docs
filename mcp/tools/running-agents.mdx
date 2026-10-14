@@ -97,11 +97,12 @@ more nodes exist beyond this page), `suspects` (count of entries whose `suspect`
 | `outputExpired` | boolean | `true` when retention already discarded the payload. |
 | `suspect` | `null` \| `{ code, consumers, hint }` | Heuristic only — set when a node succeeded with an empty output while a downstream node was waiting on it through a data edge. It is always `null` when the run graph could not be loaded, rather than guessed. |
 
-<Warning>
-  **Overlapping runs of the same agent can show each other's nodes.** If two runs of the same agent
-  overlap in time, each may list the other's nodes. A single run is exact — avoid overlapping runs
-  when you need per-node results.
-</Warning>
+<Note>
+  Every node execution carries the run's id, including the AI and integration nodes the worker
+  runs, so the list is exact even when runs of the same agent overlap. A run recorded before that
+  id existed is matched by its time window on the same agent, and an overlapping run of that agent
+  can show up in it.
+</Note>
 
 <Note>
   An absent node is still not proof it never ran: it may have been pruned by a condition branch, be
@@ -129,9 +130,8 @@ and `finishedAt`.
 
 <Warning>
   **An error here means no execution of that node was found for this run** — the node never
-  started, was pruned by a condition branch, or was skipped because an earlier node failed. The
-  overlap caveat of `get_run_nodes` applies here too. Only the scalar output is returned,
-  deliberately — the stored node object also holds resolved prompts and credential fields.
+  started, was pruned by a condition branch, or was skipped because an earlier node failed. Only the
+  scalar output is returned, deliberately — the stored node object also holds resolved prompts and credential fields.
 </Warning>
 
 ## `cancel_run`

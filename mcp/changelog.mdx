@@ -3,6 +3,16 @@ title: "Changelog"
 description: "What's new in the FluxPrompt MCP integration."
 ---
 
+## 2026-10-14 — Run results match on the run id
+
+**`get_run_nodes` and `get_node_output` match a node to its run by the run's id.**
+
+- Overlapping runs of the same agent no longer show each other's nodes. A run recorded before this
+  release is still matched by its time window.
+- The tool descriptions no longer warn that worker-run nodes can be missing.
+- **`conditionNode`** describes both outputs as reachable: `true` leaves through `outputHandle-0`
+  and `false` through `outputHandle-1`, with `loopBehavior` deciding what happens on a loop.
+
 ## 2026-10-08 — ClickUp nodes and integration picker values
 
 **`thirdPartyIntegration` now talks to ClickUp, and its pickers stop needing guessed ids.**
