@@ -1,0 +1,71 @@
+---
+title: "Skills overview"
+description: "O padrão de skills do workspace e o catálogo de skills ativas."
+---
+
+## O que é uma skill
+
+Um playbook procedural, acionado por gatilho, que o agent carrega quando a task bate com seus triggers. Mora em `.claude/skills/<name>/SKILL.md`.
+
+## O padrão
+
+Formato:
+
+- Uma pasta por skill: `.claude/skills/<kebab-case-name>/`
+- Obrigatório: `SKILL.md` com frontmatter.
+- Sub-pastas opcionais: `templates/`, `references/`, `scripts/`.
+
+Frontmatter:
+
+```yaml
+---
+name: <kebab-case-name>
+description: One sentence. Start with "Use when..." or "Triggers on...".
+triggers: [list, of, keywords, or, phrases]
+---
+```
+
+A fonte autoritativa é `.claude/skills/_STANDARD.md`. O linter é `scripts/skills-lint.mjs`.
+
+## Skills ativas
+
+{/* Manter em sincronia com .claude/skills/ */}
+
+| Skill | O que faz |
+|---|---|
+| `completions-api` | Chamar a API unificada de completions do Flux-Prompt, compatível com OpenAI (`POST /v1/chat/completions`), em qualquer provider suportado — cobre auth, formatos de request/response, ambientes, códigos de erro e o gotcha de `max_tokens` em modelos de reasoning. |
+| `completions-api-validation` | Validar a API unificada de completions — se os params de reasoning/thinking chegam corretamente no SDK de cada provider, com um sweep por modelo em todos os modelos disponíveis. |
+| `db-migration` | Conduzir migrações de dados PostgreSQL entre prod, dev e staging — copiar spaces/flows, atualizar staging, migrar libraries, dar acesso, limpar edges órfãs, desabilitar auto-execution em sandbox. |
+| `docs-bilingual` | Aplicar o padrão bilíngue EN + pt-BR sempre que uma página Mintlify em `apps/docs` é criada, editada ou movida — incluindo conectar as duas versões no `docs.json`. |
+| `e2e-debug-frontend` | Dirigir o front deployado com Playwright + um JWT conhecido para capturar atividade de rede e console enquanto reproduz um bug reportado por usuário em dev/staging. |
+| `ec2-tunnel` | Gerenciar acesso SSH no EC2 bastion da AWS e rodar queries contra Postgres de dev/staging/prod através de um túnel SSH programático — sem `ssh -L` manual. |
+| `ec2-tunnel-prod` | Acesso read-only ao PostgreSQL de PRODUÇÃO através do bastion de prod — recusa qualquer statement de escrita com defesa em tripla camada. |
+| `feature-delivery` | Conduzir uma task do ClickUp pelo ciclo de delivery (in progress → in dev → ready for QA), delegando implementação/E2E/PR aos agents e cuidando do card + comentários de handoff. |
+| `flux-access` | Dar e inspecionar acesso de usuários Flux-Prompt em dev/staging — adicionar à company/spaces, espelhar o acesso de um usuário em outro, codifica o modelo de flow pertencente a space. |
+| `flux-cost-report` | Montar um relatório de custo e uso de IA por cliente a partir de PROD — por flow, por semana, por modelo, com o gate de reconciliação que pega splits errados antes de publicar. |
+| `flux-execution-scheduler` | Como o executor de flows da apiV2 (Temporal) agenda nós depois do refactor de 2026-06-15 — scheduler topológico, sync de join/fan-in, pruning de conditionNode, claim-check de 1 MB no apiCaller. |
+| `flux-impersonate` | Gerar JWTs curtos de impersonação para outros usuários FluxPrompt via o endpoint oficial auditado — para debugging/QA autorizados em dev/staging/prod. |
+| `flux-plan` | Mudar o plano / tipo de conta de um usuário (products.type no user_product ativo) em dev/staging direto no banco. |
+| `flux-run-testing` | Testar os 4 fronts de execução end-to-end — API, Webhook, Chatbot, Editor — cobrindo node_executions, run-scoping, live status e isolamento de concorrência. |
+| `flux-support-admin` | Colocar um engenheiro de suporte em uma conta existente como admin da company (e revogar) — toda escrita é dry-run primeiro e reversível com um comando. |
+| `mcp-node-schema-sync` | Validar que o schema MCP de um node type bate com o shape real dos dados usado por front/worker/back — crítico quando o node tem input alimentado por edge/variável ou quando os handles mudam. |
+| `mcp-node-validation` | Validar que um node type pode ser autorado via MCP e de fato produzir um valor que o próximo node receba, contra uma stack local real. |
+| `mcp-validation` | Validar localmente a integração MCP do FluxPrompt antes do ship — unit/coverage, e2e, migration apply/revert, acceptance na stack local, checagens de proteção, handshake OAuth. |
+| `node-run-flush-check` | Verificar que o botão manual de Run/Get Data de um node type dá flush em toda edição pendente de campo antes de disparar, para o run usar o que está na tela e não dado velho do banco. |
+| `node-worker-migration` | Perfilar um node type em front/back/worker, decidir se a execução deve migrar para dentro do worker Temporal e (se go) iniciar o spec de migração + docs. |
+| `presentation-deck` | Montar um deck de slides HTML autocontido para uma reunião real — um arquivo, offline, navegável por teclado, com gráficos e diagramas derivados de dados defensáveis. |
+| `submodule-workflow` | Fazer e commitar mudanças com segurança no workspace que rastreia os repos de produto como submódulos git — previne os erros clássicos de pointer/detached-HEAD/ordem de push. |
+| `system-ai-model-capability-sync` | Checar se um campo novo ou alterado de capability em `system_ai_models` precisa ser conectado na UI do admin de AI Models. |
+| `terraform-infra` | Preencher os placeholders por ambiente de `<env>.tfvars` do Terraform do mcp consultando a conta AWS real, e validar que o config bate com conta/região alvo antes de plan/apply. |
+| `third-party-integrations` | Adicionar um provider novo ao node Third Party Integration ou mudar contratos de adapter/config — carrega a KB primeiro para os contratos de API ficarem consistentes entre adapters do backend e configs do frontend. |
+
+## Como adicionar uma skill
+
+1. Crie a pasta: `.claude/skills/<kebab-name>/`.
+2. Escreva o `SKILL.md` com o frontmatter conforme `_STANDARD.md`.
+3. Rode `node scripts/skills-lint.mjs .claude/skills`.
+4. Abra um PR.
+
+## Como mudar o padrão
+
+Edite `.claude/skills/_STANDARD.md` **e** esta página no mesmo PR.

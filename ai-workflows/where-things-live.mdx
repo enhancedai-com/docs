@@ -1,0 +1,17 @@
+---
+title: "Where things live"
+description: "Artifact-to-location map for Claude Code in this workspace."
+---
+
+| Artifact | Location | Standard |
+|---|---|---|
+| Skills | `.claude/skills/<name>/SKILL.md` | [Skills overview](./skills-overview) |
+| Agents | `.claude/agents/<name>.md` | — |
+| Knowledge base | `.claude/kb/` | — |
+| Tasks (in-flight plans) | `.claude/tasks/<task>/` | [Tasks and KB](./tasks-and-kb) |
+| Rules (per repo) | `apps/<repo>/.claude/rules/*.md` | [Rules](./rules) |
+| Hooks (per repo) | `apps/<repo>/.claude/hooks/*.mjs` | [Hooks](./hooks) |
+| Guardrails | `.claude/settings.json` + `scripts/guardrails/` | [Guardrails](./claude-code-guardrails) |
+| Local memory | user profile, per conversation | [Local memory](./local-memory) |
+
+Each row links to the page explaining the standard and how to add one.

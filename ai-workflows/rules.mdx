@@ -1,0 +1,50 @@
+---
+title: "Rules"
+description: "Per-repo coding rules that the agent follows automatically."
+---
+
+## What is a rule
+
+A `.md` file in `apps/<repo>/.claude/rules/` that documents a pattern the agent should follow when working in that repo. Rules are auto-loaded by Claude Code; you do not have to invoke them.
+
+## When to write one
+
+- A pattern was violated and had to be fixed in review.
+- A gotcha took hours to debug.
+- A convention is non-obvious from the code.
+
+## Shape
+
+```markdown
+---
+description: One-sentence summary. Starts with "Apply when..." so the agent knows the trigger.
+---
+
+# <Rule name>
+
+## When this applies
+<concrete scenario>
+
+## What to do
+<pattern>
+
+## What NOT to do
+<antipattern>
+
+## Why
+<reason, often linking to the incident that produced the rule>
+```
+
+## Real examples
+
+- `apps/Flux-Prompt-Frontend/.claude/rules/node-run-flush.md`
+- `apps/Flux-Prompt-Frontend/.claude/rules/react-query.md`
+- `apps/Flux-Prompt/.claude/rules/code-standards.md`
+
+## Rules vs skills vs hooks
+
+- **Rule** — passive, auto-loaded guidance. Agent reads it; nothing enforces it.
+- **Skill** — procedural, trigger-driven. Loaded when the task matches.
+- **Hook** — code that runs before/after a tool call. Can block.
+
+If you need enforcement, write a hook. If you need a procedure, write a skill. For patterns to follow, a rule is enough.

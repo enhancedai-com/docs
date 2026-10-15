@@ -28,6 +28,8 @@ The pages below get you to the shared workflow. Plan on **half a day** the first
     Now switch to the internal section: [Onboarding](/ai-workflows/internal-developer-workflows/onboarding). The `db-setup` agent bootstraps your `.workflow/.env`, generates an SSH key if you don't have one, prints the public key for the admin to authorize, and runs a smoke test against staging.
 
     This is the moment you go from "Claude Code is installed" to "Claude Code can query the team's databases".
+
+    **Smoke test — done when:** once the admin has authorized your public key on the bastion, run `SELECT now()` against **dev**, then **staging**. Each should return a timestamp. Prod is a separate, later grant — don't smoke-test it yet.
   </Step>
   <Step title="Tour the custom agents">
     Skim [the agents section](/ai-workflows/internal-developer-workflows/agents/db-investigator). The four agents we use daily:

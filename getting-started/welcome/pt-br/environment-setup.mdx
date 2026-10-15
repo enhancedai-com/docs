@@ -41,6 +41,9 @@ Instale nesta ordem. Nenhum é opcional.
   <Step title="Docker">
     [Docker Desktop](https://www.docker.com/products/docker-desktop/). No Windows, o Docker roda dentro do WSL — instale o WSL antes se você ainda não tem (`wsl --install`).
   </Step>
+  <Step title="AWS CLI">
+    As skills do `.workflow/` do time (SSH tunnel pro bastion, queries read-only em dev/staging/prod) assumem que o AWS CLI está no seu `PATH`. Instale em [aws.amazon.com/cli](https://aws.amazon.com/cli/) e verifique com `aws --version`. O agent `db-setup` te guia a criar sua **própria** access key read-only — não configure um profile na mão ainda.
+  </Step>
   <Step title="Paciência">
     Continua obrigatório. Algumas coisas não vão funcionar de primeira. Isso não é falha da doc — é a natureza de uma stack com vários serviços. Pare, leia o erro, pergunte pro seu buddy. Não tente forçar.
   </Step>
@@ -48,17 +51,46 @@ Instale nesta ordem. Nenhum é opcional.
 
 ## Clone do workspace
 
-O workspace contém dois **repositórios git separados** mais a doc e o tooling compartilhado:
+A raiz do workspace é o repo `Workflow` (`enhanced/` no disco). O código de produto vive em **quatro repositórios git separados**, gitignorados aqui e clonados independentemente *dentro* do workspace. O último argumento do `git clone` é o nome da pasta no disco, e ele é **load-bearing** — o arquivo do workspace, toda skill do `.workflow/`, o stack Docker e os agents customizados dependem **exatamente** desses nomes.
+
+```bash
+# 1. Clone ESTE repo como raiz do workspace
+git clone <Workflow-url> enhanced
+cd enhanced
+
+# 2. Clone os quatro repos de produto DENTRO dele — o NOME DA PASTA (último arg) importa
+git clone <Flux-Prompt-url>           back
+git clone <Flux-Prompt-Frontend-url>  front
+git clone <Flux-Prompt-Worker-url>    worker
+git clone <docs-url>                  docs
+
+# 3. Abra o multi-root workspace
+code enhanced.code-workspace
+```
+
+Layout final:
 
 ```
 enhanced/
-├─ back/        Flux-Prompt           backend NestJS
-├─ front/       Flux-Prompt-Frontend  frontend React
-├─ docs/                              documentação Mintlify
-└─ .workflow/                         tooling Claude Code compartilhado
+├─ back/        Flux-Prompt            backend NestJS
+├─ front/       Flux-Prompt-Frontend   frontend React
+├─ worker/      Flux-Prompt-Worker     worker Temporal
+├─ docs/                               documentação Mintlify
+└─ .workflow/                          tooling Claude Code compartilhado
 ```
 
-Seu buddy aponta os comandos de clone exatos e onde quer que fique no disco.
+| Repo | Clonar para a pasta |
+| --- | --- |
+| `Flux-Prompt` | `back/` |
+| `Flux-Prompt-Frontend` | `front/` |
+| `Flux-Prompt-Worker` | `worker/` |
+| `docs` | `docs/` |
+
+<Warning>
+  **Use os nomes das pastas, não os nomes dos repos.** Se você omitir o último argumento, o git nomeia a pasta pelo nome do repo (`Flux-Prompt`, `Flux-Prompt-Frontend`, `Flux-Prompt-Worker`) e **tudo quebra**: o arquivo do workspace, as skills, o stack Docker e os agents esperam exatamente `back/ front/ worker/ docs/`. Como backstop, os nomes originais estão no gitignore pra um clone errado não poluir o repo do workspace — mas o tooling ainda assim não vai achar seu código.
+</Warning>
+
+Seu buddy aponta as URLs de clone exatas e onde quer que o workspace fique no disco.
 
 ## Backend — `back/`
 
@@ -98,6 +130,18 @@ pnpm dev   # sobe o Vite dev server na porta 3000
 ```
 
 Abra [http://localhost:3000](http://localhost:3000). Logue com uma conta de dev (peça pro seu buddy ou crie uma via seu backend local).
+
+## Tudo de uma vez: `./devdb-up.ps1`
+
+Em vez de rodar `pnpm infra:up`, `pnpm dev:api` e `pnpm dev` em três terminais diferentes, a raiz do workspace tem um script único que sobe Postgres, Redis, o backend, o worker e o frontend juntos:
+
+```bash
+./devdb-up.ps1
+```
+
+**Done when:** `Back OK: http://localhost:3001` aparece no log e `http://localhost:3000` carrega.
+
+Use este caminho uma vez que seus `.env` estejam preenchidos; é a rota mais rápida pra "quatro processos de pé".
 
 ## O que "rodando" significa
 

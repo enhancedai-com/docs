@@ -53,6 +53,20 @@
                   "ai-workflows/claude-code-setup",
                   "ai-workflows/create-docs-agent",
                   {
+                    "group": "How we use AI",
+                    "pages": [
+                      "ai-workflows/workspace-structure",
+                      "ai-workflows/where-things-live",
+                      "ai-workflows/claude-md-per-repo",
+                      "ai-workflows/rules",
+                      "ai-workflows/hooks",
+                      "ai-workflows/skills-overview",
+                      "ai-workflows/tasks-and-kb",
+                      "ai-workflows/local-memory",
+                      "ai-workflows/claude-code-guardrails"
+                    ]
+                  },
+                  {
                     "group": "Internal developer workflows",
                     "pages": [
                       "ai-workflows/internal-developer-workflows/overview",
@@ -193,6 +207,17 @@
                   "worker/development",
                   "worker/environment-variables",
                   "worker/node-input-projection",
+                  {
+                    "group": "Developer guides",
+                    "pages": [
+                      "worker/execution-lifecycle",
+                      "worker/how-to-add-a-node-type",
+                      "worker/callback-reference",
+                      "worker/error-taxonomy",
+                      "worker/persistence-contract",
+                      "worker/running-locally"
+                    ]
+                  },
                   {
                     "group": "Node",
                     "pages": [
@@ -347,6 +372,20 @@
                   "ai-workflows/claude-code-setup",
                   "ai-workflows/create-docs-agent",
                   {
+                    "group": "How we use AI",
+                    "pages": [
+                      "ai-workflows/pt-br/workspace-structure",
+                      "ai-workflows/pt-br/where-things-live",
+                      "ai-workflows/pt-br/claude-md-per-repo",
+                      "ai-workflows/pt-br/rules",
+                      "ai-workflows/pt-br/hooks",
+                      "ai-workflows/pt-br/skills-overview",
+                      "ai-workflows/pt-br/tasks-and-kb",
+                      "ai-workflows/pt-br/local-memory",
+                      "ai-workflows/pt-br/claude-code-guardrails"
+                    ]
+                  },
+                  {
                     "group": "Internal developer workflows",
                     "pages": [
                       "ai-workflows/internal-developer-workflows/overview",
@@ -487,6 +526,17 @@
                   "worker/development",
                   "worker/pt-br/environment-variables",
                   "worker/node-input-projection",
+                  {
+                    "group": "Guias para desenvolvedor",
+                    "pages": [
+                      "worker/pt-br/execution-lifecycle",
+                      "worker/pt-br/how-to-add-a-node-type",
+                      "worker/pt-br/callback-reference",
+                      "worker/pt-br/error-taxonomy",
+                      "worker/pt-br/persistence-contract",
+                      "worker/pt-br/running-locally"
+                    ]
+                  },
                   {
                     "group": "Node",
                     "pages": [

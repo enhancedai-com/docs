@@ -1,0 +1,27 @@
+---
+title: "Workspace structure"
+description: "Map of the Flux-Prompt / EnhancedAI monorepo."
+---
+
+The workspace is a VS Code multi-root wrapper around five git repositories.
+
+## apps/
+
+| Path | Role | Production branch |
+|---|---|---|
+| `apps/Flux-Prompt` | NestJS backend API | `production` |
+| `apps/Flux-Prompt-Frontend` | React (Vite) frontend | `production` |
+| `apps/Flux-Prompt-Worker` | Temporal worker | `main` |
+| `apps/FluxPrompt-MCP` | Public MCP server | `main` |
+| `apps/docs` | Mintlify docs (this site) | `main` |
+
+See the root `CLAUDE.md` for the full branch strategy (`production`, `staging`, `master`/`main` by repo).
+
+## Other top-level folders
+
+- `.claude/` — workspace Claude Code configuration: `agents/`, `skills/`, `kb/`, `tasks/`, `settings.json`, `settings.local.json`.
+- `docker/` — local infra (Postgres, Redis) for Flux-Prompt backend.
+- `scripts/` — workspace scripts, including `guardrails/` hooks (block-sensitive-writes, confirm-shared-state).
+- `debug-playwright/` — scripted E2E runs against the deployed front.
+
+See [Where things live](./where-things-live) for artifacts (skills, agents, rules, hooks, memory, guardrails).

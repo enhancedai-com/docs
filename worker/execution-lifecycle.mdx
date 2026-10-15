@@ -1,0 +1,75 @@
+---
+title: Node execution lifecycle
+description: The path a run takes from the entry endpoint through the persisted output row.
+state: production
+state_verified: 2026-10-07
+state_verified_against: worker@develop 5fe389f, back@master 9609806b
+---
+
+This page names every stop in the run lifecycle and points to where each stop lives in code. The ordered diagrams for the two run modes (full flow and single-node) live on the published pipeline page, and this page is the verbal index into them. It does not restate the pipeline — it tells you which file and symbol to open when a particular stop misbehaves.
+
+## The eight stops
+
+A run flows through eight observable stops:
+
+1. **Entry endpoint** — the back receives the run request.
+2. **`node_executions` row** — a row is created, keyed by `(execId, nodeId)`.
+3. **Temporal dispatch** — the back enqueues the workflow.
+4. **`fetchNodeRow`** — the worker activity reads the row.
+5. **Execute** — the node module runs.
+6. **`persistNodeSuccess`** — the worker activity writes the output row.
+7. **Redis signal** — the back is notified of completion.
+8. **Socket emit** — the front receives the update.
+
+## See the diagrams
+
+The step-by-step diagrams live on the existing pipeline page. This page intentionally does not duplicate them.
+
+<Card title="Full flow run" icon="diagram-project" href="/main-api/specific-features/flow-and-single-node-execution">
+Scheduler walks every reachable node in dependency order.
+</Card>
+
+<Card title="Process single node workflow" icon="square-code" href="/worker/workflows/process-single-node">
+The workflow case that dispatches a single node activity.
+</Card>
+
+## Where each stop lives
+
+| # | Stop | File | Symbol |
+|---|---|---|---|
+| 1 | Entry endpoint | `back/src/app-api/flux/flux.service.ts` | `apiV2` |
+| 2 | `node_executions` row created | `back/src/entities/node_execution.entity.ts` | — |
+| 3 | Temporal dispatch | `back/src/temporal/worker.controller.ts` | — |
+| 4 | `fetchNodeRow` | `worker/src/modules/nodes/shared/fetch-node-row.ts` | `fetchNodeRow` |
+| 5 | Execute | `worker/src/modules/temporal/workflows/process-single-node.workflow.ts` | — |
+| 6 | `persistNodeSuccess` | `worker/src/modules/nodes/shared/persist-node-success.ts` | `persistNodeSuccess` |
+| 7 | Redis signal | `back/src/temporal/worker.controller.ts` | — |
+| 8 | Socket emit | `back/src/app-api/flux/flux.service.ts` | — |
+
+## What you observe at each stop
+
+| # | Stop | `node_executions` row state | Temporal UI event | Worker log |
+|---|---|---|---|---|
+| 1 | Entry endpoint | row not yet created | — | — |
+| 2 | Row created | `input` populated by the API, `outputData` empty, `isError: false` | — | — |
+| 3 | Temporal dispatch | unchanged | `WorkflowExecutionStarted` | — |
+| 4 | `fetchNodeRow` | unchanged (worker reads `input`) | `ActivityTaskStarted` on `fetchNodeRow` | log entry with `execId`, `nodeId` |
+| 5 | Execute | unchanged (worker in-memory) | activity running | log entry with `type` |
+| 6 | `persistNodeSuccess` | `outputData` populated, `output` set, `isError` set, `updatedAt` bumped | `ActivityTaskCompleted` on `persistNodeSuccess` | log entry with duration |
+| 7 | Redis signal | unchanged | — | — |
+| 8 | Socket emit | unchanged | — | — |
+
+<Note>
+The `node_executions` entity does **not** have a `status` column. State is observed via the combination of `input` presence (set by the API at row creation), `outputData` presence (set by `persistNodeSuccess`), `isError` (set at the same time as `outputData`), and `cancelledAt` (set when a run is cancelled). See [Running and debugging locally](/worker/running-locally) for the SQL and the full set of columns.
+</Note>
+
+## Pinned SHA
+
+<Note>
+The prose above was validated against:
+
+- `worker@develop 5fe389f` (2026-10-07)
+- `back@master 9609806b` (2026-10-07)
+
+Code references name files and symbols, never line numbers. If a symbol is renamed, the reference drifts silently — report it as a bug on this page.
+</Note>

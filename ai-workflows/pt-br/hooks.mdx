@@ -1,0 +1,58 @@
+---
+title: "Hooks"
+description: "Guards executáveis que rodam antes/depois das chamadas de ferramenta do agent."
+---
+
+## O que é um hook
+
+Um script conectado em `.claude/settings.json` sob `hooks.PreToolUse` / `PostToolUse`. O script recebe o evento de tool-use em JSON pelo stdin e decide allow / deny / confirm.
+
+## Onde eles moram
+
+- No workspace: `scripts/guardrails/*.mjs` + o `.claude/settings.json` do topo.
+- Por repo: `apps/<repo>/.claude/hooks/*.mjs` + o `.claude/settings.json` do repo.
+
+## Formato
+
+Node ESM, sem dependências de npm:
+
+```javascript
+import { pathToFileURL } from 'node:url';
+
+export function evaluate(event) {
+  // return { decision: 'allow' | 'block' | 'confirm', reason?: string }
+}
+
+async function readStdin() {
+  const chunks = [];
+  for await (const c of process.stdin) chunks.push(c);
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const raw = await readStdin();
+  const event = raw ? JSON.parse(raw) : {};
+  const r = evaluate(event);
+  if (r.decision === 'block') {
+    process.stdout.write(JSON.stringify({ permissionDecision: 'deny', permissionDecisionReason: r.reason }));
+    process.exit(2);
+  }
+  if (r.decision === 'confirm') {
+    process.stdout.write(JSON.stringify({ permissionDecision: 'ask', permissionDecisionReason: r.reason }));
+    process.exit(2);
+  }
+  process.exit(0);
+}
+```
+
+Use `pathToFileURL(process.argv[1]).href` para o gate de CLI — a concatenação ingênua de `file://` quebra no Windows (mismatch de triplas barras).
+
+## Exemplos reais
+
+- `scripts/guardrails/block-sensitive-writes.mjs`
+- `scripts/guardrails/confirm-shared-state.mjs`
+- `apps/Flux-Prompt-Frontend/.claude/hooks/design-system-check.mjs`
+
+## Testes
+
+Hooks são módulos Node comuns; teste com `node:test`. Veja `scripts/guardrails/tests/`.

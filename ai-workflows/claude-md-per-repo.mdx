@@ -1,0 +1,26 @@
+---
+title: "CLAUDE.md per repo"
+description: "Why each repo has its own CLAUDE.md and what belongs in each."
+---
+
+The root `CLAUDE.md` describes the **workspace** (artifact locations, branch strategy, commands by repo, where things live). Each sub-repo's `CLAUDE.md` describes **that repo** (its own domain, patterns, gotchas).
+
+## Which CLAUDE.md gets what
+
+| Content | Root | Per-repo |
+|---|---|---|
+| Workspace layout, `apps/*` list | ✓ | — |
+| Branch strategy | ✓ | — |
+| Where things live (skills/agents/etc.) | ✓ | — |
+| Repo-specific architecture | — | ✓ |
+| Repo-specific build/test commands | ✓ (quickstart) | ✓ (full) |
+| Repo-specific coding patterns | — | ✓ |
+| Repo-specific gotchas | — | ✓ |
+
+When in doubt: specifics go in the sub-repo file, cross-cutting goes in the root.
+
+## When to update which
+
+- Added a new skill or agent → update the root.
+- Changed a repo's build command → update the sub-repo (and the root quickstart if the command is in the quickstart snippet).
+- New coding rule for the frontend → `apps/Flux-Prompt-Frontend/.claude/rules/` and a one-liner in the sub-repo CLAUDE.md.

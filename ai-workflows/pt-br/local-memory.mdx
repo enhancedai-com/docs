@@ -1,0 +1,27 @@
+---
+title: "Memória local"
+description: "Como funciona a memória por usuário e por conversa, e quando usá-la."
+---
+
+O Claude Code suporta uma memória persistente baseada em arquivo sob o perfil do usuário (não sob este repo). Cada entrada carrega um tipo (user, feedback, project, reference) e vive através das conversas daquele usuário.
+
+## Quando a memória é a ferramenta certa
+
+- Algo que você quer que o "você do futuro" lembre entre sessões, não só nesta.
+- Contexto barato comparado a reler arquivos grandes.
+- Preferências que você passa pro agent uma vez e espera que grudem ("não rode comandos de git sem perguntar").
+
+## Quando a memória é a ferramenta errada
+
+- Algo que o time inteiro deveria saber → isso é **KB** ou uma **página do Mintlify**.
+- Algo que só importa pra esta task → isso é **tasks/** ou simplesmente a conversa.
+- Convenções do projeto → `CLAUDE.md` (raiz ou por repo), **não** memória.
+
+## Atualização
+
+A memória é um snapshot. Verifique antes de agir se ela descreve código ou infra que podem ter mudado.
+
+## Escopo
+
+- A memória é por usuário. A memória de um dev não transfere pra um colega.
+- A memória é privada; nada nesta pasta é commitado.

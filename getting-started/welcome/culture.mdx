@@ -91,6 +91,30 @@ That's enough. No "sorry to bother", no preamble. We optimize for unblocking fas
 
 The reason for English in code is that the team works async across timezones, and English is the lowest-friction default for everyone (including future hires who might not speak Portuguese). It's not a preference — it's an operational decision.
 
+## Writing style
+
+How we write our internal engineering docs — this site, PR descriptions, skills, agent instructions, incident writeups.
+
+### Voice
+
+Practical, direct, senior-engineer-to-teammate. Plain language, no marketing fluff. Confident because it is battle-tested — every claim is backed by a real worked example. Three words: candid, precise, useful.
+
+### Anti-references
+
+What we're explicitly *not*: marketing-speak and hype; vague claims with no worked example behind them; "look how clever we are" framing instead of "here is how to do the thing"; preamble, throat-clearing, and apologies before the actual information; copy that sells a feature instead of documenting it. This is a reference tool, not a pitch — it should read like excellent internal engineering docs (Stripe / Linear / Vercel docs), not a product homepage.
+
+### Principles
+
+- **Utility over decoration.** Every sentence helps a reader find or understand something. If it's just pretty, cut it.
+- **Show the real thing.** Teach with actual incidents, flows, commands, and file paths — not abstractions.
+- **Scannable under pressure.** A stressed engineer mid-incident should find the answer in seconds: clear hierarchy, short paths, obvious callouts.
+- **Lead with the practice, back it with the reference.** State how we actually work first; link to the exhaustive detail so the narrative stays short.
+- **Honest about safety.** Access limits, prod read-only, and "never do this" are stated plainly where they matter.
+
+### Accessibility
+
+WCAG AA: body text ≥4.5:1 contrast in both light and dark themes; visible focus states; semantic heading hierarchy (no skipped levels). Theme-aware via `prefers-color-scheme`. Any motion must honor `prefers-reduced-motion`.
+
 ## What "shipping" means here
 
 The bar is: a thing is shipped when **a real user could use it in production without you intervening**. That means:

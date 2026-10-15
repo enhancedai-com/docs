@@ -1,0 +1,104 @@
+---
+title: Error taxonomy
+description: Which NodeError subclass to throw, and what each one does to Temporal retries.
+state: production
+state_verified: 2026-10-07
+state_verified_against: worker@develop 5fe389f
+---
+
+Node activities throw a specific `NodeError` subclass to tell Temporal whether the failure is worth retrying. Choose the wrong subclass and you either turn a user typo into thirty minutes of retry billing, or you give up on the first flaky network call that would have succeeded on attempt two.
+
+## The hierarchy
+
+- **`UserConfigError`** — the user's input is wrong (bad URL, missing variable).
+- **`IntegrationError`** — a connected integration (OAuth, API key) failed in a user-visible way.
+- **`ProviderError`** — the third-party provider (OpenAI, Anthropic, Luma, …) returned a non-retryable error.
+- **`TimeoutError`** — the operation exceeded its budget.
+- **`SystemError`** — our bug, our infrastructure, our dependency on something we own.
+
+All five live in `worker/src/modules/nodes/shared/node-error.ts`.
+
+## Retry behavior per class
+
+| Subclass | Retryable? | Max attempts (default node activity) | Billing impact |
+|---|---|---|---|
+| `UserConfigError` | No | 1 | charged once |
+| `IntegrationError` | Yes | 1 (bounded by activity options) | charged once in practice |
+| `ProviderError` | Conditional (`retryable` flag; defaults to no) | 1 | charged once |
+| `TimeoutError` | Yes | 1 (bounded by activity options) | charged once in practice |
+| `SystemError` | No | 1 | charged once |
+
+Temporal reads the `nonRetryable` flag that each subclass carries, not a list of class names. The `runNodeActivity` wrapper in `worker/src/modules/nodes/shared/run-node-activity.ts` reshapes every `NodeError` into `ApplicationFailure.create({ nonRetryable: nodeErr.nonRetryable, ... })`, and Temporal honors that boolean. On top of that, almost every node activity in `worker/src/modules/temporal/workflows/configs.ts` sets `maximumAttempts: 1`, which caps every retryable error at a single attempt regardless of the flag — the flag only decides retries on activities that opt into higher attempt counts (today, `largeMemoryActivity` at 2 and `chargeVoiceActivity` at 3). `largeMemoryActivity` is also the only activity that uses `nonRetryableErrorTypes` by name, listing `UserConfigError` and `InvalidInputError`.
+
+## How to choose
+
+Ask the next question in order:
+
+1. Is this because of the user's input? → `UserConfigError`.
+2. Is this a connected integration failing? → `IntegrationError`.
+3. Is this a third-party provider returning an error? → `ProviderError`.
+4. Did the operation exceed its budget? → `TimeoutError`.
+5. Everything else, including bugs in our own code → `SystemError`.
+
+## Examples
+
+### `UserConfigError`
+
+```ts
+if (!ALLOWED_MODES.has(explicit)) {
+  throw new UserConfigError({
+    field: "counterMode",
+    devMessage: `unsupported counter mode: ${explicit}`,
+    userMessage: "Counter mode is invalid.",
+  });
+}
+```
+
+### `IntegrationError`
+
+```ts
+throw new IntegrationError({
+  devMessage: `Fetch failed: ${err instanceof Error ? err.message : String(err)}`,
+  userMessage: "The remote server did not respond. Try again.",
+  cause: err,
+});
+```
+
+### `ProviderError`
+
+```ts
+throw new ProviderError({
+  devMessage: `Evaluation error: ${message}`,
+  userMessage: `The evaluation model rejected the request: ${message}`,
+  cause: err,
+});
+```
+
+### `TimeoutError`
+
+```ts
+throw new TimeoutError({
+  devMessage: `Fetch timed out after ${timeoutMs}ms`,
+  userMessage: "The remote server did not respond in time. Try again.",
+  cause: err,
+});
+```
+
+### `SystemError`
+
+```ts
+throw new SystemError({
+  devMessage: `store-image failed with status ${response.status}: ${JSON.stringify(data)}`,
+  userMessage: "Failed to save the generated image.",
+});
+```
+
+## What goes wrong if you choose wrong
+
+### `SystemError` thrown on user error
+
+A null-check that should have raised `UserConfigError` instead raises `SystemError`. In the generic case `SystemError` is non-retryable, so the activity still fails once — but the moment that same code runs inside an activity with a higher `maximumAttempts` (any retried activity, or a future one), you have turned a user typo into N paid attempts of the same deterministic failure. More importantly, you have mislabeled the category: the error now reads as our bug in logs and dashboards, so an on-call engineer gets paged for an invalid URL the user typed.
+
+### `UserConfigError` thrown on a flaky network blip
+
+A transient fetch failure gets caught and re-thrown as `UserConfigError` because the handler reused the wrong class. The subclass's `nonRetryable = true` flag reaches `ApplicationFailure` through `runNodeActivity`, and Temporal gives up on the first failure — even on the activities where retries would otherwise have kicked in. The user sees "your input is wrong" when nothing about the input was wrong, and the retry that would have succeeded never happens.

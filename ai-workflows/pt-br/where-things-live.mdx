@@ -1,0 +1,17 @@
+---
+title: "Onde cada coisa mora"
+description: "Mapa de artefato para localização do Claude Code neste workspace."
+---
+
+| Artefato | Localização | Padrão |
+|---|---|---|
+| Skills | `.claude/skills/<name>/SKILL.md` | [Skills overview](./skills-overview) |
+| Agents | `.claude/agents/<name>.md` | — |
+| Base de conhecimento | `.claude/kb/` | — |
+| Tasks (planos em andamento) | `.claude/tasks/<task>/` | [Tasks e KB](./tasks-and-kb) |
+| Rules (por repo) | `apps/<repo>/.claude/rules/*.md` | [Rules](./rules) |
+| Hooks (por repo) | `apps/<repo>/.claude/hooks/*.mjs` | [Hooks](./hooks) |
+| Guardrails | `.claude/settings.json` + `scripts/guardrails/` | [Guardrails](./claude-code-guardrails) |
+| Memória local | perfil do usuário, por conversa | [Local memory](./local-memory) |
+
+Cada linha linka para a página que explica o padrão e como adicionar um.

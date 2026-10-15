@@ -1,0 +1,26 @@
+---
+title: "CLAUDE.md por repo"
+description: "Por que cada repo tem o próprio CLAUDE.md e o que entra em cada um."
+---
+
+O `CLAUDE.md` da raiz descreve o **workspace** (localização dos artefatos, estratégia de branches, comandos por repo, onde cada coisa mora). O `CLAUDE.md` de cada sub-repo descreve **aquele repo** (seu domínio, padrões, gotchas).
+
+## Qual CLAUDE.md recebe o quê
+
+| Conteúdo | Raiz | Por repo |
+|---|---|---|
+| Layout do workspace, lista de `apps/*` | ✓ | — |
+| Estratégia de branches | ✓ | — |
+| Onde cada coisa mora (skills/agents/etc.) | ✓ | — |
+| Arquitetura específica do repo | — | ✓ |
+| Comandos de build/test específicos do repo | ✓ (quickstart) | ✓ (completo) |
+| Padrões de código específicos do repo | — | ✓ |
+| Gotchas específicos do repo | — | ✓ |
+
+Na dúvida: o específico vai no arquivo do sub-repo, o transversal vai na raiz.
+
+## Quando atualizar qual
+
+- Adicionou uma nova skill ou agent → atualiza a raiz.
+- Mudou o comando de build de um repo → atualiza o sub-repo (e o quickstart da raiz se o comando estiver no snippet do quickstart).
+- Nova regra de código para o frontend → `apps/Flux-Prompt-Frontend/.claude/rules/` e um resumo de uma linha no CLAUDE.md do sub-repo.

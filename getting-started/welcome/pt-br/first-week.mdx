@@ -60,6 +60,9 @@ Hoje é exploração sem pressão.
   <Step title="Rode o agent db-setup">
     Abra o Claude Code e invoque o agent `db-setup`. Ele faz bootstrap do seu `.workflow/.env` e verifica se você consegue consultar staging pelo SSH tunnel. Veja [Onboarding](/ai-workflows/internal-developer-workflows/onboarding) (em inglês).
   </Step>
+  <Step title="Rode a suíte E2E">
+    Na raiz do workspace, rode `node debug-playwright/suite.mjs` — ou invoque o agent `e2e-playwright-runner`, que sobe o stack Docker local pra você. **Done when imprime `N/N PASS`.** Isso prova que o stack está conectado de ponta a ponta antes de você mexer em código de produto.
+  </Step>
   <Step title="Abra um flow real em staging">
     Logue em [staging.fluxprompt.ai](https://staging.fluxprompt.ai/) com uma conta de teste. Abra um flow de outra pessoa. Tente rodar. Tente editar um node. Sinta o produto como usuário.
   </Step>
