@@ -163,7 +163,10 @@ sequenceDiagram
 `FluxService.executeSingleNode` (in `flux.service.ts`) decides which engine handles the node:
 
 ```typescript
-if (this.isTemporalNode(targetNode.type)) {
+if (
+  this.isTemporalNode(targetNode.type) ||
+  isWorkerRoutedIntegration(targetNode)
+) {
   await this.temporalService.client.start('processSingleNode', {
     args: [nodeId, userId, sessionId, flowId, versionId, execId, ''],
     workflowId: `node-process-${nodeId}-${execId}`,
@@ -177,16 +180,27 @@ return { execId };
 
 ### Worker path (Temporal)
 
-`isTemporalNode(type)` returns `true` for the types already migrated to the worker:
+`isTemporalNode(type)` returns `dispatchesToWorker(type)` from the dispatch registry (`src/shared/node-dispatch/node-dispatch-registry.ts`). The registry's published projection, `node-dispatch-contract.json`, is the source of truth for this list. In production it routes these 23 types to the worker:
 
 ```
-commandTextNode       scripting              apiCaller
-mathFunction           counterNode            outputController
-pullData               pushData               mcpNode
-imageGenerator         commandContentNode     voiceBoxNode
-webSearch              webCrawling            audioReaderNode
-sqlQuerier
+animationNode          apiCaller              audioReaderNode
+commandContentNode     commandTextNode        counterNode
+fileSave               imageGenerator         imageReaderNode
+mathFunction           mcpNode                outputController
+pullData               pushData               reportBuilder
+scripting              secApiNode             sqlQuerier
+usCensusNode           voiceBoxNode           webAmazon
+webCrawling            webSearch
 ```
+
+`thirdPartyIntegration` and `hubSpotCRM` go to the worker per provider instead of per type: `isWorkerRoutedIntegration(node)` is `true` when the node's provider is in `MIGRATED_INTEGRATION_PROVIDERS` (`stripe`, `wordpress`, `slack`, `notion`, `zapier`, `hubspot`, `supabase`, `pinecone`, `mcp`, `clickup`).
+
+<Warning>
+This list describes single-node Run. A full flow run (`apiV2`) has no generic dispatch: a type reaches the worker only through its own `processNodeViaTemporal` branch in the scheduler loop. In production:
+
+- `audioReaderNode` and `sqlQuerier` still run inline in a full flow run.
+- `animationNode`, `imageReaderNode`, `secApiNode`, `usCensusNode` and `webAmazon` have no branch, so a full flow run skips them.
+</Warning>
 
 For these, the API enqueues a `processSingleNode` workflow on the `enhanced-ai-queue` task queue and returns immediately. The worker:
 
@@ -213,11 +227,13 @@ For node types not yet migrated to the worker, `runLegacyAndPersist` runs the wo
 
 `dispatchLegacyHandler` is a switch on `node.type` that calls the existing handler method on `FluxService` (the same method used inside the `apiV2` scheduler). Each `case` translates the scheduler call site into the single-node context, passing safe defaults for parameters that do not apply (for example `apiTriggers: 0`, `accessToken: ''`, `parentRunLogCollector: null`).
 
-Legacy types currently wired into the dispatcher:
+Single-node Run reaches the legacy dispatcher only for types the registry does not route to the worker. In production these are:
 
 ```
-thirdPartyIntegration    libraryNode    reportBuilder    nodesBox
+thirdPartyIntegration (unmigrated provider only)    libraryNode    nodesBox
 ```
+
+The dispatcher also keeps arms for `webSearch`, `voiceBoxNode`, `audioReaderNode`, `commandContentNode`, `webCrawling` and `sqlQuerier`. Single-node Run never reaches them, because those types go to the worker first. Only the prefetch executor and the legacy endpoint use them.
 
 <Info>
 `nodesBox` is the only case that did not have a standalone handler in `FluxService`. Its scheduler block was inlined into `dispatchLegacyHandler` (calling `this.objectCaller(...)` with the merged-and-substituted node).
@@ -407,13 +423,16 @@ When you introduce a new node type or migrate an existing one, follow this check
 
 <Steps>
   <Step title="Decide the engine">
-    If the node logic already runs in the worker (Temporal activity), add the type string to `isTemporalNode` in `flux.service.ts`. Otherwise, treat it as legacy.
+    Set the type's entry in `src/shared/node-dispatch/node-dispatch-registry.ts` (`flowDispatch`, `legacyEndpoint`, `prefetchSafe`, `workerModule`), then run `pnpm generate:node-dispatch-contract`. `isTemporalNode` reads the registry, so you do not edit it.
   </Step>
   <Step title="Legacy: add a dispatch case">
     Inside `dispatchLegacyHandler`, add `if (node.type === '<type>') { ... }`. Call the existing handler method on `FluxService` (the same one the scheduler uses), wrap the result with `wrapResult`. Pass safe defaults for params that do not apply to single-node context.
   </Step>
   <Step title="Worker: confirm activity routing">
-    The `processSingleNode` workflow already switches on `node.type`. Make sure the type is handled and that `persistNodeSuccess` is called with the activity's output.
+    Add the activity to `UNIFORM_NODE_ACTIVITIES` in `workflows/node-activities.ts`; the `processSingleNode` workflow's `default` branch resolves it. Add an explicit `case` only when the type needs its own workflow logic. Make sure `persistNodeSuccess` is called with the activity's output.
+  </Step>
+  <Step title="Worker: add the full-run branch">
+    In `apiV2`, add a `node.type === '<type>'` branch that calls `processNodeViaTemporal`, in the main loop and in the `arrayNode` inner loop. Without it, single-node Run works but a full flow run skips the node.
   </Step>
   <Step title="Wire the FE Run button">
     In the node component, replace the legacy `handleRun` body with a call to `FlowService.executeSingleNode(flowId, id, undefined, versionId)`. Add the `useEffect` that clears `isLoading` on `COMPLETED`/`FAILED`. Point the `<Node onSubmit={...}>` prop at the new handler.
