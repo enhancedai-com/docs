@@ -3,16 +3,6 @@ title: "Changelog"
 description: "What's new in the FluxPrompt MCP integration."
 ---
 
-## 2026-10-15 — The AI Image Reader runs in agent runs
-
-**An `imageReaderNode` now produces its text in a full agent run, not only on its own Run.**
-
-- A full run sends **`imageReaderNode`** to the worker, also inside an `arrayNode`. Before, the run
-  skipped it and reported it completed with no output.
-- **`varInputNode`** declares **`uploadedFiles`** (name and URL pairs) and **`extractText`**. The node
-  passes the file URLs, one per line, on the `outputExtractText` handle and does not read the files.
-  To get their text, connect `outputExtractText` to an `imageReaderNode`.
-
 ## 2026-10-14 — Run results match on the run id
 
 **`get_run_nodes` and `get_node_output` match a node to its run by the run's id.**
