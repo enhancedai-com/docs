@@ -199,7 +199,8 @@ webCrawling            webSearch
 This list describes single-node Run. A full flow run (`apiV2`) has no generic dispatch: a type reaches the worker only through its own `processNodeViaTemporal` branch in the scheduler loop. In production:
 
 - `audioReaderNode` and `sqlQuerier` still run inline in a full flow run.
-- `animationNode`, `imageReaderNode`, `secApiNode`, `usCensusNode` and `webAmazon` have no branch, so a full flow run skips them.
+- `imageReaderNode` has its own branch, like `imageGenerator`, in the main loop and in the `arrayNode` inner loop, so a full flow run sends it to the worker.
+- `animationNode`, `secApiNode`, `usCensusNode` and `webAmazon` have no branch, so a full flow run skips them.
 </Warning>
 
 For these, the API enqueues a `processSingleNode` workflow on the `enhanced-ai-queue` task queue and returns immediately. The worker:
