@@ -140,6 +140,18 @@ When `node.webSearch` is true, provider-specific tools are attached:
 
 Other providers (Perplexity, xAI, Groq) return no tools when web search is requested.
 
+### Web search billing
+
+The service counts the tool calls named `web_search` in the run and returns the count as `webSearchCalls`. The workflow passes it to [`chargeTokensActivity`](/worker/activities/charge-tokens), and the back bills each call at the provider's web search price (`webSearchPriceKeyFor` in `back/src/app-api/product/web-search-price-key.ts`):
+
+| `AiSystem` | Web search price key |
+| ---------- | -------------------- |
+| OpenAI | `open-ai-web-search` |
+| Anthropic | `anthropic-web-search` |
+| Gemini | None — Gemini searches are not charged |
+
+The same count is charged when the node fails after the provider answered (see [Error handling](/worker/workflows/process-single-node#error-handling)).
+
 ## Multimodal
 
 When `multimodalEnabled` is true, `extractMultimodalContent` (`extract-multimodal-content.ts`) finds URLs in the user prompt, system prompt, and loaded session memories via regex, keeps only the ones with a supported file extension, and dedupes them — up to **`MAX_URLS = 10`** per execution, not 3. Supported extensions: `jpg`, `jpeg`, `png`, `gif`, `webp`, `heic`, `heif`, `bmp`, `tiff`/`tif`, `svg`, `avif`, `pdf`. Matched URLs are stripped out of the prompt/system-prompt/memory text to avoid duplication.

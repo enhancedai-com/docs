@@ -198,8 +198,8 @@ webCrawling            webSearch
 <Warning>
 This list describes single-node Run. A full flow run (`apiV2`) has no generic dispatch: a type reaches the worker only through its own `processNodeViaTemporal` branch in the scheduler loop. In production:
 
-- `audioReaderNode` and `sqlQuerier` still run inline in a full flow run.
-- `imageReaderNode` has its own branch, like `imageGenerator`, in the main loop and in the `arrayNode` inner loop, so a full flow run sends it to the worker.
+- `sqlQuerier` still runs inline in a full flow run.
+- `audioReaderNode` and `imageReaderNode` each have their own branch, like `imageGenerator`, in the main loop and in the `arrayNode` inner loop, so a full flow run sends them to the worker.
 - `animationNode`, `secApiNode`, `usCensusNode` and `webAmazon` have no branch, so a full flow run skips them.
 </Warning>
 
@@ -234,7 +234,7 @@ Single-node Run reaches the legacy dispatcher only for types the registry does n
 thirdPartyIntegration (unmigrated provider only)    libraryNode    nodesBox
 ```
 
-The dispatcher also keeps arms for `webSearch`, `voiceBoxNode`, `audioReaderNode`, `commandContentNode`, `webCrawling` and `sqlQuerier`. Single-node Run never reaches them, because those types go to the worker first. Only the prefetch executor and the legacy endpoint use them.
+The dispatcher also keeps arms for `webSearch`, `voiceBoxNode`, `commandContentNode`, `webCrawling` and `sqlQuerier`. Single-node Run never reaches them, because those types go to the worker first. Only the prefetch executor and the legacy endpoint use them.
 
 <Info>
 `nodesBox` is the only case that did not have a standalone handler in `FluxService`. Its scheduler block was inlined into `dispatchLegacyHandler` (calling `this.objectCaller(...)` with the merged-and-substituted node).

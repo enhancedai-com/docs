@@ -61,7 +61,7 @@ Retorna:
 |-------|------|-----------|
 | `runId` | string | A execução informada. |
 | `status` | `"pending"` \| `"in_progress"` \| `"completed"` \| `"error"` | Estado atual da execução. `pending` está na fila e não começou; `completed` e `error` são finais. Uma execução que você cancelou reporta `error` com a mensagem `Run cancelled`. |
-| `tokens` | number | FluxCredits consumidos — uma quantidade decimal de créditos, não uma contagem de tokens do provider. |
+| `tokens` | number | FluxCredits consumidos — uma quantidade decimal de créditos, não uma contagem de tokens do provider. O total vem dos créditos cobrados na execução e inclui o que os agentes chamados pela execução (`fluxBox`, `libraryNode`) gastaram. |
 | `cost` | number | Custo atribuído à execução. |
 | `durationMs` | number | Duração real. |
 | `error` | string \| null | Motivo da falha, ou `null` quando não houver. |

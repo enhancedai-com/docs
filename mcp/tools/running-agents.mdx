@@ -60,7 +60,7 @@ Returns:
 |-------|------|-------------|
 | `runId` | string | The run being reported. |
 | `status` | `"pending"` \| `"in_progress"` \| `"completed"` \| `"error"` | Current state of the run. `pending` is queued and not started; `completed` and `error` are final. A run you cancelled reports `error` with the message `Run cancelled`. |
-| `tokens` | number | FluxCredits consumed — a decimal amount of credits, not a provider token count. |
+| `tokens` | number | FluxCredits consumed — a decimal amount of credits, not a provider token count. The total comes from the credits charged to the run, and it includes what any agent the run called (`fluxBox`, `libraryNode`) spent. |
 | `cost` | number | Cost attributed to the run. |
 | `durationMs` | number | Wall-clock duration. |
 | `error` | string \| null | Failure reason, or `null` when there is none. |
