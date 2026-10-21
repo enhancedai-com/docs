@@ -246,6 +246,8 @@ Any path where nothing was transcribed (`charge` is `null`), and any failure bef
 
 Ingests a batch of run lifecycle events. The back stores the events and rebuilds the run log from them.
 
+No worker code calls this endpoint yet: while the back runs the flow loop, it records the same events in its own process. The worker calls it once it owns the loop.
+
 **Request**
 
 ```ts
