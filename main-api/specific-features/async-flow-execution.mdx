@@ -110,6 +110,9 @@ and the terminal statuses add to it:
 `startedAt` stays `null` while the run is `pending`, and `finishedAt` is only set once the run reaches
 `completed` or `error`.
 
+When the job finishes because the run was cancelled, the run ends with status `error` and
+`errorMessage: "Run cancelled"`. If a node error was also recorded, that node's message is kept instead.
+
 ## What the run is recorded in
 
 The queue writes to its own table rather than reusing the node-level tables:
