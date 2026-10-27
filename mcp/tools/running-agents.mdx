@@ -59,7 +59,7 @@ Returns:
 | Field | Type | Description |
 |-------|------|-------------|
 | `runId` | string | The run being reported. |
-| `status` | `"pending"` \| `"in_progress"` \| `"completed"` \| `"error"` | Current state of the run. `pending` is queued and not started; `completed` and `error` are final. A run you cancelled reports `error` with the message `Run cancelled`. |
+| `status` | `"pending"` \| `"in_progress"` \| `"completed"` \| `"error"` \| `"cancelled"` | Current state of the run. `pending` is queued and not started; `completed`, `error` and `cancelled` are final. A run you cancelled reports `cancelled`, and its `error` field reads `Run cancelled`. |
 | `tokens` | number | FluxCredits consumed — a decimal amount of credits, not a provider token count. The total comes from the credits charged to the run, and it includes what any agent the run called (`fluxBox`, `libraryNode`) spent. |
 | `cost` | number | Cost attributed to the run. |
 | `durationMs` | number | Wall-clock duration. |
@@ -151,13 +151,15 @@ Requests cancellation of a run that is still in flight.
 | Field | Type | Description |
 |-------|------|-------------|
 | `runId` | string | The run you asked about. |
-| `cancelled` | boolean | `true` only when the run was actually cancelled. |
+| `cancelled` | boolean | `true` when the cancel was accepted. A queued run is already gone; a processing run stops within a few seconds. |
 | `reason` | `"cancelled"` \| `"cancel_unsupported"` \| `"dry_run"` | `cancelled` — the run was stopped. `dry_run` — you passed `dryRun: true`; nothing was cancelled. `cancel_unsupported` — there was nothing to cancel: the run already finished, is not tracked any more, or is not one this workspace owns. |
 
 The response carries no `dryRun` or `applied` fields, unlike the other write tools.
 
 A run still queued is removed from the queue; a run already processing is cancelled through its
-workflow, so "processing" is not too late.
+workflow, so "processing" is not too late. The node in flight stops within a few seconds and no
+later node starts. Poll `get_run_status` until it reports `cancelled`; a run that finishes before
+the cancel takes effect keeps its own status.
 
 <Note>
   **`cancel_run` is the one write tool that defaults to `dryRun: false`** and cancels immediately.
