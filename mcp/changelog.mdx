@@ -3,6 +3,17 @@ title: "Changelog"
 description: "What's new in the FluxPrompt MCP integration."
 ---
 
+## 2026-10-28 — A cancelled run reports `cancelled`
+
+**`get_run_status` reports a run you cancelled with its own status.**
+
+- **`get_run_status`** returns `status: "cancelled"` for a run cancelled while queued or while
+  processing. Before, it returned `error` with the message `Run cancelled`, the same status as a run
+  that failed on its own. The `error` field still reads `Run cancelled`.
+- **`cancel_run`** stops the node in flight within a few seconds, and no later node starts. Before,
+  a processing run could keep going and finish as `completed`.
+- A task started through the MCP Tasks primitive ends as `cancelled` when its run is cancelled.
+
 ## 2026-10-15 — The AI Image Reader runs in agent runs
 
 **An `imageReaderNode` now produces its text in a full agent run, not only on its own Run.**
