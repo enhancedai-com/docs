@@ -54,6 +54,8 @@ Nenhum parâmetro necessário. Assim como o `get_node_type`, não recebe `worksp
 | `nodeTypes[].description` | string | O que este node faz. |
 | `nodeTypes[].category` | string | Agrupamento: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. |
 
+Tipos de node removidos do produto não aparecem na lista. Um agente ainda pode ter um node salvo de tipo removido: o [`get_agent`](/mcp/pt-br/tools/agents-and-folders#get_agent) o marca como `deprecated`, e `add_node`, `update_node` e `connect_nodes` o recusam.
+
 <Note>
   Os schemas ficam atrás do [`get_node_type`](#get_node_type). O
   [resource](/mcp/pt-br/tools/prompts-and-resources#resources) `fluxprompt://node-types` é a exceção:
@@ -376,6 +378,8 @@ espaços, então `"display box"` resolve para o mesmo tipo que `"Display Box"`.
 Um valor que não casa com nenhuma das três formas é recusado com `validation_error` — inclusive uma
 string que parece plausível mas simplesmente não é um tipo real.
 
+Um tipo removido do produto também é recusado, com um `validation_error` que diz `Node type <type> was removed and can no longer be added or edited. Delete the node; the rest of the flow keeps working.` (em inglês). Escolha um tipo do [`list_node_types`](#list_node_types).
+
 ### Não invente coordenadas
 
 `node.position` é **opcional e resolvido pelo servidor**. A posição que você envia é uma *dica*: vence
@@ -437,6 +441,7 @@ Mescla um patch em um node existente.
   não apagadas.
 - Envie o mínimo: para mudar um campo, envie só aquele campo.
 - O `type` de um `globalStarter` não pode ser alterado (`global_starter_not_retypable`); edite o `data` dele.
+- Um node de tipo removido não pode ser editado, e você não pode mudar o `type` de um node para um tipo removido. Os dois casos são recusados com `validation_error`. Exclua o node com o [`remove_node`](#remove_node).
 
 Diferente do `add_node`, o `update_node` **respeita exatamente a posição enviada** — sem resolução
 anti-sobreposição. Isso é deliberado: permite que um cliente organize o fluxo de forma determinística,
@@ -459,7 +464,8 @@ Cria uma edge de um node de origem para um node de destino. Os handles são vali
 derivado dos dois tipos de node: um par `(tipo, handle)` desconhecido é recusado com
 `validation_error` nomeando os handles válidos daquele tipo — chame o
 [`get_node_type`](#get_node_type) e leia `handles` em vez de chutar a partir dos nomes de campo do
-`inputSchema`.
+`inputSchema`. Uma edge de ou para um node de tipo removido é recusada com `validation_error`, porque
+esse node nunca entrega valor.
 
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |-----------|------|-------------|-----------|

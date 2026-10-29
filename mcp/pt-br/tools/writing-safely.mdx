@@ -109,6 +109,7 @@ Se sua chave foi emitida por um membro não-admin, os escopos podem ter sido red
 | `version_conflict` | O agente mudou depois do seu `expectedVersion`. | Releia com `get_agent` e repita. |
 | `validation_error` | O payload quebra uma regra (ex.: id de `globalStarter` sem `flow-global-starter`, ou um handle que o tipo de node não tem). | Corrija o payload; a escrita **não** foi parcialmente aplicada. |
 | `validation_error` — voz indisponível | Um `voiceBoxNode` nomeia um `voiceId` (elevenlabs) ou `groqVoice` (groq) que o provider não conhece. `add_node` e `update_node` recusam. | Chame o [`list_voices`](/mcp/pt-br/tools/nodes-and-edges#list_voices) e use um `id` daquela lista. |
+| `validation_error` — tipo de node removido | `add_node` nomeia um tipo de node que foi removido do produto, ou `update_node` ou `connect_nodes` toca um node de tipo removido. A mensagem diz `Node type <type> was removed and can no longer be added or edited. Delete the node; the rest of the flow keeps working.` (em inglês) | Chame o [`remove_node`](/mcp/pt-br/tools/nodes-and-edges) para excluir o node. Para adicionar algo novo, use um tipo do [`list_node_types`](/mcp/pt-br/tools/nodes-and-edges#list_node_types). |
 | `integrationId` inalcançável | O nó nomeia uma conexão de terceiro que este usuário não possui nem recebeu por compartilhamento da organização. | Chame o [`list_integrations`](/mcp/pt-br/tools/nodes-and-edges#list_integrations) e use um id daquela lista. |
 | `provider_not_ready` | O provider não está habilitado para escritas via MCP neste ambiente. | Peça a um admin; o allowlist é por ambiente. |
 | `-32006` rate limited | Você excedeu o [rate limit](/mcp/pt-br/environment-variables) por chave. | Respeite o `retryAfterMs`. |
@@ -137,6 +138,16 @@ Retorna:
 | `unreachableNodes` | array | `{ nodeId, nodeType }` — nodes sem caminho de control/global/condition a partir do global starter. |
 | `wrongEdgeTypes` | array | `{ edgeId, sourceHandle, expectedType, actualType }` — edges control/global que não foram desenhadas como edges de execução. |
 | `unverifiableEdges` | array | `{ edgeId, source, target, sourceHandle, targetHandle, reason }` — edges que o caminho de escrita aceitou porque o tipo de node de destino aceita qualquer handle, então o registro não consegue confirmar nem negar que o handle é válido. Presente só para visibilidade; não afeta `ok`. |
+| `deprecatedNodes` | array | `{ nodeId, nodeType, edgeIds, reason }` — nodes cujo tipo foi removido do produto. Eles nunca rodam, e as edges deles não carregam valor. `edgeIds` lista as edges que tocam o node. Apenas reportado: **não** afeta `ok`. |
+
+#### Como nodes removidos afetam as outras verificações
+
+Um node removido nunca entrega valor, então as verificações tratam as edges dele de duas formas:
+
+- `unrenderableEdges`, `missingInputs`, `wrongEdgeTypes` e `unverifiableEdges` ignoram toda edge que toca um node removido.
+- `flowEntryIssues` e `unreachableNodes` seguem essas edges, como o agendador de execução faz. Um caminho que passa por um node removido continua contando como caminho. `unreachableNodes` nunca lista o próprio node removido.
+
+Para limpar uma entrada de `deprecatedNodes`, exclua o node com `remove_node`. Enquanto isso, o restante do agente continua funcionando.
 
 <Warning>
   **Chame isto também em agentes que você acabou de criar ou editar, não só nos pré-existentes.** Uma
