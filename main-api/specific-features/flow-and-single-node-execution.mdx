@@ -160,16 +160,14 @@ sequenceDiagram
 
 ## Single-node dispatch
 
-`FluxService.executeSingleNode` (in `flux.service.ts`) decides which engine handles the node:
+`FluxService.executeSingleNode` (in `flux.service.ts`) decides which engine handles the node. The decision depends only on the node's type, which the dispatch registry maps to an execution class:
 
 ```typescript
-if (
-  this.isTemporalNode(targetNode.type) ||
-  isWorkerRoutedIntegration(targetNode)
-) {
+if (this.isTemporalNode(targetNode.type)) {
   await this.temporalService.client.start('processSingleNode', {
-    args: [nodeId, userId, sessionId, flowId, versionId, execId, ''],
-    workflowId: `node-process-${nodeId}-${execId}`,
+    taskQueue: process.env.TEMPORAL_TASK_QUEUE || 'enhanced-ai-queue',
+    args: [nodeId, userFound.id, sessionId, flowId, versionId, execId, execId, null, runToken],
+    workflowId: buildNodeWorkflowId(nodeId, execId),
   });
   return { execId };
 }
@@ -178,22 +176,47 @@ this.runLegacyAndPersist({ node, flow, edges, execId, user, sessionId, ... });
 return { execId };
 ```
 
+### Execution classes
+
+The dispatch registry (`src/shared/node-dispatch/node-dispatch-registry.ts`) gives every node type an `execution` class. The worker-dispatch list, the prefetch skip set, the legacy endpoint verdicts and the gate that decides whether the worker workflow can run a flow all derive from the registry. Its published projection, `node-dispatch-contract.json`, lists every type with its class. The registry holds 53 types.
+
+| Class | Meaning | Types | Worker workflow gate |
+|---|---|---|---|
+| `worker` | The Temporal worker executes it, in a full flow run and in single-node Run. | 25 | Accepts |
+| `source` | Nothing executes it, but it has a value. The run resolves the value from the run seed or from the upstream node's output. | 11 | Accepts and skips the node |
+| `visual` | Nothing executes it, and it has no value in a run. Its edges carry nothing. | 9 | Accepts and skips the node |
+| `back` | The back still executes it. The entry names the task that moves it in `handoffOwner`. | 6 | Refuses the flow |
+| `sink` | It receives the run's output and builds the reply that the API, the chatbot and delivery read. | 1 | Refuses the flow |
+| `state` | It keeps state across runs. | 1 | Refuses the flow |
+
+Every `back`, `sink` and `state` entry must name an owner in `handoffOwner`, and a drift spec fails when one does not. The gate also refuses a flow that holds a type missing from the registry.
+
+<Info>
+Four node types that were removed from the product are registered as `visual` and marked `deprecated: true`. A saved node of a removed type stays in its flow, and a run skips it, so the rest of the flow keeps working. Only adding or editing one through a builder call is refused.
+</Info>
+
 ### Worker path (Temporal)
 
-`isTemporalNode(type)` returns `dispatchesToWorker(type)` from the dispatch registry (`src/shared/node-dispatch/node-dispatch-registry.ts`). The registry's published projection, `node-dispatch-contract.json`, is the source of truth for this list. In production it routes these 23 types to the worker:
+`isTemporalNode(type)` returns `dispatchesToWorker(type)` from the registry, which is `true` for the `worker` class. The registry's published projection, `node-dispatch-contract.json`, is the source of truth for this list. It routes these 25 types to the worker:
 
 ```
 animationNode          apiCaller              audioReaderNode
 commandContentNode     commandTextNode        counterNode
-fileSave               imageGenerator         imageReaderNode
-mathFunction           mcpNode                outputController
-pullData               pushData               reportBuilder
-scripting              secApiNode             sqlQuerier
-usCensusNode           voiceBoxNode           webAmazon
-webCrawling            webSearch
+fileSave               hubSpotCRM             imageGenerator
+imageReaderNode        mathFunction           mcpNode
+outputController       pullData               pushData
+reportBuilder          scripting              secApiNode
+sqlQuerier             thirdPartyIntegration  usCensusNode
+voiceBoxNode           webAmazon              webCrawling
+webSearch
 ```
 
-`thirdPartyIntegration` and `hubSpotCRM` go to the worker per provider instead of per type: `isWorkerRoutedIntegration(node)` is `true` when the node's provider is in `MIGRATED_INTEGRATION_PROVIDERS` (`stripe`, `wordpress`, `slack`, `notion`, `zapier`, `hubspot`, `supabase`, `pinecone`, `mcp`, `clickup`).
+`thirdPartyIntegration` and `hubSpotCRM` always run in the worker, whatever the provider. The back does not read the provider to route them, and it keeps no inline fallback. The worker looks up the adapter for the node's provider:
+
+- When the provider is empty, the node fails with `No integration provider is selected on this node. Choose a provider in the node settings and run it again.`
+- When the provider has no adapter, the node fails with `The provider "<name>" is not supported by this node. Choose a supported provider in the node settings.`
+
+See [Where a node executes](/main-api/specific-features/third-party-integrations-architecture#where-a-node-executes) for the provider list.
 
 <Warning>
 This list describes single-node Run. A full flow run (`apiV2`) has no generic dispatch: a type reaches the worker only through its own `processNodeViaTemporal` branch in the scheduler loop. In production:
@@ -228,13 +251,29 @@ For node types not yet migrated to the worker, `runLegacyAndPersist` runs the wo
 
 `dispatchLegacyHandler` is a switch on `node.type` that calls the existing handler method on `FluxService` (the same method used inside the `apiV2` scheduler). Each `case` translates the scheduler call site into the single-node context, passing safe defaults for parameters that do not apply (for example `apiTriggers: 0`, `accessToken: ''`, `parentRunLogCollector: null`).
 
-Single-node Run reaches the legacy dispatcher only for types the registry does not route to the worker. In production these are:
+Single-node Run reaches the legacy dispatcher only for types the registry does not route to the worker. These are:
 
 ```
-thirdPartyIntegration (unmigrated provider only)    libraryNode    nodesBox
+libraryNode    nodesBox
 ```
 
-The dispatcher also keeps arms for `webSearch`, `voiceBoxNode`, `commandContentNode`, `webCrawling` and `sqlQuerier`. Single-node Run never reaches them, because those types go to the worker first. Only the prefetch executor and the legacy endpoint use them.
+The dispatcher also keeps arms for `webSearch`, `voiceBoxNode`, `commandContentNode` and `webCrawling`. Single-node Run never reaches them, because those types go to the worker first. Only the prefetch executor uses them.
+
+### Legacy endpoint
+
+`POST /process/single-node-legacy` runs one node in the API process, outside the `processSingleNode` workflow. It checks the node type against the `legacyEndpoint` verdict in the registry and answers `422` unless the verdict is `accept`:
+
+| Verdict | Response |
+|---|---|
+| `refuse-migrated` | `Node type "<type>" is migrated to Temporal — use /process/single-node instead` |
+| `refuse-mutating` | `Node type "<type>" cannot run standalone — it mutates the flow graph` |
+| `refuse-unsupported` | `Node type "<type>" is not supported for single-node legacy execution` |
+
+`thirdPartyIntegration` and `hubSpotCRM` are `refuse-migrated`, like most worker types. Only `commandContentNode` and `voiceBoxNode` are `accept` today.
+
+### Types that a run skips
+
+A node of the `source` or `visual` class is not executed. A removed node type is `visual`, so the legacy loop, the worker workflow and prefetch all pass over it and the rest of the flow runs. The editor shows a placeholder for it and keeps its edges.
 
 <Info>
 `nodesBox` is the only case that did not have a standalone handler in `FluxService`. Its scheduler block was inlined into `dispatchLegacyHandler` (calling `this.objectCaller(...)` with the merged-and-substituted node).
@@ -423,11 +462,11 @@ The Zustand store needs the live edges array for propagation. `CoreNodeDisplay` 
 When you introduce a new node type or migrate an existing one, follow this checklist:
 
 <Steps>
-  <Step title="Decide the engine">
-    Set the type's entry in `src/shared/node-dispatch/node-dispatch-registry.ts` (`flowDispatch`, `legacyEndpoint`, `prefetchSafe`, `workerModule`), then run `pnpm generate:node-dispatch-contract`. `isTemporalNode` reads the registry, so you do not edit it.
+  <Step title="Choose the execution class">
+    Set the type's entry in `src/shared/node-dispatch/node-dispatch-registry.ts`: `execution` (see [Execution classes](#execution-classes)), `flowDispatch`, `legacyEndpoint`, `prefetchSafe` and `workerModule`. Then run `pnpm generate:node-dispatch-contract`. `isTemporalNode`, the legacy endpoint verdicts, the prefetch skip set and the worker workflow gate all read the registry, so you do not edit them. A type that runs in the worker is `execution: 'worker'`. A `back`, `sink` or `state` entry must also name its owner in `handoffOwner`.
   </Step>
-  <Step title="Legacy: add a dispatch case">
-    Inside `dispatchLegacyHandler`, add `if (node.type === '<type>') { ... }`. Call the existing handler method on `FluxService` (the same one the scheduler uses), wrap the result with `wrapResult`. Pass safe defaults for params that do not apply to single-node context.
+  <Step title="Legacy only: add a dispatch case">
+    Skip this step for a `worker` type. For a type that still runs in the API, add `if (node.type === '<type>') { ... }` inside `dispatchLegacyHandler`. Call the existing handler method on `FluxService` (the same one the scheduler uses), wrap the result with `wrapResult`. Pass safe defaults for params that do not apply to single-node context.
   </Step>
   <Step title="Worker: confirm activity routing">
     Add the activity to `UNIFORM_NODE_ACTIVITIES` in `workflows/node-activities.ts`; the `processSingleNode` workflow's `default` branch resolves it. Add an explicit `case` only when the type needs its own workflow logic. Make sure `persistNodeSuccess` is called with the activity's output.

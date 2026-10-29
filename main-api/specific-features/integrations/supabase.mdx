@@ -93,7 +93,7 @@ The documented PostgREST remedy for this, `Prefer: missing=default`, is ignored 
 
 ### Where it executes
 
-The runtime `pull`/`push` paths are being moved into the Temporal worker, provider by provider, so an integration node gets Temporal's retries and timeouts. Editor-time work stays in the main API: connecting, the dropdown options, and the schema lookup all read the OpenAPI document, which is only needed while you are building the flow.
+The runtime `pull`/`push` paths always run in the Temporal worker, so an integration node gets Temporal's retries and timeouts. Editor-time work stays in the main API: connecting, the dropdown options, and the schema lookup all read the OpenAPI document, which is only needed while you are building the flow.
 
 The split matters for failures. Configuration problems — a bad key, a missing table, an invalid filter, a missing required filter, malformed Rows JSON — are **not** retried, because retrying cannot change the outcome. Transient problems — a timeout, a network error, HTTP 429, or a Supabase `5xx` — are retried.
 

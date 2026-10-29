@@ -105,6 +105,7 @@ If your key was issued to a non-admin member, its scopes may have been clamped t
 | `version_conflict` | The agent changed since your `expectedVersion`. | Re-read with `get_agent` and retry. |
 | `validation_error` | The payload breaks a rule (e.g. a `globalStarter` id without `flow-global-starter`, or a handle the node type does not have). | Fix the payload; the write did **not** partially apply. |
 | `validation_error` — voice not available | A `voiceBoxNode` names a `voiceId` (elevenlabs) or `groqVoice` (groq) that the provider does not know. `add_node` and `update_node` refuse it. | Call [`list_voices`](/mcp/tools/nodes-and-edges#list_voices) and use an `id` from that list. |
+| `validation_error` — removed node type | `add_node` names a node type that was removed from the product, or `update_node` or `connect_nodes` touches a node of a removed type. The message reads `Node type <type> was removed and can no longer be added or edited. Delete the node; the rest of the flow keeps working.` | Call [`remove_node`](/mcp/tools/nodes-and-edges) to delete the node. To add something new, use a type from [`list_node_types`](/mcp/tools/nodes-and-edges#list_node_types). |
 | `integrationId` not reachable | The node names a third-party connection this user neither owns nor received through an organisation share. | Call [`list_integrations`](/mcp/tools/nodes-and-edges#list_integrations) and use an id from that list. |
 | `provider_not_ready` | The provider is not enabled for MCP writes in this environment. | Ask an admin; the allowlist is per environment. |
 | `-32006` rate limited | You exceeded the per-key [rate limit](/mcp/environment-variables). | Honour `retryAfterMs`. |
@@ -133,6 +134,16 @@ Returns:
 | `unreachableNodes` | array | `{ nodeId, nodeType }` — nodes with no control/global/condition path from the global starter. |
 | `wrongEdgeTypes` | array | `{ edgeId, sourceHandle, expectedType, actualType }` — control/global edges not drawn as execution edges. |
 | `unverifiableEdges` | array | `{ edgeId, source, target, sourceHandle, targetHandle, reason }` — edges the write path accepted because the target node type accepts any handle, so the registry cannot confirm or deny the handle is valid. Present for visibility only; does not affect `ok`. |
+| `deprecatedNodes` | array | `{ nodeId, nodeType, edgeIds, reason }` — nodes whose type was removed from the product. They never run, and their edges carry nothing. `edgeIds` lists the edges that touch the node. Reported only: it does **not** affect `ok`. |
+
+#### How removed nodes affect the other checks
+
+A removed node never delivers a value, so the checks treat its edges in one of two ways:
+
+- `unrenderableEdges`, `missingInputs`, `wrongEdgeTypes` and `unverifiableEdges` skip every edge that touches a removed node.
+- `flowEntryIssues` and `unreachableNodes` follow those edges, the way the run scheduler does. A path that passes through a removed node still counts as a path. `unreachableNodes` never lists the removed node itself.
+
+To clear a `deprecatedNodes` entry, delete the node with `remove_node`. The rest of the agent keeps working in the meantime.
 
 <Warning>
   **Call this on agents you just authored or edited too, not only pre-existing ones.** A write can
