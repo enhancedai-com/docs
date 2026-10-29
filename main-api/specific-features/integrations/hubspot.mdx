@@ -18,7 +18,7 @@ HubSpot is served by a dedicated module and a dedicated flow node, not by the ge
 | Deals | Yes (list and details) | No |
 
 <Warning>
-The HubSpot CRM node is read-only and runs **client-side only**. It executes in the browser while you have the flow editor open and triggers it. It does **not** run in headless, queued, or scheduled flow executions, so a flow that relies on this node will produce no HubSpot data when run outside the editor. Write operations (update contacts and companies) exist only as backend endpoints and are not exposed by the node.
+The HubSpot CRM node is read-only and runs in the **Temporal worker**, the same as every other integration node. It runs in a full flow run, including scheduled, queued, and API-triggered runs, and in single-node Run from the editor. Write operations (update contacts and companies) exist only as backend endpoints and are not exposed by the node.
 </Warning>
 
 ## How it works under the hood
@@ -100,8 +100,8 @@ In **Details** mode the node calls the by-id endpoint for the selected object ty
 ## Troubleshooting
 
 <AccordionGroup>
-<Accordion title="The node returns nothing in a scheduled or headless run">
-The HubSpot CRM node runs client-side only. It fetches data in the browser while the flow editor is open and you trigger it. Scheduled, queued, or otherwise headless executions do not run this node, so no HubSpot data is produced. Run the flow from the open editor, or stage the needed records upstream before any headless step depends on them.
+<Accordion title="The node fails in a scheduled or headless run but works in the editor">
+The node runs in the Temporal worker in every run, so a scheduled or headless run takes the same path as a run from the editor. The worker refreshes the HubSpot access token during the run, so it needs `HUBSPOT_CLIENT_ID` and `HUBSPOT_CLIENT_SECRET_ID` in its own environment, not only in the API's. Check those values first, then open the node's `node_executions` row to read the error.
 </Accordion>
 
 <Accordion title="The connection shows access timed out or requests fail with 401">
