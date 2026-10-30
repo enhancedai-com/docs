@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-49 env vars no `worker/.env.example`. O schema Zod do `src/env.ts` valida essas mais 18 outras vars que não estão no `.env.example` (várias Obrigatórias) — os dois conjuntos estão na tabela abaixo, 67 linhas no total. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+51 env vars no `worker/.env.example`. O schema Zod do `src/env.ts` valida essas mais 18 outras vars que não estão no `.env.example` (várias Obrigatórias) — os dois conjuntos estão na tabela abaixo, 69 linhas no total. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 | Var | Obrigatória? | Propósito |
 |---|---|---|
@@ -27,6 +27,8 @@ title: "Variáveis de Ambiente"
 | MOONSHOT_API_KEY | Opcional | cliente Moonshot (Kimi) |
 | MOONSHOT_BASE_URL | Opcional | URL base da API Moonshot (default `https://api.moonshot.ai/v1`) |
 | SEARCH_API_KEY | Obrigatória | busca web (node audio-transcriber) |
+| GOOGLE_PROJECT_ID | Opcional | projeto GCP do Google Speech-to-Text (node audio-transcriber, opção "Gemini"); sem ela, essa opção falha o node |
+| GOOGLE_BUCKET_NAME | Opcional | bucket GCS onde o node audio-transcriber sobe o áudio antes do Google Speech-to-Text; sem ela, essa opção falha o node |
 | SERP_API_KEY | Obrigatória | chave da SerpAPI para o provider de busca do Google no node web-search (`serpapi-client.ts`) |
 | AWS_ACCESS_KEY_ID | Opcional | credenciais Lambda (node de scripting) |
 | AWS_SECRET_ACCESS_KEY | Opcional | credenciais Lambda |
@@ -75,7 +77,7 @@ title: "Variáveis de Ambiente"
 | EMAIL_FROM_ADDRESS | Opcional | remetente dos emails do output node enviados por SMTP — mesmo valor do `back` |
 | EGRESS_POLICY_MODE | Opcional | guarda de egress da entrega de saída (`egress-policy.ts`): `off`, `report` ou `enforce` (padrão `report` — loga `egress_would_refuse`, não bloqueia nada) |
 
-Todas as 67 vars estão em uso ativo, exceto `AWS_REGION` e `PINECONE_ENV`, que são validadas pelo schema Zod mas nunca lidas em nenhum lugar do código da aplicação (veja as linhas acima). `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES`, `MCP_MAX_RESULT_BYTES`, `LOG_PROVIDER_OPTIONS`, `FAL_KEY`, `STABILITY_AI_API_KEY` e `IDEOGRAM_API_KEY` são lidas direto via `process.env`, fora do schema Zod — sem type-safety aí, mas é esperado já que todas são opcionais com fallback.
+Todas as 69 vars estão em uso ativo, exceto `AWS_REGION` e `PINECONE_ENV`, que são validadas pelo schema Zod mas nunca lidas em nenhum lugar do código da aplicação (veja as linhas acima). `LAMBDA_ENDPOINT`, `CLAIM_CHECK_THRESHOLD_BYTES`, `APICALLER_MAX_RESULT_BYTES`, `MCP_MAX_RESULT_BYTES`, `LOG_PROVIDER_OPTIONS`, `FAL_KEY`, `STABILITY_AI_API_KEY` e `IDEOGRAM_API_KEY` são lidas direto via `process.env`, fora do schema Zod — sem type-safety aí, mas é esperado já que todas são opcionais com fallback.
 
 ## Pegadinha cross-repo
 

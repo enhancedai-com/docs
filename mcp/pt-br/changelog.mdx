@@ -3,6 +3,28 @@ title: "Changelog"
 description: "Novidades na integração MCP do FluxPrompt."
 ---
 
+## 2026-10-28 — Uma execução cancelada reporta `cancelled`
+
+**O `get_run_status` reporta uma execução que você cancelou com um status próprio.**
+
+- O **`get_run_status`** devolve `status: "cancelled"` para uma execução cancelada na fila ou em
+  processamento. Antes, devolvia `error` com a mensagem `Run cancelled`, o mesmo status de uma
+  execução que falhou sozinha. O campo `error` continua trazendo `Run cancelled`.
+- O **`cancel_run`** para o node em execução em poucos segundos, e nenhum node seguinte começa.
+  Antes, uma execução em processamento podia continuar e terminar como `completed`.
+- Uma task iniciada pela primitiva Tasks do MCP termina como `cancelled` quando a execução dela é
+  cancelada.
+
+## 2026-10-15 — O AI Image Reader roda nas execuções do agente
+
+**Um `imageReaderNode` agora produz seu texto numa execução completa do agente, não só no Run do próprio node.**
+
+- Uma execução completa envia o **`imageReaderNode`** para o worker, inclusive dentro de um `arrayNode`.
+  Antes, a execução o pulava e o marcava como concluído sem saída.
+- O **`varInputNode`** declara **`uploadedFiles`** (pares de nome e URL) e **`extractText`**. O node
+  passa as URLs dos arquivos, uma por linha, no handle `outputExtractText` e não lê os arquivos.
+  Para obter o texto deles, conecte o `outputExtractText` a um `imageReaderNode`.
+
 ## 2026-10-14 — Resultados da execução casam pelo id da execução
 
 **`get_run_nodes` e `get_node_output` ligam um node à sua execução pelo id da execução.**

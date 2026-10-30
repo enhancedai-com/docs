@@ -60,8 +60,8 @@ Retorna:
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
 | `runId` | string | A execução informada. |
-| `status` | `"pending"` \| `"in_progress"` \| `"completed"` \| `"error"` | Estado atual da execução. `pending` está na fila e não começou; `completed` e `error` são finais. Uma execução que você cancelou reporta `error` com a mensagem `Run cancelled`. |
-| `tokens` | number | FluxCredits consumidos — uma quantidade decimal de créditos, não uma contagem de tokens do provider. |
+| `status` | `"pending"` \| `"in_progress"` \| `"completed"` \| `"error"` \| `"cancelled"` | Estado atual da execução. `pending` está na fila e não começou; `completed`, `error` e `cancelled` são finais. Uma execução que você cancelou reporta `cancelled`, e o campo `error` traz `Run cancelled`. |
+| `tokens` | number | FluxCredits consumidos — uma quantidade decimal de créditos, não uma contagem de tokens do provider. O total vem dos créditos cobrados na execução e inclui o que os agentes chamados pela execução (`fluxBox`, `libraryNode`) gastaram. |
 | `cost` | number | Custo atribuído à execução. |
 | `durationMs` | number | Duração real. |
 | `error` | string \| null | Motivo da falha, ou `null` quando não houver. |
@@ -157,13 +157,15 @@ Solicita o cancelamento de uma execução ainda em andamento.
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
 | `runId` | string | A execução sobre a qual você perguntou. |
-| `cancelled` | boolean | `true` somente quando a execução foi de fato cancelada. |
+| `cancelled` | boolean | `true` quando o cancelamento foi aceito. Uma execução na fila já saiu dela; uma execução em processamento para em poucos segundos. |
 | `reason` | `"cancelled"` \| `"cancel_unsupported"` \| `"dry_run"` | `cancelled` — a execução foi interrompida. `dry_run` — você passou `dryRun: true`; nada foi cancelado. `cancel_unsupported` — não havia o que cancelar: a execução já terminou, não é mais rastreada, ou não pertence a este workspace. |
 
 A resposta não traz os campos `dryRun` nem `applied`, ao contrário das outras ferramentas de escrita.
 
 Uma execução ainda na fila é removida da fila; uma execução já em processamento é cancelada pelo seu
-workflow, então "em processamento" não é tarde demais.
+workflow, então "em processamento" não é tarde demais. O node em execução para em poucos segundos
+e nenhum node seguinte começa. Consulte o `get_run_status` até ele reportar `cancelled`; uma
+execução que termina antes de o cancelamento valer mantém o próprio status.
 
 <Note>
   **O `cancel_run` é a única ferramenta de escrita com `dryRun: false` por padrão** e cancela

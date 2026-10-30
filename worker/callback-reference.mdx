@@ -154,8 +154,11 @@ interface ChargeTokensRequest {
   billingFlowId?: string;
   imageInputTokens?: number;
   imageTextTokens?: number;
+  webSearchCalls?: number;
 }
 ```
+
+`webSearchCalls` is the number of web search tool calls the model made. The back bills them as an extra charge line only when the resolved provider has a web search price key (OpenAI and Anthropic). For other providers, including Gemini, the field has no effect.
 
 **Response**
 
@@ -176,7 +179,7 @@ Guarded by `InternalApiGuard`. The user product is resolved from the flow via `P
 
 **Side effects**
 
-Writes a `token_transaction` row and updates the user product's running token and cost totals. Not idempotent — calling twice charges twice.
+Writes a `token_transaction` row and updates the user product's running token and cost totals. When you pass `execId` and `nodeId`, a repeated call does not charge again: a unique index on `(execId, nodeId, api)` keeps the same charge from being recorded twice, and a retry after a partial charge writes only the missing lines. Without them, calling twice charges twice.
 
 **When to use**
 
@@ -185,6 +188,135 @@ A model call succeeded and real tokens were consumed. `execId` and `nodeId` shou
 **When not to use**
 
 Any failure path where the user did not consume tokens — in particular, a `UserConfigError` means the model never ran, so charging would inflate the user's bill.
+
+### `/worker/charge-transcription` {#charge-transcription}
+
+Post-execution billing for the [AI audio transcriber](/worker/node/audio-transcriber#billing) node: records the audio the node transcribed.
+
+**Request**
+
+```ts
+interface ChargeTranscriptionRequest {
+  flowId: string;
+  userId: string;
+  model:
+    | 'whisper-1'
+    | 'whisper-large-v3'
+    | 'whisper-large-v3-turbo'
+    | 'gemini-speech-to-text'
+    | 'youtube-transcript';
+  usedTokens: number;
+  execId?: string;
+  nodeId?: string;
+}
+```
+
+`usedTokens` must be a number greater than or equal to `0`. The worker sends audio hours for the Whisper models, billed seconds for `gemini-speech-to-text`, and `1` for `youtube-transcript`. An unknown `model` is rejected by DTO validation.
+
+**Response**
+
+```ts
+interface ChargeTranscriptionResponse {
+  success: boolean;
+  message?: string;
+  usedTokens?: number;
+  cost?: number;
+}
+```
+
+Returns HTTP 200 with `success: true`, `usedTokens` and `cost` on success. Returns HTTP 403 with `success: false` when the flow's owner has no user product with the plan flag the model requires. Returns HTTP 500 with `success: false` when `ProductService.updateTokens` cannot apply the charge.
+
+**Auth model**
+
+Guarded by `InternalApiGuard`. The user product is resolved from the flow via `ProductService.getUserProductFromFlow` with the plan flag the model needs: `transcribe` for `whisper-1`, `groq` for the two Groq models, `gemini` for `gemini-speech-to-text`, and none for `youtube-transcript`.
+
+**Side effects**
+
+Writes a `token_transaction` row under the label `Audio` and updates the user product's running token and cost totals. When you pass `execId` and `nodeId`, a repeated call is a no-op: a unique index on `(execId, nodeId, api)` keeps the same charge from being recorded twice, and the response carries `usedTokens: 0` and `cost: 0`. Without them, calling twice charges twice.
+
+**When to use**
+
+The audio transcriber returned a `charge` for a transcription that completed. Pass `execId` and `nodeId` so the transaction is traceable to the run.
+
+**When not to use**
+
+Any path where nothing was transcribed (`charge` is `null`), and any failure before the transcription.
+
+### `/worker/run-events` {#run-events}
+
+Ingests a batch of run lifecycle events. The back stores the events and rebuilds the run log from them.
+
+No worker code calls this endpoint yet: while the back runs the flow loop, it records the same events in its own process. The worker calls it once it owns the loop.
+
+**Request**
+
+```ts
+interface RunEventsRequest {
+  runId: string;
+  events: RunEvent[];
+}
+
+interface RunEvent {
+  runId: string;
+  seq: number;
+  kind:
+    | 'run_started'
+    | 'node_started'
+    | 'node_finished'
+    | 'run_finished'
+    | 'loop_body_started'
+    | 'library_subrun_started'
+    | 'flow_caller_subrun_started'
+    | 'flow_caller_subrun_finished';
+  execId?: string;
+  nodeId?: string;
+  nodeType?: string;
+  flowId?: string;
+  flowVersionHistoryId?: string;
+  parentExecId: string | null;
+  iteration: number | null;
+  status?: 'success' | 'error' | 'cancelled';
+  error: { userMessage: string; devMessage?: string } | null;
+  loop?: {
+    anchorExecId?: string;
+    items?: number;
+    itemsProcessed?: number;
+    cancelled?: boolean;
+  };
+  inputRef?: string;
+  resultRef?: string;
+  at: string;
+}
+```
+
+`runId`, `execId`, `flowId`, `flowVersionHistoryId`, `parentExecId` and `loop.anchorExecId` are UUIDs. `seq` is an integer of at least `1`, `at` is an ISO 8601 timestamp, and `events` must contain at least one item. Every event's `runId` must match the batch's `runId`.
+
+**Response**
+
+```ts
+interface RunEventsResponse {
+  appliedThroughSeq: number;
+  finished: boolean;
+}
+```
+
+Returns HTTP 200. `appliedThroughSeq` is the highest `seq` stored for the run, and `finished` is `true` once a `run_finished` event exists. Returns HTTP 400 when an event's `runId` differs from the batch's, or when DTO validation fails.
+
+**Auth model**
+
+Guarded by `InternalApiGuard`. There is no per-run token check on this route.
+
+**Side effects**
+
+In one transaction, the back locks the run, inserts the events, and rebuilds the stored run log from every event of the run. An event whose `(runId, seq)` already exists is ignored, so resending a batch is safe. When a `run_finished` event with a `resultRef` arrives for a run that is still open, the back also finishes the run's execution record: it sets the final status, the output or error message, the token and cost totals from `token_transaction`, and the duration. A `cancelled` finish is recorded as status `error` with the message `Run cancelled`.
+
+**When to use**
+
+A component outside the back needs to report a run's node and run lifecycle so the back can build the run log.
+
+**When not to use**
+
+Reporting a node's output: this endpoint carries references (`inputRef`, `resultRef`) to payloads, not the payloads themselves. Store them with `/worker/store-payload` first.
 
 ### `/worker/generate-file` {#generate-file}
 
@@ -249,11 +381,14 @@ Writing an arbitrary payload to storage: this endpoint renders text into a file 
 | About to read a payload > 256 KB written by a previous activity | `/worker/get-payload` |
 | About to invoke a model whose user may not have access | `/worker/validate-model-access` |
 | Model call succeeded and tokens were consumed | `/worker/charge-tokens` |
+| Audio transcription completed and returned a `charge` | `/worker/charge-transcription` |
+| Need to report run and node lifecycle events so the back can build the run log | `/worker/run-events` |
 | Need to upload a generated file to S3/GCS | `/worker/generate-file` |
 
 ## When NOT to use
 
 - Do not call `/worker/charge-tokens` on user error — a `UserConfigError` means the user did not consume tokens; charging anyway inflates their bill.
+- Do not call `/worker/charge-transcription` when the transcriber returned no `charge` — nothing was transcribed.
 - Do not call `/worker/generate-file` for payloads smaller than the claim-check threshold — the claim check is for size, not for every file.
 - Do not call `/worker/store-payload` to bypass `persistNodeSuccess` — the row still has to be written; the claim check is additional, not alternative.
 
