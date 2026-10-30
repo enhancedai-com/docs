@@ -1,0 +1,208 @@
+---
+title: "processBatch"
+description: "Detailed documentation of the processBatch workflow that runs a flow once per row of a registered CSV as a durable Temporal workflow"
+state: production
+state_verified: 2026-10-30
+state_verified_against: worker@main c5b4318
+---
+
+## Overview
+
+The `processBatch` workflow runs a registered CSV batch — one flow run per row — as a durable Temporal workflow. It replaces the pre-B7 implementation, which was a detached `.catch(console.error)` loop inside `apiv3Batch` that did not survive an API deploy.
+
+A workflow does. Once started, the batch keeps going across API restarts, worker restarts, and transient failures. The API's role is reduced to starting (or cancelling) the workflow and the per-row preparation call.
+
+**Source:** `flux-prompt-worker/src/modules/temporal/workflows/process-batch.workflow.ts`
+
+## Workflow signature
+
+```typescript
+export async function processBatch(
+  input: ProcessBatchInput,
+): Promise<ProcessBatchResult>
+```
+
+### Input
+
+```typescript
+interface ProcessBatchInput {
+  batchId: string;
+  stopAfterFailures: number | null;
+  carryState?: {
+    nextRowIndex: number;
+    failureCount: number;
+    endRow: number;
+    totalRows: number;
+    flowId: string;
+    userId: string;
+    varInputNodes: string[];
+    spaceId: string | null;
+  };
+}
+```
+
+| Field | Description |
+| --- | --- |
+| `batchId` | ID of the `batch_processing_file` row. Also used to build the workflow id, `batch-process-${batchId}`, which the API's `/stop` endpoint cancels. |
+| `stopAfterFailures` | Stop the batch after this many failed rows. `null` means run the whole CSV regardless of failures. Set on the start call, overrides what is on `batch_processing_file.stopAfterFailures` when provided. |
+| `carryState` | Internal — populated by `continueAsNew` across segments (see below). Never set by the API. |
+
+### Output
+
+```typescript
+interface ProcessBatchResult {
+  status: "completed" | "error" | "stopped";
+  processedRows: number;
+  failedRows: number;
+}
+```
+
+`processedRows` and `failedRows` reflect only the current segment, not the full batch — a batch that fans out across many `continueAsNew` segments reports counts of the last segment. The authoritative progress is `batch_processing_file.lastProcessedLine`, which `updateLastProcessedLineActivity` keeps in sync after every row.
+
+## Starting a batch
+
+The API starts the workflow from the `POST /flux/batch-process` handler (`FluxController.apiv3Batch`):
+
+```typescript
+await this.temporalService.client.start('processBatch', {
+  taskQueue: process.env.TEMPORAL_TASK_QUEUE || 'enhanced-ai-queue',
+  workflowId: `batch-process-${batchFile.id}`,
+  args: [{ batchId: batchFile.id, stopAfterFailures: batchFile.stopAfterFailures }],
+});
+```
+
+The deterministic workflow id (one per batch file) is what makes the stop endpoint work and what refuses a double-start:
+
+- `POST /flux/batch-process/:id/stop` calls `.getHandle(workflowId).cancel()`.
+- A second `POST /flux/batch-process` while the first is still running fails with `WorkflowExecutionAlreadyStartedError`, caught by the controller and returned as *"Batch is already processing."*
+
+### `stopAfterFailures`
+
+Optional on the request body:
+
+```http
+POST /flux/batch-process
+api-key: <api key>
+Content-Type: application/json
+
+{ "batchId": "<uuid>", "stopAfterFailures": 10 }
+```
+
+The controller writes it to `batch_processing_file.stopAfterFailures` before starting the workflow. Inside the workflow, when `failureCount` reaches this value, the batch is marked `error` with *"Stopped after N failed row(s)."* and returns. Omit the field (or set `null`) to run every row regardless of failures.
+
+<Note>
+A data error (see [Error handling](#error-handling)) terminates the batch on the first occurrence, independently of `stopAfterFailures`.
+</Note>
+
+## Execution flow
+
+<Steps>
+  <Step title="Load the batch context">
+    First tick only (no `carryState`). Calls [`loadBatchContextActivity`](#activities-used) to read `flowId`, `userId`, `startRow`, `endRow`, `totalRows`, `lastProcessedLine`, `stopAfterFailures`, `spaceId`, and the ordered list of Variable Input node ids on that flow. Resolves the loop's starting point to `max(startRow, lastProcessedLine + 1)` so a resumed segment never re-runs a committed row.
+
+    If the batch row does not exist, returns `{ status: "error" }` without touching the DB. If the flow has no Variable Input node, marks the batch `error` with *"The flow has no Variable Input node to receive the batch rows."* and returns.
+  </Step>
+  <Step title="Dispatch up to five rows at a time">
+    Inside a cancellable `CancellationScope`, the loop keeps up to `BATCH_ROW_CONCURRENCY = 5` row runs in flight. Each slot runs `runOneRow`:
+    1. `loadRowInputActivity({ batchId, rowIndex })` reads the CSV row.
+    2. `prepareBatchRowRunActivity({ batchId, rowIndex })` calls back into the main API (`POST /worker/batch-row-run`) to build a fresh `runId` + seed snapshot for that row — merging the row columns into the flow's Variable Input nodes.
+    3. `executeChild(processFlow, ...)` runs the flow as a child workflow using the prepared seed; the child workflow id is `batch-row-${batchId}-${rowIndex}-${runId}`.
+    4. `writeRowOutputActivity` persists the child's result on the `batch_processing_file_input_output` row.
+
+    Settled rows are awaited with `Promise.race` so each one calls `updateLastProcessedLineActivity` as soon as it finishes — the DB column always reflects the newest committed row, not the oldest in-flight one.
+  </Step>
+  <Step title="Honor stopAfterFailures">
+    Every settled failure increments `failureCount`. When `stopAfterFailures !== null && failureCount >= stopAfterFailures`, the workflow marks the batch `error` with *"Stopped after N failed row(s)."* and returns.
+  </Step>
+  <Step title="Segment with continueAsNew">
+    After `BATCH_SEGMENT_SIZE = 100` rows have settled in the current segment, the workflow calls `continueAsNew` with the live `BatchLoopState` as `carryState`. This resets the event history so a batch with tens of thousands of rows never hits Temporal's history limit. The next segment resumes from `nextRowIndex` without re-reading any row that has already been written to `lastProcessedLine`.
+  </Step>
+  <Step title="Mark terminal">
+    When the loop exhausts the row range, calls `markBatchTerminalActivity` with `completed` (no failures) or `error` (one or more failures). On cancellation, marks the batch `stopped` from a non-cancellable scope so the status write survives the cancel.
+  </Step>
+</Steps>
+
+## Concurrency and segments
+
+| Constant | Value | Purpose |
+| --- | --- | --- |
+| `BATCH_ROW_CONCURRENCY` | 5 | Maximum row runs in flight at any time in one segment |
+| `BATCH_SEGMENT_SIZE` | 100 | After this many settled rows, `continueAsNew` resets the event history |
+
+Both are compile-time constants in `process-batch.workflow.ts`. The row concurrency is a workflow-level cap; the per-node concurrency inside each row run is governed by the worker's `maxConcurrentActivityTaskExecutions` setting (see [Worker service](/worker/workflows/worker-service#worker-concurrency)).
+
+## Error handling
+
+The workflow distinguishes **data** errors from **infra** errors:
+
+| Kind | Trigger | Effect |
+| --- | --- | --- |
+| `data` | `runOneRow` throws an `ApplicationFailure` whose `type` is `BAD_DATA_ERROR_TYPE` (worker side: `BadDataError` from `src/modules/batch/batch.errors.ts`), or the pre-check steps (`loadRowInputActivity`, `prepareBatchRowRunActivity`) returned a non-`ok` kind | Terminates the batch immediately: `markBatchTerminalActivity` with *"Row N failed with a data error: ..."* |
+| `infra` | Any other failure of the child flow run, including a `processFlow` that returned `status !== "success"` | Counts toward `failureCount`; honors `stopAfterFailures`; does **not** terminate on its own |
+
+`detectDataError` walks the `.cause` chain looking for `ApplicationFailure.type === BAD_DATA_ERROR_TYPE`, so a `BadDataError` thrown deep inside a child flow still terminates the parent batch.
+
+## Row preparation callback
+
+`prepareBatchRowRunActivity` is the only activity that talks back to the main API. It calls `POST /worker/batch-row-run` with `{ batchId, rowIndex }`, which the API routes to `BatchRunPreparationService.prepare` (`src/app-api/flux/batch-run-preparation.service.ts`). The service:
+
+1. Loads the batch and its flow.
+2. Looks up the flow's Variable Input nodes.
+3. Maps CSV columns onto those nodes:
+   - One Variable Input node → all columns are concatenated with a single space and fed to it.
+   - Multiple nodes → one column per node, in the order the nodes are listed on the batch context. The order is `COALESCE(position_y, 0) ASC, node_id ASC` — top-to-bottom on canvas, deterministic ties.
+   - Any other mismatch between column count and node count returns `kind: 'column_count_mismatch'`, which the workflow treats as a data error.
+4. Allocates a fresh `runId` and asks `FluxService.prepareWorkflowSeedForBatchRow` to persist a seed snapshot the child `processFlow` can resolve against.
+5. Returns `{ kind: 'ok', runId, seedSnapshotId }`.
+
+Non-`ok` results (`row_missing`, `empty_input`, `no_var_input_nodes`, `batch_missing`, `column_count_mismatch`) all surface in the workflow as data errors and terminate the batch.
+
+## Cancellation
+
+The whole loop runs under `CancellationScope.cancellable`. A `.cancel()` from the API — `POST /flux/batch-process/:id/stop` → `temporalService.client.getHandle(workflowId).cancel()` — raises a cancellation inside the loop, which:
+
+- Allows the in-flight `runOneRow` to finish or be cancelled by its own `ChildWorkflowCancellationType.WAIT_CANCELLATION_COMPLETED` policy on the child `processFlow`.
+- Marks the batch `stopped` through a non-cancellable scope so the final status write cannot itself be cancelled.
+- Returns `{ status: "stopped", processedRows, failedRows }`.
+
+A batch that has already reached a terminal status (`completed` or `error`) is not reopened by cancellation — the terminal status wins because `markBatchTerminalActivity` ran first and `terminalStatus` is already non-null when the cancellation arrives.
+
+## Activities used
+
+Workflow-level proxies live in `workflows/configs.ts`:
+
+| Activity | Purpose |
+| --- | --- |
+| `loadBatchContextActivity` | Reads the `batch_processing_file` row, the owning flow's user, and the ordered Variable Input node list |
+| `loadRowInputActivity` | Reads one `batch_processing_file_input_output` row (the CSV input for a given row index) |
+| `prepareBatchRowRunActivity` | Calls back to the main API's `POST /worker/batch-row-run` to allocate `runId` + seed snapshot for a row |
+| `writeRowOutputActivity` | Persists the child flow run's result on the input/output row |
+| `updateLastProcessedLineActivity` | Advances `batch_processing_file.lastProcessedLine` using `GREATEST` so an older in-flight finish never regresses it |
+| `markBatchTerminalActivity` | Sets `batch_processing_file.status` to `completed` / `error` / `stopped` plus an optional `errorMessage` |
+
+Each row run also executes a child `processFlow` workflow, which in turn fans out to `processSingleNode` child workflows per node — see [`processSingleNode`](/worker/workflows/process-single-node) for the node-level activity set.
+
+## Status transitions
+
+`batch_processing_file.status` moves through:
+
+1. **`in_progress`** — set by the API in `apiv3Batch` right before `.start(...)`.
+2. **`completed`** — set by `markBatchTerminalActivity` when the loop finished with no failures.
+3. **`error`** — set by `markBatchTerminalActivity` on a data error, on `stopAfterFailures`, or on any failed row at the terminal mark.
+4. **`stopped`** — set from a non-cancellable scope when the workflow is cancelled before reaching a terminal status.
+
+The API's `POST /flux/batch-process` refuses `in_progress`, `completed`, or `fully_processed` batches up front — the workflow is never started twice for the same file.
+
+## Load-bearing caveat: B4 coverage
+
+Every row runs its flow as `executeChild(processFlow, ...)`. The batch workflow is only as useful as the `processFlow` + `processSingleNode` coverage underneath it: if a row's flow contains a node type that B4 does not cover (one that's missing from both the `processSingleNode` switch and `UNIFORM_NODE_ACTIVITIES` in `node-activities.ts`), the row fails with *"Node type X not supported"* and counts as an infra failure for `stopAfterFailures`. Confirmed 2026-10-28 against a flow containing `outputObjectNode` — every row stuck at that node.
+
+See [`processSingleNode` → Node type dispatch](/worker/workflows/process-single-node#node-type-dispatch) for the current coverage table.
+
+## Related documentation
+
+- [Worker overview](/worker/overview)
+- [Worker service](/worker/workflows/worker-service) — task queue + activity registration
+- [`processSingleNode`](/worker/workflows/process-single-node) — the per-node workflow each row ultimately dispatches to
+- [`processAgent`](/worker/workflows/process-agent)
+- [External API endpoints — Batch processing](/main-api/specific-features/external-api-endpoints#batch-processing)

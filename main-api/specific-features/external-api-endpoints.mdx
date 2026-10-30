@@ -113,11 +113,15 @@ With several Variable Input nodes, the CSV columns map to them in the order the 
 
 | Method | Path | Purpose | Auth |
 | --- | --- | --- | --- |
-| `POST` | `/flux/batch-process` | Start processing a registered batch file. Refuses a batch that is already in progress, completed, or fully processed. | api-key |
+| `POST` | `/flux/batch-process` | Start processing a registered batch file. Body: `{ batchId, stopAfterFailures? }`. Refuses a batch that is already in progress, completed, or fully processed. | api-key |
 | `GET` | `/flux/batch-process/:id/status` | Return `status`, `errorMessage`, `lastProcessedLine`, and `totalRows` for one batch. | api-key |
 | `GET` | `/flux/batch-process/all` | List every batch file belonging to the caller's flows. | api-key |
 | `POST` | `/flux/batch-process/:id/stop` | Stop a running batch. A completed batch is left alone. | api-key |
 | `GET` | `/flux/batch-process/:ids/download` | Build a CSV of inputs and outputs for one or more comma-separated batch ids, upload it, and return `downloadLink`. | api-key |
+
+`POST /flux/batch-process` starts a durable Temporal workflow (`processBatch`, workflow id `batch-process-${batchId}`) that survives API deploys and worker restarts. `POST /flux/batch-process/:id/stop` cancels that workflow by id; the batch ends with `status: stopped`. See [the `processBatch` workflow](/worker/workflows/process-batch) for the row concurrency, segmenting, and error-kind rules.
+
+**`stopAfterFailures` (optional on `POST /flux/batch-process`):** stop the batch once this many rows have failed. Omit (or send `null`) to run every row regardless of failures. A `data` error (missing CSV row, column-count mismatch, or a `BadDataError` from the flow) terminates the batch on the first occurrence, independently of this cap.
 
 <Warning>
 `/flux/batch-process/:ids/download` returns a link to object storage that needs no credential of its own. Anyone with the link can read the CSV, so do not paste it into a shared channel.

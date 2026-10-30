@@ -60,6 +60,8 @@ Workflows define the execution logic and orchestrate activities. They are determ
 **Available workflows:**
 
 - [`processSingleNode`](/worker/workflows/process-single-node) - Executes a single node in a workflow
+- [`processFlow`](/worker/workflows/process-single-node#related-documentation) - Runs a full flow: dispatches a `processSingleNode` child workflow per node, in topological order
+- [`processBatch`](/worker/workflows/process-batch) - Runs a registered CSV batch as a durable workflow: one child `processFlow` per row, five rows in flight, `continueAsNew` every 100 rows, `stopAfterFailures` cap
 - [`processAgent`](/worker/workflows/process-agent) - Executes a complete agent workflow (in development)
 
 ### Activities

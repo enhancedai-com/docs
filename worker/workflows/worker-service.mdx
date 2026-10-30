@@ -109,7 +109,7 @@ The worker limits concurrent execution to prevent resource exhaustion:
 
 ## Registered activities
 
-The worker registers **32** activity implementations from `ActivitiesService` (`worker.service.ts:33-119`):
+The worker registers **42** activity implementations from `ActivitiesService` (`worker.service.ts:33-190`):
 
 | Activity | Description |
 |----------|-------------|
@@ -145,6 +145,16 @@ The worker registers **32** activity implementations from `ActivitiesService` (`
 | `chargeApiCallActivity` | Charges usage after a web search run |
 | `voiceGeneratorActivity` | Executes the voice generator node |
 | `chargeVoiceActivity` | Charges usage after a voice generation run |
+| `loadRunSeedActivity` | Loads a run seed snapshot the API persisted before starting a flow run |
+| `emitRunEventActivity` | Appends run events (started / node started / node finished / finished) to the API's run-events ingest endpoint |
+| `storeRunResultActivity` | Persists the final run result via the API's claim-check storage |
+| `openNodeExecutionActivity` | Opens the `node_executions` row the child `processSingleNode` will read from and returns its `runToken` |
+| `loadBatchContextActivity` | Reads a `batch_processing_file` row + its Variable Input node list for the batch loop ([`processBatch`](/worker/workflows/process-batch)) |
+| `loadRowInputActivity` | Reads one CSV row from `batch_processing_file_input_output` |
+| `prepareBatchRowRunActivity` | Calls the main API's `POST /worker/batch-row-run` to allocate `runId` + seed snapshot for the row |
+| `writeRowOutputActivity` | Writes the child flow run's result on the input/output row |
+| `updateLastProcessedLineActivity` | Advances `batch_processing_file.lastProcessedLine` monotonically |
+| `markBatchTerminalActivity` | Sets `batch_processing_file.status` to `completed` / `error` / `stopped` |
 
 All are wrapped through `bindRunToken` before registration.
 
@@ -170,4 +180,5 @@ If workflows execute but return incorrect results or "Node not found" errors:
 
 - [Worker overview](/worker/overview)
 - [processSingleNode workflow](/worker/workflows/process-single-node)
+- [processBatch workflow](/worker/workflows/process-batch)
 - [processAgent workflow](/worker/workflows/process-agent)

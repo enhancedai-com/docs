@@ -239,6 +239,7 @@
                     "pages": [
                       "worker/workflows/worker-service",
                       "worker/workflows/process-single-node",
+                      "worker/workflows/process-batch",
                       "worker/workflows/process-agent"
                     ]
                   },
@@ -558,6 +559,7 @@
                     "pages": [
                       "worker/workflows/worker-service",
                       "worker/workflows/process-single-node",
+                      "worker/workflows/process-batch",
                       "worker/workflows/process-agent"
                     ]
                   },
