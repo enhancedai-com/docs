@@ -81,8 +81,8 @@ aggregate status: a run reports `"completed"` as long as it finished, even when 
 
 Returns `runId`, `versionId` (the version the run targeted, or `null` for the working copy),
 `total` (the true count of nodes that started, not capped by the page size), `truncated` (boolean —
-more nodes exist beyond this page), `suspects` (count of entries whose `suspect` is non-null), and a
-`nodes` array:
+more nodes exist beyond this page), `suspects` (count of entries whose `suspect` is non-null),
+`deprecatedNodes` (see below), and a `nodes` array:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -96,6 +96,15 @@ more nodes exist beyond this page), `suspects` (count of entries whose `suspect`
 | `outputRedacted` | boolean | `true` when a secret pattern was removed from the preview. |
 | `outputExpired` | boolean | `true` when retention already discarded the payload. |
 | `suspect` | `null` \| `{ code, consumers, hint }` | Heuristic only — set when a node succeeded with an empty output while a downstream node was waiting on it through a data edge. It is always `null` when the run graph could not be loaded, rather than guessed. |
+
+`deprecatedNodes` lists the nodes whose type was removed from the product, in the flow version the run used. A run skips these nodes, so they never start and never appear in `nodes`. Use the list to explain why a node you can see on the canvas has no entry. The array is empty when no removed node exists, and when the run graph could not be loaded.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `nodeId` | string | Node id. |
+| `type` | string | The removed node type. |
+| `deprecated` | `true` | Always `true`. |
+| `deprecationMessage` | string | Explains that the type was removed and that you can delete the node. |
 
 <Note>
   Every node execution carries the run's id, including the AI and integration nodes the worker

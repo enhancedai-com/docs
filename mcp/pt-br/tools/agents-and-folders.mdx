@@ -324,6 +324,12 @@ Quando `includeNodes` é `false`, os arrays `nodes` e `edges` são omitidos e ap
 | `position` | object | Coordenadas `{ x, y }` no canvas. |
 | `width` | number | Largura do node no canvas. |
 | `height` | number | Altura do node no canvas. |
+| `deprecated` | `true` | Aparece só em um node cujo tipo foi removido do produto. |
+| `deprecationMessage` | string | Aparece junto com `deprecated`. Explica que o tipo foi removido e que você pode excluir o node. |
+
+<Note>
+Um node de tipo removido nunca roda e não entrega nada, então as edges dele não carregam valor. O restante do agente continua funcionando. `update_node` e `connect_nodes` recusam o node, e `remove_node` o exclui. Veja [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges).
+</Note>
 
 #### Campos de edge
 

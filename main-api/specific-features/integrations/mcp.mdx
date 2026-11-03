@@ -40,7 +40,7 @@ There are two transports:
 For a remote HTTPS server, the token is optional. If the server requires authentication and no token was supplied, the connect attempt throws `McpOAuthRequiredError(serverUrl, host)`, which signals that an OAuth handshake is needed before the connection can be saved.
 </Info>
 
-`pull()` only accepts the object type `list_tools`; any other type throws. It re-fetches tools through `listToolsWithTarget`, honoring the runtime cache for `remote_http` when the fingerprint still matches, and returns `{ tools }`. `push()` on the back adapter is unreachable and throws `MCP pushes run in the Temporal worker. Reaching this means the mcp provider was routed away from the worker.` — `mcp` is in `MIGRATED_INTEGRATION_PROVIDERS`, so a push executes in the worker's own mcp adapter. `getOptions` is not implemented. Credentials are stored encrypted in `user_integrations.apiCredentialsEncrypted`.
+`pull()` only accepts the object type `list_tools`; any other type throws. It re-fetches tools through `listToolsWithTarget`, honoring the runtime cache for `remote_http` when the fingerprint still matches, and returns `{ tools }`. `push()` on the back adapter is unreachable and throws `MCP pushes run in the Temporal worker. Reaching this means the mcp provider was routed away from the worker.` — every `thirdPartyIntegration` node runs in the worker, so a push executes in the worker's own mcp adapter. `getOptions` is not implemented. Credentials are stored encrypted in `user_integrations.apiCredentialsEncrypted`.
 
 ## Prerequisites and credentials
 

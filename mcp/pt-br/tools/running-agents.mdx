@@ -84,7 +84,7 @@ quando um node nunca rodou.
 Retorna `runId`, `versionId` (a versão que a execução usou, ou `null` para a cópia de trabalho),
 `total` (a contagem real de nodes que começaram, não limitada pelo tamanho da página), `truncated`
 (boolean — existem mais nodes além desta página), `suspects` (contagem de entradas cujo `suspect` não
-é nulo) e um array `nodes`:
+é nulo), `deprecatedNodes` (veja abaixo) e um array `nodes`:
 
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
@@ -98,6 +98,15 @@ Retorna `runId`, `versionId` (a versão que a execução usou, ou `null` para a 
 | `outputRedacted` | boolean | `true` quando um padrão de segredo foi removido do preview. |
 | `outputExpired` | boolean | `true` quando a retenção já descartou o conteúdo. |
 | `suspect` | `null` \| `{ code, consumers, hint }` | Apenas heurística — definido quando um node teve sucesso com saída vazia enquanto um node downstream esperava por ele por uma edge de dado. É sempre `null` quando o grafo da execução não pôde ser carregado, em vez de adivinhado. |
+
+`deprecatedNodes` lista os nodes cujo tipo foi removido do produto, na versão do fluxo que a execução usou. A execução pula esses nodes, então eles nunca começam e nunca aparecem em `nodes`. Use a lista para explicar por que um node visível no canvas não tem entrada. O array fica vazio quando não há node removido e quando o grafo da execução não pôde ser carregado.
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `nodeId` | string | Id do node. |
+| `type` | string | O tipo de node removido. |
+| `deprecated` | `true` | Sempre `true`. |
+| `deprecationMessage` | string | Explica que o tipo foi removido e que você pode excluir o node. |
 
 <Note>
   Toda execução de node carrega o id da execução, inclusive os nodes de IA e de integração que o

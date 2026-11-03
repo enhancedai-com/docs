@@ -53,6 +53,8 @@ No parameters required. Like `get_node_type`, it takes no `workspaceId`.
 | `nodeTypes[].description` | string | What this node does. |
 | `nodeTypes[].category` | string | Grouping: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. |
 
+Node types that were removed from the product are not listed. An agent can still hold a saved node of a removed type: [`get_agent`](/mcp/tools/agents-and-folders#get_agent) marks it `deprecated`, and `add_node`, `update_node` and `connect_nodes` refuse it.
+
 <Note>
   The schemas live behind [`get_node_type`](#get_node_type). The `fluxprompt://node-types`
   [resource](/mcp/tools/prompts-and-resources#resources) is the exception: it returns the full
@@ -375,6 +377,8 @@ name (`"Display Box"`), or the composed label [`list_node_types`](#list_node_typ
 A value that matches none of the three is rejected with a `validation_error` — including a
 plausible-looking string that simply is not a real type.
 
+A type that was removed from the product is refused too, with a `validation_error` that reads `Node type <type> was removed and can no longer be added or edited. Delete the node; the rest of the flow keeps working.` Pick a type from [`list_node_types`](#list_node_types) instead.
+
 ### Do not invent coordinates
 
 `node.position` is **optional and resolved by the server**. The position you send is a *hint*: the
@@ -435,6 +439,7 @@ Merges a patch into an existing node.
 - `patch.data` is merged **one level deep**, so data keys you omit are preserved, not deleted.
 - Send the minimum: to change one field, send only that field.
 - A `globalStarter`'s `type` cannot be changed (`global_starter_not_retypable`); edit its `data` instead.
+- A node of a removed type cannot be edited, and you cannot change a node's `type` to a removed one. Both are refused with a `validation_error`. Delete the node with [`remove_node`](#remove_node).
 
 Unlike `add_node`, `update_node` **honours the position you send exactly** — no anti-overlap
 resolution. That is deliberate: it lets a client lay out a flow deterministically, one node at a
@@ -456,7 +461,8 @@ run starts, move its edge with `disconnect_nodes` and `connect_nodes`.
 Creates an edge from a source node to a target node. Handles are validated against the derived
 registry for the two node types: an unknown `(type, handle)` pair is refused with a
 `validation_error` naming the valid handles for that type — call [`get_node_type`](#get_node_type)
-and read `handles` instead of guessing from `inputSchema` field names.
+and read `handles` instead of guessing from `inputSchema` field names. An edge to or from a node of a
+removed type is refused with a `validation_error`, because that node never delivers a value.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|

@@ -62,12 +62,15 @@ If any of the three repos is on an environment branch (`production`, `staging`, 
 
 ## The registry entry (step 8)
 
-Add an entry for your type to `back/src/shared/node-dispatch/node-dispatch-registry.ts` with all four fields set on purpose:
+Add an entry for your type to `back/src/shared/node-dispatch/node-dispatch-registry.ts` with all five fields set on purpose:
 
+- `execution: "worker"` (the class of the type: `worker`, `source`, `visual`, `back`, `sink` or `state`; a `back`, `sink` or `state` entry must also name its owner in `handoffOwner`)
 - `flowDispatch: "worker"` (your type is dispatched to the worker in a full flow run)
-- `legacyEndpoint: true | false` (does the legacy single-node endpoint accept it)
+- `legacyEndpoint` (the verdict of the legacy single-node endpoint: `"refuse-migrated"` for a worker type, or `"accept"`, `"refuse-mutating"`, `"refuse-unsupported"`)
 - `prefetchSafe: true | false` (is prefetch resolution safe for your type)
 - `workerModule: true`
+
+The class drives the worker workflow gate, the prefetch skip set and the legacy endpoint. A type missing from the registry makes the gate refuse any flow that holds it. See [Execution classes](/main-api/specific-features/flow-and-single-node-execution#execution-classes).
 
 Then regenerate the machine-readable contract:
 

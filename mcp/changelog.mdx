@@ -3,6 +3,16 @@ title: "Changelog"
 description: "What's new in the FluxPrompt MCP integration."
 ---
 
+## 2026-10-29 — Removed node types are marked and refused
+
+**Four node types were removed from the product. An agent that still holds one keeps working, and the tools tell you which nodes they are.**
+
+- **`get_agent`** adds `deprecated: true` and a `deprecationMessage` to a node of a removed type.
+- **`get_run_nodes`** returns `deprecatedNodes`: the removed nodes in the flow version the run used. A run skips them, so they never appear in `nodes`.
+- **`check_agent_integrity`** returns `deprecatedNodes` and does not fail `ok` because of them. `unrenderableEdges`, `missingInputs`, `wrongEdgeTypes` and `unverifiableEdges` skip the edges of a removed node. `flowEntryIssues` and `unreachableNodes` follow those edges, the way a run does.
+- **`add_node`**, **`update_node`** and **`connect_nodes`** refuse a removed type with a `validation_error`. `remove_node` still deletes the node.
+- A **`thirdPartyIntegration`** or `hubSpotCRM` node always runs in the worker. A node with an empty provider, or a provider the worker does not know, fails with a message that tells you to choose a supported provider in the node settings.
+
 ## 2026-10-28 — A cancelled run reports `cancelled`
 
 **`get_run_status` reports a run you cancelled with its own status.**

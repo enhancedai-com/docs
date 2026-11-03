@@ -127,34 +127,30 @@ A Third Party Integration node does not always run in the same process, and the 
 
 **Editor-time operations always run in the API.** Connecting, refreshing a token, loading a dropdown (`getOptions`), fetching a schema, testing a connection — all of these are API endpoints, for every provider, always.
 
-**Execution — `pull` and `push` during a flow run — is being moved into the Temporal worker, one provider at a time.** The back keeps a set of migrated providers; when a node's provider is in that set, the back stops executing it inline and dispatches to the worker instead, which holds its own copy of the adapter's runtime path. The provenance of each ported adapter is recorded in `PORTED_FROM.md` in the worker's `third-party-integration` module.
+**Execution — `pull` and `push` during a flow run — always runs in the Temporal worker.** The dispatch registry classes `thirdPartyIntegration` and the dedicated `hubSpotCRM` node as `execution: 'worker'`. The back does not read the node's provider to route it, and it keeps no inline fallback. The worker holds its own copy of each adapter's runtime path. The provenance of each ported adapter is recorded in `PORTED_FROM.md` in the worker's `third-party-integration` module.
 
-The set is `MIGRATED_INTEGRATION_PROVIDERS` in `back/src/shared/integration/integration-executable-node.ts`, and it is the **only** thing that decides where a provider runs — no environment flag is involved. Nothing else in the routing code names a provider, so releasing one is a single-line change.
+The worker builds its adapter map in one factory, and a spec fails when the map differs from `integrationProviders` on the `thirdPartyIntegration` entry of the registry (`back/src/shared/node-dispatch/node-dispatch-registry.ts`). These providers run in the worker:
 
-### Rollout to production
+| Provider | Node types |
+|---|---|
+| `stripe`, `wordpress`, `slack`, `notion`, `zapier`, `supabase`, `pinecone`, `mcp`, `clickup` | `thirdPartyIntegration` |
+| `hubspot` | `thirdPartyIntegration` and the dedicated `hubSpotCRM` node |
 
-Providers reach production one release at a time, each as its own deploy. A provider absent from this table still executes inline in the back on production, even though the worker already carries its adapter.
+The worker trims and lowercases the provider before it looks up the adapter. A node that the worker cannot serve fails with a user-facing error instead of running somewhere else:
 
-| Provider | On the worker in production | Release |
-|---|---|---|
-| Stripe | yes | `868ke6j3r` |
-| WordPress | yes | `868ke6j56` |
-| Slack | yes | `868ke6j6m` |
-| Notion | yes | `868ke6j7t` |
-| Zapier | yes | `868ke6j9d` |
-| HubSpot | yes — both `thirdPartyIntegration` and the dedicated `hubSpotCRM` node | `868ke6jb7` |
+- **Empty provider.** `No integration provider is selected on this node. Choose a provider in the node settings and run it again.`
+- **Provider with no adapter.** `The provider "<name>" is not supported by this node. Choose a supported provider in the node settings.`
+
+The legacy endpoint `POST /process/single-node-legacy` refuses both node types. See [Flow and single-node execution](/main-api/specific-features/flow-and-single-node-execution#legacy-endpoint).
 
 <Note>
-The worker ships **every** ported adapter as soon as the first provider is released, because the module builds its adapter map in one factory. An adapter present in the worker is therefore not evidence that its provider is routed there — only the back's set is. This is deliberate: hand-trimming the registry per release is how an inline-vs-worker behaviour difference would get introduced unnoticed.
+`MIGRATED_INTEGRATION_PROVIDERS` still exists, but it no longer routes anything. It is the registry's `integrationProviders` set under its old name. Its one remaining use is the default allowlist for MCP third-party nodes, when `MCP_THIRDPARTY_ALLOWLIST` is not set.
 </Note>
 
-Two consequences worth knowing:
-
-- **The worker needs the provider's OAuth client credentials too**, not just the API. It refreshes access tokens during a run, so a worker missing `<PROVIDER>_CLIENT_ID`/`_SECRET` fails every node on a connection whose token has expired — while the same node works fine in the editor, because the editor path never leaves the API.
-- **The rollout is per environment.** An environment that has not received the worker routing still executes every provider inline in the back. A provider can therefore behave correctly in one environment and fail in another with the same flow, and the difference is where it ran.
+**The worker needs the provider's OAuth client credentials too**, not just the API. It refreshes access tokens during a run, so a worker missing `<PROVIDER>_CLIENT_ID`/`_SECRET` fails every node on a connection whose token has expired — while the same node works fine in the editor, because the editor path never leaves the API.
 
 <Warning>
-When a provider is migrated, **deploy the worker before the back**. The back's routing flag is what stops inline execution; if it ships first, the worker's registry does not yet contain the adapter and every node for that provider fails with "this integration provider is not supported by the worker yet".
+Deploy in this order: the worker, then the front, then the back, then the MCP server. The back no longer runs integration nodes itself, so the worker must already carry the adapters. The back also refuses integration nodes on the legacy single-node endpoint, while an older front sends chain steps of that type there. The new front only calls `/flux/execute-single-node`, which the older back already serves, so it can ship before the back. A browser tab that still runs the old front bundle gets a refusal on that chain step after the back deploys, until you reload it.
 </Warning>
 
 ## Adding a new provider (backend)
@@ -192,7 +188,7 @@ When a provider is migrated, **deploy the worker before the back**. The back's r
     ```
   </Step>
   <Step title="Port the runtime path to the worker">
-    A new provider is delivered with its worker adapter in the same change, not handed off to be migrated later. That means the runtime `pull`/`push` subset, its own HTTP helper (global `fetch`, not `@nestjs/axios`), its own error classification, an entry in the worker's adapter registry, and the provider string added to the back's migrated-providers set. Editor-time operations stay in the API and are deliberately not ported.
+    A new provider is delivered with its worker adapter in the same change, not handed off to be migrated later. That means the runtime `pull`/`push` subset, its own HTTP helper (global `fetch`, not `@nestjs/axios`), its own error classification, an entry in the worker's adapter registry, and the provider string added to `integrationProviders` on the `thirdPartyIntegration` entry of the dispatch registry. The worker's adapter map and that set must list the same providers, or a worker spec fails. Without a worker adapter, a node for the provider fails at run time with a "not supported by this node" error. Editor-time operations stay in the API and are deliberately not ported.
   </Step>
 </Steps>
 
