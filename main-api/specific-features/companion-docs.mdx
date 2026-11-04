@@ -254,7 +254,7 @@ Both are fire-and-forget (`void` + `.catch` that logs), so a documentation failu
 
 | Owner type | Read requires |
 | --- | --- |
-| `flow` | `FlowAccessService.resolveAccessibleAgent` succeeds — the normal agent-visibility rule (folder owner, space member, or org member). |
+| `flow` | `FlowAccessService.resolveAccessibleAgent` succeeds — the normal agent-visibility rule: the owner of a personal folder, an active member of the organization that owns the space, or the active owner of a workspace folder. A space membership alone does not count; see the [agent access rule](/main-api/specific-features/external-api-endpoints#agent-access-rule). |
 | `space` | Access to the space's company: an `ACTIVE` `CompanyUser` row, or owning the company. A `UserSpaces` row alone does not grant read access. |
 | `company` | An active `CompanyUser` row, or owning the company. |
 | `folder` | Owning the folder, being its `companyUser`, or access to the folder's space. |
