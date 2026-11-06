@@ -13,8 +13,8 @@ This page is the rest of that principle, applied to the rest of how we work.
 
 The defaults:
 
-- **Every change goes through PR review.** No direct pushes to `production`, `staging`, `master`, or `main`. Pre-commit and CI hooks enforce most of it; the rest is on you.
-- **Two reviewers minimum.** Trivial changes can pass with one if the second reviewer is on vacation or unreachable, but the bar is "I genuinely don't think a second pair of eyes would catch anything", not "I'm in a hurry".
+- **Every change to production goes through PR review.** `main` changes only through a reviewed and merged PR. `develop` and `staging` take a direct merge of your feature branch so you can test on dev and staging; see [Git workflow](/getting-started/git-workflow). Pre-commit and CI hooks enforce most of it; the rest is on you.
+- **One reviewer per PR.** Every change goes through review by one teammate, whether you wrote it with AI or not.
 - **Reviewer comments are answered, not ignored.** Reply to every thread, even if just "agreed, will fix" or "I'd argue against this because X". A PR with unresolved comments doesn't merge.
 
 ### What a good PR review looks like
@@ -37,23 +37,24 @@ We use a structured PR title and body per the [Engineering Handbook](/ai-workflo
 - Branch name: `<change_type>/<task_code>` (e.g., `feat/868jk7x3j`)
 - PR title: `[TYPE] Imperative task name` (e.g., `[FEAT] Add Notion dynamic field picker`)
 - PR body: three sections — **Description**, **Preview** (screenshots / logs), **References** (ClickUp link)
-- Base branch: **`production`** for both `back/` and `front/`
+- Base branch: **`main`** in every repo (`back/`, `front/`, `worker/`, `mcp-server/`)
 
 The `pr-creator` agent in Claude Code does this for you from a ClickUp task. Use it.
 
 ## Deploys
 
-- **Dev:** auto-deploys from `master` (back/) or `main` (front/) on every push.
-- **Staging:** auto-deploys from `staging`. Promote with `git merge origin/production && git push origin staging`.
-- **Prod:** manual workflow dispatch — `gh workflow run cicd_prod.yml --ref production`.
+- **Dev:** auto-deploys from `develop` on every push.
+- **Staging:** auto-deploys from `staging` on every push.
+- **Prod:** manual workflow dispatch on `main` — for example, `gh workflow run cicd_prod.yml --ref main` in `back/`. A merge into `main` deploys nothing.
+- **No production deploys on Fridays**, except critical fixes or urgent issues. The Brazil team deploys, usually one person per day, and everyone should know how.
 
-Full topology and the resize-task-def recipe in [PR and deploy flow](/ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow).
+Branches, commands, and every repo are in [Git workflow](/getting-started/git-workflow). Full topology and the resize-task-def recipe in [PR and deploy flow](/ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow).
 
-After a prod deploy, post a short announcement in Gmail Chat. The `pr-creator` agent composes this and copies it to your clipboard.
+After a prod deploy, post a short announcement in Google Chat. The `deploy-announcer` agent composes this and copies it to your clipboard.
 
 ## Async vs. calls
 
-The default is async. Slack/Gmail Chat over calls, almost always.
+The default is async. Slack/Google Chat over calls, almost always.
 
 **When to call instead:**
 
@@ -86,7 +87,7 @@ That's enough. No "sorry to bother", no preamble. We optimize for unblocking fas
 ## Languages
 
 - **Code, identifiers, commit messages, PRs, this docs site:** English. Always.
-- **Team chat (Gmail Chat, Slack):** Portuguese or English, whichever feels natural. Most of the team is Brazilian; you'll see both.
+- **Team chat (Google Chat, Slack):** Portuguese or English, whichever feels natural. Most of the team is Brazilian; you'll see both.
 - **Customer-facing messages:** match the customer's language. Most often English.
 
 The reason for English in code is that the team works async across timezones, and English is the lowest-friction default for everyone (including future hires who might not speak Portuguese). It's not a preference — it's an operational decision.
@@ -130,7 +131,9 @@ The bar is: a thing is shipped when **a real user could use it in production wit
 
 One non-negotiable tool: **Claude Code** — the team's primary AI agent across all repos. Set up via [this page](/getting-started/welcome/claude-code).
 
-The rest is taste. Use whatever editor, terminal, browser, and music you want. The team has converged on Claude Code because the workflows around it — `.workflow/` skills, custom agents, plan mode — pay back the convergence.
+The rest is taste. Use whatever editor, terminal, browser, and music you want. The team has converged on Claude Code because the workflows around it — `.claude/skills/` skills, custom agents, plan mode — pay back the convergence.
+
+Up offers Cursor too, but the team works in Claude Code. If you like Cursor's editor, you can run Claude Code inside it.
 
 ## What we don't do
 

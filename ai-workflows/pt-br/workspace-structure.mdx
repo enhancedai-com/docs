@@ -9,13 +9,13 @@ O workspace é um wrapper multi-root do VS Code em volta de cinco repositórios 
 
 | Caminho | Papel | Branch de produção |
 |---|---|---|
-| `apps/Flux-Prompt` | Backend NestJS (API) | `production` |
-| `apps/Flux-Prompt-Frontend` | Frontend React (Vite) | `production` |
+| `apps/Flux-Prompt` | Backend NestJS (API) | `main` |
+| `apps/Flux-Prompt-Frontend` | Frontend React (Vite) | `main` |
 | `apps/Flux-Prompt-Worker` | Worker Temporal | `main` |
 | `apps/FluxPrompt-MCP` | Servidor MCP público | `main` |
 | `apps/docs` | Docs em Mintlify (este site) | `main` |
 
-Veja o `CLAUDE.md` da raiz para a estratégia completa de branches (`production`, `staging`, `master`/`main` por repo).
+Todo repo de produto usa `develop` (dev), `staging` e `main` (produção). Veja [Fluxo de git](/getting-started/pt-br/git-workflow) para a estratégia completa de branches.
 
 ## Outras pastas no topo
 

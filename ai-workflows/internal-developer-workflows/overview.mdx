@@ -1,6 +1,6 @@
 ---
 title: "Overview"
-description: "How the engineering team uses Claude Code, the .workflow/ skills, and custom subagents to query production data, investigate incidents, and ship faster."
+description: "How the engineering team uses Claude Code, the team skills, and custom subagents to query production data, investigate incidents, and ship faster."
 ---
 
 ## What this section is
@@ -10,7 +10,7 @@ This section documents the Claude Code tooling the engineering team uses every d
 It exists so that any teammate — not just the people who built the tooling — can ramp up, contribute, and reuse the same workflow without re-deriving how it works.
 
 <Note>
-  The tooling itself lives at the **workspace root** in `.workflow/` and `.claude/agents/`. This section explains how to use it; the source of truth for behavior is always the files in those folders.
+  The tooling itself lives at the **workspace root** in `.claude/` (`skills/`, `agents/`, `kb/`, `tasks/`) and `scripts/`. This section explains how to use it; the source of truth for behavior is always the files in those folders.
 </Note>
 
 ## Who this is for
@@ -24,7 +24,7 @@ It exists so that any teammate — not just the people who built the tooling —
 Before any of this works, you need:
 
 - **Claude Code installed** and authenticated. See the [Claude Code docs](https://docs.claude.com/en/docs/claude-code/overview) if you have never used it.
-- **The workspace cloned locally** with `back/`, `front/`, `docs/`, and the team-shared `.workflow/` folder.
+- **The workspace cloned locally** with `back/`, `front/`, `docs/`, and the team-shared `.claude/` folder.
 - **Access to the AWS bastion authorized by an admin** — covered in [Onboarding](/ai-workflows/internal-developer-workflows/onboarding).
 - **Node 18+, pnpm, and git** on your machine. AWS CLI v2 is optional but recommended for CloudWatch lookups.
 
@@ -37,7 +37,7 @@ The tooling is layered. Knowing which layer you are in tells you where to look f
     A reusable capability the model invokes via the `Skill` tool. Self-contained: instructions in `SKILL.md`, code in `templates/`, references in `references/`. Examples: `ec2-tunnel`, `ec2-tunnel-prod`, `db-migration`, `mcp-validation`.
   </Card>
   <Card title="Agent" icon="user-gear">
-    A specialized subagent defined in `.claude/agents/<name>.md` (or `.workflow/agents/`). Composes skills, tools, and rules to solve a specific class of problem. Examples: `db-investigator`, `db-setup`, `pr-creator`, `mcp-validator` (which runs the `mcp-validation` skill in isolation).
+    A specialized subagent defined in `.claude/agents/<name>.md`. Composes skills, tools, and rules to solve a specific class of problem. Examples: `db-investigator`, `db-setup`, `pr-creator`, `mcp-validator` (which runs the `mcp-validation` skill in isolation).
   </Card>
   <Card title="Playbook" icon="book-open">
     A documented diagnostic recipe a human follows (with or without Claude). Combines skills and agents in a known sequence for a known class of incident. Examples: Flux error investigation, memory leak diagnosis.
@@ -57,28 +57,26 @@ The tooling is layered. Knowing which layer you are in tells you where to look f
 
 ```
 <workspace>/
-├─ .workflow/                       Skills, KBs, rules. Shared with the team.
-│  ├─ .env                          Your local credentials. NEVER committed.
-│  ├─ .env.example                  Template — safe to share.
-│  ├─ skills/
+├─ .env                             Your local credentials. NEVER committed.
+├─ .env.example                     Template — safe to share.
+├─ .claude/                         Team-shared Claude Code tooling
+│  ├─ skills/                       One folder per skill, for example:
 │  │  ├─ ec2-tunnel/                Dev/staging DB access via SSH tunnel
 │  │  ├─ ec2-tunnel-prod/           Read-only prod DB access (triple-layer safety)
 │  │  ├─ db-migration/              Data migration between environments
-│  │  └─ tlc-spec-driven/           Adaptive feature planning
-│  ├─ rules/                        Always-applied context for code work
-│  └─ kb/                           Knowledge base (node specs, conventions)
-├─ skills/
-│  └─ mcp-validation/               Local validation gate for the MCP server
-└─ .claude/
-   └─ agents/                       Custom subagents
-      ├─ db-investigator.md         Diagnose "data missing" reports
-      ├─ db-setup.md                Onboard new teammates
-      ├─ pr-creator.md              Create PRs from ClickUp tasks
-      └─ mcp-validator.md           Run the MCP validation gate (isolated)
+│  │  └─ mcp-validation/            Local validation gate for the MCP server
+│  ├─ agents/                       Custom subagents
+│  │  ├─ db-investigator.md         Diagnose "data missing" reports
+│  │  ├─ db-setup.md                Onboard new teammates
+│  │  ├─ pr-creator.md              Create PRs from ClickUp tasks
+│  │  └─ mcp-validator.md           Run the MCP validation gate (isolated)
+│  ├─ kb/                           Knowledge base (deploy topology, conventions)
+│  └─ tasks/                        Specs and notes, one folder per task
+└─ scripts/                         Team scripts (deploy-direct, commit guard, PR checks)
 ```
 
 <Warning>
-  `.workflow/.env` is the only file that holds real secrets (SSH passphrase, DB passwords, bastion hostnames). It is git-ignored and must stay that way. If you accidentally stage it, abort the commit.
+  The workspace-root `.env` holds the tooling's real secrets (SSH passphrase, DB passwords, bastion hostnames). It is git-ignored and must stay that way. If you accidentally stage it, abort the commit.
 </Warning>
 
 ## Explore
@@ -88,7 +86,7 @@ The tooling is layered. Knowing which layer you are in tells you where to look f
     Go from a fresh clone to running your first query against staging.
   </Card>
   <Card title="Skills reference" icon="screwdriver-wrench" href="/ai-workflows/internal-developer-workflows/skills/ec2-tunnel">
-    Detailed reference for each `.workflow/skills/*` capability.
+    Detailed reference for each `.claude/skills/*` capability.
   </Card>
   <Card title="Agents reference" icon="user-gear" href="/ai-workflows/internal-developer-workflows/agents/db-investigator">
     Each custom subagent: what it does, when to invoke, what to feed it.

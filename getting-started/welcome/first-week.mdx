@@ -1,11 +1,11 @@
 ---
 title: "Your first week"
-description: "Day-by-day plan for your first five days at FluxPrompt. Ends with a real PR merged to production."
+description: "Day-by-day plan for your first five days at FluxPrompt. Aims for a real PR deployed to staging by Friday."
 ---
 
 ## The goal
 
-By Friday of your first week, you should have **a pull request mergeado and deployed to staging**. Not a tutorial. Not a hello-world. A real change to the real codebase, no matter how small.
+**Stretch goal:** a pull request merged and deployed to staging by Friday. It's a challenge, not a requirement. The expectation is your first delivery by the end of week 2. Either way, not a tutorial, not a hello-world: a real change to the real codebase, no matter how small.
 
 Industry data backs this up — shipping something real in week one is the single biggest predictor of whether a new engineer feels confident by month two. So we plan around it.
 
@@ -22,7 +22,21 @@ The live onboarding session happens today. Your buddy or another teammate walks 
     The first three pages of this guide: [Welcome](/getting-started/welcome), [The team](/getting-started/welcome/team), [What we build](/getting-started/welcome/the-product). Come with questions.
   </Step>
   <Step title="Accesses and accounts">
-    Slack/Gmail Chat, ClickUp, GitHub (added to enhancedai-com org), AWS console read access, Datadog read access, Mintlify dashboard, and **Google Drive with Greg's legacy docs and videos** — that last one is the single best resource to understand how the platform works end-to-end. Your buddy makes sure each one works **today**, not "later this week".
+    Each access is granted by a different person. Ask on day one so everything works **today**, not "later this week".
+
+    | Access | What for | Who grants it |
+    | - | - | - |
+    | Slack | Talk to the Brazil team and Up | Up's team. You'll usually have it when you join; if not, ask Giovanni |
+    | Google Chat (product group) | Talk to the client | Giovanni, your direct manager |
+    | ClickUp ("Flow" board, FluxPrompt Platform Dev list) | Tasks | Brad |
+    | GitHub (`enhancedai-com` org) | Code | Brad or Everton |
+    | Claude (Claude Code) | AI-assisted development | Brad |
+    | `.env` files | Run the stack locally | Any dev on the team |
+    | SSH key on the bastion and vault | Query dev and staging databases | Everton |
+    | AWS console and Datadog (read-only) | Watch deploys and logs | Not everyone gets it. Today: Ale, Guilherme, Yago, and Everton |
+    | Mintlify access code | Read this site | It's in the team's Slack. Any teammate can send it |
+    | Greg's docs and videos (Google Drive) | Understand the platform end to end. The single best resource for it | Guilherme |
+    | Cursor (optional) | Up's tool; see [How we work](/getting-started/welcome/culture#tooling-expectations) | Up's internal account |
   </Step>
   <Step title="Read this guide end-to-end">
     Even the [inside jokes](/getting-started/welcome/fun-stuff) page. Skim it. You're not memorizing — you're building a map so when something comes up tomorrow you remember where to look.
@@ -37,7 +51,7 @@ Today is environment setup. Block the morning. Coffee.
 
 <Steps>
   <Step title="Clone the workspace">
-    The workspace contains `back/`, `front/`, `docs/`, and the team-shared `.workflow/` directory. Your buddy points you to the right repos and shows you how it's laid out locally.
+    The workspace contains `back/`, `front/`, `docs/`, and the team-shared `.claude/` directory. Your buddy points you to the right repos and shows you how it's laid out locally.
   </Step>
   <Step title="Run the backend">
     Follow [Machine setup](/getting-started/welcome/environment-setup). Goal: `pnpm dev:api` runs and you can hit `http://localhost:3001/health` (or similar) without a stack trace.
@@ -58,7 +72,7 @@ Today is exploration without pressure.
 
 <Steps>
   <Step title="Run the db-setup agent">
-    Open Claude Code and invoke the `db-setup` agent. It bootstraps your `.workflow/.env` and verifies you can query staging through the SSH tunnel. See [Onboarding](/ai-workflows/internal-developer-workflows/onboarding).
+    Open Claude Code and invoke the `db-setup` agent. It bootstraps your `.env` and verifies you can query staging through the SSH tunnel. See [Onboarding](/ai-workflows/internal-developer-workflows/onboarding).
   </Step>
   <Step title="Run the E2E suite">
     From the workspace root, run `node debug-playwright/suite.mjs` — or invoke the `e2e-playwright-runner` agent, which boots the local Docker stack for you. **Done when it prints `N/N PASS`.** This proves the stack is wired together end-to-end before you touch product code.
@@ -88,10 +102,10 @@ That's it. No apologies, no preamble. We optimize for unblocking fast.
     Use the `pr-creator` agent — feed it your ClickUp task URL. It formats the title, body, and links per the [Engineering Handbook](/ai-workflows/internal-developer-workflows/agents/pr-creator).
   </Step>
   <Step title="Get reviewed">
-    Two reviewers minimum. They'll comment. You'll address. Repeat until approved.
+    One teammate reviews your PR. They'll comment. You'll address. Repeat until approved.
   </Step>
   <Step title="Merge and watch it deploy">
-    The CI pipeline for `master`/`main` auto-deploys to dev. Staging is a manual promotion. Watch the rollout in AWS so you understand what's actually happening when "deploy" is a word someone says.
+    Merge your branch into `develop` and push; that deploys dev automatically. Staging works the same way with the `staging` branch. Production is your reviewed PR into `main` plus a manual workflow run. See [Git workflow](/getting-started/git-workflow). If you have AWS access, watch the rollout so you understand what's actually happening when "deploy" is a word someone says; if not, pair with someone who does.
   </Step>
   <Step title="Update your status">
     Tell the team. Doesn't have to be ceremonial — "first PR merged, here's what it does, thanks to X for reviewing" lands well.

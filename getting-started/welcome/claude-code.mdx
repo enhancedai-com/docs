@@ -25,7 +25,7 @@ The pages below get you to the shared workflow. Plan on **half a day** the first
     Same page, the Superpowers and Context7 sections. Superpowers gives you the team's structured commands; Context7 keeps Claude grounded on current library APIs instead of training data.
   </Step>
   <Step title="Run the db-setup agent">
-    Now switch to the internal section: [Onboarding](/ai-workflows/internal-developer-workflows/onboarding). The `db-setup` agent bootstraps your `.workflow/.env`, generates an SSH key if you don't have one, prints the public key for the admin to authorize, and runs a smoke test against staging.
+    Now switch to the internal section: [Onboarding](/ai-workflows/internal-developer-workflows/onboarding). The `db-setup` agent bootstraps your `.env`, generates an SSH key if you don't have one, prints the public key for the admin to authorize, and runs a smoke test against staging.
 
     This is the moment you go from "Claude Code is installed" to "Claude Code can query the team's databases".
 
@@ -63,7 +63,7 @@ The pages below get you to the shared workflow. Plan on **half a day** the first
 Once you have the basics working, these pages are the deep references you'll come back to:
 
 <Columns cols={2}>
-  <Card title=".workflow/ skills" icon="screwdriver-wrench" href="/ai-workflows/internal-developer-workflows/skills/ec2-tunnel">
+  <Card title=".claude/skills/" icon="screwdriver-wrench" href="/ai-workflows/internal-developer-workflows/skills/ec2-tunnel">
     Programmatic SSH tunnels, read-only prod queries, DB migrations between envs.
   </Card>
   <Card title="Custom agents" icon="user-gear" href="/ai-workflows/internal-developer-workflows/agents/db-investigator">

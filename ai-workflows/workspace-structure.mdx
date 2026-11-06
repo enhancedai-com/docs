@@ -9,13 +9,13 @@ The workspace is a VS Code multi-root wrapper around five git repositories.
 
 | Path | Role | Production branch |
 |---|---|---|
-| `apps/Flux-Prompt` | NestJS backend API | `production` |
-| `apps/Flux-Prompt-Frontend` | React (Vite) frontend | `production` |
+| `apps/Flux-Prompt` | NestJS backend API | `main` |
+| `apps/Flux-Prompt-Frontend` | React (Vite) frontend | `main` |
 | `apps/Flux-Prompt-Worker` | Temporal worker | `main` |
 | `apps/FluxPrompt-MCP` | Public MCP server | `main` |
 | `apps/docs` | Mintlify docs (this site) | `main` |
 
-See the root `CLAUDE.md` for the full branch strategy (`production`, `staging`, `master`/`main` by repo).
+Every product repo uses `develop` (dev), `staging`, and `main` (production). See [Git workflow](/getting-started/git-workflow) for the full branch strategy.
 
 ## Other top-level folders
 

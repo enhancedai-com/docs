@@ -1,6 +1,6 @@
 ---
 title: "db-setup"
-description: "Onboard a new teammate end-to-end to the .workflow/ tooling. Prereqs check, SSH key generation, .env population, dependency install, smoke test. Idempotent — safe to re-run."
+description: "Onboard a new teammate end-to-end to the workspace tooling. Prereqs check, SSH key generation, .env population, dependency install, smoke test. Idempotent — safe to re-run."
 ---
 
 ## What it does
@@ -53,7 +53,7 @@ Checks if `~/.ssh/id_rsa` exists. If yes, uses it (asks before overwriting). If 
 
 ### `.env` population
 
-Copies `.workflow/.env.example` to `.workflow/.env` if missing, then walks through each variable one at a time (using `AskUserQuestion` so secrets don't all get pasted into a single response). Confirms by key name only — never echoes values back to the chat.
+Copies `.env.example` to `.env` at the workspace root if missing, then walks through each variable one at a time (using `AskUserQuestion` so secrets don't all get pasted into a single response). Confirms by key name only — never echoes values back to the chat.
 
 Writes the file with `-Encoding utf8` (not the default UTF-16 BOM that PowerShell 5.1 produces, which the dotenv loader can't read).
 
@@ -107,7 +107,7 @@ use the db-setup agent
 Or directly:
 
 ```
-Agent(subagent_type="db-setup", prompt="bootstrap my environment for the .workflow tooling")
+Agent(subagent_type="db-setup", prompt="bootstrap my environment for the workspace tooling")
 ```
 
 ## Out of scope
@@ -115,7 +115,7 @@ Agent(subagent_type="db-setup", prompt="bootstrap my environment for the .workfl
 - Authorizing pubkeys on the bastion (admin's `add-key.mjs` run)
 - Provisioning RDS users or rotating shared DB passwords
 - Installing Node, pnpm, AWS CLI, or git (points to installers)
-- Anything outside `.workflow/` tooling
+- Anything outside `.claude/` tooling
 
 ## Related
 
