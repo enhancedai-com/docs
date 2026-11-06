@@ -1,0 +1,229 @@
+---
+title: "Endpoints da API externa"
+description: "Índice completo de todos os endpoints do FluxPrompt acessíveis com uma API key — Integrations API, documentação companheira, completions, memory pods, execução de flows, processamento em lote e documentos — com o modo de autenticação e links para os guias detalhados."
+---
+
+Esta página é o índice da superfície HTTP externa da plataforma: todos os endpoints que você pode chamar com um header `api-key`, agrupados por área, com uma linha de propósito e um link para o guia detalhado quando ele existe.
+
+Os caminhos são exatos. Não há prefixo global de rota nem segmento de versão de API — `POST /v1/chat/completions` é a única rota com `v1`, e isso faz parte do formato compatível com a OpenAI.
+
+## Como ler a coluna de autenticação
+
+| Valor | Significado |
+| --- | --- |
+| **api-key** | Envie `api-key: <YOUR_KEY>`. Um token JWT bearer não é aceito. |
+| **api-key or JWT** | Funciona tanto `api-key: <YOUR_KEY>` quanto `Authorization: Bearer <JWT>`. |
+| **none** | Nenhuma credencial. O endpoint se protege por outra coisa, como o sigilo do id do flow, ou por nada. |
+| **none or JWT** | Nenhuma credencial é obrigatória, mas você pode enviar `Authorization: Bearer <JWT>` para se identificar. O endpoint só precisa dele quando a regra dele exige um usuário logado. |
+
+A chave vai em um header chamado exatamente `api-key` — sem esquema `Bearer`, sem prefixo `x-`.
+
+<Info>
+Uma chave **de space** resolve para o usuário dono do space, com o space anexado, então os endpoints de listagem se restringem automaticamente a esse space. Uma chave **de usuário** vê tudo o que esse usuário pode ver. Veja a [visão geral da Integrations API](/main-api/specific-features/integrations-api/overview) para saber onde encontrar cada uma.
+</Info>
+
+## Regra de acesso a agentes
+
+Vários endpoints desta página verificam se você alcança um determinado agente. Você alcança um agente quando uma destas condições é verdadeira:
+
+- O agente está na sua pasta pessoal.
+- O agente está em um space, e você é membro ativo da organização dona do space.
+- O agente está em uma pasta sua dentro de uma organização, e a sua participação nessa organização está ativa.
+
+A sua participação fica ativa quando você entra na organização, e deixa de ficar ativa quando um admin da organização a desativa ou remove. Pertencer a um space não conta quando a sua participação na organização do space não está mais ativa. Criar um agente não dá, por si só, acesso a ele.
+
+Com uma API key, a regra se aplica ao usuário da chave: uma chave de usuário age como esse usuário, e uma chave de space age como o dono da organização do space.
+
+## Integrations API — agentes e pastas
+
+Caminho base `/integrations`. Documentada passo a passo, para quem não programa, no [guia da Integrations API](/main-api/specific-features/integrations-api/overview).
+
+| Método | Caminho | Propósito | Autenticação | Docs |
+| --- | --- | --- | --- | --- |
+| `GET` | `/integrations/folders` | Lista todas as pastas em que o chamador pode escrever, pessoais e de spaces. Filtre com `?name=`. | api-key or JWT | [Listar pastas](/main-api/specific-features/integrations-api/list-folders) |
+| `GET` | `/integrations/agents` | Lista os agentes acessíveis com as URLs prontas de API, webhook e chatbot. Filtre com `?name=` (`?search=` é um alias obsoleto). | api-key or JWT | [Listar agentes](/main-api/specific-features/integrations-api/list-agents) |
+| `POST` | `/integrations/agents` | Cria um agente ou chat flow; aponta para uma pasta por `folderId`, ou encontra-ou-cria uma por `folderName`. | api-key or JWT | [Criar um agente](/main-api/specific-features/integrations-api/create-agent) |
+| `GET` | `/integrations/agents/:id` | Retorna o JSON completo do agente — `nodes`, `edges` e o markdown de `documentation`. | api-key or JWT | [Obter um agente](/main-api/specific-features/integrations-api/get-agent) |
+| `PATCH` | `/integrations/agents/:id` | Renomeia um agente e/ou substitui todo o conteúdo de nodes+edges. | api-key or JWT | [Atualizar um agente](/main-api/specific-features/integrations-api/update-agent) |
+| `GET` | `/integrations/:provider/connection-test` | Valida que uma chave funciona para um provedor. Usado pelo Zapier e ferramentas parecidas para confirmar uma conexão. | api-key | — |
+
+<Warning>
+`PATCH /integrations/agents/:id` faz uma **sincronização completa** de `content`. Qualquer node ou edge ausente do payload é apagado. Faça `GET` primeiro, modifique, e então envie tudo de volta com `PATCH`.
+</Warning>
+
+## Documentação companheira
+
+Quinze endpoints, cinco escopos de dono × três verbos. As respostas são **`text/markdown` puro**, não JSON. Os passo a passo completos estão em [endpoints de documentação companheira](/main-api/specific-features/integrations-api/companion-docs); a arquitetura está em [documentação companheira (entity docs)](/main-api/specific-features/companion-docs).
+
+<Warning>
+  **🚧 Ainda não está em produção.** Dos quinze, produção responde apenas
+  `GET /integrations/agents/:id/documentation`, e ali retorna o markdown legado de `flows.agentflow_md`
+  em vez de um documento de `entity_docs`. Os outros quatorze — todo `PUT`, todo
+  `regenerate` e todo escopo de dono que não é agente — existem apenas em `back@master`.
+</Warning>
+
+| Método | Caminho | Propósito | Autenticação |
+| --- | --- | --- | --- |
+| `GET` | `/integrations/agents/:id/documentation` | Lê o documento companheiro de um agente. | api-key or JWT |
+| `PUT` | `/integrations/agents/:id/documentation` | Substitui o documento companheiro de um agente. | api-key or JWT |
+| `POST` | `/integrations/agents/:id/documentation/regenerate` | Recoleta as seções do agente mantidas pela máquina a partir dos dados atuais. | api-key or JWT |
+| `GET` | `/integrations/folders/:id/documentation` | Lê o documento companheiro de uma pasta. | api-key or JWT |
+| `PUT` | `/integrations/folders/:id/documentation` | Substitui o documento companheiro de uma pasta. | api-key or JWT |
+| `POST` | `/integrations/folders/:id/documentation/regenerate` | Recoleta as seções da pasta mantidas pela máquina. | api-key or JWT |
+| `GET` | `/integrations/spaces/:id/documentation` | Lê o documento companheiro de um space. | api-key or JWT |
+| `PUT` | `/integrations/spaces/:id/documentation` | Substitui o documento companheiro de um space. Apenas admin do space ou da organização. | api-key or JWT |
+| `POST` | `/integrations/spaces/:id/documentation/regenerate` | Recoleta as seções do space mantidas pela máquina. Apenas admin do space ou da organização. | api-key or JWT |
+| `GET` | `/integrations/organizations/:id/documentation` | Lê o documento companheiro de uma organização. | api-key or JWT |
+| `PUT` | `/integrations/organizations/:id/documentation` | Substitui o documento companheiro de uma organização. Apenas admin da organização. | api-key or JWT |
+| `POST` | `/integrations/organizations/:id/documentation/regenerate` | Recoleta as seções da organização mantidas pela máquina. Apenas admin da organização. | api-key or JWT |
+| `GET` | `/integrations/me/documentation` | Lê o documento companheiro do próprio dono da chave. | api-key or JWT |
+| `PUT` | `/integrations/me/documentation` | Substitui o documento companheiro do próprio dono da chave. | api-key or JWT |
+| `POST` | `/integrations/me/documentation/regenerate` | Recoleta as seções do próprio chamador mantidas pela máquina. | api-key or JWT |
+
+## Completions API
+
+Superfície compatível com a OpenAI sobre todos os provedores suportados. Documentada no [guia da Completions API](/main-api/specific-features/completions-api/overview).
+
+| Método | Caminho | Propósito | Autenticação | Docs |
+| --- | --- | --- | --- | --- |
+| `POST` | `/v1/chat/completions` | Executa um chat completion em qualquer modelo disponível. Retorna JSON, ou um stream SSE quando `stream: true`. | api-key | [Chat completions](/main-api/specific-features/completions-api/chat-completions) |
+| `GET` | `/v1/models` | Lista os modelos que a chave pode usar. | api-key | [Listar modelos](/main-api/specific-features/completions-api/list-models) |
+
+## Memory Pods
+
+Os cinco ficam no controller `/flux`. Documentados no [guia da Memory Pods API](/main-api/specific-features/memory-pods-api/overview); detalhes internos em [arquitetura de memory pods](/main-api/specific-features/memory-pods-architecture).
+
+| Método | Caminho | Propósito | Autenticação | Docs |
+| --- | --- | --- | --- | --- |
+| `POST` | `/flux/memory-pods` | Cria um pod. Uma chave de space o cria nesse space. | api-key | [Criar um pod](/main-api/specific-features/memory-pods-api/create-pod) |
+| `GET` | `/flux/memory-pods/get` | Lista os pods do chamador. Filtre com `?id=` ou `?podName=` (substring, sem diferenciar maiúsculas). | api-key | [Listar pods](/main-api/specific-features/memory-pods-api/list-pods) |
+| `POST` | `/flux/memory-pods/:podId/add-document` | Adiciona documentos a um pod, como uploads multipart ou URLs. | api-key | [Adicionar um documento](/main-api/specific-features/memory-pods-api/add-document) |
+| `DELETE` | `/flux/memory-pods/:podId/delete-document` | Apaga arquivos nomeados de um pod. | api-key | [Apagar um documento](/main-api/specific-features/memory-pods-api/delete-document) |
+| `PUT` | `/flux/memory-pods/:podId/replace-document` | Substitui um arquivo de um pod por uma nova URL, sem mexer no resto do pod. | api-key | [Substituir um documento](/main-api/specific-features/memory-pods-api/replace-document) |
+
+## Execução de flows
+
+| Método | Caminho | Propósito | Autenticação |
+| --- | --- | --- | --- |
+| `POST` | `/flux/api-v2?flowId=<id>` | Enfileira a execução de um flow. Com `callback_url`, responde `202` com `{executionId, statusUrl}`; sem ele, espera até `AGENT_WAIT_TIMEOUT_MS` e responde `200` com a saída, `400` quando um node falha, ou `202` com o `statusUrl` quando a execução passa do tempo de espera. Opcionais: `sessionId`, `versionId`. | api-key |
+| `GET` | `/flux/executions/:id` | Status de uma execução api-v2 enfileirada: `pending`, `in_progress`, `completed` (com `output`, `tokensUsed`, `totalCost`, `durationMs`) ou `error` (com `errorMessage`). Restrito ao chamador. | api-key |
+| `POST` | `/flux/api-v2-webhook?flowId=<id>` | Gatilho de webhook sem espera: o corpo inteiro da requisição entra no primeiro node de variable input do flow e a execução é enfileirada. | none |
+| `POST` | `/flux/run-public-flow/:id` | Executa o flow de um chatbot publicado, como o dono do flow. Quem pode chamar depende de como o chatbot foi publicado; veja [Executar um chatbot publicado](#executar-um-chatbot-publicado). | none or JWT |
+
+As URLs `api` e `webhook` retornadas por `GET /integrations/agents` são exatamente as duas primeiras rotas, já preenchidas com o id do flow.
+
+O contrato de fila por trás do `api-v2` — o formato do `202`, o endpoint de consulta e os ajustes de concorrência e de espera — está descrito em [execução assíncrona de flows](/main-api/specific-features/async-flow-execution).
+
+<Warning>
+`/flux/api-v2-webhook` e `/flux/run-public-flow/:id` podem executar **sem credencial**. A única proteção da rota de webhook é o sigilo do id do flow. Para um chatbot publicado para **Anyone with the link**, a única proteção da rota pública é essa configuração de publicação. Trate as duas URLs como segredos, e publique um chatbot para **Anyone with the link** apenas quando você quiser que qualquer pessoa o execute.
+</Warning>
+
+### Executar um chatbot publicado
+
+`POST /flux/run-public-flow/:id` segue a mesma regra da página do chatbot. A configuração de publicação do chatbot decide quem pode executá-lo:
+
+| Configuração de publicação | Quem pode executar o flow |
+| --- | --- |
+| **Publishing ON**, **Anyone with the link** (`chatbotPublishType: external`) | Qualquer chamador, com ou sem JWT. |
+| **Publishing ON**, **Only people with access to this space** (`chatbotPublishType: internal`) | Um chamador que envia um JWT válido e é o dono do flow ou membro ativo da organização dona do space do flow. |
+| **Publishing OFF** | Apenas o dono do flow, com um JWT válido. |
+
+A rota lê apenas um JWT. Um header `api-key` não identifica você aqui, então uma requisição que traz apenas uma API key conta como anônima.
+
+Quando a rota recusa uma chamada, ela responde `400` e não executa o flow:
+
+| Mensagem | Causa |
+| --- | --- |
+| `Flow is not public` | O flow não existe ou foi apagado, ou não está publicado e você não é o dono. |
+| `This chatbot is shared inside its organization. Please log in to open it.` | O chatbot está publicado para **Only people with access to this space** e a requisição não tem um JWT válido. |
+| `This chatbot is shared inside its organization and your account does not have access to its space.` | O chatbot está publicado para **Only people with access to this space**, e você não é o dono do flow nem membro ativo da organização dona do space. |
+
+Quando a própria execução falha, a rota responde na hora com uma resposta de erro: o status e a mensagem de uma recusa que a execução levanta, ou `500` para uma falha inesperada. A resposta `500` não inclui a causa interna.
+
+### Processamento em lote
+
+Executa um flow uma vez por linha de um CSV enviado. O CSV é registrado primeiro pela UI, o que gera o id de lote que estes endpoints recebem.
+
+Com vários nodes de Variable Input, as colunas do CSV são mapeadas para eles na ordem em que os nodes foram criados, e pela posição no canvas (de cima para baixo, depois da esquerda para a direita) quando foram criados juntos. Um lote que não consegue continuar termina com `status: error` e o motivo em `errorMessage`: o flow não tem node de Variable Input, ou a execução de uma linha falhou.
+
+| Método | Caminho | Propósito | Autenticação |
+| --- | --- | --- | --- |
+| `POST` | `/flux/batch-process` | Começa a processar um arquivo de lote registrado. Corpo: `{ batchId, stopAfterFailures? }`. Recusa um lote que já está em andamento, concluído ou totalmente processado. | api-key |
+| `GET` | `/flux/batch-process/:id/status` | Retorna `status`, `errorMessage`, `lastProcessedLine` e `totalRows` de um lote. | api-key |
+| `GET` | `/flux/batch-process/all` | Lista todos os arquivos de lote dos flows do chamador. | api-key |
+| `POST` | `/flux/batch-process/:id/stop` | Para um lote em execução. Um lote concluído não é alterado. | api-key |
+| `GET` | `/flux/batch-process/:ids/download` | Monta um CSV de entradas e saídas para um ou mais ids de lote separados por vírgula, faz o upload e retorna `downloadLink`. | api-key |
+
+`POST /flux/batch-process` inicia um workflow durável do Temporal (`processBatch`, workflow id `batch-process-${batchId}`) que sobrevive a deploys da API e a reinícios do worker. `POST /flux/batch-process/:id/stop` cancela esse workflow pelo id; o lote termina com `status: stopped`. Veja [o workflow `processBatch`](/worker/workflows/process-batch) para as regras de concorrência de linhas, segmentação e tipos de erro.
+
+**`stopAfterFailures` (opcional em `POST /flux/batch-process`):** para o lote quando esse número de linhas tiver falhado. Omita (ou envie `null`) para executar todas as linhas, independentemente de falhas. Um erro de `data` (linha do CSV ausente, número de colunas diferente, ou um `BadDataError` do flow) encerra o lote na primeira ocorrência, independentemente desse limite.
+
+<Warning>
+`/flux/batch-process/:ids/download` retorna um link para o object storage que não precisa de credencial própria. Qualquer pessoa com o link pode ler o CSV, então não cole o link em um canal compartilhado.
+</Warning>
+
+### Documentos e uploads
+
+| Método | Caminho | Propósito | Autenticação |
+| --- | --- | --- | --- |
+| `POST` | `/flux/upload` | Faz upload de um arquivo e o registra como documento do chamador. Com `?spaceId=`, anexa o arquivo a esse space. Você precisa pertencer ao space e ser membro ativo da organização dona dele. A rota verifica isso antes de guardar o arquivo, e recusa com `400` `You do not have access to this space`. | api-key |
+| `GET` | `/flux/doc?name=&id=` | Encontra documentos do chamador. Quando exatamente um corresponde e é um `.pdf` ou `.txt`, o texto extraído vem na resposta. | api-key |
+| `GET` | `/flux/all-doc` | Lista todos os documentos do chamador, sem filtro. | api-key |
+
+<Note>
+`/flux/all-doc` equivale a chamar `/flux/doc` sem parâmetros de query e é mantido por compatibilidade. Prefira `/flux/doc`.
+</Note>
+
+### JSON do flow (legado)
+
+Substituído pelos endpoints de agente da Integrations API. Integrações novas devem usar `GET`/`PATCH /integrations/agents/:id`, que validam o payload, retornam a `documentation` do agente e aplicam as regras de acesso de pasta/space de forma consistente.
+
+| Método | Caminho | Propósito | Autenticação |
+| --- | --- | --- | --- |
+| `GET` | `/flux/json/:id` | Retorna `id`, `name`, `nodes` e `edges` de um flow. O usuário da chave precisa alcançar o flow pela [regra de acesso a agentes](#regra-de-acesso-a-agentes); qualquer outro flow responde `404` `Flow not found`. | api-key |
+| `PATCH` | `/flux/json/:id` | Substitui os nodes e/ou edges de um flow e os metadados dele. Sincronização completa, igual à da Integrations API. O chamador precisa alcançar o flow pela [regra de acesso a agentes](#regra-de-acesso-a-agentes); qualquer outro flow responde `400` `Flow not found`. Com um JWT, você também precisa do papel `owner`, `admin` ou `builder` na organização que você selecionou, ou a rota responde `403`. | api-key or JWT |
+
+## Outros endpoints
+
+| Método | Caminho | Propósito | Autenticação |
+| --- | --- | --- | --- |
+| `POST` | `/merger/merge-pdf` | Junta vários PDFs em um. | api-key |
+| `POST` | `/open-ai/get-completion` | Completion legado de um único provedor. Retorna `message`, `usedTokens` e `cost`. | api-key |
+
+<Note>
+`/open-ai/get-completion` é anterior ao roteador unificado e se limita a um provedor. Use [`POST /v1/chat/completions`](/main-api/specific-features/completions-api/chat-completions) — ele cobre todos os provedores com um único formato de requisição.
+</Note>
+
+## Apenas internos
+
+Estes aceitam uma `api-key`, mas um segundo guard os restringe a contas da equipe interna (um endereço de e-mail da empresa). Uma chave de cliente se autentica e então recebe `403`.
+
+| Método | Caminho | Propósito | Autenticação |
+| --- | --- | --- | --- |
+| `GET` | `/space-logs/spaces/:spaceId/runs` | Lista paginada de logs de execução de um space (`?page=`, `?limit=`, máximo 100). | api-key + internal staff |
+| `GET` | `/space-logs/spaces/:spaceId/runs/latest` | O payload de log da execução mais recente. `422` quando o space está com logging desligado. | api-key + internal staff |
+| `GET` | `/space-logs/runs/:processId` | O payload de log de uma execução, com cache por weak-ETag e suporte a `304`. | api-key + internal staff |
+
+## Fora desta página
+
+<Columns cols={2}>
+  <Card title="Endpoints da master key" icon="key" href="/main-api/specific-features/master-api-key">
+    `/master/flows` e o header de personificação `x-flux-act-as-space` aceitam apenas a master key única da plataforma — uma API key comum recebe `403`.
+  </Card>
+  <Card title="FluxPrompt MCP" icon="plug" href="/mcp/overview">
+    A superfície MCP usa os próprios tokens OAuth e guards internos. Uma API key de usuário não autentica nela.
+  </Card>
+</Columns>
+
+Endpoints protegidos apenas por `JwtAuthGuard` — a maior parte da plataforma, tudo o que o app web chama — estão fora do escopo aqui e não são acessíveis com uma API key.
+
+## Relacionados
+
+<Columns cols={2}>
+  <Card title="Visão geral da Integrations API" icon="book-open" href="/main-api/specific-features/integrations-api/overview">
+    Encontre a sua API key e configure o Postman uma vez.
+  </Card>
+  <Card title="Erros e dicas" icon="life-buoy" href="/main-api/specific-features/integrations-api/errors-and-tips">
+    O que cada código de status significa e como corrigir.
+  </Card>
+</Columns>

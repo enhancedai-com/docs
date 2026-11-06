@@ -13,13 +13,26 @@ Paths are exact. There is no global route prefix and no API version segment — 
 | --- | --- |
 | **api-key** | Send `api-key: <YOUR_KEY>`. A JWT bearer token is not accepted. |
 | **api-key or JWT** | Either `api-key: <YOUR_KEY>` or `Authorization: Bearer <JWT>` works. |
-| **none** | No credential at all. The endpoint gates on something else (a `public` flag on the flow, or nothing). |
+| **none** | No credential at all. The endpoint gates on something else, such as the secrecy of the flow id, or on nothing. |
+| **none or JWT** | No credential is required, but you can send `Authorization: Bearer <JWT>` to identify yourself. The endpoint needs it only when its rule asks for a logged-in user. |
 
 The key goes in a header named exactly `api-key` — no `Bearer` scheme, no `x-` prefix.
 
 <Info>
 A **space-scoped** key resolves to the space's owning user with the space attached, so list endpoints automatically narrow to that one space. A **user-level** key sees everything that user can see. See [Integrations API overview](/main-api/specific-features/integrations-api/overview) for where to find each.
 </Info>
+
+## Agent access rule
+
+Several endpoints on this page check that you can reach a given agent. You can reach an agent when one of these conditions is true:
+
+- The agent is in your personal folder.
+- The agent is in a space, and you are an active member of the organization that owns the space.
+- The agent is in a folder you own inside an organization, and your membership in that organization is active.
+
+Your membership is active once you join the organization, and stops being active when an organization admin deactivates or removes it. Belonging to a space does not count once your membership in the space's organization is no longer active. Creating an agent does not by itself give you access to it.
+
+With an API key, the rule applies to the key's user: a user-level key acts as its user, and a space-scoped key acts as the owner of the space's organization.
 
 ## Integrations API — agents and folders
 
@@ -95,15 +108,37 @@ All five live on the `/flux` controller. Documented in the [Memory Pods API guid
 | `POST` | `/flux/api-v2?flowId=<id>` | Queue a flow run. With `callback_url` it answers `202` with `{executionId, statusUrl}`; without one it waits up to `AGENT_WAIT_TIMEOUT_MS` and answers `200` with the output, `400` when a node fails, or `202` with the `statusUrl` when the run outlives the wait. Optional `sessionId`, `versionId`. | api-key |
 | `GET` | `/flux/executions/:id` | Status of a queued api-v2 run: `pending`, `in_progress`, `completed` (with `output`, `tokensUsed`, `totalCost`, `durationMs`) or `error` (with `errorMessage`). Scoped to the caller. | api-key |
 | `POST` | `/flux/api-v2-webhook?flowId=<id>` | Fire-and-forget webhook trigger: the whole request body is fed into the flow's first variable input node and the run is queued. | none |
-| `POST` | `/flux/run-public-flow/:id` | Run a flow that has been marked public, as the flow's owner. Refuses anything not flagged `public`. | none |
+| `POST` | `/flux/run-public-flow/:id` | Run a published chatbot's flow as the flow's owner. Who can call it depends on how the chatbot is published; see [Run a published chatbot](#run-a-published-chatbot). | none or JWT |
 
 The `api` and `webhook` URLs returned by `GET /integrations/agents` are exactly these first two routes, pre-filled with the flow id.
 
 The queueing contract behind `api-v2` — the `202` shape, the poll endpoint, and the concurrency and wait knobs — is described in [asynchronous flow execution](/main-api/specific-features/async-flow-execution).
 
 <Warning>
-`/flux/api-v2-webhook` and `/flux/run-public-flow/:id` accept **no credential**. The webhook route's only protection is the secrecy of the flow id; the public route's only protection is the flow's `public` flag. Treat both URLs as secrets, and do not mark a flow public unless you intend it to be world-runnable.
+`/flux/api-v2-webhook` and `/flux/run-public-flow/:id` can run with **no credential**. The webhook route's only protection is the secrecy of the flow id. For a chatbot published for **Anyone with the link**, the public route's only protection is that publish setting. Treat both URLs as secrets, and publish a chatbot for **Anyone with the link** only when you intend anyone to run it.
 </Warning>
+
+### Run a published chatbot
+
+`POST /flux/run-public-flow/:id` follows the same rule as the chatbot page. The chatbot's publish setting decides who can run it:
+
+| Publish setting | Who can run the flow |
+| --- | --- |
+| **Publishing ON**, **Anyone with the link** (`chatbotPublishType: external`) | Any caller, with or without a JWT. |
+| **Publishing ON**, **Only people with access to this space** (`chatbotPublishType: internal`) | A caller who sends a valid JWT and is the flow's owner or an active member of the organization that owns the flow's space. |
+| **Publishing OFF** | Only the flow's owner, with a valid JWT. |
+
+The route reads only a JWT. An `api-key` header does not identify you here, so a request that carries only an API key counts as anonymous.
+
+When the route refuses a call, it answers `400` and does not run the flow:
+
+| Message | Cause |
+| --- | --- |
+| `Flow is not public` | The flow does not exist or is deleted, or it is not published and you are not its owner. |
+| `This chatbot is shared inside its organization. Please log in to open it.` | The chatbot is published for **Only people with access to this space** and the request has no valid JWT. |
+| `This chatbot is shared inside its organization and your account does not have access to its space.` | The chatbot is published for **Only people with access to this space**, and you are neither the flow's owner nor an active member of the organization that owns its space. |
+
+When the run itself fails, the route answers right away with an error response: the status and message of a refusal that the run raises, or `500` for an unexpected failure. The `500` response does not include the internal cause.
 
 ### Batch processing
 
@@ -131,7 +166,7 @@ With several Variable Input nodes, the CSV columns map to them in the order the 
 
 | Method | Path | Purpose | Auth |
 | --- | --- | --- | --- |
-| `POST` | `/flux/upload` | Upload a file and register it as a document for the caller. With `?spaceId=`, attaches it to that space after checking membership. | api-key |
+| `POST` | `/flux/upload` | Upload a file and register it as a document for the caller. With `?spaceId=`, attaches it to that space. You must belong to the space and be an active member of the organization that owns it. The route checks this before it stores the file, and refuses with `400` `You do not have access to this space`. | api-key |
 | `GET` | `/flux/doc?name=&id=` | Find the caller's documents. When exactly one matches and it is a `.pdf` or `.txt`, the extracted text is inlined in the response. | api-key |
 | `GET` | `/flux/all-doc` | List every document the caller owns, unfiltered. | api-key |
 
@@ -145,8 +180,8 @@ Superseded by the Integrations API agent endpoints. New integrations should use 
 
 | Method | Path | Purpose | Auth |
 | --- | --- | --- | --- |
-| `GET` | `/flux/json/:id` | Return `id`, `name`, `nodes`, and `edges` for a flow. | api-key |
-| `PATCH` | `/flux/json/:id` | Replace a flow's nodes and/or edges plus its metadata. Full sync, same as the Integrations API. | api-key or JWT |
+| `GET` | `/flux/json/:id` | Return `id`, `name`, `nodes`, and `edges` for a flow. The key's user must reach the flow under the [agent access rule](#agent-access-rule); any other flow answers `404` `Flow not found`. | api-key |
+| `PATCH` | `/flux/json/:id` | Replace a flow's nodes and/or edges plus its metadata. Full sync, same as the Integrations API. The caller must reach the flow under the [agent access rule](#agent-access-rule); any other flow answers `400` `Flow not found`. With a JWT, you also need the `owner`, `admin`, or `builder` role in the organization you have selected, or the route answers `403`. | api-key or JWT |
 
 ## Other endpoints
 

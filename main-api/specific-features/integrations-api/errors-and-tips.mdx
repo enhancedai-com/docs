@@ -33,7 +33,7 @@ Your API key is missing, expired, or wrong.
 
 ### 403 Forbidden
 
-You're authenticated, but you don't have permission to do this thing — usually because the space or folder belongs to someone else, or because a folder you targeted by `folderId` lives in a different space than the `spaceId` you sent.
+You're authenticated, but you don't have permission to do this thing — usually because the space or folder belongs to someone else, because your membership in the organization that owns the space is no longer active, or because a folder you targeted by `folderId` lives in a different space than the `spaceId` you sent.
 
 **Fix:** Check that the `spaceId` you sent is one you have access to. The list returned by [`GET /integrations/folders`](/main-api/specific-features/integrations-api/list-folders) only shows folders you can use, so when in doubt, list folders again and pick a fresh ID from there.
 
