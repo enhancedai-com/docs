@@ -102,7 +102,7 @@ A few request behaviors are worth keeping in mind as you read the flow above:
 | Behavior | Summary |
 | --- | --- |
 | Authentication | Every request authenticates with the `api-key` header (user key or company-space key). |
-| Provider resolution | The provider (Anthropic, OpenAI, Google Gemini, Groq, Perplexity, or xAI) is derived from the `model` id — you never send a provider name. |
+| Provider resolution | The provider (Anthropic, OpenAI, Google Gemini, Groq, Perplexity, xAI, Moonshot, Mistral, TypeSafe, or Cloudflare Workers AI) is derived from the `model` id — you never send a provider name. |
 | Deprecated models | `deprecated_model_behavior` controls whether a deprecated model errors or is transparently substituted. |
 | OpenAI compatibility | Requests and responses match OpenAI's `/v1/chat/completions`, so OpenAI SDKs work by swapping the base URL. |
 
