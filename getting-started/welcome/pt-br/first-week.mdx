@@ -51,7 +51,7 @@ Hoje é setup do ambiente. Reserve a manhã. Café.
 
 <Steps>
   <Step title="Clone o workspace">
-    O workspace contém `back/`, `front/`, `docs/` e o diretório compartilhado `.workflow/`. Seu buddy aponta os repos certos e mostra como o layout fica localmente.
+    O workspace contém `back/`, `front/`, `docs/` e o diretório compartilhado `.claude/`. Seu buddy aponta os repos certos e mostra como o layout fica localmente.
   </Step>
   <Step title="Sobe o backend">
     Siga [Setup da máquina](/getting-started/welcome/pt-br/environment-setup). Objetivo: `pnpm dev:api` roda e você consegue bater em `http://localhost:3001/health` (ou similar) sem stack trace.
@@ -72,7 +72,7 @@ Hoje é exploração sem pressão.
 
 <Steps>
   <Step title="Rode o agent db-setup">
-    Abra o Claude Code e invoque o agent `db-setup`. Ele faz bootstrap do seu `.workflow/.env` e verifica se você consegue consultar staging pelo SSH tunnel. Veja [Onboarding](/ai-workflows/internal-developer-workflows/onboarding) (em inglês).
+    Abra o Claude Code e invoque o agent `db-setup`. Ele faz bootstrap do seu `.env` e verifica se você consegue consultar staging pelo SSH tunnel. Veja [Onboarding](/ai-workflows/internal-developer-workflows/onboarding) (em inglês).
   </Step>
   <Step title="Rode a suíte E2E">
     Na raiz do workspace, rode `node debug-playwright/suite.mjs` — ou invoque o agent `e2e-playwright-runner`, que sobe o stack Docker local pra você. **Done when imprime `N/N PASS`.** Isso prova que o stack está conectado de ponta a ponta antes de você mexer em código de produto.

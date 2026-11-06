@@ -10,7 +10,7 @@ Two responsibilities, packaged as one skill:
 1. **Key management** on the bastion's `authorized_keys` — list, add, and remove SSH keys for teammates.
 2. **Tunneled database access** — open an SSH connection, forward a local port to RDS, run a query, close. All in one Node process.
 
-The skill lives at `.workflow/skills/ec2-tunnel/`. Source of truth for its behavior is the `SKILL.md` file in that folder.
+The skill lives at `.claude/skills/ec2-tunnel/`. Source of truth for its behavior is the `SKILL.md` file in that folder.
 
 <Warning>
   This skill targets **dev and staging only**. For production, use the [`ec2-tunnel-prod`](/ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod) skill — it enforces read-only at three layers and is non-bypassable.
@@ -26,7 +26,7 @@ The skill lives at `.workflow/skills/ec2-tunnel/`. Source of truth for its behav
 
 ## Required environment variables
 
-All loaded from `.workflow/.env`:
+All loaded from the workspace-root `.env`:
 
 | Variable | Purpose |
 | --- | --- |
@@ -40,12 +40,12 @@ All loaded from `.workflow/.env`:
 ### Run a single query
 
 ```powershell
-Get-Content ".\.workflow\.env" | Where-Object { $_ -match '^([A-Z_]+)=(.*)$' } | ForEach-Object {
+Get-Content ".\.env" | Where-Object { $_ -match '^([A-Z_]+)=(.*)$' } | ForEach-Object {
   Set-Item "env:$($matches[1])" $matches[2]
 }
 $env:ENV = "staging"
 $env:QUERY = "SELECT count(*) FROM flows WHERE \"deletedAt\" IS NULL"
-node .\.workflow\skills\ec2-tunnel\templates\tunnel-and-query.mjs
+node .\.claude\skills\ec2-tunnel\templates\tunnel-and-query.mjs
 ```
 
 The script opens the SSH connection, forwards to RDS, runs the query, prints rows, then exits. No leftover state.
@@ -55,7 +55,7 @@ The script opens the SSH connection, forwards to RDS, runs the query, prints row
 For multiple queries or to use a GUI client:
 
 ```powershell
-node .\.workflow\skills\ec2-tunnel\templates\start-tunnel.mjs
+node .\.claude\skills\ec2-tunnel\templates\start-tunnel.mjs
 # In another shell:
 $env:PGPASSWORD = "<dev or staging password>"
 psql -h localhost -p 5433 -U postgres
@@ -69,13 +69,13 @@ Default local port is `5433` (avoids conflict with a local Postgres on `5432`). 
   <Step title="List currently authorized keys">
     Show who is on the bastion. Run when in doubt before adding/removing.
     ```powershell
-    node .\.workflow\skills\ec2-tunnel\templates\list-keys.mjs
+    node .\.claude\skills\ec2-tunnel\templates\list-keys.mjs
     ```
   </Step>
   <Step title="Add a teammate's key">
     Get the **public** key from the teammate (the file ending in `.pub`). Edit `add-key.mjs` and paste it into `NEW_KEY`, then run:
     ```powershell
-    node .\.workflow\skills\ec2-tunnel\templates\add-key.mjs
+    node .\.claude\skills\ec2-tunnel\templates\add-key.mjs
     ```
     The script backs up `authorized_keys` first, appends idempotently (no duplicates), and verifies file permissions.
   </Step>
@@ -93,7 +93,7 @@ These come directly from the skill's `SKILL.md` and are enforced or guarded by t
 - **Validate line-count delta** when removing — if it's not exactly `N-1`, abort.
 - **Set correct perms** after modification: `chmod 600 ~/.ssh/authorized_keys`, `chmod 700 ~/.ssh`. `sshd` silently ignores files with wrong perms.
 - **Never log** `SSH_PASSPHRASE` or `PGPASSWORD_*` in scripts or session output.
-- **Never commit** real DB endpoints or bastion IPs. They live in `.workflow/.env` only.
+- **Never commit** real DB endpoints or bastion IPs. They live in `.env` only.
 
 ## SQL gotchas in this codebase
 

@@ -25,7 +25,7 @@ As páginas abaixo te levam ao workflow compartilhado. Reserve **meio dia** pra 
     Mesma página, seções de Superpowers e Context7. O Superpowers te dá os comandos estruturados do time; o Context7 mantém o Claude ancorado na API atual das libs em vez do dado de treinamento.
   </Step>
   <Step title="Rode o agent db-setup">
-    Agora pule para a seção interna: [Onboarding](/ai-workflows/internal-developer-workflows/onboarding). O agent `db-setup` faz o bootstrap do seu `.workflow/.env`, gera uma chave SSH se você não tem, imprime a pública pro admin autorizar, e roda um smoke test contra staging.
+    Agora pule para a seção interna: [Onboarding](/ai-workflows/internal-developer-workflows/onboarding). O agent `db-setup` faz o bootstrap do seu `.env`, gera uma chave SSH se você não tem, imprime a pública pro admin autorizar, e roda um smoke test contra staging.
 
     Esse é o momento em que você sai de "Claude Code instalado" pra "Claude Code conseguindo consultar os bancos do time".
 
@@ -63,7 +63,7 @@ As páginas abaixo te levam ao workflow compartilhado. Reserve **meio dia** pra 
 Quando o básico estiver funcionando, estas páginas são as referências profundas que você vai consultar (em inglês):
 
 <Columns cols={2}>
-  <Card title=".workflow/ skills" icon="screwdriver-wrench" href="/ai-workflows/internal-developer-workflows/skills/ec2-tunnel">
+  <Card title=".claude/skills/" icon="screwdriver-wrench" href="/ai-workflows/internal-developer-workflows/skills/ec2-tunnel">
     Tunnels SSH programáticos, queries read-only em prod, migrações de dados entre envs.
   </Card>
   <Card title="Agents customizados" icon="user-gear" href="/ai-workflows/internal-developer-workflows/agents/db-investigator">

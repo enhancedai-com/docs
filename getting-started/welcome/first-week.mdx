@@ -51,7 +51,7 @@ Today is environment setup. Block the morning. Coffee.
 
 <Steps>
   <Step title="Clone the workspace">
-    The workspace contains `back/`, `front/`, `docs/`, and the team-shared `.workflow/` directory. Your buddy points you to the right repos and shows you how it's laid out locally.
+    The workspace contains `back/`, `front/`, `docs/`, and the team-shared `.claude/` directory. Your buddy points you to the right repos and shows you how it's laid out locally.
   </Step>
   <Step title="Run the backend">
     Follow [Machine setup](/getting-started/welcome/environment-setup). Goal: `pnpm dev:api` runs and you can hit `http://localhost:3001/health` (or similar) without a stack trace.
@@ -72,7 +72,7 @@ Today is exploration without pressure.
 
 <Steps>
   <Step title="Run the db-setup agent">
-    Open Claude Code and invoke the `db-setup` agent. It bootstraps your `.workflow/.env` and verifies you can query staging through the SSH tunnel. See [Onboarding](/ai-workflows/internal-developer-workflows/onboarding).
+    Open Claude Code and invoke the `db-setup` agent. It bootstraps your `.env` and verifies you can query staging through the SSH tunnel. See [Onboarding](/ai-workflows/internal-developer-workflows/onboarding).
   </Step>
   <Step title="Run the E2E suite">
     From the workspace root, run `node debug-playwright/suite.mjs` — or invoke the `e2e-playwright-runner` agent, which boots the local Docker stack for you. **Done when it prints `N/N PASS`.** This proves the stack is wired together end-to-end before you touch product code.

@@ -7,7 +7,7 @@ description: "Strictly read-only access to the production PostgreSQL. Triple-lay
 
 Provides SELECT-only access to FluxPrompt's production PostgreSQL through the prod bastion. Every other operation — INSERT, UPDATE, DELETE, DDL, GRANT, COPY-TO-FILE, MERGE, EXPLAIN ANALYZE of DML — is refused before the query reaches the database.
 
-The skill lives at `.workflow/skills/ec2-tunnel-prod/`. Source of truth for its behavior is the `SKILL.md` file there.
+The skill lives at `.claude/skills/ec2-tunnel-prod/`. Source of truth for its behavior is the `SKILL.md` file there.
 
 <Warning>
   This skill exists **only for read access**. If you need to write to prod, that goes through migrations and an audited PR — never through this skill. There is no override flag, and asking for "just this once" will be refused.
@@ -51,11 +51,11 @@ Every query passes through three independent checks. All three must pass for the
 ### Single SELECT
 
 ```powershell
-Get-Content ".\.workflow\.env" | Where-Object { $_ -match '^([A-Z_]+)=(.*)$' } | ForEach-Object {
+Get-Content ".\.env" | Where-Object { $_ -match '^([A-Z_]+)=(.*)$' } | ForEach-Object {
   Set-Item "env:$($matches[1])" $matches[2]
 }
 $env:QUERY = "SELECT count(*) FROM flows WHERE \"deletedAt\" IS NULL"
-node .\.workflow\skills\ec2-tunnel-prod\templates\read-query.mjs
+node .\.claude\skills\ec2-tunnel-prod\templates\read-query.mjs
 ```
 
 ### Multiple SELECTs in succession
@@ -63,7 +63,7 @@ node .\.workflow\skills\ec2-tunnel-prod\templates\read-query.mjs
 Open a long-running read-only tunnel and connect with any client:
 
 ```powershell
-node .\.workflow\skills\ec2-tunnel-prod\templates\start-tunnel-ro.mjs
+node .\.claude\skills\ec2-tunnel-prod\templates\start-tunnel-ro.mjs
 # In another shell:
 $env:PGPASSWORD = "<PGPASSWORD_PROD value>"
 psql -h localhost -p 5435 -U postgres

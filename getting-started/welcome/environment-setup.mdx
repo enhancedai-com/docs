@@ -42,7 +42,7 @@ Install in this order. None of these are optional.
     [Docker Desktop](https://www.docker.com/products/docker-desktop/). On Windows, Docker runs inside WSL — install WSL first if you don't have it (`wsl --install`).
   </Step>
   <Step title="AWS CLI">
-    The team's `.workflow/` skills (SSH tunnel to the bastion, read-only DB queries against dev/staging/prod) assume the AWS CLI is on your `PATH`. Install from [aws.amazon.com/cli](https://aws.amazon.com/cli/) and verify with `aws --version`. The `db-setup` agent walks you through creating your own read-only access key — don't configure a profile by hand yet.
+    The team's skills in `.claude/skills/` (SSH tunnel to the bastion, read-only DB queries against dev/staging/prod) assume the AWS CLI is on your `PATH`. Install from [aws.amazon.com/cli](https://aws.amazon.com/cli/) and verify with `aws --version`. The `db-setup` agent walks you through creating your own read-only access key — don't configure a profile by hand yet.
   </Step>
   <Step title="Patience">
     Still required. Some things will not work on the first try. This is not a failure of the docs — it's the nature of multi-service stacks. Pause, read the error, ask your buddy. Don't power through.
@@ -51,7 +51,7 @@ Install in this order. None of these are optional.
 
 ## Clone the workspace
 
-The workspace root is the `Workflow` repo (`enhanced/` on disk). The product code lives in **four separate git repositories** that are gitignored here and cloned independently *inside* the workspace. The last argument to `git clone` is the folder name on disk, and it is **load-bearing** — the workspace file, every `.workflow/` skill, the Docker stack, and the custom agents all expect these exact folder names.
+The workspace root is the `Workflow` repo (`enhanced/` on disk). The product code lives in **four separate git repositories** that are gitignored here and cloned independently *inside* the workspace. The last argument to `git clone` is the folder name on disk, and it is **load-bearing** — the workspace file, every skill in `.claude/skills/`, the Docker stack, and the custom agents all expect these exact folder names.
 
 ```bash
 # 1. Clone THIS repo as your workspace root
@@ -76,7 +76,7 @@ enhanced/
 ├─ front/       Flux-Prompt-Frontend   React frontend
 ├─ worker/      Flux-Prompt-Worker     Temporal worker
 ├─ docs/                               Mintlify documentation
-└─ .workflow/                          Team-shared Claude Code tooling
+└─ .claude/                            Team-shared Claude Code tooling
 ```
 
 | Repo | Clone into folder |
