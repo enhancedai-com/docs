@@ -110,8 +110,8 @@ On success, returns an OpenAI-shaped list object. Each item is a model entry wit
   Maximum context tokens.
 </ResponseField>
 
-<ResponseField name="data[].max_output_tokens" type="integer">
-  Maximum output tokens. Also the default cap for `max_tokens` in chat completions.
+<ResponseField name="data[].max_output_tokens" type="integer | null">
+  Maximum output tokens. Also the default cap for `max_tokens` in chat completions. `null` when the model has no recorded ceiling: the provider's default applies, and a non-streamed request is capped at 16,384 tokens.
 </ResponseField>
 
 ## Errors
