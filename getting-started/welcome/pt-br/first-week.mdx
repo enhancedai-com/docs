@@ -1,11 +1,11 @@
 ---
 title: "Sua primeira semana"
-description: "Plano dia a dia dos seus primeiros cinco dias no FluxPrompt. Termina com um PR real mergeado em produção."
+description: "Plano dia a dia dos seus primeiros cinco dias no FluxPrompt. Mira um PR real deployado em staging até sexta."
 ---
 
 ## O objetivo
 
-Até sexta-feira da sua primeira semana, você deve ter **um pull request mergeado e deployado em staging**. Não é um tutorial. Não é um hello-world. Uma mudança real no codebase real, por menor que seja.
+**Desafio:** um pull request mergeado e deployado em staging até sexta. É um desafio, não uma exigência. O esperado é sua primeira entrega até o fim da semana 2. Nos dois casos, não é tutorial nem hello-world: é uma mudança real no codebase real, por menor que seja.
 
 Os dados da indústria sustentam isso — entregar algo real na semana 1 é o maior preditor de se um novo engenheiro vai se sentir confiante no segundo mês. Então a gente planeja em volta disso.
 
@@ -22,7 +22,21 @@ A sessão de onboarding ao vivo é hoje. Seu buddy ou outro membro do time vai c
     As três primeiras páginas deste guia: [Visão geral](/getting-started/welcome/pt-br), [O time](/getting-started/welcome/pt-br/team), [O que a gente constrói](/getting-started/welcome/pt-br/the-product). Venha com perguntas.
   </Step>
   <Step title="Acessos e contas">
-    Slack/Gmail Chat, ClickUp, GitHub (incluído na org enhancedai-com), AWS console read access, Datadog read access, Mintlify dashboard, e **Google Drive com os docs e vídeos legados do Greg** — esse último é o melhor recurso isolado para entender como a plataforma funciona de ponta a ponta. Seu buddy garante que cada um funcione **hoje**, não "ao longo da semana".
+    Cada acesso é liberado por uma pessoa diferente. Peça no primeiro dia pra tudo funcionar **hoje**, não "ao longo da semana".
+
+    | Acesso | Pra quê | Quem libera |
+    | - | - | - |
+    | Slack | Falar com o time do Brasil e com a Up | O time da Up. Geralmente você já entra com ele; se não, peça ao Giovanni |
+    | Google Chat (grupo do produto) | Falar com o cliente | Giovanni, seu gestor direto |
+    | ClickUp (board "Flow", lista FluxPrompt Platform Dev) | Tasks | Brad |
+    | GitHub (org `enhancedai-com`) | Código | Brad ou Everton |
+    | Claude (Claude Code) | Desenvolvimento com IA | Brad |
+    | Arquivos `.env` | Rodar a stack local | Qualquer dev do time |
+    | Chave SSH no bastion e cofre | Consultar os bancos de dev e staging | Everton |
+    | Console AWS e Datadog (só leitura) | Acompanhar deploys e logs | Nem todo mundo recebe. Hoje: Ale, Guilherme, Yago e Everton |
+    | Código de acesso do Mintlify | Ler este site | Está no Slack do time. Qualquer pessoa do time pode mandar |
+    | Docs e vídeos do Greg (Google Drive) | Entender a plataforma de ponta a ponta. O melhor recurso pra isso | Guilherme |
+    | Cursor (opcional) | Ferramenta da Up; veja [Como trabalhamos](/getting-started/welcome/pt-br/culture#expectativas-de-tooling) | Conta interna da Up |
   </Step>
   <Step title="Leia este guia inteiro">
     Inclusive a página de [piadas internas](/getting-started/welcome/pt-br/fun-stuff). Pode passar batido. Você não está memorizando — está montando um mapa pra quando algo aparecer amanhã, você lembrar onde olhar.
@@ -88,10 +102,10 @@ Se travar, **a frase que você fala em voz alta pro seu buddy é curta**:
     Use o agent `pr-creator` — passe a URL da sua task do ClickUp. Ele formata título, body e links conforme o [Engineering Handbook](/ai-workflows/internal-developer-workflows/agents/pr-creator) (em inglês).
   </Step>
   <Step title="Receba review">
-    Dois reviewers, no mínimo. Eles vão comentar. Você endereça. Repete até aprovar.
+    Uma pessoa do time revisa seu PR. Ela vai comentar. Você endereça. Repete até aprovar.
   </Step>
   <Step title="Mergeie e veja deployar">
-    O pipeline de CI pra `master`/`main` faz auto-deploy em dev. Staging é promoção manual. Acompanhe o rollout no AWS pra entender o que de fato acontece quando alguém diz a palavra "deploy".
+    Faça merge da sua branch na `develop` e dê push; isso faz deploy automático em dev. Staging funciona igual, com a branch `staging`. Produção é o seu PR revisado na `main` mais um workflow rodado na mão. Veja [Fluxo de git](/getting-started/pt-br/git-workflow). Se você tem acesso à AWS, acompanhe o rollout pra entender o que de fato acontece quando alguém diz a palavra "deploy"; se não, acompanhe junto com alguém que tem.
   </Step>
   <Step title="Atualize o status">
     Avise o time. Não precisa ser cerimonioso — "primeiro PR mergeado, faz X, valeu pelo review fulano" cai bem.

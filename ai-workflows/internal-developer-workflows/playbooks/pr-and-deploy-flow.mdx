@@ -19,12 +19,16 @@ You finished work on a ClickUp task and need to ship it. This is the team's stan
 
 | Repo | Dev branch | Staging branch | Production branch |
 | --- | --- | --- | --- |
-| Flux-Prompt (`back/`) | `master` | `staging` | `production` |
-| Flux-Prompt-Frontend (`front/`) | `main` | `staging` | `production` |
+| Flux-Prompt (`back/`) | `develop` | `staging` | `main` |
+| Flux-Prompt-Frontend (`front/`) | `develop` | `staging` | `main` |
+| Flux-Prompt-Worker (`worker/`) | `develop` | `staging` | `main` |
+| FLuxPrompt-MCP (`mcp-server/`) | `develop` | `staging` | `main` |
+
+The legacy `production` and `master` branches are frozen since 2026-10-13. Never branch from them or target a PR at them.
 
 Feature branches follow `<change_type>/<task_code>` where `change_type` ∈ `fix`, `feat`, `refactor`. Example: `feat/868jk7x3j`.
 
-All PRs target `production`. Promotion to dev/staging happens via `git merge origin/production` into the target branch and push.
+All PRs target `main`. To test on dev or staging, merge your feature branch into `develop` or `staging` and push. Never merge `develop` or `staging` into your feature branch. The full flow is in [Git workflow](/getting-started/git-workflow).
 
 ## Stage 1 — Create the PR
 
@@ -34,7 +38,7 @@ Use the [`pr-creator` agent](/ai-workflows/internal-developer-workflows/agents/p
 use the pr-creator agent — https://app.clickup.com/t/868jk7x3j
 ```
 
-The agent finds the matching branch in both `back/` and `front/`, formats the title (`[FEAT] Imperative name`), fills the body template (Description / Preview / References), and runs `gh pr create --base production`.
+The agent finds the matching branch in both `back/` and `front/`, formats the title (`[FEAT] Imperative name`), fills the body template (Description / Preview / References), runs `scripts/check-no-dev-in-prod-pr.sh`, and runs `gh pr create --base main`.
 
 ## Stage 2 — Review
 
@@ -46,19 +50,19 @@ Standard team review. The agent leaves `Preview` as a placeholder for you to fil
 
 | Workflow | Trigger | Behavior |
 | --- | --- | --- |
-| `cicd_dev.yml` | `push` to `master` | Auto-deploy to ECS dev |
+| `cicd_dev.yml` | `push` to `develop` or `workflow_dispatch` | Auto-deploy to ECS dev |
 | `cicd_staging.yml` | `push` to `staging` or `workflow_dispatch` | Auto on push, manual on demand |
 | `cicd_prod.yml` | `workflow_dispatch` **only** | Manual command — never auto-deploys |
 
-Front repo has the equivalent S3 deploys: `Deploy to S3 Dev` (push to `main`), `Deploy to S3 Staging` (push to `staging`), `Deploy to S3 Prod` (`workflow_dispatch`).
+Front repo has the equivalent S3 deploys: `Deploy to S3 Dev` (push to `develop`), `Deploy to S3 Staging` (push to `staging`), `Deploy to S3 Prod` (`workflow_dispatch`).
 
 ### Production deploy command
 
 ```bash
-gh workflow run cicd_prod.yml --ref production
+gh workflow run cicd_prod.yml --ref main
 ```
 
-The workflow builds an image tagged with `${{ github.sha }}` of `production`, pushes to ECR, renders the task definition, and deploys to `api-service-prod`.
+The workflow builds an image tagged with `${{ github.sha }}` of `main`, pushes to ECR, renders the task definition, and deploys to `api-service-prod`.
 
 ### Watch the rollout
 
@@ -157,7 +161,7 @@ Please give me a shout if anything looks off after the rollout. Thanks!
 
 Format rules:
 
-- Plain text (no markdown bold/italic — Gmail Chat renders plain text)
+- Plain text (no markdown bold/italic — Google Chat renders plain text)
 - No emojis
 - One bullet per ClickUp task, even if it had PRs in both repos
 - Em dash (`—`) between task name and URL

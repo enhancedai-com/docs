@@ -34,7 +34,7 @@ You have a ClickUp task code (e.g., `868jk7x3j`) or full URL, and at least one o
     - **References** — the ClickUp URL
   </Step>
   <Step title="Create the PR">
-    `gh pr create --base production --head <branch>`. If both repos have the branch, creates both PRs in parallel.
+    `gh pr create --base main --head <branch>`. If both repos have the branch, creates both PRs in parallel.
   </Step>
   <Step title="Report PR URLs">
     One line per PR. Stops.
@@ -60,7 +60,7 @@ https://app.clickup.com/t/<task_code>
 
 ## Deploy announcement (optional)
 
-When you say "compose the message" / "draft the announcement" / "team message" after the session's deploy is done, the agent generates a Gmail Chat–friendly plain-text message covering every ClickUp task deployed in the session, and copies it to your clipboard.
+When you say "compose the message" / "draft the announcement" / "team message" after the session's deploy is done, the agent generates a Google Chat–friendly plain-text message covering every ClickUp task deployed in the session, and copies it to your clipboard.
 
 **Format:**
 
@@ -75,7 +75,7 @@ Please give me a shout if anything looks off after the rollout. Thanks!
 
 **Rules:**
 
-- 100% English, no emojis, no markdown — Gmail Chat renders plain text
+- 100% English, no emojis, no markdown — Google Chat renders plain text
 - One bullet per task, even if it had PRs in both repos
 - Em dash (`—`) between task name and URL, not a hyphen or colon
 - Closing line is verbatim unless you customize
@@ -85,7 +85,7 @@ Please give me a shout if anything looks off after the rollout. Thanks!
 - **Never merges** a PR it created.
 - **Never pushes** to production or any branch directly.
 - **Never amends or force-pushes** the source branch.
-- **Default base = `production`** — only changes if you explicitly say so.
+- **Default base = `main`** — only changes if you explicitly say so. Before it opens a PR into `main`, it runs `scripts/check-no-dev-in-prod-pr.sh` and refuses a branch that merged `develop`, `staging`, or `master`.
 - **Always includes the ClickUp link** under References.
 - If `gh` auth is missing, surfaces it and stops (does not work around).
 
