@@ -254,8 +254,8 @@ Both are fire-and-forget (`void` + `.catch` that logs), so a documentation failu
 
 | Owner type | Read requires |
 | --- | --- |
-| `flow` | `FlowAccessService.resolveAccessibleAgent` succeeds — the normal agent-visibility rule (folder owner, space member, or org member). |
-| `space` | A `UserSpaces` row, **or** access to the space's company. |
+| `flow` | `FlowAccessService.resolveAccessibleAgent` succeeds — the normal agent-visibility rule: the owner of a personal folder, an active member of the organization that owns the space, or the active owner of a workspace folder. A space membership alone does not count; see the [agent access rule](/main-api/specific-features/external-api-endpoints#agent-access-rule). |
+| `space` | Access to the space's company: an `ACTIVE` `CompanyUser` row, or owning the company. A `UserSpaces` row alone does not grant read access. |
 | `company` | An active `CompanyUser` row, or owning the company. |
 | `folder` | Owning the folder, being its `companyUser`, or access to the folder's space. |
 | `user` | `ownerId === user.id`. Only your own document. |
@@ -271,7 +271,7 @@ The failure shape differs by owner type. A flow you cannot see raises `404 Agent
 | Owner type | Write requires |
 | --- | --- |
 | `flow`, `folder`, `user` | Nothing beyond read access. |
-| `space` | Space admin (`UserSpaceRole.ADMIN`) — or admin of the space's organization. |
+| `space` | Space admin (`UserSpaceRole.ADMIN`) who is also an `ACTIVE` member of the space's company — or admin of the space's organization. |
 | `company` | Organization admin (`CompanyUserRole.ADMIN` + `ACTIVE`) or the company owner. |
 
 And one guard that runs **before** the admin check, so it applies even to platform admins: `assertNotSpaceScopedOrgWrite`. If the authenticated principal carries an `apiKeySpaceId` — meaning it authenticated with a space-scoped API key — any write to a `company` document is refused with `403 A space-scoped API key cannot change organization documentation`. A key scoped to one space has no business rewriting the organization it sits under.
