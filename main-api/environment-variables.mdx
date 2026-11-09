@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-208 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+222 back env vars: the 219 that `back/.env.example` lists, plus 3 it does not. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 ## Database
 
@@ -14,6 +14,7 @@ title: "Environment Variables"
 | TYPEORM_PASSWORD | Required | DB password |
 | TYPEORM_DATABASE | Required | DB name |
 | TYPEORM_POOL_MAX | Optional | connection pool size (default 30) |
+| TYPEORM_SYNCHRONIZE | Optional | no read site found in back; listed as obsolete below |
 
 ## Redis / Queue / Temporal
 
@@ -149,6 +150,8 @@ title: "Environment Variables"
 | EMAIL_FROM_ADDRESS | Required | "from" address |
 | EMAIL_HOST | Required | SMTP host |
 | EMAIL_PORT | Required | SMTP port |
+| EMAIL_SSL | Optional | no read site found in back; listed as obsolete below |
+| EMAIL_TLS | Optional | no read site found in back; listed as obsolete below |
 | EMAIL_USER | Required | SMTP user |
 | EMAIL_PASSWORD | Required | SMTP password |
 | EMAIL_SERVICE | Required | nodemailer provider (e.g. gmail) |
@@ -163,6 +166,7 @@ title: "Environment Variables"
 | Var | Required? | Purpose |
 |---|---|---|
 | STRIPE_KEY | Required | Stripe billing |
+| STRIPE_ACCOUNT_ID | Optional | no read site found in back; listed as obsolete below |
 | KLAVIJO_API_KEY | Required | Klaviyo email marketing |
 | KLAVIJO_LIST_ID | Required | target Klaviyo list |
 | SEC_API | Required | SEC financial data API |
@@ -240,8 +244,20 @@ title: "Environment Variables"
 | RATE_LIMIT_RUN_PUBLIC_FLOW_PER_HOUR | Optional | same override, per-hour |
 | ID_OF_AGENT_TO_BUILD_FORM | Required | internal agent that builds forms |
 | ID_OF_AGENT_TO_GENERATE_SUMMARY | Required | internal agent that generates summaries |
+| ID_OF_AGENT_TO_GENERATE_DOC | Optional | no read site found in back; `.env.example` lists it for the entity-doc generation flow |
+| ID_OF_AGENT_TO_GENERATE_USER_DOC | Optional | no read site found in back; `.env.example` lists it for the entity-doc generation flow |
+| ID_OF_AGENT_TO_GENERATE_FOLDER_DOC | Optional | no read site found in back; `.env.example` lists it for the entity-doc generation flow |
+| ID_OF_AGENT_TO_GENERATE_SPACE_DOC | Optional | no read site found in back; `.env.example` lists it for the entity-doc generation flow |
+| ID_OF_AGENT_TO_GENERATE_COMPANY_DOC | Optional | no read site found in back; `.env.example` lists it for the entity-doc generation flow |
+| AGENTFLOW_DOC_API_KEY | Optional | no read site found in back; `.env.example` lists it for the entity-doc generation flow |
+| AGENTFLOW_DOC_API_URL | Optional | no read site found in back; `.env.example` lists it for the entity-doc generation flow |
+| ENTITY_DOC_REFRESH_COOLDOWN_HOURS | Optional | hours after an entity doc was last generated before an automatic refresh may run again (default 12) |
 | WEBHOOK_DB | Required | Redis DB index for user webhooks |
 | FILE_PATH | Required | local temp file dir |
+| EGRESS_POLICY_MODE | Optional | SSRF check mode for back's `api_call` service and `/proxy`: `off`, `report` or `enforce`; any other value means `report` (default `report`) |
+| EGRESS_MAX_RESPONSE_BYTES | Optional | max response size that `GET /egress-policy` reports; the worker enforces it (default 10485760) |
+| EGRESS_TIMEOUT_MS | Optional | request timeout that `GET /egress-policy` reports; the worker enforces it (default 30000) |
+| PROXY_ALLOWED_HOSTS | Optional | comma-separated lowercase hostnames `/proxy` may fetch; `*` allows any host; empty means `/proxy` refuses every request |
 | LOG_PROVIDER_OPTIONS | Optional | debug flag, logs AI provider options |
 | BUILD_TIME | Optional | build metadata |
 | BUILD_WITH_API_KEY | Required | "build with API" flow key |
