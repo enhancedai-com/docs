@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-206 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+208 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 ## Database
 
@@ -117,6 +117,8 @@ title: "Environment Variables"
 | AZURE_API_KEY | Required | Azure OpenAI |
 | MISTRAL_API_KEY | Required | Mistral |
 | GROQ_API_KEY | Required | Groq |
+| CLOUDFLARE_ACCOUNT_ID | Optional | Cloudflare Workers AI account the nightly model sync reads prices and retirements from; unset skips that pass |
+| CLOUDFLARE_API_TOKEN | Optional | token for that account, same value as the worker's |
 | XAI_API_KEY | Required | xAI (Grok) |
 | PPLX_API_KEY | Required | Perplexity |
 | GENAI_API_KEY | Required | Gemini/GenAI |

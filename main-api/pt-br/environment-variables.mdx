@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-206 env vars no `back/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+208 env vars no `back/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 ## Database
 
@@ -117,6 +117,8 @@ title: "Variáveis de Ambiente"
 | AZURE_API_KEY | Obrigatória | Azure OpenAI |
 | MISTRAL_API_KEY | Obrigatória | Mistral |
 | GROQ_API_KEY | Obrigatória | Groq |
+| CLOUDFLARE_ACCOUNT_ID | Opcional | conta Cloudflare Workers AI de onde o sync noturno de modelos lê preços e modelos aposentados; sem ela, essa etapa é pulada |
+| CLOUDFLARE_API_TOKEN | Opcional | token dessa conta, mesmo valor do worker |
 | XAI_API_KEY | Obrigatória | xAI (Grok) |
 | PPLX_API_KEY | Obrigatória | Perplexity |
 | GENAI_API_KEY | Obrigatória | Gemini/GenAI |
