@@ -2,7 +2,7 @@
 title: "Environment Variables"
 ---
 
-206 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
+207 env vars in `back/.env.example`. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.
 
 ## Database
 
@@ -38,7 +38,8 @@ title: "Environment Variables"
 
 | Var | Required? | Purpose |
 |---|---|---|
-| JWT_SECRET | Required | JWT signing |
+| AUTH_JWT_SECRET | Required | signs and verifies session JWTs (HTTP and socket); at least 32 chars, one value per environment; the API refuses to boot without it, and changing it signs every user out |
+| JWT_SECRET | Optional | fallback key for credentials encryption when `INTEGRATIONS_ENCRYPTION_KEY` is unset; does not sign sessions |
 | GOOGLE_LOGIN_CLIENT_ID | Required | Google OAuth login |
 | GOOGLE_LOGIN_CLIENT_SECRECT | Required | Google OAuth login secret (typo in name — don't fix casually, it's a breaking change) |
 | APPLE_CLIENT_ID | Required | Sign in with Apple |
