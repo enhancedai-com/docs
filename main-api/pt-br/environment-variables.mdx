@@ -2,7 +2,7 @@
 title: "Variáveis de Ambiente"
 ---
 
-206 env vars no `back/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
+207 env vars no `back/.env.example`. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.
 
 ## Database
 
@@ -38,7 +38,8 @@ title: "Variáveis de Ambiente"
 
 | Var | Obrigatória? | Propósito |
 |---|---|---|
-| JWT_SECRET | Obrigatória | assinatura de JWT |
+| AUTH_JWT_SECRET | Obrigatória | assina e valida os JWTs de sessão (HTTP e socket); no mínimo 32 caracteres, um valor por ambiente; a API não sobe sem ela, e trocá-la desloga todo mundo |
+| JWT_SECRET | Opcional | chave reserva da criptografia de credenciais quando `INTEGRATIONS_ENCRYPTION_KEY` não está definida; não assina sessões |
 | GOOGLE_LOGIN_CLIENT_ID | Obrigatória | login OAuth Google |
 | GOOGLE_LOGIN_CLIENT_SECRECT | Obrigatória | secret do login Google (typo no nome — não corrigir de leve, é breaking change) |
 | APPLE_CLIENT_ID | Obrigatória | Sign in with Apple |
