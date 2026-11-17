@@ -15,7 +15,7 @@ execução.
 ## `list_node_types`
 
 Um resumo leve de cada tipo de node — `type`, `label`, `category` e `description`, e **nenhum schema e
-nenhum handle**. Busque uma vez para descobrir os nomes exatos dos tipos e depois chame o
+nenhum handle** — mais uma descrição de cada categoria de node. Busque uma vez para descobrir os nomes exatos dos tipos e depois chame o
 [`get_node_type`](#get_node_type) para cada tipo que você vai construir. Não escreva um node só a
 partir do resumo.
 
@@ -40,6 +40,16 @@ Nenhum parâmetro necessário. Assim como o `get_node_type`, não recebe `worksp
       "description": "Evaluates a condition and routes flow execution along the true or false branch.",
       "category": "Logic"
     }
+  ],
+  "categories": [
+    {
+      "name": "AI",
+      "description": "Nodes that call an AI model to generate or read content: text prompts, vector memory search, image and video generation, image and audio reading, and text-to-speech."
+    },
+    {
+      "name": "Logic",
+      "description": "Nodes that decide or compute inside the flow: conditions that pick a branch, counters, math functions and custom scripts."
+    }
   ]
 }
 ```
@@ -53,8 +63,13 @@ Nenhum parâmetro necessário. Assim como o `get_node_type`, não recebe `worksp
 | `nodeTypes[].label` | string | Nome legível por humanos, composto como `"Nome front (Nome técnico)"` quando o nome do canvas e o nome técnico diferem — ex.: `"Display Box (Output Controller)"` — ou publicado como apenas um dos dois quando coincidem ou o tipo não tem entrada no sidebar. Essa string exata, e o nome front isolado, também são entrada válida para o `node.type` do [`add_node`](#add_node) e para o `type` do [`get_node_type`](#get_node_type). |
 | `nodeTypes[].description` | string | O que este node faz. |
 | `nodeTypes[].category` | string | Agrupamento: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. Veja [Categorias de node](#categorias-de-node). |
+| `categories` | array | Uma entrada por categoria que tem tipos de node, em ordem de nome. Vazio quando o backend ainda não descreve as categorias. |
+| `categories[].name` | string | Nome da categoria. Corresponde a `nodeTypes[].category`. |
+| `categories[].description` | string | O que os nodes dessa categoria fazem. |
 
 #### Categorias de node
+
+O `list_node_types` retorna estas descrições em `categories`, e o [`get_node_type`](#get_node_type) retorna a do seu tipo em `categoryDescription`. As duas vêm de `NODE_CATEGORY_DESCRIPTIONS` no back, em `src/app-mcp/node-types/node-type-metadata.ts`; a tabela abaixo é uma cópia desse mapa, que fica em inglês.
 
 | Categoria | O que os nodes fazem |
 |-----------|----------------------|
@@ -76,7 +91,7 @@ Tipos de node removidos do produto não aparecem na lista. Um agente ainda pode 
 ## `get_node_type`
 
 Retorna a definição completa de um tipo de node: `type`, `label`, `description`, `category`,
-`inputSchema`, `outputSchema` e `handles`. Chame uma vez por tipo de node que você usa, e antes de ligar com o
+`categoryDescription`, `inputSchema`, `outputSchema` e `handles`. Chame uma vez por tipo de node que você usa, e antes de ligar com o
 [`connect_nodes`](#connect_nodes). Para buscar todos os schemas de uma vez, leia o resource
 [`fluxprompt://node-types`](/mcp/pt-br/tools/prompts-and-resources#resources).
 

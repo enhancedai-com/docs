@@ -101,6 +101,7 @@ x-mcp-internal-secret: <secret>
     "label": "Command Text Node",
     "description": "Executes a text prompt and passes output downstream.",
     "category": "AI",
+    "categoryDescription": "Nodes that call an AI model to generate or read content: text prompts, vector memory search, image and video generation, image and audio reading, and text-to-speech.",
     "inputSchema": { "type": "object", "properties": { "model": { "type": "string" }, "command": { "type": "string" } } },
     "outputSchema": { "type": "object", "properties": { "text": { "type": "string" } } },
     "handles": { "sourceHandles": [], "targetHandles": [], "patterned": [], "handlesPatterned": false, "unresolved": false, "canContinueExecutionChain": true }
