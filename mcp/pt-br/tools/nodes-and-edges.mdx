@@ -52,7 +52,18 @@ Nenhum parâmetro necessário. Assim como o `get_node_type`, não recebe `worksp
 | `nodeTypes[].type` | string | Identificador legível por máquina (camelCase, ex.: `commandTextNode`). Corresponde ao campo `type` nos objetos de node do `get_agent`. |
 | `nodeTypes[].label` | string | Nome legível por humanos, composto como `"Nome front (Nome técnico)"` quando o nome do canvas e o nome técnico diferem — ex.: `"Display Box (Output Controller)"` — ou publicado como apenas um dos dois quando coincidem ou o tipo não tem entrada no sidebar. Essa string exata, e o nome front isolado, também são entrada válida para o `node.type` do [`add_node`](#add_node) e para o `type` do [`get_node_type`](#get_node_type). |
 | `nodeTypes[].description` | string | O que este node faz. |
-| `nodeTypes[].category` | string | Agrupamento: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. |
+| `nodeTypes[].category` | string | Agrupamento: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. Veja [Categorias de node](#categorias-de-node). |
+
+#### Categorias de node
+
+| Categoria | O que os nodes fazem |
+|-----------|----------------------|
+| `AI` | Chamam um modelo de IA para gerar ou ler conteúdo: prompts de texto, busca em memória vetorial, geração de imagem e vídeo, leitura de imagem e áudio, e texto para fala. |
+| `Logic` | Decidem ou calculam dentro do fluxo: condições que escolhem um caminho, contadores, funções matemáticas e scripts próprios. |
+| `Integration` | Acessam um serviço fora do fluxo: APIs HTTP, servidores MCP, CRMs e apps de terceiros, busca, crawling e tendências na web, e fontes públicas de dados como SEC e US Census. |
+| `Data` | Guardam, consultam ou transformam dados: tabelas, consultas SQL, dados armazenados, objetos de memória, gravação de arquivos, relatórios e arrays que rodam uma sequência por item. |
+| `Input/Output` | Iniciam ou terminam uma execução: o starter e as entradas de variável que recebem valores, e os nodes de saída que montam e devolvem o resultado. |
+| `Utility` | Apoiam o canvas: caixas de texto, rich text e mídia, sticky notes, grupos de nodes, bibliotecas, configurações dinâmicas, e nodes que chamam ou criam outros fluxos. Um tipo de node sem categoria declarada também fica aqui. |
 
 Tipos de node removidos do produto não aparecem na lista. Um agente ainda pode ter um node salvo de tipo removido: o [`get_agent`](/mcp/pt-br/tools/agents-and-folders#get_agent) o marca como `deprecated`, e `add_node`, `update_node` e `connect_nodes` o recusam.
 
