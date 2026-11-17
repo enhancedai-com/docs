@@ -41,7 +41,7 @@ For how `run_agent_recipe` reads results and credits, see [Running agents](/mcp/
 | URI | Contents |
 |-----|----------|
 | `fluxprompt://models` | The AI models available to this workspace: `provider`, `modelName`, `displayName`, `description`, `modelType`, `contextWindow`, `supportsVision`, `supportsReasoning`. |
-| `fluxprompt://node-types` | The full node type catalogue: `type`, `label`, `description`, `category`, `inputSchema`, `outputSchema` and `handles` for every type. |
+| `fluxprompt://node-types` | The full node type catalogue: `type`, `label`, `description`, `category`, `categoryDescription`, `inputSchema`, `outputSchema` and `handles` for every type. |
 
 `fluxprompt://models` mirrors what `list_ai_models` returns. `fluxprompt://node-types` does **not**
 mirror `list_node_types`: that tool returns summaries only, while the resource returns the full

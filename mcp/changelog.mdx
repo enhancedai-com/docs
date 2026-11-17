@@ -3,6 +3,14 @@ title: "Changelog"
 description: "What's new in the FluxPrompt MCP integration."
 ---
 
+## 2026-11-17 — Node categories are described
+
+**`list_node_types` now tells you what each node category means.**
+
+- **`list_node_types`** returns `categories`: one `name` and `description` per category, next to `nodeTypes`.
+- **`get_node_type`** and the `fluxprompt://node-types` resource add `categoryDescription` to each node type.
+- Nothing was removed or renamed. A client that ignores the new fields keeps working.
+
 ## 2026-10-29 — Removed node types are marked and refused
 
 **Four node types were removed from the product. An agent that still holds one keeps working, and the tools tell you which nodes they are.**

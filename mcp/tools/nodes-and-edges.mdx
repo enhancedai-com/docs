@@ -14,7 +14,7 @@ plausible-looking field that does not exist is stored happily and then ignored a
 ## `list_node_types`
 
 A lightweight summary of every node type — `type`, `label`, `category` and `description`, and **no
-schemas and no handles**. Fetch it once to discover the exact type names, then call
+schemas and no handles** — plus a description of each node category. Fetch it once to discover the exact type names, then call
 [`get_node_type`](#get_node_type) for each type you are about to build. Do not write a node from the
 summary alone.
 
@@ -39,6 +39,16 @@ No parameters required. Like `get_node_type`, it takes no `workspaceId`.
       "description": "Evaluates a condition and routes flow execution along the true or false branch.",
       "category": "Logic"
     }
+  ],
+  "categories": [
+    {
+      "name": "AI",
+      "description": "Nodes that call an AI model to generate or read content: text prompts, vector memory search, image and video generation, image and audio reading, and text-to-speech."
+    },
+    {
+      "name": "Logic",
+      "description": "Nodes that decide or compute inside the flow: conditions that pick a branch, counters, math functions and custom scripts."
+    }
   ]
 }
 ```
@@ -51,7 +61,23 @@ No parameters required. Like `get_node_type`, it takes no `workspaceId`.
 | `nodeTypes[].type` | string | Machine-readable identifier (camelCase, e.g. `commandTextNode`). Matches the `type` field in `get_agent` node objects. |
 | `nodeTypes[].label` | string | Human-readable name, composed as `"Front name (Technical name)"` when the canvas name and the technical name differ — e.g. `"Display Box (Output Controller)"` — or published as just the one name when they match or the type has no sidebar entry. This exact string, and the bare front name, are also valid input to [`add_node`](#add_node)'s `node.type` and to [`get_node_type`](#get_node_type)'s `type`. |
 | `nodeTypes[].description` | string | What this node does. |
-| `nodeTypes[].category` | string | Grouping: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. |
+| `nodeTypes[].category` | string | Grouping: `Input/Output`, `AI`, `Data`, `Logic`, `Utility`, `Integration`. See [Node categories](#node-categories). |
+| `categories` | array | One entry per category that has node types, sorted by name. Empty when the backend does not describe categories yet. |
+| `categories[].name` | string | Category name. Matches `nodeTypes[].category`. |
+| `categories[].description` | string | What the nodes in this category do. |
+
+#### Node categories
+
+`list_node_types` returns these descriptions in `categories`, and [`get_node_type`](#get_node_type) returns the one for its type in `categoryDescription`. Both come from `NODE_CATEGORY_DESCRIPTIONS` in back `src/app-mcp/node-types/node-type-metadata.ts`, so the table below is a copy of that map.
+
+| Category | Description |
+|----------|-------------|
+| `AI` | Nodes that call an AI model to generate or read content: text prompts, vector memory search, image and video generation, image and audio reading, and text-to-speech. |
+| `Logic` | Nodes that decide or compute inside the flow: conditions that pick a branch, counters, math functions and custom scripts. |
+| `Integration` | Nodes that reach a service outside the flow: HTTP APIs, MCP servers, CRMs and third-party apps, web search, crawling and trends, and public data sources such as SEC and US Census. |
+| `Data` | Nodes that store, query or reshape data: tables, SQL queries, stored data, memory objects, file saving, reports and arrays that run a sequence per item. |
+| `Input/Output` | Nodes where a run starts or ends: the starter and variable inputs that receive values, and the output nodes that shape and return the result. |
+| `Utility` | Nodes that support the canvas: text, rich text and media boxes, sticky notes, node groups, libraries, dynamic settings, and nodes that call or create other flows. A node type without a declared category also falls here. |
 
 Node types that were removed from the product are not listed. An agent can still hold a saved node of a removed type: [`get_agent`](/mcp/tools/agents-and-folders#get_agent) marks it `deprecated`, and `add_node`, `update_node` and `connect_nodes` refuse it.
 
@@ -63,8 +89,8 @@ Node types that were removed from the product are not listed. An agent can still
 
 ## `get_node_type`
 
-Returns one node type's full definition: `type`, `label`, `description`, `category`, `inputSchema`,
-`outputSchema` and `handles`. Call it once per node type you use, and before wiring with
+Returns one node type's full definition: `type`, `label`, `description`, `category`,
+`categoryDescription`, `inputSchema`, `outputSchema` and `handles`. Call it once per node type you use, and before wiring with
 [`connect_nodes`](#connect_nodes). To fetch every schema at once, read the
 [`fluxprompt://node-types`](/mcp/tools/prompts-and-resources#resources) resource.
 
