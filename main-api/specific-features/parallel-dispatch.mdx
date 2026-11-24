@@ -1,0 +1,174 @@
+---
+title: "Parallel dispatch"
+description: "How the worker runs independent nodes of one run at the same time, the two feature flags and the cap that control it, which flows stay sequential, how each node type behaves, and what happens when a node fails."
+---
+
+A flow that has eight independent image generations takes the sum of the eight when the nodes run
+one after another. With parallel dispatch, the worker starts every node whose inputs are ready at the
+same time, up to a per-run cap, so the run takes about as long as its slowest path.
+
+Parallel dispatch applies to a **full flow run executed by the worker**. It does not change what a
+node does or what it produces. It changes only when the worker starts it.
+
+<Note>
+  Parallel dispatch is **off for every company by default**. With it off, a run is sequential, exactly
+  as before. See [Turn it on](#turn-it-on) for the two feature flags that control it.
+</Note>
+
+## What runs in parallel
+
+Only **dependency edges** order the nodes of a run: execution edges (`outputFlow` → `input`), data
+edges and condition branches. Two nodes with no path of dependency edges between them are independent,
+and the worker can run them at the same time. An edge that leaves the Global Starter node does not
+order anything.
+
+- The worker starts every ready node until the number of nodes in flight reaches the cap, `maxInFlight`.
+  When one node settles, it starts the next ready node.
+- The cap applies to each run on its own. A sub-flow is a run of its own, so a flow that calls
+  sub-flows can have more nodes in flight in total than the cap.
+- The worker runs at most 10 node activities at the same time across all runs. Nodes beyond that wait in
+  the Temporal queue and do not fail. See [Worker concurrency](/worker/workflows/worker-service#worker-concurrency).
+
+A single-node **Run** on the canvas is not affected: it runs one node.
+
+## Turn it on
+
+The back decides once per run, when the run starts. Parallel dispatch is on for a run only when all of
+these are true:
+
+1. **The flow can run on the worker.** Every node type in the flow is accepted by the worker gate
+   (`canUseWorkflowForFlow`). See [Execution classes](/main-api/specific-features/flow-and-single-node-execution#execution-classes).
+2. **The `parallel_dispatch` flag is enabled** and its allowlist holds the company that owns the
+   flow or the user who owns the run. A flow that has no owning company, such as one in a personal
+   folder, can qualify only through its user.
+3. **The flow is not one of the [flows that stay sequential](#flows-that-stay-sequential).**
+
+| Flag | Scope | Seeded | Meaning |
+|---|---|---|---|
+| `parallel_dispatch` | Company allowlist | Disabled, value `2` | Turns parallel dispatch on for the companies on the allowlist. The flag's **value** is the cap. |
+| `parallel_fail_fast` | Global | Enabled | Chooses what the run does when a node fails. See [When a node fails](#when-a-node-fails). |
+
+Manage both from **Admin Dashboard → Feature Flags**. Enabling `parallel_dispatch` without an
+allowlist entry turns it on for nobody.
+
+### The cap
+
+The cap is the flag's value, rounded down and clamped to the range **1 to 4**. An empty value uses the
+default.
+
+| Flag value | Cap |
+|---|---|
+| Empty | 2 |
+| `0.5` | 1 |
+| `3` | 3 |
+| `9` | 4 |
+
+A cap of `1` runs the nodes one at a time. The ceiling of 4 is a platform rule, not a flow setting.
+
+### Where it applies
+
+The back passes the cap when it starts the run, so it applies to:
+
+- Runs that start through `apiV2`, such as a canvas **Run**.
+- Runs started by a Temporal schedule.
+
+It does not apply to batch rows. See [Batch rows](#per-node-behavior).
+
+The flags are read once, when the run starts, through the same 5-second cache described in
+[Execution limits](/main-api/specific-features/execution-limits#turning-the-ceilings-on-and-off). A
+change applies to the **next** run that starts. A run already in flight keeps the cap it started with.
+
+## Flows that stay sequential
+
+A run is sequential when any of these is true:
+
+- The flag is off for the flow's company, or the flow has a node type that the worker gate refuses.
+- The flow has a **Small Memory** node that is not in chat mode, and a loop in the flow closes through
+  that node. A reader that ran beside the node that writes to it could miss its entry, so the whole
+  flow runs one node at a time. Small Memory in chat mode (`data.chat` is `true`) does not cause this.
+
+A flow that stays sequential is not refused. It runs as it always did.
+
+## Per-node behavior
+
+| Node | Behavior in a parallel run |
+|---|---|
+| Sequence (`arrayNode`) | Iterations stay sequential. The array **holds its body nodes** while it runs, so no body node runs outside the loop. Only nodes outside the body run beside it. Two arrays whose bodies overlap run one after the other. |
+| Condition (`conditionNode`) | Runs beside its siblings. A branch the condition does not take is never dispatched. |
+| Flux Box and Library (`fluxBox`, `libraryNode`) | Each call is its own sub-run and runs beside its siblings. It inherits the cap of the run that calls it. |
+| Small Memory (`fluxObject`) | Never executes. Its readers wait for its producers through ordinary edges. |
+| Batch rows | Rows run five at a time, as before. Inside each row, nodes run one at a time: a row gets no cap. |
+
+## When a node fails
+
+When a node fails in a parallel run, the worker stops starting new nodes. What happens to the nodes
+already in flight depends on the `parallel_fail_fast` flag.
+
+| `parallel_fail_fast` | Behavior |
+|---|---|
+| On (default) | The worker **cancels** every other node in flight, except sub-flow calls, then fails the run. Each cancelled node records the reason *"Stopped because node X failed. A write or send this step had already started may have completed."*, where X is the label of the failed node, or its id when it has no label. |
+| Off | The worker **drains**: it lets every node in flight finish, then fails the run. |
+
+Three cases never cancel a node, whatever the flag says:
+
+- The failure is a worker shutdown, such as a deploy or a scale-in. The run drains instead, because
+  the interrupted nodes retry on another worker and cancelling healthy siblings would only waste work.
+- The node in flight is a sub-flow call. A sub-flow can hold half-finished external writes, so it runs to
+  its end.
+- A drain already started. A later failure does not cancel the nodes the drain is waiting for.
+
+When two nodes fail at the same time, the run reports the one the worker started first. A
+cancellation is not a failure, so a cancelled node never names the run.
+
+### Side effects
+
+A node that is already in flight when its sibling fails finishes its call. The platform does not undo
+it.
+
+<Warning>
+  Cancelling a node stops the platform from waiting for it. It does not always stop the node. Nodes
+  that write outside the platform, such as integrations, Push Data, SQL Querier, MCP, Large Memory and
+  File Save, finish their write and are then recorded as cancelled, so running the flow again repeats the
+  write. Image Generator and MCP nodes can still be charged after the cancel. Only the text
+  generator and the API caller wait for the call to stop, and text generation is charged only for the
+  tokens it used. See [Cancel a run](/main-api/specific-features/cancel-a-run#interrupting-the-step-in-flight).
+</Warning>
+
+A Data Output node that ran in a failed run still sends its email and callback, as in a sequential
+run. See [Output delivery](/worker/activities/deliver-run-outputs).
+
+If you prefer that a failure never cancels a sibling, turn `parallel_fail_fast` off.
+
+## Cancel a parallel run
+
+Several nodes are in flight in a parallel run, so the cancel footprint records the **last node that
+settled**, not the last node that started. `stoppedAtNodeId` holds that node. See
+[Cancel a run](/main-api/specific-features/cancel-a-run#the-cooperative-stop).
+
+The runs list returns every node in flight in `inFlightSteps`, and `isStepInterruptible` is `true`
+only when every one of them can be interrupted.
+
+## Force an order between two nodes
+
+When two nodes depend on each other only through something outside the flow, the flow has no edge
+that tells the worker to order them. For example, node B reads a spreadsheet row that node A writes.
+In a parallel run, A and B can start together.
+
+To force the order, connect A to B with an **execution edge** (`outputFlow` → `input`). B then waits
+for A to settle. The edge carries no data, so it changes nothing else. See
+[Execution order vs data](/mcp/tools/nodes-and-edges#execution-order-vs-data--the-two-edge-model) for how
+to create one.
+
+<Tip>
+  A flow that ran correctly one node at a time because the nodes happened to run in the order you drew
+  can change behavior under parallel dispatch. Before you turn it on for a flow, check each pair of
+  nodes that touch the same external resource, and connect them with an execution edge.
+</Tip>
+
+## Related documentation
+
+- [Flow and single-node execution](/main-api/specific-features/flow-and-single-node-execution) — the run paths that parallel dispatch sits in
+- [Execution limits](/main-api/specific-features/execution-limits) — the system ceilings that apply to every run
+- [Cancel a run](/main-api/specific-features/cancel-a-run) — what cancelling does to nodes in flight
+- [Process batch workflow](/worker/workflows/process-batch) — why batch rows stay sequential inside each row
+- [Nodes and edges](/mcp/tools/nodes-and-edges) — execution edges and data edges

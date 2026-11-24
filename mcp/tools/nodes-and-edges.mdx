@@ -511,6 +511,11 @@ This is the single most common source of "I connected it but nothing happens":
 Chaining two `commandTextNode`s so B runs after A *and* sees A's text therefore needs **both** edges,
 each with its own `edgeId`. Either one alone is a silent half-connection.
 
+Both kinds of edge order the two nodes. Two nodes with **no edge** between them are independent, and a
+run the worker executes with [parallel dispatch](/main-api/specific-features/parallel-dispatch) can run
+them at the same time. When node B must run after node A but does not read A's output, connect them
+with the `outputFlow` → `input` edge.
+
 On top of the edge, the target's `data` must reference the source — the companion array
 `<field>Data`, e.g. an `outputObjectNode`'s `data.textData`.
 
