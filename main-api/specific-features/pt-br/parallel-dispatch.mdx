@@ -113,7 +113,7 @@ nodes que já estão em andamento depende da flag `parallel_fail_fast`.
 
 | `parallel_fail_fast` | Comportamento |
 |---|---|
-| Ligada (padrão) | O worker **cancela** todos os outros nodes em andamento, exceto chamadas de sub-flow, e então falha o run. Cada node cancelado registra o motivo *"Stopped because node X failed"*, em que X é o rótulo do node que falhou, ou o id dele quando não tem rótulo. |
+| Ligada (padrão) | O worker **cancela** todos os outros nodes em andamento, exceto chamadas de sub-flow, e então falha o run. Cada node cancelado registra o motivo *"Stopped because node X failed. A write or send this step had already started may have completed."*, em que X é o rótulo do node que falhou, ou o id dele quando não tem rótulo. |
 | Desligada | O worker **drena**: deixa todos os nodes em andamento terminarem e só então falha o run. |
 
 Três casos nunca cancelam um node, qualquer que seja a flag:

@@ -106,7 +106,7 @@ already in flight depends on the `parallel_fail_fast` flag.
 
 | `parallel_fail_fast` | Behavior |
 |---|---|
-| On (default) | The worker **cancels** every other node in flight, except sub-flow calls, then fails the run. Each cancelled node records the reason *"Stopped because node X failed"*, where X is the label of the failed node, or its id when it has no label. |
+| On (default) | The worker **cancels** every other node in flight, except sub-flow calls, then fails the run. Each cancelled node records the reason *"Stopped because node X failed. A write or send this step had already started may have completed."*, where X is the label of the failed node, or its id when it has no label. |
 | Off | The worker **drains**: it lets every node in flight finish, then fails the run. |
 
 Three cases never cancel a node, whatever the flag says:
