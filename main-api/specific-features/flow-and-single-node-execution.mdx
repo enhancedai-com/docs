@@ -186,10 +186,10 @@ The dispatch registry (`src/shared/node-dispatch/node-dispatch-registry.ts`) giv
 | `source` | Nothing executes it, but it has a value. The run resolves the value from the run seed or from the upstream node's output. | 11 | Accepts and skips the node |
 | `visual` | Nothing executes it, and it has no value in a run. Its edges carry nothing. | 9 | Accepts and skips the node |
 | `back` | The back still executes it. The entry names the task that moves it in `handoffOwner`. | 6 | Refuses the flow |
-| `sink` | It receives the run's output and builds the reply that the API, the chatbot and delivery read. | 1 | Refuses the flow |
+| `sink` | It receives the run's output and builds the reply that the API, the chatbot and delivery read. | 1 | Accepts when the entry has a worker module. The only `sink` type, Data Output (`outputObjectNode`), has one, so the gate accepts it and the workflow runs that module. |
 | `state` | It keeps state across runs. | 1 | Refuses the flow |
 
-Every `back`, `sink` and `state` entry must name an owner in `handoffOwner`, and a drift spec fails when one does not. The gate also refuses a flow that holds a type missing from the registry.
+Every entry that the gate refuses, which today means every `back` and `state` entry, must name an owner in `handoffOwner`, and a drift spec fails when one does not. The gate also refuses a flow that holds a type missing from the registry.
 
 <Info>
 Four node types that were removed from the product are registered as `visual` and marked `deprecated: true`. A saved node of a removed type stays in its flow, and a run skips it, so the rest of the flow keeps working. Only adding or editing one through a builder call is refused.
@@ -463,7 +463,7 @@ When you introduce a new node type or migrate an existing one, follow this check
 
 <Steps>
   <Step title="Choose the execution class">
-    Set the type's entry in `src/shared/node-dispatch/node-dispatch-registry.ts`: `execution` (see [Execution classes](#execution-classes)), `flowDispatch`, `legacyEndpoint`, `prefetchSafe` and `workerModule`. Then run `pnpm generate:node-dispatch-contract`. `isTemporalNode`, the legacy endpoint verdicts, the prefetch skip set and the worker workflow gate all read the registry, so you do not edit them. A type that runs in the worker is `execution: 'worker'`. A `back`, `sink` or `state` entry must also name its owner in `handoffOwner`.
+    Set the type's entry in `src/shared/node-dispatch/node-dispatch-registry.ts`: `execution` (see [Execution classes](#execution-classes)), `flowDispatch`, `legacyEndpoint`, `prefetchSafe` and `workerModule`. Then run `pnpm generate:node-dispatch-contract`. `isTemporalNode`, the legacy endpoint verdicts, the prefetch skip set and the worker workflow gate all read the registry, so you do not edit them. A type that runs in the worker is `execution: 'worker'`. A `back` or `state` entry, or a `sink` entry without a worker module, must also name its owner in `handoffOwner`.
   </Step>
   <Step title="Legacy only: add a dispatch case">
     Skip this step for a `worker` type. For a type that still runs in the API, add `if (node.type === '<type>') { ... }` inside `dispatchLegacyHandler`. Call the existing handler method on `FluxService` (the same one the scheduler uses), wrap the result with `wrapResult`. Pass safe defaults for params that do not apply to single-node context.
