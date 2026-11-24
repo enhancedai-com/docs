@@ -1,0 +1,183 @@
+---
+title: "Despacho paralelo"
+description: "Como o worker executa ao mesmo tempo os nodes independentes de um mesmo run, as duas feature flags e o limite que o controlam, quais flows continuam sequenciais, como cada tipo de node se comporta e o que acontece quando um node falha."
+---
+
+Um flow com oito gerações de imagem independentes leva a soma das oito quando os nodes rodam um depois
+do outro. Com o despacho paralelo, o worker inicia ao mesmo tempo todos os nodes cujas entradas já
+estão prontas, até um limite por run, e o run leva aproximadamente o tempo do seu caminho mais lento.
+
+O despacho paralelo vale para um **run completo de flow executado pelo worker**. Ele não muda o que um
+node faz nem o que ele produz. Muda apenas o momento em que o worker o inicia.
+
+<Note>
+  O despacho paralelo vem **desligado para todas as empresas por padrão**. Desligado, o run é
+  sequencial, exatamente como antes. Veja [Como ligar](#como-ligar) para conhecer as duas feature flags
+  que o controlam.
+</Note>
+
+## O que roda em paralelo
+
+Apenas as **edges de dependência** ordenam os nodes de um run: edges de execução (`outputFlow` →
+`input`), edges de dados e ramos de condição. Dois nodes sem nenhum caminho de edges de dependência
+entre eles são independentes, e o worker pode executá-los ao mesmo tempo. Uma edge que sai do node
+Global Starter não ordena nada.
+
+- O worker inicia todos os nodes prontos até que o número de nodes em andamento chegue ao limite,
+  `maxInFlight`. Quando um node termina, o worker inicia o próximo node pronto.
+- O limite vale para cada run separadamente. Um sub-flow é um run próprio, então um flow que chama
+  sub-flows pode ter, no total, mais nodes em andamento do que o limite.
+- O worker executa no máximo 10 activities de node ao mesmo tempo, somando todos os runs. Os nodes
+  além disso esperam na fila do Temporal e não falham. Veja
+  [Concorrência do worker](/worker/workflows/worker-service#worker-concurrency) (em inglês).
+
+O **Run** de um único node no canvas não é afetado: ele executa um node só.
+
+## Como ligar
+
+O back decide uma vez por run, quando o run começa. O despacho paralelo fica ligado para um run apenas
+quando todas estas condições são verdadeiras:
+
+1. **O flow pode rodar no worker.** Todos os tipos de node do flow são aceitos pelo gate do worker
+   (`canUseWorkflowForFlow`). Veja
+   [Classes de execução](/main-api/specific-features/flow-and-single-node-execution#execution-classes) (em inglês).
+2. **A flag `parallel_dispatch` está ligada** e a allowlist dela tem a empresa dona do flow ou o
+   usuário dono do run. Um flow sem empresa dona, como um flow em uma pasta pessoal, só pode
+   qualificar pelo usuário.
+3. **O flow não é um dos [flows que continuam sequenciais](#flows-que-continuam-sequenciais).**
+
+| Flag | Escopo | Valor inicial | Significado |
+|---|---|---|---|
+| `parallel_dispatch` | Allowlist de empresas | Desligada, valor `2` | Liga o despacho paralelo para as empresas da allowlist. O **valor** da flag é o limite. |
+| `parallel_fail_fast` | Global | Ligada | Define o que o run faz quando um node falha. Veja [Quando um node falha](#quando-um-node-falha). |
+
+Gerencie as duas em **Admin Dashboard → Feature Flags**. Ligar `parallel_dispatch` sem uma entrada na
+allowlist não liga o despacho paralelo para ninguém.
+
+### O limite
+
+O limite é o valor da flag, arredondado para baixo e restrito à faixa de **1 a 4**. Um valor vazio usa
+o padrão.
+
+| Valor da flag | Limite |
+|---|---|
+| Vazio | 2 |
+| `0.5` | 1 |
+| `3` | 3 |
+| `9` | 4 |
+
+Um limite `1` executa os nodes um por vez. O teto de 4 é uma regra da plataforma, não uma configuração
+do flow.
+
+### Onde se aplica
+
+O back envia o limite quando inicia o run, então ele vale para:
+
+- Runs que começam por `apiV2`, como o **Run** do canvas.
+- Runs iniciados por um schedule do Temporal.
+
+Ele não vale para as linhas de um batch. Veja [Linhas de batch](#comportamento-por-node).
+
+As flags são lidas uma vez, quando o run começa, pelo mesmo cache de 5 segundos descrito em
+[Limites de execução](/main-api/specific-features/execution-limits#turning-the-ceilings-on-and-off) (em inglês).
+Uma mudança vale para o **próximo** run a começar. Um run já em andamento mantém o limite com o qual
+começou.
+
+## Flows que continuam sequenciais
+
+Um run é sequencial quando qualquer uma destas condições é verdadeira:
+
+- A flag está desligada para a empresa do flow, ou o flow tem um tipo de node que o gate do worker
+  recusa.
+- O flow tem um node **Small Memory** que não está em modo chat, e um loop do flow se fecha passando por
+  esse node. Um leitor que rodasse ao lado do node que escreve nele poderia perder a entrada, então o
+  flow inteiro roda um node por vez. Small Memory em modo chat (`data.chat` igual a `true`) não causa
+  isso.
+
+Um flow que continua sequencial não é recusado. Ele roda como sempre rodou.
+
+## Comportamento por node
+
+| Node | Comportamento em um run paralelo |
+|---|---|
+| Sequence (`arrayNode`) | As iterações continuam sequenciais. O array **reserva os nodes do corpo** enquanto roda, então nenhum node do corpo roda fora do loop. Só os nodes de fora do corpo rodam ao lado dele. Dois arrays com corpos que se sobrepõem rodam um depois do outro. |
+| Condition (`conditionNode`) | Roda ao lado dos irmãos. Um ramo que a condição não segue nunca é despachado. |
+| Flux Box e Library (`fluxBox`, `libraryNode`) | Cada chamada é um sub-run próprio e roda ao lado dos irmãos. Ela herda o limite do run que a chama. |
+| Small Memory (`fluxObject`) | Nunca executa. Os leitores esperam os produtores por edges comuns. |
+| Linhas de batch | As linhas rodam cinco por vez, como antes. Dentro de cada linha, os nodes rodam um por vez: a linha não recebe limite. |
+
+## Quando um node falha
+
+Quando um node falha em um run paralelo, o worker deixa de iniciar novos nodes. O que acontece com os
+nodes que já estão em andamento depende da flag `parallel_fail_fast`.
+
+| `parallel_fail_fast` | Comportamento |
+|---|---|
+| Ligada (padrão) | O worker **cancela** todos os outros nodes em andamento, exceto chamadas de sub-flow, e então falha o run. Cada node cancelado registra o motivo *"Stopped because node X failed"*, em que X é o rótulo do node que falhou, ou o id dele quando não tem rótulo. |
+| Desligada | O worker **drena**: deixa todos os nodes em andamento terminarem e só então falha o run. |
+
+Três casos nunca cancelam um node, qualquer que seja a flag:
+
+- A falha é um desligamento do worker, como um deploy ou uma redução de réplicas. O run drena, porque
+  os nodes interrompidos são refeitos em outro worker e cancelar irmãos saudáveis só desperdiçaria
+  trabalho.
+- O node em andamento é uma chamada de sub-flow. Um sub-flow pode ter escritas externas pela metade,
+  então ele roda até o fim.
+- Uma drenagem já começou. Uma falha posterior não cancela os nodes que a drenagem está esperando.
+
+Quando dois nodes falham ao mesmo tempo, o run reporta o que o worker iniciou primeiro. Um cancelamento
+não é uma falha, então um node cancelado nunca dá nome ao run.
+
+### Efeitos colaterais
+
+Um node que já está em andamento quando o irmão falha termina a chamada dele. A plataforma não a
+desfaz.
+
+<Warning>
+  Cancelar um node faz a plataforma parar de esperar por ele. Nem sempre isso interrompe o node. Os
+  nodes que escrevem fora da plataforma, como integrações, Push Data, SQL Querier, MCP, Large Memory e
+  File Save, terminam a escrita e só depois são registrados como cancelados, então rodar o flow de novo
+  repete a escrita. Nodes Image Generator e MCP ainda podem ser cobrados depois do cancelamento. Só o
+  gerador de texto e o API caller esperam a chamada parar, e a geração de texto é cobrada apenas pelos
+  tokens que usou. Veja
+  [Cancelar um run](/main-api/specific-features/cancel-a-run#interrupting-the-step-in-flight) (em inglês).
+</Warning>
+
+Um node Data Output que rodou em um run com falha ainda envia o e-mail e o callback dele, como em um run
+sequencial. Veja [Entrega de saídas](/worker/activities/deliver-run-outputs) (em inglês).
+
+Se você prefere que uma falha nunca cancele um irmão, desligue `parallel_fail_fast`.
+
+## Cancelar um run paralelo
+
+Em um run paralelo há vários nodes em andamento, então a pegada do cancelamento registra o **último
+node que terminou**, não o último que começou. `stoppedAtNodeId` guarda esse node. Veja
+[Cancelar um run](/main-api/specific-features/cancel-a-run#the-cooperative-stop) (em inglês).
+
+A lista de runs devolve todos os nodes em andamento em `inFlightSteps`, e `isStepInterruptible` só é
+`true` quando todos eles podem ser interrompidos.
+
+## Forçar uma ordem entre dois nodes
+
+Quando dois nodes dependem um do outro apenas por algo fora do flow, o flow não tem uma edge que diga
+ao worker para ordená-los. Por exemplo, o node B lê uma linha de planilha que o node A escreve. Em um
+run paralelo, A e B podem começar juntos.
+
+Para forçar a ordem, conecte A a B com uma **edge de execução** (`outputFlow` → `input`). Assim, B espera
+A terminar. A edge não carrega dados, então não muda mais nada. Veja
+[Ordem de execução vs dados](/mcp/pt-br/tools/nodes-and-edges#ordem-de-execução-vs-dados--o-modelo-de-duas-edges)
+para saber como criá-la.
+
+<Tip>
+  Um flow que funcionava rodando um node por vez porque os nodes rodavam na ordem em que você os
+  desenhou pode mudar de comportamento com o despacho paralelo. Antes de ligá-lo para um flow, confira
+  cada par de nodes que mexe no mesmo recurso externo e conecte os dois com uma edge de execução.
+</Tip>
+
+## Documentação relacionada
+
+- [Execução de flow completo e de node único](/main-api/specific-features/flow-and-single-node-execution) (em inglês) — os caminhos de run em que o despacho paralelo atua
+- [Limites de execução](/main-api/specific-features/execution-limits) (em inglês) — os tetos do sistema que valem para todo run
+- [Cancelar um run](/main-api/specific-features/cancel-a-run) (em inglês) — o que o cancelamento faz com os nodes em andamento
+- [Workflow de batch](/worker/workflows/process-batch) (em inglês) — por que as linhas de batch continuam sequenciais por dentro
+- [Nodes e edges](/mcp/pt-br/tools/nodes-and-edges) — edges de execução e edges de dados

@@ -62,7 +62,7 @@ The diagrams below trace the exact same scenario — running a text generator no
 
 ### Full flow via the global node
 
-Triggered when the user clicks Run on the `FlowGlobalNode`. The scheduler walks every reachable node in dependency order; the diagram shows two example nodes (a text generator T followed by an audio generator A) but the loop runs for every node in the flow.
+Triggered when the user clicks Run on the `FlowGlobalNode`. The scheduler walks every reachable node in dependency order; the diagram shows two example nodes (a text generator T followed by an audio generator A) but the loop runs for every node in the flow. When the worker runs the whole flow, it can also run nodes that do not depend on each other at the same time; see [Parallel dispatch](/main-api/specific-features/parallel-dispatch).
 
 ```mermaid
 sequenceDiagram

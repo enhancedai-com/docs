@@ -514,6 +514,11 @@ Esta é a maior causa de "eu conectei, mas nada acontece":
 Encadear dois `commandTextNode` para que B rode depois de A *e* veja o texto de A exige, portanto,
 **as duas** edges, cada uma com seu `edgeId`. Qualquer uma sozinha é uma meia-conexão silenciosa.
 
+Os dois tipos de edge ordenam os dois nodes. Dois nodes **sem edge** entre eles são independentes, e um
+run que o worker executa com [despacho paralelo](/main-api/specific-features/pt-br/parallel-dispatch)
+pode rodá-los ao mesmo tempo. Quando o node B precisa rodar depois do node A mas não lê a saída de A,
+conecte os dois com a edge `outputFlow` → `input`.
+
 Além da edge, o `data` do destino precisa referenciar a origem — o array companheiro `<campo>Data`,
 ex.: o `data.textData` de um `outputObjectNode`.
 

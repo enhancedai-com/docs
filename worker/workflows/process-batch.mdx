@@ -129,7 +129,7 @@ A data error (see [Error handling](#error-handling)) terminates the batch on the
 | `BATCH_ROW_CONCURRENCY` | 5 | Maximum row runs in flight at any time in one segment |
 | `BATCH_SEGMENT_SIZE` | 100 | After this many settled rows, `continueAsNew` resets the event history |
 
-Both are compile-time constants in `process-batch.workflow.ts`. The row concurrency is a workflow-level cap; the per-node concurrency inside each row run is governed by the worker's `maxConcurrentActivityTaskExecutions` setting (see [Worker service](/worker/workflows/worker-service#worker-concurrency)).
+Both are compile-time constants in `process-batch.workflow.ts`. The row concurrency is a workflow-level cap; the per-node concurrency inside each row run is governed by the worker's `maxConcurrentActivityTaskExecutions` setting (see [Worker service](/worker/workflows/worker-service#worker-concurrency)). Inside a row, nodes run one at a time: a batch row gets no `maxInFlight`, so [parallel dispatch](/main-api/specific-features/parallel-dispatch) does not apply to it.
 
 ## Error handling
 

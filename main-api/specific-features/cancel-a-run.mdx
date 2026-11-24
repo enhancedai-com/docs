@@ -11,7 +11,7 @@ There are two levels to it, and they are not the same feature:
 
 | Level | What it does | Availability |
 |---|---|---|
-| **Stop at the node boundary** | The scheduler checks for a cancel request before it picks the next node. The step already running is left alone and finishes normally. | Always on |
+| **Stop at the node boundary** | The scheduler checks for a cancel request before it picks the next node. The step already running is left alone and finishes normally. In a [parallel run](/main-api/specific-features/parallel-dispatch), that is every step in flight. | Always on |
 | **Interrupt the step in flight** | The step running right now is aborted mid-work, its partial output is persisted, and the run stops. | Behind the `node_cancel_in_flight` feature flag |
 
 <Note>
@@ -127,7 +127,7 @@ If the lookup itself fails, the run **continues**. A database hiccup must not si
 run, so the error is logged (*"Cancel lookup failed, run continues"*) and treated as "not cancelled".
 
 When the loop breaks, `resolveCancelledRunFootprint` records the footprint: `stoppedAtNodeId` is the
-last node that started, and `notExecutedNodeIds` is every scheduled node that neither completed nor
+last node that started. In a [parallel run](/main-api/specific-features/parallel-dispatch#cancel-a-parallel-run) several nodes are in flight, so it is the last node that settled. `notExecutedNodeIds` is every scheduled node that neither completed nor
 was pruned by a condition branch (`dead`). The result is persisted with `markCancelled` (3 attempts,
 200 ms apart), followed by a `room_status_updated` event marking each unreached node `CANCELLED`.
 
@@ -222,7 +222,7 @@ interrupted, on the worker.
 | `status` | `ok` \| `running` \| `error` \| `cancelled` — `cancelled` once `cancelledAt` is set |
 | `isCancelling` | A request exists, the run has not settled yet, and it is still running |
 | `isCancellable` | The run type is in `CANCELLABLE_RUN_TYPES` |
-| `isStepInterruptible` | Whether cancelling would abort the current step, given the flag and the in-flight node type |
+| `isStepInterruptible` | Whether cancelling would abort the current step, given the flag and the in-flight node type. In a parallel run it is `true` only when every node in flight can be interrupted |
 | `notExecutedNodes` | The nodes the run never reached |
 
 `status=cancelled` also works as a filter on the runs list.
