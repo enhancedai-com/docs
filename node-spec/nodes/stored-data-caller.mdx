@@ -1,0 +1,83 @@
+---
+title: "Stored Data Caller"
+sidebarTitle: "Stored Data Caller"
+description: "Retrieves a previously stored document by its id — not a generic \"key\"/\"namespace\" pair. RUNTIME BEHAVIOUR: this node is resolved by the builder, which calls the provider from the browser — there is no server-side executor. Inside a running flow it produces no output at all: the run reports completed and the node stores only its own configuration, so nothing downstream can consume a result. Use it on the canvas, not as a step another node reads from."
+---
+
+<Info>
+  Node type `storedDataCaller` in the [Data](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Stored Data Caller — Retrieves previously stored data from FluxPrompt's data store.
+FIELDS:
+- selectedDocument: The stored document to retrieve, picked in node settings.
+TIP: Pairs with nodes that store data. Retrieves by document id.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "storedDataCaller",
+  "label": "Stored Data Caller",
+  "category": "Data",
+  "description": "Retrieves a previously stored document by its id — not a generic \"key\"/\"namespace\" pair. RUNTIME BEHAVIOUR: this node is resolved by the builder, which calls the provider from the browser — there is no server-side executor. Inside a running flow it produces no output at all: the run reports completed and the node stores only its own configuration, so nothing downstream can consume a result. Use it on the canvas, not as a step another node reads from.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "selectedDocument": {
+        "type": "object",
+        "description": "The stored document to retrieve. The editor extracts its text into text when the document is picked, or when text is empty.",
+        "properties": {"id": {"type": "string"}, "name": {"type": "string"}}
+      },
+      "selectedDocumentIdData": {
+        "type": "array",
+        "description": "A document id fed from an upstream edge. Takes precedence over selectedDocument: when the first entry's text differs from selectedDocument.id, the editor loads that document instead. Land an edge reference here — setting only selectedDocument means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"text": {"type": "string", "description": "Retrieved document content"}}
+  },
+  "handles": {
+    "sourceHandles": [{"handle": "output", "role": "data"}],
+    "targetHandles": [
+      {"handle": "input"},
+      {"handle": "selectedDocumentId", "dataField": "selectedDocumentId"}
+    ],
+    "patterned": [
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": false
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/StoredDataCaller.tsx",
+    "frontFields": [
+      "collapsed", "label", "outputSize", "placement", "previewIndex", "selectedDocument",
+      "selectedDocumentIdData", "sensitiveFields", "text"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {},
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

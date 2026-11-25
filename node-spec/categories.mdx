@@ -1,0 +1,17 @@
+---
+title: "Node categories"
+description: "The six categories every node type belongs to, and the description the MCP serves for each."
+---
+
+Every node page declares one of these categories in its `node-spec` block. The MCP returns the description in `list_node_types` (`categories`) and in `get_node_type` (`categoryDescription`). A category that is not declared here fails the sync. See [how the node specification works](/node-spec/overview).
+
+```json node-spec-categories
+{
+  "AI": "Nodes that call an AI model to generate or read content: text prompts, vector memory search, image and video generation, image and audio reading, and text-to-speech.",
+  "Logic": "Nodes that decide or compute inside the flow: conditions that pick a branch, counters, math functions and custom scripts.",
+  "Integration": "Nodes that reach a service outside the flow: HTTP APIs, MCP servers, CRMs and third-party apps, web search, crawling and trends, and public data sources such as SEC and US Census.",
+  "Data": "Nodes that store, query or reshape data: tables, SQL queries, stored data, memory objects, file saving, reports and arrays that run a sequence per item.",
+  "Input/Output": "Nodes where a run starts or ends: the starter and variable inputs that receive values, and the output nodes that shape and return the result.",
+  "Utility": "Nodes that support the canvas: text, rich text and media boxes, sticky notes, node groups, libraries, dynamic settings, and nodes that call or create other flows. A node type without a declared category also falls here."
+}
+```

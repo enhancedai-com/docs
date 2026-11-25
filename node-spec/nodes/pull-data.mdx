@@ -1,0 +1,207 @@
+---
+title: "Pull Data"
+sidebarTitle: "Pull Data"
+description: "Reads content from a connected Google (Sheets/Docs/Slides) or Microsoft (Excel/Word/PowerPoint) file."
+---
+
+<Info>
+  Node type `pullData` in the [Integration](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Pull Data — Reads data from Google Sheets, Docs or Slides, or from Microsoft Excel, Word or PowerPoint.
+FIELDS:
+- provider: google (default) or microsoft.
+- selectedGoogleService: Which Google service — Google Sheets, Google Docs, or Google Slides.
+- docs: The Google document ID (Google Docs only).
+TIP: Use the document ID from the Google URL. Service selection determines how the data is parsed.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "pullData",
+  "label": "Pull Data",
+  "category": "Integration",
+  "description": "Reads content from a connected Google (Sheets/Docs/Slides) or Microsoft (Excel/Word/PowerPoint) file.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "provider": {
+        "type": "string",
+        "description": "Defaults to \"google\".",
+        "enum": ["google", "microsoft"]
+      },
+      "selectedGoogleService": {
+        "type": "string",
+        "description": "google only. Defaults to \"Google Sheets\".",
+        "enum": ["Google Sheets", "Google Docs", "Google Slides"]
+      },
+      "spreadsheet": {"type": "string", "description": "google Sheets only — spreadsheet id."},
+      "sheets": {
+        "type": ["number", "string"],
+        "description": "google Sheets only — worksheet (tab) id. The run returns the stored text without reading the sheet when spreadsheet or sheets is empty."
+      },
+      "rangeFilter": {
+        "type": "string",
+        "description": "google Sheets and microsoft Excel — optional A1-notation range, for example \"A1:Z40\". Empty reads the whole worksheet."
+      },
+      "rangeFilterData": {
+        "type": "array",
+        "description": "rangeFilter fed from an upstream edge. Takes precedence over rangeFilter: the executor reads this first and falls back to the plain field only when this is empty.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "docs": {"type": "string", "description": "google Docs only — document id."},
+      "docsType": {
+        "type": "string",
+        "description": "google Docs only. \"fullContent\" (default) reads the whole document; \"pullCert\" reads paragraphStart to paragraphEnd.",
+        "enum": ["fullContent", "pullCert"]
+      },
+      "presentationId": {
+        "type": "string",
+        "description": "google Slides only — presentation id. The run returns the stored text without reading when it is empty."
+      },
+      "slidesFilter": {
+        "type": "string",
+        "description": "google Slides and microsoft PowerPoint — optional slide selection, for example \"1, 2-5, 8\". Empty reads every slide."
+      },
+      "slidesFilterData": {
+        "type": "array",
+        "description": "slidesFilter fed from an upstream edge. Takes precedence over slidesFilter: the executor reads this first and falls back to the plain field only when this is empty.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "selectedMicrosoftService": {
+        "type": "string",
+        "description": "microsoft only. Defaults to \"Excel\".",
+        "enum": ["Excel", "Word", "PowerPoint"]
+      },
+      "microsoftFileId": {"type": "string", "description": "microsoft Excel only."},
+      "microsoftWorksheetId": {"type": "string", "description": "microsoft Excel only."},
+      "microsoftWordFileId": {"type": "string", "description": "microsoft Word only."},
+      "microsoftWordContentType": {
+        "type": "string",
+        "description": "microsoft Word only. \"fullContent\" (default) or \"pullCert\" for a paragraph range. Only the editor's Get Data button reads it; a flow run applies paragraphStart and paragraphEnd whenever they are set, so leave them empty to read the full document.",
+        "enum": ["fullContent", "pullCert"]
+      },
+      "microsoftPowerPointFileId": {"type": "string", "description": "microsoft PowerPoint only."},
+      "paragraphStart": {"type": "string", "description": "Word/Docs paragraph-range mode only."},
+      "paragraphEnd": {"type": "string", "description": "Word/Docs paragraph-range mode only."},
+      "paragraphStartData": {
+        "type": "array",
+        "description": "paragraphStart fed from an upstream edge. Takes precedence over paragraphStart: the executor reads this first and falls back to the plain field only when this is empty.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "paragraphEndData": {
+        "type": "array",
+        "description": "paragraphEnd fed from an upstream edge. Takes precedence over paragraphEnd: the executor reads this first and falls back to the plain field only when this is empty.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"text": {"type": "string", "description": "Pulled content, serialized as text"}}
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "input"},
+      {"handle": "paragraphEnd", "dataField": "paragraphEnd"},
+      {"handle": "paragraphStart", "dataField": "paragraphStart"},
+      {"handle": "rangeFilter", "dataField": "rangeFilter"},
+      {"handle": "sheetName"},
+      {"handle": "slidesFilter", "dataField": "slidesFilter"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/PullDataNode/PullDataNode.tsx",
+    "frontFields": [
+      "collapsed", "creatorId", "docs", "docsData", "docsType", "executionStatus", "id", "label",
+      "microsoftFileId", "microsoftPowerPointFileId", "microsoftWordContentType",
+      "microsoftWordFileId", "microsoftWorksheetId", "outputSize", "paragraphEnd",
+      "paragraphEndData", "paragraphStart", "paragraphStartData", "placement", "presentationId",
+      "previewIndex", "provider", "publicRangeFilter", "rangeFilter", "rangeFilterData",
+      "selectedDoc", "selectedGoogleService", "selectedMicrosoftService",
+      "selectedPublicGoogleService", "selectedSpreadSheet", "selectedWorkSheet", "sensitiveFields",
+      "setPublicRangeFilter", "setSelectedPublicGoogleService", "sheetNameData", "sheets",
+      "slidesFilter", "slidesFilterData", "spaceId", "spreadsheet", "text",
+      "updatePublicWorkSheets", "updateSelectedDoc", "updateSelectedPublicDoc",
+      "updateSelectedSpreadSheet", "updateSelectedWorkSheet", "workSheetsLoaded"
+    ],
+    "workerModule": "src/modules/nodes/pull-data",
+    "workerFields": [
+      "docs", "docsType", "errorMessage", "errorStatusCode", "executionStatus", "label",
+      "microsoftFileId", "microsoftPowerPointFileId", "microsoftWordFileId",
+      "microsoftWorksheetId", "paragraphEnd", "paragraphEndData", "paragraphStart",
+      "paragraphStartData", "presentationId", "provider", "rangeFilter", "rangeFilterData",
+      "selectedGoogleService", "selectedMicrosoftService", "sheets", "slidesFilter",
+      "slidesFilterData", "spreadsheet", "text"
+    ]
+  },
+  "internalFields": {
+    "creatorId": "Read by the editor to decide whether the viewer may edit the node (PullDataNode.tsx:708-714); no executor reads it.",
+    "docsData": "Editor prop: PullDataNode.tsx passes the Google Docs list it loaded into the child's data prop; it is not stored on the node.",
+    "publicRangeFilter": "Editor prop for the no-connection public-sheet preview (PullDataNode.tsx:1175-1186); it is not stored on the node.",
+    "selectedDoc": "Copy of docs the editor saves alongside it (PullDataNode.tsx:968); executors read docs.",
+    "selectedPublicGoogleService": "Editor prop for the no-connection public preview (PullDataNode.tsx:1175-1186); it is not stored on the node.",
+    "selectedSpreadSheet": "Editor prop: the spreadsheet object the editor loaded, passed into the child's data prop; it is not stored on the node.",
+    "selectedWorkSheet": "Editor prop: the worksheet object the editor loaded, passed into the child's data prop; it is not stored on the node.",
+    "setPublicRangeFilter": "Editor callback passed into the child's data prop (PullDataNode.tsx:1184); it is not stored on the node.",
+    "setSelectedPublicGoogleService": "Editor callback passed into the child's data prop (PullDataNode.tsx:1178); it is not stored on the node.",
+    "sheetNameData": "Read by the shared MicrosoftExcelSelect only when showNewSheetOption is set, which Pull Data never sets (PullMicrosoftExcelData.tsx:7); the pull executor never reads it.",
+    "updatePublicWorkSheets": "Editor callback passed into the child's data prop (PullDataNode.tsx:1181); it is not stored on the node.",
+    "updateSelectedDoc": "Editor callback passed into the child's data prop (PullDataNode.tsx:1267); it is not stored on the node.",
+    "updateSelectedPublicDoc": "Editor callback passed into the child's data prop (PullDataNode.tsx:1185); it is not stored on the node.",
+    "updateSelectedSpreadSheet": "Editor callback passed into the child's data prop (PullDataNode.tsx:1251); it is not stored on the node.",
+    "updateSelectedWorkSheet": "Editor callback passed into the child's data prop (PullDataNode.tsx:1252); it is not stored on the node.",
+    "workSheetsLoaded": "Editor loading flag passed into the child's data prop (PullDataNode.tsx:1248); it is not stored on the node."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

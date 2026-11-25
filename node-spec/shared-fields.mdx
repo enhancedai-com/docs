@@ -1,0 +1,33 @@
+---
+title: "Shared node fields"
+description: "Fields the editor and the platform write on every kind of node. They are not part of any node's configuration, so no node page declares them."
+---
+
+The front components and the worker read and write some `data` fields on almost every node: editor state, run state and run results. They do not configure what a node does, so a node page leaves them out of `inputSchema`. This page lists them once with the reason, and back's field check counts them as explained for every node type. See [the field check](/node-spec/overview#field-check).
+
+A field that only one node type carries and that is still not configuration goes in that page's `internalFields` instead.
+
+```json node-spec-shared-fields
+{
+  "collapsed": "Editor state: whether the node is collapsed on the canvas.",
+  "placement": "Editor layout: whether the node shows its prompt panel, its output panel or both.",
+  "id": "The node id, copied into data by the editor. The platform sets it; never write it.",
+  "myId": "The node id, copied into data by older components. The platform sets it; never write it.",
+  "label": "The node's name on the canvas. add_node fills a unique one when data.label is empty; it does not change what the node does.",
+  "executionStatus": "Run state the platform writes while the node executes.",
+  "executionError": "Run state: the error the last run of the node hit, written by the platform.",
+  "flowTrigger": "Run state: the trigger that started the current run, written by the platform.",
+  "canceled": "Run state written when a run of the node is cancelled.",
+  "paused": "Run state written when a run of the node is paused.",
+  "previewIndex": "Editor state: which stored response the node previews. The editor strips it when it saves the node.",
+  "previewResponses": "Editor state: the responses the node keeps for preview. The editor strips it when it saves the node.",
+  "outputSize": "Editor metric: the size of the node's output, computed for display.",
+  "inputSize": "Editor metric: the size of the node's input, computed for display.",
+  "errorMessage": "Run result: the user-facing error of the last run, written by the platform.",
+  "errorStatusCode": "Run result: the status code of the last failed run, written by the platform.",
+  "usedTokens": "Run result: the credits the last run used, written by the platform.",
+  "nodeUsedTokens": "Run result: the credits the node used, written by the platform.",
+  "sensitiveFields": "PHI setting: the input fields a person marked as sensitive, so their values are redacted from run logs and audit records. Set in the node's Sensitive fields section, not part of its configuration.",
+  "spaceId": "The workspace the node belongs to. The platform fills and reads it; never write it."
+}
+```

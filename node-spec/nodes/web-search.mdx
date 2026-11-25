@@ -1,0 +1,115 @@
+---
+title: "Web Search"
+sidebarTitle: "Web Search"
+description: "Performs a Google search through SerpApi (Web Search, Location, News or Images). Output is a single serialized text string, not a structured results array."
+---
+
+<Info>
+  Node type `webSearch` in the [Integration](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Web Search — Searches Google and returns the results as one text string. Supports Web Search, Location, News and Images modes.
+FIELDS:
+- query: Search query string. Keep it concise and search-engine-friendly. Can include dynamic variables from upstream.
+- type: Search type — Web Search, Location, News or Images. Other types the editor shows (Patents, Shopping, etc.) fail at run time.
+TIP: Good queries are specific and short. For dynamic queries, write as a template referencing upstream data.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "webSearch",
+  "label": "Web Search",
+  "category": "Integration",
+  "description": "Performs a Google search through SerpApi (Web Search, Location, News or Images). Output is a single serialized text string, not a structured results array.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Fallback query, used only when queryData is empty. When a variable is linked into the \"query\" handle, queryData takes precedence. Supports \"{{<nodeId>.<key>}}\" interpolation (e.g. \"latest news {{var_input_company_001.text}}\"): at run time this is replaced with that node's schema entry for <key> (typically \"text\", populated from the referenced node's output). Unresolved placeholders (unknown nodeId or key) are left in the string as-is, verbatim."
+      },
+      "queryData": {
+        "type": "array",
+        "description": "Query fed from an upstream edge into the \"query\" handle. When non-empty, its joined text overrides query. That joined text is then run through the same \"{{<nodeId>.<key>}}\" interpolation as the plain query fallback before the search executes.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "engine": {
+        "type": "string",
+        "description": "Editor setting with no effect on the run: every search goes to Google through SerpApi. Choosing \"bing\" only narrows the type options the editor shows.",
+        "enum": ["google", "bing"]
+      },
+      "type": {
+        "type": "string",
+        "description": "Search vertical. Defaults to \"Web Search\". The editor also shows Patents, Patent Details, Lens, Shop and Shopping, but the run has no search for them and fails.",
+        "enum": ["Web Search", "Location", "News", "Images"]
+      },
+      "country": {
+        "type": "string",
+        "description": "Sent to SerpApi as gl. Defaults to \"us\" when absent. The editor writes a country name from its list, e.g. \"United States\"."
+      },
+      "language": {
+        "type": "string",
+        "description": "Sent to SerpApi as hl. Defaults to \"en\" when absent. The editor writes a country name from its list, e.g. \"United States\"."
+      },
+      "page": {"type": "number", "description": "Result page number. Defaults to 1. The editor does not offer this setting."},
+      "results": {
+        "type": "number",
+        "description": "Number of results to return, for type \"Web Search\" only. Defaults to 10. NOT \"maxResults\"."
+      },
+      "autocorrect": {"type": "boolean", "description": "Defaults to true."},
+      "lat": {"type": "string", "description": "Editor setting shown for type \"Location\"; the run does not send it."},
+      "lng": {"type": "string", "description": "Editor setting shown for type \"Location\"; the run does not send it."},
+      "start": {"type": "number", "description": "Editor setting shown for type \"Location\"; the run does not send it."},
+      "patentId": {"type": "string", "description": "No effect: nothing writes or reads it at run time."}
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"text": {"type": "string", "description": "Serialized search results"}}
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [{"handle": "input"}, {"handle": "query", "dataField": "query"}],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/WebSearch.tsx",
+    "frontFields": [
+      "collapsed", "executionStatus", "id", "label", "outputSize", "placement", "previewIndex",
+      "previewResponses", "query", "queryData", "sensitiveFields", "text"
+    ],
+    "workerModule": "src/modules/nodes/web-search",
+    "workerFields": [
+      "autocorrect", "country", "errorMessage", "errorStatusCode", "executionStatus", "label",
+      "language", "page", "query", "queryData", "results", "text", "type"
+    ]
+  },
+  "internalFields": {},
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

@@ -1,0 +1,105 @@
+---
+title: "File Save"
+sidebarTitle: "File Save"
+description: "Saves one or more files to cloud storage. There is no \"data\"/\"format\"/\"bucket\" — files is the payload."
+---
+
+<Info>
+  Node type `fileSave` in the [Data](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+File Save — Saves generated files like images, audio, or documents to storage.
+FIELDS:
+- Configured via settings. Receives file data from upstream.
+TIP: Typically placed after image/voice/music generators to persist their output.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "fileSave",
+  "label": "File Save",
+  "category": "Data",
+  "description": "Saves one or more files to cloud storage. There is no \"data\"/\"format\"/\"bucket\" — files is the payload.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "files": {
+        "type": "array",
+        "description": "Files to save. Each entry is an object, never a bare string: the executor spreads it to carry edge-fed names, so a string is destructured into a character-indexed object and the file is lost.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Identifies this file, and is what edge-fed \"<id>-name\"/\"<id>-file\" values are matched against."
+            },
+            "value": {
+              "type": "string",
+              "description": "URL of the file to upload; the run fails for an entry without one, and a URL without a scheme gets https:// prepended. An edge into the \"<id>-file\" handle writes the upstream value here."
+            },
+            "fileName": {
+              "type": "string",
+              "description": "Name of the file in Drive. An edge into the \"<id>-name\" handle writes the upstream value here."
+            }
+          },
+          "required": ["id"]
+        }
+      },
+      "urlData": {
+        "type": "array",
+        "description": "The editor displays it next to every file input, but nothing fills it and the worker does not read it: an edge into \"<id>-file\" or \"<id>-name\" writes the upstream value into that entry's value or fileName instead. Do not use it to feed a file.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "selectedFolderDoc": {
+        "type": "string",
+        "description": "Google Drive folder ID the files are saved into. Optional — if empty or missing, files land in the authenticated user's My Drive root. Picked in the node UI from the authenticated user's Drive folders."
+      }
+    },
+    "required": ["files"]
+  },
+  "outputSchema": {"type": "object", "properties": {}},
+  "handles": {
+    "sourceHandles": [{"handle": "outputFlow", "role": "control"}],
+    "targetHandles": [{"handle": "input"}],
+    "patterned": [
+      {"direction": "target", "pattern": "^.+-name$", "discriminating": true},
+      {"direction": "target", "pattern": "^.+-file$", "discriminating": true},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/FileSave/FileSave.tsx",
+    "frontFields": [
+      "executionStatus", "files", "id", "label", "placement", "selectedFolderDoc",
+      "sensitiveFields", "text", "urlData"
+    ],
+    "workerModule": "src/modules/nodes/file-save",
+    "workerFields": [
+      "errorMessage", "errorStatusCode", "executionStatus", "files", "label", "selectedFolderDoc"
+    ]
+  },
+  "internalFields": {
+    "text": "Not read by this node: the extractor picks up data.text in the shared TagInput (Test/TagInput.tsx:1321), where data is one item of the connected array the file inputs display."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

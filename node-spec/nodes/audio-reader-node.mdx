@@ -1,0 +1,140 @@
+---
+title: "Ai Audio Transcriber (Audio Reader Node)"
+sidebarTitle: "Ai Audio Transcriber"
+description: "Transcribes audio from a file/URL or a YouTube video."
+---
+
+<Info>
+  Node type `audioReaderNode` in the [AI](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Audio Reader — Transcribes audio to text using speech recognition, or reads a YouTube video's transcript.
+FIELDS:
+- inputPreview: URL of the audio file to transcribe. Often piped in from upstream.
+- youtubeUrl: YouTube video URL, used when type is ytTranscript.
+TIP: Output is the transcribed text from the audio input.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "audioReaderNode",
+  "label": "Audio Reader Node",
+  "category": "AI",
+  "description": "Transcribes audio from a file/URL or a YouTube video.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string",
+        "description": "Transcription source. \"ytTranscript\" reads youtubeUrl; anything else (default) reads inputPreview as an audio file URL.",
+        "enum": ["ytTranscript", "audio"]
+      },
+      "youtubeUrl": {
+        "type": "string",
+        "description": "YouTube video URL. Required when type is \"ytTranscript\". Fallback used only when youtubeUrlData is empty; not interpolated itself."
+      },
+      "ytType": {
+        "type": "string",
+        "description": "Transcript format, used only when type is \"ytTranscript\". \"text\" (default) returns the transcript as plain joined text; \"textMtd\" returns one line per segment with its text, duration and offset.",
+        "enum": ["text", "textMtd"]
+      },
+      "inputPreview": {
+        "type": "string",
+        "description": "URL of the audio file, read when type is not \"ytTranscript\". Without it the run fails, except with groq, which skips the run and keeps the previous text. An edge into the \"inputPreview\" handle overwrites this field with the upstream value before the node runs."
+      },
+      "inputPreviewData": {
+        "type": "array",
+        "description": "Edge reference that connect_nodes writes for the \"inputPreview\" handle. The executor never reads this array: before the node runs, the platform copies the connected edge's value into inputPreview itself.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "aiModel": {
+        "type": "string",
+        "description": "Transcription model. Valid pairs with aiSystem: openai + whisper-1, gemini + gemini-speech-to-text, groq + whisper-large-v3, groq + whisper-large-v3-turbo. Any other pair runs as groq + whisper-large-v3-turbo. Older nodes store a selector here instead (openAi, gemini, groq, groq_v3_turbo); those still resolve to their pair, but write the pair.",
+        "enum": ["whisper-1", "gemini-speech-to-text", "whisper-large-v3", "whisper-large-v3-turbo"]
+      },
+      "aiSystem": {
+        "type": "string",
+        "description": "Transcription provider, paired with aiModel.",
+        "enum": ["openai", "gemini", "groq"]
+      },
+      "clearOnExecution": {
+        "type": "boolean",
+        "description": "When true, a full agent run clears the node's previous text before it executes."
+      },
+      "youtubeUrlData": {
+        "type": "array",
+        "description": "youtubeUrl fed from an upstream edge. Takes precedence over youtubeUrl: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only youtubeUrl means an edge-linked value never arrives. When populated, its joined text is run through \"{{<nodeId>.<key>}}\" interpolation before use; the plain youtubeUrl fallback is not interpolated.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"text": {"type": "string", "description": "Transcribed text"}}
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "input"},
+      {"handle": "inputPreview", "dataField": "inputPreview"},
+      {"handle": "youtubeUrl", "dataField": "youtubeUrl"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/AiAudioTranscriber.tsx",
+    "frontFields": [
+      "aiModel", "aiSystem", "clearOnExecution", "collapsed", "executionStatus", "flowTrigger",
+      "id", "inputPreview", "label", "nodeUsedTokens", "outputSize", "placement", "previewIndex",
+      "previewResponses", "sensitiveFields", "text", "type", "uploadAudio", "usedTokens",
+      "youtubeUrl", "youtubeUrlData", "ytType"
+    ],
+    "workerModule": "src/modules/nodes/audio-transcriber",
+    "workerFields": [
+      "aiModel", "aiSystem", "inputPreview", "previewResponses", "text", "type", "youtubeUrl",
+      "youtubeUrlData", "ytType"
+    ]
+  },
+  "internalFields": {
+    "uploadAudio": "Editor state: the File object of the last upload, which serializes to an empty object. The uploaded file's URL is in inputPreview."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```
+
+## Related pages
+
+- [Worker: audio transcriber](/worker/node/audio-transcriber)

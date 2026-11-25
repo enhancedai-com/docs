@@ -1,0 +1,249 @@
+---
+title: "Api Caller"
+sidebarTitle: "Api Caller"
+description: "Makes HTTP requests to external APIs and returns the response. There is no generic \"headers\"/\"body\" object — auth headers go in jsonAuth (a JSON string), the request body goes in jsonRequestBody (a JSON string), and basic auth uses username/password."
+---
+
+<Info>
+  Node type `apiCaller` in the [Integration](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+API Caller — Makes HTTP requests to external APIs (GET, POST, etc.).
+FIELDS:
+- url: The API endpoint URL. Can include dynamic path segments.
+TIP: Headers, method, body, and auth are configured in node settings. URL can be built dynamically from upstream data.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "apiCaller",
+  "label": "API Caller",
+  "category": "Integration",
+  "description": "Makes HTTP requests to external APIs and returns the response. There is no generic \"headers\"/\"body\" object — auth headers go in jsonAuth (a JSON string), the request body goes in jsonRequestBody (a JSON string), and basic auth uses username/password.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "description": "Target API endpoint URL. The run fails with \"URL is required.\" when neither url nor urlData has a value."
+      },
+      "method": {
+        "type": "string",
+        "description": "HTTP method. The request goes out as GET when absent, and GET cannot carry a request body.",
+        "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"]
+      },
+      "contentType": {
+        "type": "string",
+        "description": "Content-Type of the request body. A request with a body defaults to application/json. With application/x-www-form-urlencoded the body is built from formDataParams, or from the keys of jsonRequestBody when formDataParams is empty.",
+        "enum": ["application/json", "application/x-www-form-urlencoded"]
+      },
+      "jsonAuth": {
+        "type": "string",
+        "description": "JSON-stringified map of custom auth headers, e.g. '{\"Authorization\":\"Bearer xyz\"}'."
+      },
+      "jsonRequestBody": {"type": "string", "description": "JSON-stringified request body."},
+      "queryParams": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {"key": {"type": "string"}, "value": {"type": "string"}}
+        }
+      },
+      "formDataParams": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {"key": {"type": "string"}, "value": {"type": "string"}}
+        }
+      },
+      "username": {"type": "string", "description": "Basic auth username."},
+      "password": {"type": "string", "description": "Basic auth password."},
+      "validateCertificate": {
+        "type": "boolean",
+        "description": "Whether to validate the TLS certificate. Defaults to true."
+      },
+      "requestTimeoutMs": {
+        "type": "number",
+        "description": "Timeout of each request in milliseconds. Defaults to 30000. The editor does not offer this setting."
+      },
+      "pollingEnabled": {
+        "type": "boolean",
+        "description": "Repeat the request until it is done. Without pollingConditionField and pollingConditionMatch, polling repeats until the response status is 2xx; with both, it repeats while the field matches the regex. Defaults to false."
+      },
+      "pollingInterval": {
+        "type": "number",
+        "description": "Seconds between polling requests. The run uses 5 when absent; the editor pre-fills 10."
+      },
+      "pollingRetryDuration": {
+        "type": "number",
+        "description": "Seconds to keep polling before the run fails with a timeout. The run uses 60 when absent; the editor pre-fills 300."
+      },
+      "pollingConditionField": {
+        "type": "string",
+        "description": "Dot path of a JSON field in the response, e.g. \"status\" or \"data.state\". Used with pollingConditionMatch."
+      },
+      "pollingConditionMatch": {
+        "type": "string",
+        "description": "Regular expression tested against pollingConditionField. Polling continues while the field matches it."
+      },
+      "outputFilter": {
+        "type": "object",
+        "description": "Filter applied to a JSON response. The filtered result is stored in filteredText and is what downstream nodes receive. The editor's Filter Output dialog writes it after a run. It applies only while schemaHash equals the hash of the response's key structure; when the response shape changes, the run ignores the filter and clears it. Set null to remove it.",
+        "properties": {
+          "selectedPaths": {
+            "type": "array",
+            "description": "Dot paths of the leaf values to keep, e.g. \"data.0.name\". A numeric segment expands over every item of that array.",
+            "items": {"type": "string"}
+          },
+          "mode": {
+            "type": "string",
+            "description": "\"structured\" outputs a JSON object with the selected paths; \"raw\" outputs the selected values one per line.",
+            "enum": ["structured", "raw"]
+          },
+          "schemaHash": {
+            "type": "string",
+            "description": "Base64 of the JSON array of the response's key paths, sorted, with arrays written as \"[]\" and read from their first item."
+          }
+        }
+      },
+      "urlData": {
+        "type": "array",
+        "description": "url fed from an upstream edge. Takes precedence over url: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only url means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "jsonAuthData": {
+        "type": "array",
+        "description": "jsonAuth fed from an upstream edge. Takes precedence over jsonAuth: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only jsonAuth means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "jsonRequestBodyData": {
+        "type": "array",
+        "description": "jsonRequestBody fed from an upstream edge. Takes precedence over jsonRequestBody: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only jsonRequestBody means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "usernameData": {
+        "type": "array",
+        "description": "username fed from an upstream edge. Takes precedence over username: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only username means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "passwordData": {
+        "type": "array",
+        "description": "password fed from an upstream edge. Takes precedence over password: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only password means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "result": {
+        "type": "string",
+        "description": "What the run returns: the response body, or the filtered output when outputFilter applies. A binary response comes back as a base64 data URL. Over 1 MB it is truncated; downstream nodes read the full stored output."
+      },
+      "text": {"type": "string", "description": "The raw response body the run stores on the node."},
+      "filteredText": {
+        "type": "string",
+        "description": "The filtered response the run stores when outputFilter applies. Downstream nodes read it in preference to text."
+      }
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "input"},
+      {"handle": "jsonAuth", "dataField": "jsonAuth"},
+      {"handle": "jsonRequestBody", "dataField": "jsonRequestBody"},
+      {"handle": "password", "dataField": "password"},
+      {"handle": "url", "dataField": "url"},
+      {"handle": "username", "dataField": "username"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/ApiCaller.tsx",
+    "frontFields": [
+      "clearOnExecution", "collapsed", "contentType", "executionError", "executionStatus",
+      "filteredText", "flowTrigger", "formDataParams", "id", "jsonAuth", "jsonAuthData",
+      "jsonRequestBody", "jsonRequestBodyData", "label", "method", "myId", "outputFilter",
+      "outputSize", "password", "passwordData", "placement", "pollingCallCount",
+      "pollingConditionField", "pollingConditionMatch", "pollingEnabled", "pollingInterval",
+      "pollingRetryDuration", "previewIndex", "queryParams", "response", "sensitiveFields", "text",
+      "type", "url", "urlData", "username", "usernameData", "validateCertificate"
+    ],
+    "workerModule": "src/modules/nodes/api-caller",
+    "workerFields": [
+      "contentType", "errorMessage", "errorStatusCode", "executionStatus", "filteredText",
+      "formDataParams", "jsonAuth", "jsonAuthData", "jsonRequestBody", "jsonRequestBodyData",
+      "label", "method", "outputFilter", "password", "passwordData", "pollingCallCount",
+      "pollingConditionField", "pollingConditionMatch", "pollingEnabled", "pollingInterval",
+      "pollingRetryDuration", "queryParams", "requestTimeoutMs", "text", "url", "urlData",
+      "username", "usernameData", "validateCertificate"
+    ]
+  },
+  "internalFields": {
+    "clearOnExecution": "Editor setting on the output panel: a run started from the editor clears the flow's sessions when any node has it set. No executor reads it for this node.",
+    "pollingCallCount": "Run result: how many requests the last polling run made, written by the worker and shown in the editor.",
+    "response": "Legacy field older editors stored. The current editor only reads it into local state, nothing writes it, and the worker ignores it.",
+    "type": "Legacy numeric field older editors stored. The current editor only reads it into local state and the worker ignores it."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```
+
+## Related pages
+
+- [Worker: API caller](/worker/node/api-caller)

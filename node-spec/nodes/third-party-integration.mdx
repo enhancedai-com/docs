@@ -1,0 +1,1313 @@
+---
+title: "Third Party Integration"
+sidebarTitle: "Third Party Integration"
+description: "Connects to a configured third-party service to pull or push data. It executes on the server (Temporal worker), so it produces output in every trigger — canvas run, API, cron, chatbot, form and batch — and downstream nodes can consume its result. HOW TO CONFIGURE ONE: pick \"provider\"; set \"mode\" to pull or push (\"mode\", not \"action\"); for a pull set \"pullObjectType\", for a push set \"pushAction\" (\"pushAction\", not \"action\"); then set the fields this schema marks as belonging to that provider and that object type or action. Fields are namespaced by provider in their descriptions, and several names are shared by more than one provider with different meanings — always read the provider list a field names before setting it. Credentials are NOT node data: the connection lives in the saved integration, selected through integrationId or connectedByUserId, and no secret, site URL or API key belongs in this node. Any field with a companion \"<field>Data\" array can be fed by an edge, and the array wins over the scalar."
+---
+
+<Info>
+  Node type `thirdPartyIntegration` in the [Integration](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## Specification
+
+```json node-spec
+{
+  "type": "thirdPartyIntegration",
+  "label": "Third Party Integration",
+  "category": "Integration",
+  "description": "Connects to a configured third-party service to pull or push data. It executes on the server (Temporal worker), so it produces output in every trigger — canvas run, API, cron, chatbot, form and batch — and downstream nodes can consume its result. HOW TO CONFIGURE ONE: pick \"provider\"; set \"mode\" to pull or push (\"mode\", not \"action\"); for a pull set \"pullObjectType\", for a push set \"pushAction\" (\"pushAction\", not \"action\"); then set the fields this schema marks as belonging to that provider and that object type or action. Fields are namespaced by provider in their descriptions, and several names are shared by more than one provider with different meanings — always read the provider list a field names before setting it. Credentials are NOT node data: the connection lives in the saved integration, selected through integrationId or connectedByUserId, and no secret, site URL or API key belongs in this node. Any field with a companion \"<field>Data\" array can be fed by an edge, and the array wins over the scalar.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "provider": {
+        "type": "string",
+        "description": "Which service this node talks to. These are the providers a node can be authored for through the MCP: clickup, hubspot, mcp, notion, pinecone, slack, stripe, supabase, wordpress, zapier. For clickup, the workspace, space, folder, list, status and assignee values are ids from the connected account — call list_integration_options with the integrationId of this node to get them instead of guessing. The \"mcp\" provider talks to a saved MCP server connection and has a single operation: set mode to push and pushAction to call_tool, with toolName and an optional toolArguments JSON object. It exposes no pull: a tool catalogue carries no dependable read/write signal, so the product offers no mode choice for it. It takes an explicit tool name — unlike the mcpNode, it does not pick a tool or build arguments from a prompt. Left without an enum on purpose — the product carries provider entries beyond this list, and reporting one of them as invalid would flag a node that runs."
+      },
+      "providerEntry": {
+        "type": "string",
+        "description": "Which configuration of the provider to use, when one provider offers several. Only zapier has more than one today: zapier_pull, zapier_push and zapier_poll. Leaving it empty makes the product resolve the entry from pushAction or pullObjectType, falling back to the first entry that supports the mode — set it explicitly for zapier. For every other provider it equals the provider name."
+      },
+      "mode": {
+        "type": "string",
+        "description": "'pull' reads data, 'push' writes it. An absent or unrecognised value is treated as a non-push run, which is what flows saved before writes landed rely on.",
+        "enum": ["pull", "push"]
+      },
+      "pullObjectType": {
+        "type": "string",
+        "description": "What to read, when mode is pull. Provider-specific, and it also decides which of the pull fields below apply. hubspot: deals, contacts, companies. stripe: customers, charges, invoices, subscriptions, payment_intents, payouts, products, prices, balance, disputes. zapier: webhook_listener on the zapier_pull entry, poll_endpoint on zapier_poll. slack: channel_history, channels, users, files. notion: pages, database_records, blocks. wordpress: posts, pages, media, categories, tags, comments, users. clickup: tasks (needs list), task (needs taskId), spaces (needs team), lists (needs space or folder), comments (needs taskId). pinecone: search (default), fetch_vectors, list_ids, index_stats, vector_query. supabase: rows (default), count."
+      },
+      "pushObjectType": {
+        "type": "string",
+        "description": "Not read by any provider today: every provider encodes the object a write targets in pushAction. The editor only lists the name among the selectors it saves immediately (constants.ts:3). Leave it empty."
+      },
+      "pushAction": {
+        "type": "string",
+        "description": "Which write to perform, when mode is push. Provider-specific, and it decides which of the push fields below apply. mcp: call_tool, its only operation — MCP has no read/write split, so the node offers no mode choice and always runs toolName with toolArguments on the connected MCP server. hubspot: upsert_contact, upsert_company, create_contact, create_company, create_deal, update_contact, update_company, update_deal. stripe: create_invoice, create_customer, update_customer, create_product, create_price, finalize_invoice, send_invoice. zapier: send_to_webhook. slack: post_message, update_message, delete_message, upload_file, set_topic, add_reaction, schedule_message. notion: create_page, update_page_properties, append_content, create_database_record, update_database_record. wordpress: create_post, update_post, create_page, update_page, upload_media. clickup: create_task (needs list and name), update_task (needs taskId), create_comment (needs taskId and commentText). pinecone: upsert_records, update_metadata, delete_records, upsert_vectors. supabase: insert_rows, update_rows, upsert_rows, delete_rows. Omitting it makes the run fail with the supported list. Left without an enum on purpose: the allowed set depends on provider, so a single flat list would report a valid value from one provider as invalid."
+      },
+      "toolName": {
+        "type": "string",
+        "description": "mcp only. Which tool to run on the connected MCP server, by its exact name as returned by the list_tools pull. Required for a call_tool push; unlike the mcpNode, this node does not choose a tool from a prompt. A wrong name is refused at run time with the names the connection actually exposes."
+      },
+      "toolArguments": {
+        "type": "string",
+        "description": "mcp only. Arguments for the tool named by toolName, as a JSON object matching that tool's inputSchema — for example {\"customer\":\"acme\"}. Omit it for a tool that takes none. A value that is not a JSON object is refused before the tool runs, rather than calling it with no arguments."
+      },
+      "toolNameData": {
+        "type": "array",
+        "description": "toolName fed from an upstream edge. Takes precedence over toolName. mcp only.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "toolArgumentsData": {
+        "type": "array",
+        "description": "toolArguments fed from an upstream edge. Takes precedence over toolArguments; its joined text must still be a JSON object. mcp only.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "integrationId": {
+        "type": "string",
+        "description": "Id of the saved connection to use. When it is empty, the run uses the connection the user running the flow has for this provider; a selected connection that belongs to another provider, or that the running user cannot reach, fails the run."
+      },
+      "connectedByUserId": {
+        "type": "string",
+        "description": "Id of the user whose connection the editor uses to load option lists when integrationId is empty. A run ignores it: every provider now executes in the worker, which resolves the connection from integrationId or from the user running the flow. Set integrationId instead."
+      },
+      "text": {
+        "type": "string",
+        "description": "Content to push, for the write-capable providers. slack requires it on post_message, update_message and schedule_message. Used only when textData is empty. On a push it also fills \"payload\" when that is empty. pinecone: the text an upsert_records push stores and embeds, required there."
+      },
+      "textData": {
+        "type": "array",
+        "description": "text fed from an upstream edge. Takes precedence over text. Land an edge reference here — setting only text means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "pushDataInput": {
+        "type": "string",
+        "description": "The content a write sends, as the executor sees it. Normally derived rather than set: an upstream edge value fills it, and on a push \"content\" fills it when it is still empty. Set it directly only to override both."
+      },
+      "team": {
+        "type": "string",
+        "description": "clickup: the workspace (ClickUp calls it a team). Required by the spaces pull; the other actions only need the ids they scope to (list, space or folder), but team is what lists those ids. Its values are ids from the connected ClickUp account: list them with list_integration_options for the integrationId of this node (field team)."
+      },
+      "space": {
+        "type": "string",
+        "description": "clickup: the space. Needed to list folders and lists, and by a lists pull when no folder is set. Its values are ids from the connected ClickUp account: list them with list_integration_options for the integrationId of this node (field space, with team in the context)."
+      },
+      "folder": {
+        "type": "string",
+        "description": "clickup: an optional folder inside the space. When set, lists come from the folder; when empty, from the space's folderless lists. Its values are ids from the connected ClickUp account: list them with list_integration_options for the integrationId of this node (field folder, with space in the context)."
+      },
+      "list": {
+        "type": "string",
+        "description": "clickup: the list tasks are read from on a tasks pull and created in on create_task. Required by both. Its values are ids from the connected ClickUp account: list them with list_integration_options for the integrationId of this node (field list, with folder or space in the context)."
+      },
+      "taskId": {
+        "type": "string",
+        "description": "clickup: the task id a task pull, a comments pull, update_task or create_comment acts on. Required by all four. It is a plain id, not a picker: read it from a tasks pull or from a create_task output. Used only when taskIdData is empty."
+      },
+      "taskIdData": {
+        "type": "array",
+        "description": "taskId fed from an upstream edge. Takes precedence over taskId.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "assignees": {
+        "type": "array",
+        "description": "clickup: ClickUp user ids. On a tasks pull it filters by assignee; on create_task it assigns the task. An array or a comma-separated string. Its values are ids from the connected ClickUp account: list them with list_integration_options for the integrationId of this node (field assignees, with team in the context).",
+        "items": {"type": "string"}
+      },
+      "priority": {
+        "type": "string",
+        "description": "clickup: task priority on create_task or update_task: 1 urgent, 2 high, 3 normal, 4 low. Empty leaves it unset or unchanged.",
+        "enum": ["", "1", "2", "3", "4"]
+      },
+      "includeClosed": {
+        "type": "boolean",
+        "description": "clickup: include closed tasks in a tasks pull. Defaults to false."
+      },
+      "includeSubtasks": {
+        "type": "boolean",
+        "description": "clickup: include subtasks in a tasks or task pull. Defaults to false."
+      },
+      "commentText": {
+        "type": "string",
+        "description": "clickup: the comment create_comment adds. Required; an upstream text or content value fills it when it is empty. Used only when commentTextData is empty."
+      },
+      "commentTextData": {
+        "type": "array",
+        "description": "commentText fed from an upstream edge. Takes precedence over commentText.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "notifyAll": {
+        "type": "boolean",
+        "description": "clickup: notify every assignee of the task about a create_comment. Defaults to false."
+      },
+      "blobConfig": {
+        "type": "string",
+        "description": "A JSON object, as a string, that overrides node data at run time. It must contain a \"provider\" key or it is ignored entirely; every other key is copied over the node data, except the reserved ones (blobConfig, flowTrigger, label, placement, previewIndex, canceled, paused, output) and any key ending in \"Data\". The provider and mode the run dispatches on still come from node data. The editor rewrites blobConfig with a snapshot of the node's settings on every edit, and a non-empty node value wins over that snapshot only for the keys the worker treats as edge-fed (THIRD_PARTY_INTEGRATION_DATA_PAYLOAD_KEYS in the worker payload builder). For every other key, such as pullObjectType, pushAction and selectors like team, list, channel, database or sortBy, the snapshot wins, so a client that changes one of them without the editor must also set blobConfig to \"\" or to an updated snapshot."
+      },
+      "blobConfigData": {
+        "type": "array",
+        "description": "blobConfig fed from an upstream edge. Takes precedence over blobConfig, so a node can be reconfigured by whatever produced the edge.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "limit": {
+        "type": "number",
+        "description": "hubspot, notion, slack, stripe, zapier, pinecone, supabase: how many records a pull returns. Defaults differ per provider: hubspot 10; stripe 10 with a ceiling of 100; zapier 10 with a ceiling of 100 on a poll_endpoint pull; slack 100 with a ceiling of 1000 on every pull; notion 20 with a ceiling of 100; pinecone 100 with a ceiling of 100 on a list_ids pull; supabase 50 with a ceiling of 1000 on a rows pull. The editor shows other defaults for some of these but never stores them. wordpress uses perPage instead. Used only when limitData is empty."
+      },
+      "limitData": {
+        "type": "array",
+        "description": "limit fed from an upstream edge. Takes precedence over limit.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "dateFrom": {
+        "type": "string",
+        "description": "stripe, wordpress, slack, clickup: start of the date range a pull filters on. clickup applies it to the creation date on a tasks pull. stripe ignores it when pullObjectType is balance. slack applies it to a channel_history pull and converts it to the Slack ts the API expects."
+      },
+      "dateTo": {
+        "type": "string",
+        "description": "stripe, wordpress, slack, clickup: end of the date range a pull filters on. clickup applies it to the creation date on a tasks pull. stripe ignores it when pullObjectType is balance. slack applies it to a channel_history pull and converts it to the Slack ts the API expects."
+      },
+      "statusFilter": {
+        "type": "string",
+        "description": "stripe, wordpress, clickup: status a pull filters on; empty means any. clickup takes one or more status names on a tasks pull, as an array or a comma-separated string (list_integration_options field statusFilter, with list in the context). The accepted values come from the provider and depend on pullObjectType, so they are not enumerated here. stripe only offers it for charges, invoices, subscriptions, payment_intents, payouts, disputes, products and prices."
+      },
+      "searchQuery": {
+        "type": "string",
+        "description": "notion, stripe: free-text search applied to a pull. notion uses it on a pages pull; stripe expects its own Search query syntax, and only some object types support it. Used only when searchQueryData is empty."
+      },
+      "searchQueryData": {
+        "type": "array",
+        "description": "searchQuery fed from an upstream edge. Takes precedence over searchQuery.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "customerId": {
+        "type": "string",
+        "description": "stripe: a customer id. On a pull it filters the records; on a push it identifies the customer and is required by update_customer and create_invoice. Used only when customerIdData is empty."
+      },
+      "customerIdData": {
+        "type": "array",
+        "description": "customerId fed from an upstream edge. Takes precedence over customerId.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "productId": {
+        "type": "string",
+        "description": "stripe: a product id. On a pull it filters prices; on a push it is required by create_price."
+      },
+      "invoiceId": {
+        "type": "string",
+        "description": "stripe: the invoice finalize_invoice or send_invoice acts on. Required by both."
+      },
+      "customerEmail": {
+        "type": "string",
+        "description": "stripe: the customer email. Required by create_customer, optional on update_customer."
+      },
+      "customerName": {
+        "type": "string",
+        "description": "stripe: the customer name, on create_ or update_customer."
+      },
+      "productName": {
+        "type": "string",
+        "description": "stripe: the product name. Required by create_product."
+      },
+      "amountDollars": {
+        "type": "number",
+        "description": "stripe: the amount in dollars, not cents. Required by create_price; an optional line item on create_invoice."
+      },
+      "currency": {
+        "type": "string",
+        "description": "stripe: ISO currency code, defaulting to usd. Required by create_price and create_invoice."
+      },
+      "priceRecurringInterval": {
+        "type": "string",
+        "description": "stripe: billing interval for create_price. Empty means a one-time price.",
+        "enum": ["", "month", "year"]
+      },
+      "dueDate": {
+        "type": "string",
+        "description": "stripe: due date for create_invoice. clickup: due date and time for create_task or update_task, as an ISO date-time or epoch milliseconds."
+      },
+      "metadataJson": {
+        "type": "string",
+        "description": "stripe: a JSON object, as a string, attached as metadata to the created or updated record. pinecone: a JSON object of metadata to store, optional on upsert_records and required with at least one key on update_metadata. Used only when metadataJsonData is empty."
+      },
+      "description": {
+        "type": "string",
+        "description": "stripe: free text on the created record, for create_product and create_invoice. clickup: the task description on create_task or update_task; when the field is absent (not merely empty) a content value fills it. Used only when descriptionData is empty."
+      },
+      "descriptionData": {
+        "type": "array",
+        "description": "description fed from an upstream edge. Takes precedence over description.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "webhookUrl": {
+        "type": "string",
+        "description": "zapier: the Catch Hook URL a push posts to. Required by send_to_webhook, and refused unless it starts with https://hooks.zapier.com — an arbitrary host is rejected at run time, not silently called. On a webhook_listener pull it is generated from the node id and read-only: setting it there has no effect."
+      },
+      "zapierEndpointUrl": {
+        "type": "string",
+        "description": "zapier: the endpoint a poll_endpoint pull reads from. Required for that object type."
+      },
+      "payload": {
+        "type": "string",
+        "description": "zapier: the body a send_to_webhook push sends. Required, and parsed as JSON when payloadFormat is json. Used only when payloadData is empty; on a push an upstream text value also fills it when it is still empty."
+      },
+      "payloadData": {
+        "type": "array",
+        "description": "payload fed from an upstream edge. Takes precedence over payload — this is the normal way to send another node output to a Zap.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "payloadFormat": {
+        "type": "string",
+        "description": "zapier: how the payload is encoded on a send_to_webhook push. Defaults to json, which also makes an empty payload fail.",
+        "enum": ["json", "form"]
+      },
+      "customHeaders": {
+        "type": "string",
+        "description": "zapier: extra request headers for a send_to_webhook push, one per line as \"Header-Name: value\". Used only when customHeadersData is empty."
+      },
+      "customHeadersData": {
+        "type": "array",
+        "description": "customHeaders fed from an upstream edge. Takes precedence over customHeaders.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "perPage": {
+        "type": "number",
+        "description": "wordpress: how many records a pull returns, defaulting to 10. This is wordpress's own name for what the other providers call limit. Used only when perPageData is empty."
+      },
+      "perPageData": {
+        "type": "array",
+        "description": "perPage fed from an upstream edge. Takes precedence over perPage.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "search": {
+        "type": "string",
+        "description": "wordpress: free-text search applied to any pull. Used only when searchData is empty."
+      },
+      "searchData": {
+        "type": "array",
+        "description": "search fed from an upstream edge. Takes precedence over search.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "categoryFilter": {
+        "type": "array",
+        "description": "wordpress: category ids a posts or pages pull is restricted to. Used only when categoryFilterData is empty.",
+        "items": {"type": "string"}
+      },
+      "categoryFilterData": {
+        "type": "array",
+        "description": "categoryFilter fed from an upstream edge. Takes precedence over categoryFilter.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "tagFilter": {
+        "type": "array",
+        "description": "wordpress: tag ids a posts or pages pull is restricted to. Used only when tagFilterData is empty.",
+        "items": {"type": "string"}
+      },
+      "tagFilterData": {
+        "type": "array",
+        "description": "tagFilter fed from an upstream edge. Takes precedence over tagFilter.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "authorFilter": {
+        "type": "string",
+        "description": "wordpress: author id a posts or pages pull is restricted to. Used only when authorFilterData is empty."
+      },
+      "authorFilterData": {
+        "type": "array",
+        "description": "authorFilter fed from an upstream edge. Takes precedence over authorFilter.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "orderBy": {
+        "type": "string",
+        "description": "wordpress: field a pull sorts by, and the accepted values depend on pullObjectType. posts and pages: date, modified, title, relevance, id, slug. media: date, modified, title, id, slug. categories and tags: name, id, count, slug, description. comments: date, id, type. users: name, id, registered_date, slug, email. clickup: created, updated, due_date or id, on a tasks pull; defaults to created. supabase: the column a rows pull sorts by, with orderDirection. Used only when orderByData is empty."
+      },
+      "orderByData": {
+        "type": "array",
+        "description": "orderBy fed from an upstream edge. Takes precedence over orderBy.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "mediaType": {
+        "type": "string",
+        "description": "wordpress: media kind a media pull is restricted to. Used only when mediaTypeData is empty.",
+        "enum": ["image", "video", "audio", "application"]
+      },
+      "mediaTypeData": {
+        "type": "array",
+        "description": "mediaType fed from an upstream edge. Takes precedence over mediaType.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "postId": {
+        "type": "string",
+        "description": "wordpress: id of the post an update_post acts on, where it is required. update_page does not read it: it reads page_id. Used only when postIdData is empty."
+      },
+      "postIdData": {
+        "type": "array",
+        "description": "postId fed from an upstream edge. Takes precedence over postId.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "status": {
+        "type": "string",
+        "description": "wordpress: publication status a created or updated post or page is given. The accepted values come from the connected site, so they are not enumerated here. clickup: the status name a created or updated task gets; on create_task empty means the list default. Its values are status names from the connected ClickUp account: list them with list_integration_options for the integrationId of this node (field status, with list in the context). Used only when statusData is empty."
+      },
+      "statusData": {
+        "type": "array",
+        "description": "status fed from an upstream edge. Takes precedence over status.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "categories": {
+        "type": "array",
+        "description": "wordpress: category ids assigned to a created or updated post. Offered on the post actions only, not on pages. Used only when categoriesData is empty.",
+        "items": {"type": "string"}
+      },
+      "categoriesData": {
+        "type": "array",
+        "description": "categories fed from an upstream edge. Takes precedence over categories.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "tags": {
+        "type": "array",
+        "description": "wordpress: tag ids assigned to a created or updated post. Offered on the post actions only, not on pages. clickup: tag names added to a create_task, as an array or a comma-separated string. Used only when tagsData is empty.",
+        "items": {"type": "string"}
+      },
+      "tagsData": {
+        "type": "array",
+        "description": "tags fed from an upstream edge. Takes precedence over tags.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "author": {
+        "type": "string",
+        "description": "wordpress: author id of a created or updated post or page. Used only when authorData is empty."
+      },
+      "authorData": {
+        "type": "array",
+        "description": "author fed from an upstream edge. Takes precedence over author.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "slug": {
+        "type": "string",
+        "description": "wordpress: URL slug of a created or updated post or page. Used only when slugData is empty."
+      },
+      "slugData": {
+        "type": "array",
+        "description": "slug fed from an upstream edge. Takes precedence over slug.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "featuredImageUrl": {
+        "type": "string",
+        "description": "wordpress: URL of the image set as featured on a created or updated post or page. Used only when featuredImageUrlData is empty."
+      },
+      "featuredImageUrlData": {
+        "type": "array",
+        "description": "featuredImageUrl fed from an upstream edge. Takes precedence over featuredImageUrl.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "altText": {
+        "type": "string",
+        "description": "wordpress: offered by the editor on upload_media, but the worker never sends it to WordPress today."
+      },
+      "altTextData": {
+        "type": "array",
+        "description": "altText fed from an upstream edge. Takes precedence over altText.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "statusFilterData": {
+        "type": "array",
+        "description": "statusFilter fed from an upstream edge. Takes precedence over statusFilter. wordpress only — stripe offers no connection point on that field.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "dateFromData": {
+        "type": "array",
+        "description": "dateFrom fed from an upstream edge. Takes precedence over dateFrom. wordpress only — stripe offers no connection point on that field.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "dateToData": {
+        "type": "array",
+        "description": "dateTo fed from an upstream edge. Takes precedence over dateTo. wordpress only — stripe offers no connection point on that field.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "database": {
+        "type": "string",
+        "description": "notion: id of the database. Required by a database_records pull and by create_database_record and update_database_record."
+      },
+      "sortProperty": {
+        "type": "string",
+        "description": "notion: property name a database_records pull sorts by. Used only when sortPropertyData is empty."
+      },
+      "sortPropertyData": {
+        "type": "array",
+        "description": "sortProperty fed from an upstream edge. Takes precedence over sortProperty.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "sortDirection": {
+        "type": "string",
+        "description": "notion: sort direction of a database_records pull, defaulting to descending.",
+        "enum": ["ascending", "descending"]
+      },
+      "page_id": {
+        "type": "string",
+        "description": "notion: id of the page. Required by a blocks pull and by update_page_properties and append_content. wordpress: id of the page an update_page acts on, where it is required; the editor writes postId for that action instead, so set page_id. Used only when page_idData is empty."
+      },
+      "page_idData": {
+        "type": "array",
+        "description": "page_id fed from an upstream edge. Takes precedence over page_id.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "parent": {
+        "type": "string",
+        "description": "notion: id of the page or database a create_page push creates under. Required by that action. clickup: id of the task a create_task creates a subtask under; optional."
+      },
+      "record_id": {
+        "type": "string",
+        "description": "notion: id of the database record update_database_record acts on. Required by that action. Used only when record_idData is empty."
+      },
+      "record_idData": {
+        "type": "array",
+        "description": "record_id fed from an upstream edge. Takes precedence over record_id.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "title": {
+        "type": "string",
+        "description": "notion, wordpress: the title of the created or updated record. notion requires it on create_page and treats it as optional on update_page_properties; wordpress offers it on all four post and page actions. Used only when titleData is empty."
+      },
+      "titleData": {
+        "type": "array",
+        "description": "title fed from an upstream edge. Takes precedence over title.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "content": {
+        "type": "string",
+        "description": "notion, wordpress: the body of the created or updated record. notion takes markdown and converts it to blocks — optional on create_page, required by append_content; wordpress takes it on all four post and page actions. Used only when contentData is empty; on a push it also fills pushDataInput when that is still empty."
+      },
+      "contentData": {
+        "type": "array",
+        "description": "content fed from an upstream edge. Takes precedence over content.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "notionProperties": {
+        "type": "object",
+        "description": "notion: database record properties to write, as a map of property name to value. Required and non-empty for update_database_record. The executor also accepts the alias \"properties\", which the editor never writes.",
+        "additionalProperties": true
+      },
+      "notionFilter": {
+        "type": "object",
+        "description": "notion: structured filter applied to a database_records pull, translated to the Notion filter syntax. The executor also accepts the alias \"filter\", which the editor never writes.",
+        "additionalProperties": true
+      },
+      "channel": {
+        "type": "string",
+        "description": "slack: the channel id a pull reads from or a push writes to. Required by every push action, and by a channel_history pull; optional on a files pull, where it narrows the result."
+      },
+      "excludeArchived": {
+        "type": "boolean",
+        "description": "slack: leave archived channels out of a channels pull. Defaults to true."
+      },
+      "types": {
+        "type": "string",
+        "description": "slack: which channels a channels pull returns.",
+        "enum": ["public_channel", "private_channel"]
+      },
+      "includeLocale": {
+        "type": "boolean",
+        "description": "slack: ask a users pull for each member locale. Defaults to false."
+      },
+      "oldest": {
+        "type": "string",
+        "description": "slack: legacy Slack ts for the oldest message a channel_history pull returns. Superseded by dateFrom, which the UI writes now; still read when dateFrom is empty. Prefer dateFrom on new nodes."
+      },
+      "latest": {
+        "type": "string",
+        "description": "slack: legacy Slack ts for the newest message a channel_history pull returns. Superseded by dateTo, which the UI writes now; still read when dateTo is empty. Prefer dateTo on new nodes."
+      },
+      "threadOnly": {
+        "type": "boolean",
+        "description": "slack: offered by the editor on a channel_history pull, but the worker never reads it: a channel_history pull always returns the channel history, not one thread."
+      },
+      "thread_ts": {
+        "type": "string",
+        "description": "slack: the parent message ts of a thread. Only a post_message push reads it, to reply inside that thread; a channel_history pull ignores it."
+      },
+      "timestamp": {
+        "type": "string",
+        "description": "slack: ts of the message an update_message, delete_message or add_reaction acts on. Required by all three."
+      },
+      "richFormatting": {
+        "type": "boolean",
+        "description": "slack: send Block Kit instead of plain text on a post_message push. Defaults to false, and turning it on is what makes blockKitJson apply."
+      },
+      "blockKitJson": {
+        "type": "string",
+        "description": "slack: Block Kit blocks as a JSON string, for a post_message push. Only applies when richFormatting is on. Used only when blockKitJsonData is empty."
+      },
+      "blockKitJsonData": {
+        "type": "array",
+        "description": "blockKitJson fed from an upstream edge. Takes precedence over blockKitJson.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "fileUrl": {
+        "type": "string",
+        "description": "slack, wordpress: URL of the file the upload push sends. slack requires it on upload_file; wordpress takes it on upload_media. Used only when fileUrlData is empty."
+      },
+      "fileUrlData": {
+        "type": "array",
+        "description": "fileUrl fed from an upstream edge. Takes precedence over fileUrl.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "filename": {
+        "type": "string",
+        "description": "slack: name to give the uploaded file on an upload_file push."
+      },
+      "initial_comment": {
+        "type": "string",
+        "description": "slack: message posted alongside the file on an upload_file push."
+      },
+      "name": {
+        "type": "string",
+        "description": "slack: the new channel topic on a set_topic push, required by that action. clickup: the task name — required by create_task, and the new name on update_task; an upstream text value fills it when it is empty. Used only when nameData is empty."
+      },
+      "nameData": {
+        "type": "array",
+        "description": "name fed from an upstream edge. Takes precedence over name.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "reactionName": {
+        "type": "string",
+        "description": "slack: emoji name an add_reaction push applies, required by that action. The accepted names come from the connected workspace."
+      },
+      "post_at": {
+        "type": "string",
+        "description": "slack: when a schedule_message push should publish, required by that action. Used only when post_atData is empty."
+      },
+      "post_atData": {
+        "type": "array",
+        "description": "post_at fed from an upstream edge. Takes precedence over post_at.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "selectedProperties": {
+        "type": "array",
+        "description": "hubspot: which HubSpot property names a pull returns. Empty fetches the default set.",
+        "items": {"type": "string"}
+      },
+      "entityId": {
+        "type": "string",
+        "description": "hubspot: id of the single record to read. Setting it is what selects one record instead of a list. Used only when entityIdData is empty."
+      },
+      "entityIdData": {
+        "type": "array",
+        "description": "entityId fed from an upstream edge. Takes precedence over entityId.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "query": {
+        "type": "string",
+        "description": "hubspot: search term applied to a pull, matched against the record name. Used only when queryData is empty."
+      },
+      "queryData": {
+        "type": "array",
+        "description": "query fed from an upstream edge. Takes precedence over query.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "sortBy": {
+        "type": "string",
+        "description": "hubspot: property name a pull sorts by, and the accepted values depend on pullObjectType. deals: createdate, closedate, hs_lastmodifieddate, dealname. contacts: createdate, hs_lastmodifieddate, firstname, lastname. companies: createdate, hs_lastmodifieddate, name."
+      },
+      "sortOrder": {
+        "type": "string",
+        "description": "hubspot: sort direction of a pull, applied only when sortBy is set. \"ASC\" sorts ascending; any other value, an absent one included, sorts descending. The editor shows ASC when the field is unset but does not store it, so set it explicitly.",
+        "enum": ["ASC", "DESC"]
+      },
+      "dealstatus": {
+        "type": "string",
+        "description": "hubspot: deal status a pull filters on, defaulting to all. Only offered when pullObjectType is deals.",
+        "enum": ["all", "open", "won", "lost"]
+      },
+      "email": {
+        "type": "string",
+        "description": "hubspot: identifies the contact on upsert_contact, where it is required — the contact is created if the email is new and updated if it already exists. Used only when emailData is empty."
+      },
+      "emailData": {
+        "type": "array",
+        "description": "email fed from an upstream edge. Takes precedence over email.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "domain": {
+        "type": "string",
+        "description": "hubspot: identifies the company on upsert_company, where it is required. The company is created if the domain is new and updated if exactly one matches; if several companies share it the run fails, and they must be merged in HubSpot first. Used only when domainData is empty."
+      },
+      "domainData": {
+        "type": "array",
+        "description": "domain fed from an upstream edge. Takes precedence over domain.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "dealname": {
+        "type": "string",
+        "description": "hubspot: name of the deal on create_deal, where HubSpot requires it. Used only when dealnameData is empty."
+      },
+      "dealnameData": {
+        "type": "array",
+        "description": "dealname fed from an upstream edge. Takes precedence over dealname.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "pipeline": {
+        "type": "string",
+        "description": "hubspot: pipeline id on create_deal. The editor uses it only to list that pipeline's stages for dealstage; the run does not send it to HubSpot, which receives only dealname, dealstage and hubspotProperties. The valid ids come from the connected portal, so they are not enumerated here."
+      },
+      "dealstage": {
+        "type": "string",
+        "description": "hubspot: stage id for create_deal, required. The valid ids come from the selected pipeline in the connected portal."
+      },
+      "recordId": {
+        "type": "string",
+        "description": "hubspot: id of the record an update_contact, update_company or update_deal acts on. Required by all three, and the run fails if no record has it. pinecone: the record id an update_metadata push changes, required there, or the id an upsert_records push writes; empty upsert ids default to one id per connection, so every node on that connection overwrites the same record. Used only when recordIdData is empty."
+      },
+      "recordIdData": {
+        "type": "array",
+        "description": "recordId fed from an upstream edge. Takes precedence over recordId.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "hubspotProperties": {
+        "type": "object",
+        "description": "hubspot: extra HubSpot properties to write, as a map of property name to value. Applied on top of the fields above; a name HubSpot reports as read-only or calculated is rejected.",
+        "additionalProperties": {"type": "string"}
+      },
+      "indexName": {
+        "type": "string",
+        "description": "pinecone: the index every pull and push acts on. Required. The valid names come from the connected Pinecone project, so they are not enumerated here."
+      },
+      "namespace": {
+        "type": "string",
+        "description": "pinecone: the namespace inside the index. namespaceOverride wins when it is set. Empty means the default namespace."
+      },
+      "namespaceOverride": {
+        "type": "string",
+        "description": "pinecone: a namespace typed or fed by an edge, used instead of namespace when it is not empty. Used only when namespaceOverrideData is empty."
+      },
+      "namespaceOverrideData": {
+        "type": "array",
+        "description": "namespaceOverride fed from an upstream edge. Takes precedence over namespaceOverride.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "queryText": {
+        "type": "string",
+        "description": "pinecone: the text a search pull looks for, required there. Used only when queryTextData is empty."
+      },
+      "queryTextData": {
+        "type": "array",
+        "description": "queryText fed from an upstream edge. Takes precedence over queryText.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "topK": {
+        "type": "number",
+        "description": "pinecone: how many matches a search or vector_query pull returns, defaulting to 5 with a ceiling of 10000."
+      },
+      "metadataFilter": {
+        "type": "string",
+        "description": "pinecone: a Pinecone metadata filter as a JSON object, for example {\"category\":{\"$eq\":\"handbook\"}}. Optional on search and vector_query; required by delete_records when deleteScope is filter. Used only when metadataFilterData is empty."
+      },
+      "metadataFilterData": {
+        "type": "array",
+        "description": "metadataFilter fed from an upstream edge. Takes precedence over metadataFilter. Two edges into it produce invalid JSON.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "embedModel": {
+        "type": "string",
+        "description": "pinecone: the embedding model for a search pull or an upsert_records push on an index without integrated embedding. Empty or \"__integrated__\" picks the hosted model that matches the index dimension."
+      },
+      "includeValues": {
+        "type": "boolean",
+        "description": "pinecone: also return vector values, on fetch_vectors, vector_query and search on an index without integrated embedding. Defaults to false."
+      },
+      "includeMetadata": {
+        "type": "boolean",
+        "description": "pinecone: return metadata on a vector_query pull. Defaults to true."
+      },
+      "outputFormat": {
+        "type": "string",
+        "description": "pinecone: \"text\" returns search and vector_query matches as plain text; any other value returns JSON. fetch_vectors ignores it.",
+        "enum": ["json", "text"]
+      },
+      "queryVector": {
+        "type": "string",
+        "description": "pinecone: a JSON array of numbers to search with on a vector_query pull, for example [0.12, -0.03]. Set this or queryById, not both. Used only when queryVectorData is empty."
+      },
+      "queryVectorData": {
+        "type": "array",
+        "description": "queryVector fed from an upstream edge. Takes precedence over queryVector.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "queryById": {
+        "type": "string",
+        "description": "pinecone: the id of a stored record whose vector a vector_query pull searches with. Set this or queryVector, not both. Used only when queryByIdData is empty."
+      },
+      "queryByIdData": {
+        "type": "array",
+        "description": "queryById fed from an upstream edge. Takes precedence over queryById.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "ids": {
+        "type": "string",
+        "description": "pinecone: record ids separated by commas or new lines. Required by fetch_vectors (at most 100) and by delete_records when deleteScope is ids (at most 1000). Used only when idsData is empty."
+      },
+      "idsData": {
+        "type": "array",
+        "description": "ids fed from an upstream edge. Takes precedence over ids.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "idPrefix": {
+        "type": "string",
+        "description": "pinecone: only list ids that start with this prefix, on a list_ids pull. Used only when idPrefixData is empty."
+      },
+      "idPrefixData": {
+        "type": "array",
+        "description": "idPrefix fed from an upstream edge. Takes precedence over idPrefix.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "paginationToken": {
+        "type": "string",
+        "description": "pinecone: the token a previous list_ids pull returned, to read the next page. Used only when paginationTokenData is empty."
+      },
+      "paginationTokenData": {
+        "type": "array",
+        "description": "paginationToken fed from an upstream edge. Takes precedence over paginationToken.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "chunkSize": {
+        "type": "number",
+        "description": "pinecone: on upsert_records, split the text into chunks of this many characters stored as <recordId>#<n>. 0 or empty stores one record."
+      },
+      "vectorsJson": {
+        "type": "string",
+        "description": "pinecone: the records an upsert_vectors push writes, as a JSON array of {\"id\", \"values\": [numbers], \"metadata\"}. Required. Used only when vectorsJsonData is empty."
+      },
+      "vectorsJsonData": {
+        "type": "array",
+        "description": "vectorsJson fed from an upstream edge. Takes precedence over vectorsJson. Two edges into it produce invalid JSON.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "deleteScope": {
+        "type": "string",
+        "description": "pinecone: what a delete_records push deletes: ids (the default), filter (every record matching metadataFilter) or namespace (every record in the namespace, which needs deleteAllConfirm). The editor shows ids when it is unset but does not store it, so set it explicitly.",
+        "enum": ["ids", "filter", "namespace"]
+      },
+      "deleteAllConfirm": {
+        "type": "string",
+        "description": "pinecone: must be \"DELETE ALL\" (any case) for a delete_records push with deleteScope namespace. The default namespace cannot be wiped."
+      },
+      "table": {
+        "type": "string",
+        "description": "supabase: the table every pull and push acts on. Required. The valid names come from the connected project, so they are not enumerated here."
+      },
+      "columns": {
+        "type": "array",
+        "description": "supabase: the columns a rows pull returns, as an array or a comma-separated string. Empty returns every column.",
+        "items": {"type": "string"}
+      },
+      "filters": {
+        "type": "string",
+        "description": "supabase: one PostgREST filter per line, as column=operator.value (for example status=eq.active). Operators: eq, neq, gt, gte, lt, lte, like, ilike, is, in, cs, cd, fts, plfts, phfts, wfts. Optional on rows and count pulls; required by update_rows and delete_rows. An edge into this field reaches the run only through the value the editor copies into filters, never through filtersData."
+      },
+      "orderDirection": {
+        "type": "string",
+        "description": "supabase: sort direction of a rows pull. \"asc\" sorts ascending; anything else, an absent value included, sorts descending.",
+        "enum": ["asc", "desc"]
+      },
+      "offset": {
+        "type": "number",
+        "description": "supabase: how many rows a rows pull skips."
+      },
+      "rows": {
+        "type": "string",
+        "description": "supabase: the rows an insert_rows, upsert_rows or update_rows push sends, as a JSON object or array of objects. update_rows uses only the first row. An edge into this field reaches the run only through the value the editor copies into rows, never through rowsData."
+      },
+      "onConflict": {
+        "type": "string",
+        "description": "supabase: the column an upsert_rows push matches existing rows on."
+      }
+    },
+    "required": ["provider"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {"type": "string", "description": "Result text from the provider call."},
+      "output": {
+        "type": "string",
+        "description": "Mirror of text, kept for downstream nodes that read \"output\"."
+      },
+      "errorMessage": {
+        "type": "string",
+        "description": "User-facing reason the call failed; null on success. Read it before retrying — a provider refusal and a missing connection surface here rather than as an empty result."
+      },
+      "errorStatusCode": {
+        "type": "number",
+        "description": "Status code the provider returned when the call failed; null on success."
+      }
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "blobConfig", "dataField": "blobConfig"},
+      {"handle": "input"},
+      {"handle": "pushDataInput", "dataField": "pushDataInput"},
+      {"handle": "field_text", "dataField": "text"},
+      {"handle": "field_title", "dataField": "title"},
+      {"handle": "field_content", "dataField": "content"},
+      {"handle": "field_fileUrl", "dataField": "fileUrl"},
+      {"handle": "field_post_at", "dataField": "post_at"},
+      {"handle": "field_name", "dataField": "name"},
+      {"handle": "field_blockKitJson", "dataField": "blockKitJson"},
+      {"handle": "field_payload", "dataField": "payload"},
+      {"handle": "field_customHeaders", "dataField": "customHeaders"},
+      {"handle": "field_altText", "dataField": "altText"},
+      {"handle": "field_author", "dataField": "author"},
+      {"handle": "field_authorFilter", "dataField": "authorFilter"},
+      {"handle": "field_categories", "dataField": "categories"},
+      {"handle": "field_categoryFilter", "dataField": "categoryFilter"},
+      {"handle": "field_customerId", "dataField": "customerId"},
+      {"handle": "field_dateFrom", "dataField": "dateFrom"},
+      {"handle": "field_dateTo", "dataField": "dateTo"},
+      {"handle": "field_dealname", "dataField": "dealname"},
+      {"handle": "field_domain", "dataField": "domain"},
+      {"handle": "field_email", "dataField": "email"},
+      {"handle": "field_entityId", "dataField": "entityId"},
+      {"handle": "field_featuredImageUrl", "dataField": "featuredImageUrl"},
+      {"handle": "field_limit", "dataField": "limit"},
+      {"handle": "field_mediaType", "dataField": "mediaType"},
+      {"handle": "field_orderBy", "dataField": "orderBy"},
+      {"handle": "field_page_id", "dataField": "page_id"},
+      {"handle": "field_perPage", "dataField": "perPage"},
+      {"handle": "field_postId", "dataField": "postId"},
+      {"handle": "field_query", "dataField": "query"},
+      {"handle": "field_recordId", "dataField": "recordId"},
+      {"handle": "field_record_id", "dataField": "record_id"},
+      {"handle": "field_search", "dataField": "search"},
+      {"handle": "field_searchQuery", "dataField": "searchQuery"},
+      {"handle": "field_slug", "dataField": "slug"},
+      {"handle": "field_sortProperty", "dataField": "sortProperty"},
+      {"handle": "field_status", "dataField": "status"},
+      {"handle": "field_statusFilter", "dataField": "statusFilter"},
+      {"handle": "field_tagFilter", "dataField": "tagFilter"},
+      {"handle": "field_tags", "dataField": "tags"},
+      {"handle": "field_toolName", "dataField": "toolName"},
+      {"handle": "field_toolArguments", "dataField": "toolArguments"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/ThirdPartyIntegration/ThirdPartyIntegrationNode.tsx",
+    "frontFields": [
+      "blobConfig", "collapsed", "executionError", "executionStatus", "flowTrigger", "id",
+      "integrationId", "label", "mode", "output", "outputSize", "placement", "previewIndex",
+      "sensitiveFields", "text"
+    ],
+    "workerModule": "src/modules/nodes/third-party-integration",
+    "workerFields": [
+      "Data", "amountDollars", "blobConfig", "blobConfigData", "blockKitJson", "connectedByUserId",
+      "content", "currency", "customHeaders", "customerEmail", "customerId", "customerName",
+      "dateFrom", "dateTo", "description", "dueDate", "errorMessage", "errorStatusCode",
+      "executionStatus", "fileUrl", "idPrefix", "ids", "integrationId", "invoiceId", "label",
+      "limit", "metadataFilter", "metadataJson", "mode", "name", "namespaceOverride",
+      "paginationToken", "payload", "post_at", "priceRecurringInterval", "productId",
+      "productName", "provider", "pushDataInput", "queryById", "queryText", "queryVector",
+      "recordId", "searchQuery", "statusFilter", "text", "textData", "title", "vectorsJson"
+    ]
+  },
+  "internalFields": {
+    "Data": "Edge-filled by the platform: a value wired into the generic input handle lands here (no dataField maps it). The worker uses it as the upstream text when textData is empty (payload-builder.ts:201-203); wire an edge instead of writing it."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```
+
+## Related pages
+
+- [Client: third-party integration node](/client/specific-features/third-party-integration-node)
+- [Main API: third-party integrations architecture](/main-api/specific-features/third-party-integrations-architecture)

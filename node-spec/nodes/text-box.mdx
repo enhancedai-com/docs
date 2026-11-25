@@ -1,0 +1,78 @@
+---
+title: "Text Box"
+sidebarTitle: "Text Box"
+description: "Displays or passes a static or dynamic text value through the flow."
+---
+
+<Info>
+  Node type `textBox` in the [Utility](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Text Box — Holds static text that feeds into other nodes via content connectors. Content-only node with NO process connections.
+FIELDS:
+- text: The exact text content. Could be instructions, reference data, templates, examples, or any static content another node needs.
+TIP: Often used to hold system prompts, instruction sets, or reference material that feeds into an ATG's instruction or content field. Whatever you write here is passed verbatim to the connected node.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "textBox",
+  "label": "Text Box",
+  "category": "Utility",
+  "description": "Displays or passes a static or dynamic text value through the flow.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {"type": "string", "description": "Fallback text, used only when textData is empty."},
+      "textData": {
+        "type": "array",
+        "description": "Text content fed from an upstream edge. When non-empty, takes precedence over text.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"text": {"type": "string", "description": "Text output"}}
+  },
+  "handles": {
+    "sourceHandles": [{"handle": "textOutput", "role": "data"}],
+    "targetHandles": [{"handle": "input"}, {"handle": "inputText", "dataField": "text"}],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": false
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/TextBoxNode.tsx",
+    "frontFields": [
+      "collapsed", "disabled", "id", "inputSize", "label", "sensitiveFields", "text", "textData"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {
+    "disabled": "Legacy editor state: the component still reads it to lock the text input, but the current editor never writes it and no executor reads it."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

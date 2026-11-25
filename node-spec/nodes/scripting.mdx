@@ -1,0 +1,162 @@
+---
+title: "Scripting (Scripting Node)"
+sidebarTitle: "Scripting"
+description: "Executes custom JavaScript or Python code within the flow."
+---
+
+<Info>
+  Node type `scripting` in the [Logic](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Scripting Node — Runs custom JavaScript or Python code for data transformation, parsing, logic, and calculations.
+FIELDS:
+- script: Complete, runnable code. Variables injected as varOne, varTwo, etc. Must produce output via console.log(). Include error handling and comments for complex logic. Use \n for newlines in strings.
+CRITICAL — INPUT TYPE HANDLING:
+Injected variables (varOne, varTwo, etc.) may arrive as JSON strings OR already-parsed objects depending on the upstream node. ALWAYS normalize at the top of your script:
+  const data = typeof varOne === 'string' ? JSON.parse(varOne) : varOne;
+Then work with `data` instead of `varOne` directly. Do this for every injected variable that might contain structured data (varTwo, varThree, etc.).
+RULES:
+1. NEVER redeclare injected variables (e.g., `const varOne = {...}`). This shadows the real injected input and replaces it with hardcoded data — the #1 cause of silent failures.
+2. Bare expressions like `myVar;` do NOT reliably return values. Always use console.log() to emit output from the node.
+3. Always use the typeof/JSON.parse guard for ANY variable that might contain structured data — upstream nodes are inconsistent about whether they pass strings or objects.
+4. When extracting nested properties, use optional chaining as safety:
+     data?.images?.[0]?.url
+   This prevents crashes if the structure is unexpected or missing.
+5. Wrap complex logic in a try/catch so malformed input doesn't silently kill the node.
+TEMPLATE — Extract a value from a JSON input:
+  const data = typeof varOne === 'string' ? JSON.parse(varOne) : varOne;
+  const result = data?.images?.[0]?.url ?? null;
+  console.log(result);
+TEMPLATE — Transform and return a new object:
+  const data = typeof varOne === 'string' ? JSON.parse(varOne) : varOne;
+  const output = {
+    url: data?.images?.[0]?.url ?? null,
+    status: data?.status ?? 'unknown'
+  };
+  console.log(JSON.stringify(output));
+TEMPLATE — Safe extraction with error handling:
+  try {
+    const data = typeof varOne === 'string' ? JSON.parse(varOne) : varOne;
+    const result = data?.images?.[0]?.url ?? null;
+    if (!result) {
+      console.log('ERROR: No URL found in response');
+    } else {
+      console.log(result);
+    }
+  } catch (e) {
+    console.log('ERROR: Failed to parse input — ' + e.message);
+  }
+COMMON MISTAKES TO AVOID:
+- ❌ `const varOne = { images: [...] };` — shadows the injected variable
+- ❌ `varOne.images[0].url;` — bare expression, no output; also no type guard so crashes if varOne is a string
+- ❌ `return data.images[0].url;` — bare return at top level fails because the node wraps code in an async function
+- ✅ `const data = typeof varOne === 'string' ? JSON.parse(varOne) : varOne;` then `console.log(data?.images?.[0]?.url);`
+The single most important takeaway: ALWAYS `typeof` check and `JSON.parse` your injected variables before accessing nested properties, and ALWAYS use console.log() for output.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "scripting",
+  "label": "Scripting Node",
+  "category": "Logic",
+  "description": "Executes custom JavaScript or Python code within the flow.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "language": {
+        "type": "string",
+        "description": "Programming language. One of: JavaScript, Python.",
+        "enum": ["JavaScript", "Python"]
+      },
+      "script": {
+        "type": "string",
+        "description": "Code to execute. Used only when scriptData is empty; scriptData[0].text takes precedence when present."
+      },
+      "scriptData": {
+        "type": "array",
+        "description": "Script content fed from an upstream edge. When non-empty, scriptData[0].text is used instead of script.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "variables": {
+        "type": "array",
+        "description": "Variables accessible inside the script.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "name": {"type": "string"},
+            "value": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": ["language"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "result": {"description": "Value returned by the script"},
+      "console": {
+        "type": "array",
+        "description": "Console output produced while running the script",
+        "items": {"type": "string"}
+      }
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "console", "role": "data"},
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [{"handle": "input"}, {"handle": "script", "dataField": "script"}],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/Scripting.tsx",
+    "frontFields": [
+      "collapsed", "console", "consoleSize", "executionError", "executionStatus", "flowTrigger",
+      "id", "label", "language", "myId", "outputSize", "placement", "previewIndex", "result",
+      "script", "scriptData", "sensitiveFields", "text", "variables"
+    ],
+    "workerModule": "src/modules/nodes/scripting",
+    "workerFields": [
+      "console", "consoleAsResult", "executionStatus", "language", "result", "script",
+      "scriptData", "variables"
+    ]
+  },
+  "internalFields": {
+    "consoleAsResult": "Executor switch that neither the editor nor any stored node sets; the worker defaults it to true (scripting.service.ts:161), which makes the last console line the result when the script returns nothing, the behaviour the guide relies on.",
+    "consoleSize": "Editor metric: the size of the console output, computed for display.",
+    "text": "Not read by this node: the extractor picks up data.text in the shared TagInput (Test/TagInput.tsx:1321), where data is one item of a connected scriptData array, and neither the component nor the worker reads the node's own text."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```
+
+## Related pages
+
+- [Worker: scripting](/worker/node/scripting)

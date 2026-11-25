@@ -1,0 +1,181 @@
+---
+title: "MCP Client"
+sidebarTitle: "MCP Client"
+description: "Calls a tool on a third-party MCP server (self-hosted URL or a saved integration) and returns the result."
+---
+
+<Info>
+  Node type `mcpNode` in the [Integration](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## Specification
+
+```json node-spec
+{
+  "type": "mcpNode",
+  "label": "MCP Client",
+  "category": "Integration",
+  "description": "Calls a tool on a third-party MCP server (self-hosted URL or a saved integration) and returns the result.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "serverUrl": {
+        "type": "string",
+        "description": "Remote MCP server URL. Required unless integrationId is set. Run through \"{{<nodeId>.<key>}}\" interpolation before use, whether or not serverUrlData is populated."
+      },
+      "authToken": {
+        "type": "string",
+        "description": "Bearer token for serverUrl, if required. Run through \"{{<nodeId>.<key>}}\" interpolation before use, whether or not authTokenData is populated."
+      },
+      "integrationId": {
+        "type": "string",
+        "description": "Id of a saved MCP connection/integration, as an alternative to serverUrl."
+      },
+      "integrationResource": {
+        "type": "string",
+        "description": "Resource identifier scoped to the integration, if applicable."
+      },
+      "toolName": {
+        "type": "string",
+        "description": "Name of the tool to call on the target MCP server. Run through \"{{<nodeId>.<key>}}\" interpolation before use, whether or not toolNameData is populated."
+      },
+      "prompt": {
+        "type": "string",
+        "description": "Prompt/input text sent to the tool. Run through \"{{<nodeId>.<key>}}\" interpolation before use, whether or not promptData is populated."
+      },
+      "toolArguments": {
+        "type": "string",
+        "description": "Arguments for the tool, as a JSON object matching the tool's inputSchema — for example {\"query\":\"invoices\"}. When set, it is sent as-is and NO model call is made to infer arguments from the prompt; leave it empty to keep the prompt-driven behaviour every node saved before this field relies on. A value that is not a JSON object is refused before the tool runs. An empty object counts as unset."
+      },
+      "toolArgumentsData": {
+        "type": "array",
+        "description": "toolArguments fed from an upstream edge. Takes precedence over toolArguments; its joined text must still be a JSON object.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "toolContext": {
+        "type": "object",
+        "description": "Additional structured context passed to the tool call."
+      },
+      "sessionId": {
+        "type": "string",
+        "description": "Existing MCP session id. The worker copies it into the connection target, but the current MCP client never sends it to the server, so setting it has no effect today."
+      },
+      "protocolVersion": {
+        "type": "string",
+        "description": "MCP protocol version sent as the MCP-Protocol-Version header on a remote HTTP connection. Empty lets the client negotiate it."
+      },
+      "clearOnExecution": {
+        "type": "boolean",
+        "description": "Editor setting \"Clear output upon run\". Only the editor acts on it, when a run starts from the canvas; back resets this node's output before every run anyway."
+      },
+      "serverUrlData": {
+        "type": "array",
+        "description": "serverUrl fed from an upstream edge. Takes precedence over serverUrl: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only serverUrl means an edge-linked value never arrives. Its joined text is run through \"{{<nodeId>.<key>}}\" interpolation, exactly like the plain serverUrl fallback.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "authTokenData": {
+        "type": "array",
+        "description": "authToken fed from an upstream edge. Takes precedence over authToken: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only authToken means an edge-linked value never arrives. Its joined text is run through \"{{<nodeId>.<key>}}\" interpolation, exactly like the plain authToken fallback.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "toolNameData": {
+        "type": "array",
+        "description": "toolName fed from an upstream edge. Takes precedence over toolName: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only toolName means an edge-linked value never arrives. Its joined text is run through \"{{<nodeId>.<key>}}\" interpolation, exactly like the plain toolName fallback.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "promptData": {
+        "type": "array",
+        "description": "prompt fed from an upstream edge. Takes precedence over prompt: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only prompt means an edge-linked value never arrives. Its joined text is run through \"{{<nodeId>.<key>}}\" interpolation, exactly like the plain prompt fallback.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"text": {"type": "string", "description": "Formatted tool result"}}
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "authToken", "dataField": "authToken"},
+      {"handle": "input"},
+      {"handle": "prompt", "dataField": "prompt"},
+      {"handle": "serverUrl", "dataField": "serverUrl"},
+      {"handle": "toolName", "dataField": "toolName"},
+      {"handle": "toolArguments", "dataField": "toolArguments"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/McpClient.tsx",
+    "frontFields": [
+      "authTokenData", "clearOnExecution", "collapsed", "executionStatus", "id", "label", "myId",
+      "placement", "previewIndex", "promptData", "sensitiveFields", "serverUrlData", "text",
+      "toolNameData"
+    ],
+    "workerModule": "src/modules/nodes/mcp",
+    "workerFields": [
+      "authToken", "authTokenData", "errorMessage", "errorStatusCode", "executionStatus",
+      "integrationId", "integrationResource", "label", "prompt", "promptData", "protocolVersion",
+      "serverUrl", "serverUrlData", "sessionId", "text", "toolArguments", "toolArgumentsData",
+      "toolContext", "toolName", "toolNameData"
+    ]
+  },
+  "internalFields": {},
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```
+
+## Related pages
+
+- [Worker: MCP](/worker/node/mcp)
+- [Client: MCP node](/client/specific-features/mcp-node)

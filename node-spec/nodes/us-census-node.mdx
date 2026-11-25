@@ -1,0 +1,82 @@
+---
+title: "US Census Data (US Census Node)"
+sidebarTitle: "US Census Data"
+description: "Queries the US Census Bureau API directly with its own \"get\"/\"for\" query parameters — there is no \"dataset\"/\"variables\"/\"geography\" abstraction. RUNTIME BEHAVIOUR: the Run button on the node executes it on the worker, but a full flow run has no step for this type and skips it, so inside a running flow it produces no output and nothing downstream can consume a result. Use it on the canvas, not as a step another node reads from."
+---
+
+<Info>
+  Node type `usCensusNode` in the [Integration](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+US Census — Queries the US Census Bureau data API.
+FIELDS:
+- get / for / year: ACS 5-year variable codes, the geography (e.g. "us", "state:06"), and the dataset end year.
+TIP: Use for demographic data, population stats, and economic indicators.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "usCensusNode",
+  "label": "US Census Node",
+  "category": "Integration",
+  "description": "Queries the US Census Bureau API directly with its own \"get\"/\"for\" query parameters — there is no \"dataset\"/\"variables\"/\"geography\" abstraction. RUNTIME BEHAVIOUR: the Run button on the node executes it on the worker, but a full flow run has no step for this type and skips it, so inside a running flow it produces no output and nothing downstream can consume a result. Use it on the canvas, not as a step another node reads from.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "get": {
+        "type": "string",
+        "description": "Census API \"get\" parameter: comma-separated ACS 5-year variable codes, e.g. \"B02001_001E\". NAME is always added. Defaults to \"B12001_001E\"."
+      },
+      "for": {
+        "type": "string",
+        "description": "Census API \"for\" parameter: the geography, e.g. \"us\", \"state:06\" or \"state:*\". Defaults to \"us\"."
+      },
+      "year": {
+        "type": "number",
+        "description": "End year of the ACS 5-year dataset. Defaults to 2022; a year before 2009 fails the run."
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"text": {"type": "string", "description": "Serialized census data"}}
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [{"handle": "input"}],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/UsCensusNode.tsx",
+    "frontFields": [
+      "canceled", "collapsed", "flowTrigger", "for", "get", "id", "label", "outputSize", "paused",
+      "placement", "previewIndex", "sensitiveFields", "text", "year"
+    ],
+    "workerModule": "src/modules/nodes/us-census",
+    "workerFields": [
+      "errorMessage", "executionStatus", "for", "get", "label", "text", "year"
+    ]
+  },
+  "internalFields": {},
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

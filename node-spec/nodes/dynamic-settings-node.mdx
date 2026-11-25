@@ -1,0 +1,168 @@
+---
+title: "Ai Model Switch (Dynamic Settings Node)"
+sidebarTitle: "Ai Model Switch"
+description: "Feeds model settings into a downstream AI node. selectedOption chooses WHICH settings panel the node exposes — \"text\" or \"voice\" — and nothing else is a valid value: any other string leaves the node rendered with no panel and no settings selected, which is silently useless."
+---
+
+<Info>
+  Node type `dynamicSettingsNode` in the [Utility](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## Specification
+
+```json node-spec
+{
+  "type": "dynamicSettingsNode",
+  "label": "Dynamic Settings Node",
+  "category": "Utility",
+  "description": "Feeds model settings into a downstream AI node. selectedOption chooses WHICH settings panel the node exposes — \"text\" or \"voice\" — and nothing else is a valid value: any other string leaves the node rendered with no panel and no settings selected, which is silently useless.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "selectedOption": {
+        "type": "string",
+        "description": "Which settings panel this node provides and which node type it feeds through the target's \"modelSettings\" handle: \"text\" merges this node's settings into a connected commandTextNode, \"voice\" into a connected voiceBoxNode. Unset behaves as \"text\", which is also the UI default. There is no \"default\"/\"select\"/\"both\" option.",
+        "enum": ["text", "voice"]
+      },
+      "aiSystem": {
+        "type": "string",
+        "description": "text panel: the provider merged into the connected commandTextNode, replacing its own aiSystem. The panel offers anthropic, openai, groq, gemini, perplexity and opensources; the text generator refuses opensources."
+      },
+      "aiModel": {
+        "type": "string",
+        "description": "text panel: the model merged into the connected commandTextNode, replacing its own aiModel."
+      },
+      "autoToken": {
+        "type": "boolean",
+        "description": "text panel: merged into the connected commandTextNode, replacing its value; same meaning as the commandTextNode field of the same name."
+      },
+      "aiTokens": {
+        "type": "number",
+        "description": "text panel: merged into the connected commandTextNode, replacing its value; same meaning as the commandTextNode field of the same name."
+      },
+      "aiTemperature": {
+        "type": "number",
+        "description": "text panel: merged into the connected commandTextNode, replacing its value; same meaning as the commandTextNode field of the same name."
+      },
+      "aiFp": {
+        "type": "number",
+        "description": "text panel: merged into the connected commandTextNode, replacing its value; same meaning as the commandTextNode field of the same name."
+      },
+      "aiPp": {
+        "type": "number",
+        "description": "text panel: merged into the connected commandTextNode, replacing its value; same meaning as the commandTextNode field of the same name."
+      },
+      "geminiMaxOutputTokens": {
+        "type": "number",
+        "description": "text panel: merged into the connected commandTextNode, replacing its value; same meaning as the commandTextNode field of the same name."
+      },
+      "temperature": {
+        "type": "number",
+        "description": "text panel: merged into the connected commandTextNode, replacing its value; same meaning as the commandTextNode field of the same name."
+      },
+      "topP": {
+        "type": "number",
+        "description": "text panel: merged into the connected commandTextNode, replacing its value; same meaning as the commandTextNode field of the same name."
+      },
+      "topK": {
+        "type": "number",
+        "description": "text panel: merged into the connected commandTextNode, replacing its value; same meaning as the commandTextNode field of the same name."
+      },
+      "groqMaxTokens": {
+        "type": "number",
+        "description": "text panel: merged into the connected commandTextNode, replacing its value; same meaning as the commandTextNode field of the same name."
+      },
+      "geminiTemp": {
+        "type": "number",
+        "description": "text panel: merged into the connected commandTextNode, replacing its value; same meaning as the commandTextNode field of the same name."
+      },
+      "geminiTopP": {
+        "type": "number",
+        "description": "text panel: merged into the connected commandTextNode, replacing its value; same meaning as the commandTextNode field of the same name."
+      },
+      "seed": {
+        "type": "number",
+        "description": "text panel: merged into the connected commandTextNode, replacing its value; same meaning as the commandTextNode field of the same name."
+      },
+      "groqStop": {
+        "type": "string",
+        "description": "text panel: merged into the connected commandTextNode, replacing its value; same meaning as the commandTextNode field of the same name."
+      },
+      "voiceSystem": {
+        "type": "string",
+        "description": "voice panel: the provider field merged into the connected voiceBoxNode. The voice executor reads voiceSystem only when the target has no aiSystem, and maps only \"elevenlabs.io\", \"play.ht\" and \"Groq\", so on a current voice node it does not change the provider."
+      },
+      "voiceId": {
+        "type": "string",
+        "description": "voice panel, elevenlabs: merged into the connected voiceBoxNode, replacing its value; same meaning as the voiceBoxNode field of the same name."
+      },
+      "stability": {
+        "type": "number",
+        "description": "voice panel, elevenlabs: merged into the connected voiceBoxNode, replacing its value; same meaning as the voiceBoxNode field of the same name."
+      },
+      "similarity_boost": {
+        "type": "number",
+        "description": "voice panel, elevenlabs: merged into the connected voiceBoxNode, replacing its value; same meaning as the voiceBoxNode field of the same name."
+      },
+      "style": {
+        "type": "number",
+        "description": "voice panel, elevenlabs: merged into the connected voiceBoxNode, replacing its value; same meaning as the voiceBoxNode field of the same name."
+      },
+      "use_speaker_boost": {
+        "type": "boolean",
+        "description": "voice panel, elevenlabs: merged into the connected voiceBoxNode, replacing its value; same meaning as the voiceBoxNode field of the same name."
+      },
+      "voice": {
+        "type": "string",
+        "description": "voice panel, playht: merged into the connected voiceBoxNode, replacing its value; same meaning as the voiceBoxNode field of the same name."
+      },
+      "speed": {
+        "type": "number",
+        "description": "voice panel, playht: merged into the connected voiceBoxNode, replacing its value; same meaning as the voiceBoxNode field of the same name."
+      },
+      "quality": {
+        "type": "string",
+        "description": "voice panel, playht: merged into the connected voiceBoxNode, replacing its value; same meaning as the voiceBoxNode field of the same name."
+      },
+      "outputFormat": {
+        "type": "string",
+        "description": "voice panel, playht: merged into the connected voiceBoxNode, replacing its value; same meaning as the voiceBoxNode field of the same name."
+      },
+      "sampleRate": {
+        "type": "number",
+        "description": "voice panel, playht: merged into the connected voiceBoxNode, replacing its value; same meaning as the voiceBoxNode field of the same name."
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {"type": "object", "properties": {}},
+  "handles": {
+    "sourceHandles": [{"handle": "outputModelTextSettings", "role": "data"}],
+    "targetHandles": [{"handle": "input"}],
+    "patterned": [
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": false
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/DynamicSettingNode.tsx",
+    "frontFields": [
+      "aiSystem", "audioUrl", "collapsed", "modelId", "outputFormat", "quality", "sampleRate",
+      "selectedOption", "sensitiveFields", "similarity_boost", "speed", "stability", "style",
+      "text", "title", "use_speaker_boost", "voice", "voiceId", "voiceSystem"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {
+    "title": "Read by the voice panel for display only. No input writes it and no executor reads it.",
+    "audioUrl": "Read by the voice panel for display only. No input writes it and no executor reads it from this node.",
+    "modelId": "Read by the voice panel for display only. No input writes it, and the ElevenLabs executor uses its own fixed model.",
+    "text": "Read by the voice panel for display only. It is removed before this node's settings are merged into the target."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

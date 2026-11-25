@@ -1,0 +1,150 @@
+---
+title: "SEC Data (SEC API Node)"
+sidebarTitle: "SEC Data"
+description: "Queries the SEC EDGAR full-text/filing search API. There is no \"ticker\" field — search by query text and formTypes. RUNTIME BEHAVIOUR: the Run button on the node executes it on the worker, but a full flow run has no step for this type and skips it, so inside a running flow it produces no output and nothing downstream can consume a result. Use it on the canvas, not as a step another node reads from."
+---
+
+<Info>
+  Node type `secApiNode` in the [Integration](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+SEC API — Queries SEC EDGAR APIs for company filings and financial data.
+FIELDS:
+- model: Which SEC API is called (e.g. sec-query, sec-full-text-search, sec-ticker). It decides what query holds.
+- query: The value the chosen model looks up. There is no ticker field: for a ticker lookup, set model to "sec-ticker" and put the ticker in query.
+TIP: Use for financial research, filing lookups, and company financial data.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "secApiNode",
+  "label": "SEC API Node",
+  "category": "Integration",
+  "description": "Queries the SEC EDGAR full-text/filing search API. There is no \"ticker\" field — search by query text and formTypes. RUNTIME BEHAVIOUR: the Run button on the node executes it on the worker, but a full flow run has no step for this type and skips it, so inside a running flow it produces no output and nothing downstream can consume a result. Use it on the canvas, not as a step another node reads from.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "model": {
+        "type": "string",
+        "description": "Which SEC API to call. Defaults to \"sec-query\". It decides what query holds: a search query for \"sec-query\", \"sec-full-text-search\", \"sec-trading\", \"sec-form-d\", \"sec-adv-firm-search\" and \"sec-adv-individual-registered-adviser\"; a filing URL for \"sec-extractor\"; a CRD number for the other \"sec-adv-*\" and \"sec-indirect-owners\"; a CIK, ticker, CUSIP or company name for \"sec-cik\", \"sec-ticker\", \"sec-cusip\" and \"sec-company-name\".",
+        "enum": [
+          "sec-query", "sec-full-text-search", "sec-extractor", "sec-trading", "sec-form-d",
+          "sec-adv-firm-search", "sec-adv-individual-registered-adviser", "sec-adv-direct-owners",
+          "sec-indirect-owners", "sec-adv-financial-industry-affiliations", "sec-adv-private-funds",
+          "sec-adv-brochure-api", "sec-cik", "sec-ticker", "sec-cusip", "sec-company-name"
+        ]
+      },
+      "query": {
+        "type": "string",
+        "description": "The value the chosen model looks up (see model). The run fails when neither query nor queryData has a value."
+      },
+      "formTypes": {
+        "type": "string",
+        "description": "\"sec-full-text-search\" only: comma-separated SEC form types, e.g. \"10-K,10-Q,8-K\"."
+      },
+      "startDate": {"type": "string", "description": "\"sec-full-text-search\" only: start of the filing date range."},
+      "endDate": {"type": "string", "description": "\"sec-full-text-search\" only: end of the filing date range."},
+      "section": {
+        "type": "string",
+        "description": "\"sec-extractor\" only: the filing item to extract, e.g. \"1A\"."
+      },
+      "type": {
+        "type": "string",
+        "description": "\"sec-extractor\" only: the format of the extracted section, e.g. \"Text\". Lowercased before the call."
+      },
+      "size": {
+        "type": "number",
+        "description": "Number of results to return, for the query-based models. Defaults to 10. NOT \"maxResults\"."
+      },
+      "from": {
+        "type": "number",
+        "description": "Result offset for pagination, for the query-based models. Defaults to 0."
+      },
+      "queryData": {
+        "type": "array",
+        "description": "query fed from an upstream edge. Takes precedence over query: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only query means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "sectionData": {
+        "type": "array",
+        "description": "section fed from an upstream edge. Takes precedence over section: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only section means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "typeData": {
+        "type": "array",
+        "description": "type fed from an upstream edge. Takes precedence over type: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only type means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"text": {"type": "string", "description": "Serialized filing results"}}
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "input"},
+      {"handle": "secNodeTarget", "dataField": "query"},
+      {"handle": "section", "dataField": "section"},
+      {"handle": "type", "dataField": "type"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/SecApiNode.tsx",
+    "frontFields": [
+      "canceled", "collapsed", "endDate", "flowTrigger", "formTypes", "from", "id", "label",
+      "model", "outputSize", "paused", "placement", "previewIndex", "query", "queryData",
+      "section", "sectionData", "sensitiveFields", "size", "startDate", "text", "type", "typeData"
+    ],
+    "workerModule": "src/modules/nodes/sec-api",
+    "workerFields": [
+      "endDate", "errorMessage", "executionStatus", "formTypes", "from", "label", "model", "query",
+      "queryData", "section", "sectionData", "size", "startDate", "text", "type", "typeData"
+    ]
+  },
+  "internalFields": {},
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

@@ -1,0 +1,124 @@
+---
+title: "Ai Video Generator"
+sidebarTitle: "Ai Video Generator"
+description: "Generates a video via Luma Labs Dream Machine. Two modes: \"Text to Video\" (prompt only) and \"Image to Video\" (prompt + a start image URL). Runs on the Temporal worker: create → long-poll Luma → upload to our storage → downstream nodes read the persisted URL from `text`."
+---
+
+<Info>
+  Node type `animationNode` in the [AI](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Video / Animation Generator — Generates video or animation from a text prompt.
+FIELDS:
+- prompt: Visual scene description including subject, motion, camera movement, style, lighting. Describe what HAPPENS over time.
+TIP: Include motion and change — video prompts need action, not just static scenes.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "animationNode",
+  "label": "AI Video Generator",
+  "category": "AI",
+  "description": "Generates a video via Luma Labs Dream Machine. Two modes: \"Text to Video\" (prompt only) and \"Image to Video\" (prompt + a start image URL). Runs on the Temporal worker: create → long-poll Luma → upload to our storage → downstream nodes read the persisted URL from `text`.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "prompt": {"type": "string", "description": "Video generation prompt."},
+      "type": {
+        "type": "string",
+        "enum": ["Text to Video", "Image to Video"],
+        "description": "Which generation mode to run. Defaults to \"Text to Video\". Image to Video also requires start_image or startImageInputData."
+      },
+      "model": {
+        "type": "string",
+        "enum": ["ray-2", "ray-flash-2"],
+        "description": "Luma model. ray-2 is higher quality; ray-flash-2 is faster/cheaper."
+      },
+      "aspect_ratio": {
+        "type": "string",
+        "enum": ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "9:21"],
+        "description": "Output aspect ratio."
+      },
+      "start_image": {
+        "type": "string",
+        "description": "Public URL of the starting image. Required when type = \"Image to Video\"."
+      },
+      "promptData": {
+        "type": "array",
+        "description": "Prompt fed from an upstream edge into \"animationPromptInput\" (overrides prompt). The run fails when both are empty.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "startImageInputData": {
+        "type": "array",
+        "description": "Start image URL fed from an upstream edge into \"startImageInput\" (overrides start_image).",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {"type": "string", "description": "URL of the generated video on our storage."}
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "animationPromptInput", "dataField": "prompt"},
+      {"handle": "input"},
+      {"handle": "startImageInput", "dataField": "startImageInput"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/AiVideoGenerator.tsx",
+    "frontFields": [
+      "canceled", "collapsed", "executionStatus", "flowTrigger", "id", "inputSize", "label",
+      "paused", "placement", "promptData", "run", "sensitiveFields", "startImageInputData",
+      "start_image", "text"
+    ],
+    "workerModule": "src/modules/nodes/ai-video-generator",
+    "workerFields": [
+      "aspect_ratio", "model", "prompt", "promptData", "spaceId", "startImageInputData",
+      "start_image", "text", "type"
+    ]
+  },
+  "internalFields": {
+    "run": "Editor state: the option picked in the node's Run menu, such as \"Run from here\". No executor reads it."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

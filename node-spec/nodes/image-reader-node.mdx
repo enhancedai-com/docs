@@ -1,0 +1,135 @@
+---
+title: "Ai Image Reader (AI Image Reader Node)"
+sidebarTitle: "Ai Image Reader"
+description: "Reads and analyses an image or file using vision AI or OCR. Runs in the worker; downstream nodes can consume its text output."
+---
+
+<Info>
+  Node type `imageReaderNode` in the [AI](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Image Reader — Analyzes an image using AI vision and returns text description or analysis.
+FIELDS:
+- prompt: What to analyze about the image. Specific prompts like "List all text visible in this image" or "Identify the products shown" produce better results than generic "describe this."
+TIP: The more specific the analysis request, the more useful the output.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "imageReaderNode",
+  "label": "AI Image Reader Node",
+  "category": "AI",
+  "description": "Reads and analyses an image or file using vision AI or OCR. Runs in the worker; downstream nodes can consume its text output.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "mode": {
+        "type": "string",
+        "description": "How the sources are read. \"image\" (the default) describes every source with a vision model, guided by prompt; \"file\" extracts the text of each source with ocrProvider. Both modes read src, srcData and uploadedFiles.",
+        "enum": ["image", "file"]
+      },
+      "src": {
+        "type": "string",
+        "description": "Source URL(s). One or more URLs separated by whitespace, comma or newline. Used only when srcData is empty."
+      },
+      "srcData": {
+        "type": "array",
+        "description": "Source URL(s) fed from an upstream edge into \"src\". Takes precedence over src.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "uploadedFiles": {
+        "type": "array",
+        "description": "Uploaded file references. Multiple entries supported for both image and file modes.",
+        "items": {
+          "type": "object",
+          "properties": {"name": {"type": "string"}, "src": {"type": "string"}}
+        }
+      },
+      "prompt": {
+        "type": "string",
+        "description": "What to ask about the image. \"image\" mode only; defaults to \"Describe this image\". Used only when promptData is empty."
+      },
+      "promptData": {
+        "type": "array",
+        "description": "Prompt fed from an upstream edge. Takes precedence over prompt. \"image\" mode only.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "ocrProvider": {
+        "type": "string",
+        "description": "\"file\" mode only: the OCR engine. Defaults to \"mistral_ocr\".",
+        "enum": ["mistral_ocr", "mistral_vision", "google_ocr", "google_ocr_form_parse"]
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "AI-generated description/analysis of the image or file"
+      }
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "input"},
+      {"handle": "prompt"},
+      {"handle": "src", "dataField": "src"},
+      {"handle": "imageGenCaption", "dataField": "caption"},
+      {"handle": "imageGenQuestion", "dataField": "question"},
+      {"handle": "imageGenContent", "dataField": "content"},
+      {"handle": "imgGenPrompt", "dataField": "prompt"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/ImageReader.tsx",
+    "frontFields": [
+      "collapsed", "executionStatus", "id", "label", "outputSize", "placement", "promptData",
+      "sensitiveFields", "srcData", "text", "uploadedFiles"
+    ],
+    "workerModule": "src/modules/nodes/image-reader",
+    "workerFields": [
+      "executionStatus", "mode", "model", "ocrProvider", "previewResponses", "prompt",
+      "promptData", "src", "srcData", "text", "uploadedFiles"
+    ]
+  },
+  "internalFields": {
+    "model": "Legacy: older editors stored the vision model here. The executor never reads it; \"image\" mode always uses gpt-4o."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

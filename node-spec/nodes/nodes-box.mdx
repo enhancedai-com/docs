@@ -1,0 +1,79 @@
+---
+title: "Object Caller (Nodes Box)"
+sidebarTitle: "Object Caller"
+description: "Calls a stored user-defined JSON object by id, optionally session-scoped."
+---
+
+<Info>
+  Node type `nodesBox` in the [Utility](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Object Viewer — Reads and writes a specific FluxPrompt object's data.
+FIELDS:
+- selectedId: The object ID to read and write.
+TIP: Useful for displaying stored object contents or updating its fields (append, replace or clear per field).
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "nodesBox",
+  "label": "Nodes Box (Object Caller)",
+  "category": "Utility",
+  "description": "Calls a stored user-defined JSON object by id, optionally session-scoped.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "selectedId": {
+        "type": "string",
+        "description": "Id of the stored object to call. Without it the node runs and changes nothing. Per-field settings live in dynamic keys named after the object's field ids (read them from the object, never guess): \"<fieldId>-in\" is the text written into that field, \"<fieldId>checked\" true replaces the field with it (false or absent appends it), and \"<fieldId>clearOnExecution\" true empties the field before a run."
+      },
+      "sessionEnabled": {
+        "type": "boolean",
+        "description": "Agent Session Mode: keep a separate copy of the object's field values per session. The run reads it from this node when it resets the object before a run; the write itself follows the object's own sessionEnabled."
+      },
+      "selectedSession": {
+        "type": "string",
+        "description": "Session key the object is read and written under when the object is session-enabled; defaults to \"default\"."
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {"type": "object", "properties": {}},
+  "handles": {
+    "sourceHandles": [{"handle": "outputFlow", "role": "control"}],
+    "targetHandles": [{"handle": "input"}],
+    "patterned": [
+      {"direction": "source", "pattern": "^.+-out$", "discriminating": true},
+      {"direction": "target", "pattern": "^.+-in$", "discriminating": true},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/ObjectCaller.tsx",
+    "frontFields": [
+      "canceled", "executionStatus", "flowTrigger", "id", "label", "localObject", "paused",
+      "selectedId", "sensitiveFields", "sessionEnabled", "text"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {
+    "localObject": "Display only: the settings dialog reads it to label the object Local or Global; whether an object is local is stored on the object itself, not on this node.",
+    "text": "Not a setting of this node: the field check finds a connection entry's text read inside the shared TagInput; some older stored nodes carry a copy of the object's field list here, which no executor reads."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

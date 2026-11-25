@@ -1,0 +1,100 @@
+---
+title: "Global Starter"
+sidebarTitle: "Global Starter"
+description: "Entry point that triggers the flow execution. IMPORTANT: the node id must contain the literal substring \"flow-global-starter\" (e.g. \"flow-global-starter_<anything>\") — the execution engine resolves the flow's starting edge by matching that substring in the id, not by node type. Any other id saves successfully but the flow will never actually run."
+---
+
+<Info>
+  Node type `globalStarter` in the [Input/Output](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## Specification
+
+```json node-spec
+{
+  "type": "globalStarter",
+  "label": "Global Starter",
+  "category": "Input/Output",
+  "description": "Entry point that triggers the flow execution. IMPORTANT: the node id must contain the literal substring \"flow-global-starter\" (e.g. \"flow-global-starter_<anything>\") — the execution engine resolves the flow's starting edge by matching that substring in the id, not by node type. Any other id saves successfully but the flow will never actually run.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "isAutotrigger": {
+        "type": "boolean",
+        "description": "Whether the editor shows the flow as running on a schedule; the platform copies it to the flow's isAutotrigger flag. Setting it does not schedule anything: the editor's Auto Trigger dialog creates the schedule through the schedule service, then writes isAutotrigger, intervalData and triggerMessage here."
+      },
+      "intervalData": {
+        "type": "object",
+        "description": "The schedule the editor's Auto Trigger dialog last saved, kept for display. The runs themselves follow the schedule stored by the schedule service.",
+        "properties": {
+          "type": {"type": "string", "enum": ["hourly", "daily", "weekly", "monthly"]},
+          "minutely": {"type": "string", "description": "Second of the minute."},
+          "hourly": {"type": "string", "description": "Minute of the hour."},
+          "daily": {"type": "string", "description": "Hour of the day."},
+          "weekly": {"type": "string", "description": "Comma-separated weekdays, for weekly."},
+          "monthly": {"type": "string", "description": "Day or days of the month, for monthly."},
+          "codedTime": {"type": "string", "description": "The cron-like expression built from the fields above."},
+          "varInput": {"type": "string", "description": "Id of the varInputNode a scheduled run fills."},
+          "inputText": {"type": "string", "description": "Text a scheduled run puts into varInput."}
+        }
+      },
+      "triggerMessage": {
+        "type": "string",
+        "description": "Human-readable description of the schedule, such as \"Runs every day at 09:00:00.\", which the Auto Trigger dialog writes and the node shows while isAutotrigger is true. It is not sent to the flow."
+      },
+      "generateSessionId": {
+        "type": "boolean",
+        "description": "The settings toggle \"Allow passing in custom ID for Chat Sessions\". The editor shows it on when the field is absent."
+      },
+      "selectedNode": {
+        "type": "string",
+        "description": "The settings field \"Target input Node (for email and webhook calls)\": the id of a varInputNode in this flow, or \"none\"."
+      },
+      "showApiCalling": {
+        "type": "boolean",
+        "description": "The settings toggle \"Turn ON API calling\", which shows the agent's API URL in the settings panel. No server code reads it."
+      },
+      "showEmailCalling": {
+        "type": "boolean",
+        "description": "The settings toggle \"Turn ON Email triggering\", which shows the agent's email address in the settings panel. No server code reads it."
+      },
+      "notes": {"type": "string", "description": "Free-text notes shown on the node."}
+    },
+    "required": []
+  },
+  "outputSchema": {"type": "object", "properties": {}},
+  "handles": {
+    "sourceHandles": [{"handle": "a", "role": "global"}],
+    "targetHandles": [],
+    "patterned": [
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/FlowGlobalNode.tsx",
+    "frontFields": [
+      "currentExecId", "errorMessage", "errorStatusCode", "generateSessionId", "hasExecutionError",
+      "hasFinished", "intervalData", "isAutotrigger", "label", "loading", "logs", "notes",
+      "notesExpanded", "selectedNode", "showApiCalling", "showEmailCalling", "summary",
+      "triggerMessage", "usedTokens"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {
+    "currentExecId": "Run state: the id of the run the editor started from this node, used to follow its progress.",
+    "hasExecutionError": "Run state: the editor reads it from every node when a run finishes and resets it to false.",
+    "hasFinished": "Run state: set when a run of the flow finishes, which makes the editor write the run log and reset the nodes.",
+    "loading": "Run state: whether the editor shows the flow as running.",
+    "logs": "Run history: the last 100 run summaries the editor writes when a run finishes.",
+    "notesExpanded": "Editor state: whether the notes panel is open.",
+    "summary": "Agent description the settings panel generates with a summary flow and stores for display; it does not change how the flow runs."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

@@ -1,0 +1,324 @@
+---
+title: "Ai Text Generator (Command Text Node)"
+sidebarTitle: "Ai Text Generator"
+description: "Calls an AI model with a text prompt and passes the generated text downstream. Chaining A -> B needs both an execution edge and a data edge, plus the data reference on B. A single connect_nodes call with no handles does all three for this target type, so call it once and verify with get_agent; only wire the second edge by hand when you need a handle other than contentIn (promptIn, instructionIn, personaIn), and in that case set the matching companion array (promptData, instructionData, personaData) yourself. Note the distinction: contentIn/promptIn/instructionIn/personaIn are edge handles, not fields — never set them inside data."
+---
+
+<Info>
+  Node type `commandTextNode` in the [AI](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+AI Text Generator — Calls an LLM to generate text. The workhorse node for any AI-driven task.
+FIELDS:
+- persona: WHO the AI is. Role identity, expertise, personality, communication style. Write in second person ("You are..."). Do NOT put task instructions or output format rules here — those go in instruction.
+- prompt: WHAT to do. The main task or question. Concise, starts with a verb. If the node receives dynamic data from upstream, reference it naturally ("Analyze the following…"). Runs every execution.
+- instruction: HOW to respond. Output format, length limits, what to include/exclude, edge case handling, quality criteria. This is where structure templates and numbered rules go.
+- content: Static reference material or background context. Often empty when dynamic data is piped in via content connector.
+TIP: Persona = who you are. Instruction = rules to follow. Prompt = what to do right now. Content = what to reference. Keep them separate.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "commandTextNode",
+  "label": "Command Text Node",
+  "category": "AI",
+  "description": "Calls an AI model with a text prompt and passes the generated text downstream. Chaining A -> B needs both an execution edge and a data edge, plus the data reference on B. A single connect_nodes call with no handles does all three for this target type, so call it once and verify with get_agent; only wire the second edge by hand when you need a handle other than contentIn (promptIn, instructionIn, personaIn), and in that case set the matching companion array (promptData, instructionData, personaData) yourself. Note the distinction: contentIn/promptIn/instructionIn/personaIn are edge handles, not fields — never set them inside data.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "prompt": {
+        "type": "string",
+        "description": "The text prompt actually sent to the model. Do not set \"command\" — it is not read at execution time, only \"prompt\" is."
+      },
+      "aiModel": {"type": "string", "description": "AI model name, e.g. \"gemini-2.5-flash-lite\"."},
+      "aiSystem": {
+        "type": "string",
+        "description": "AI provider, lowercase — e.g. \"gemini\", \"anthropic\", \"openai\", \"groq\", \"xai\", \"perplexity\", \"moonshot\", \"mistral\", \"typesafe\", \"cloudflare\". The executor lowercases this before matching, so a camelCase value still runs, but write it lowercase: that is the current standard and mixed casing is already in the data. A run does not need it: the executor takes the provider from aiModel's catalogue entry and refuses only a value it does not know. Set it anyway, because the editor lists the models of this provider. Models whose list_ai_models type is \"Evaluation\" (e.g. \"jev\" under \"typesafe\") do not generate text: their prompt must be a JSON object {\"state\": ..., \"questions\": {\"<id>\": {\"type\": \"boolean\" | \"choice\" | \"score\", \"instructions\": \"...\", \"criteria\": ...}}} and the output is the answers as JSON. \"criteria\" is required for \"choice\" (an object mapping each option to its description) and \"score\" (an ordered array of at least two levels), and optional for \"boolean\"."
+      },
+      "content": {
+        "type": "string",
+        "description": "Optional extra context appended after the prompt. Normally populated via contentData from an edge into \"contentIn\", not set directly."
+      },
+      "contentData": {
+        "type": "array",
+        "description": "content fed from an upstream edge. Takes precedence over content: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only content means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "promptData": {
+        "type": "array",
+        "description": "prompt fed from an upstream edge. Takes precedence over prompt: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only prompt means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "persona": {
+        "type": "string",
+        "description": "Persona text. It is the model's SYSTEM prompt, so it shapes behaviour rather than being appended to the user message. Fed by an edge into \"personaIn\"."
+      },
+      "personaData": {
+        "type": "array",
+        "description": "persona fed from an upstream edge. Takes precedence over persona; multiple entries are joined with a blank line. Land an edge reference here — setting only persona means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "instruction": {
+        "type": "string",
+        "description": "Instructions for the answer. Singular \"instruction\", not \"instructions\". Appended to the user message after the prompt, as \"Instructions in crafting your response: ...\"; it is not part of the system prompt. Fed by an edge into \"instructionIn\"."
+      },
+      "instructionData": {
+        "type": "array",
+        "description": "instruction fed from an upstream edge. Takes precedence over instruction. Land an edge reference here — setting only instruction means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "requireJsonOutput": {
+        "type": "boolean",
+        "description": "When true the model is asked for structured JSON matching jsonOutputSchema. Defaults to false; jsonOutputSchema is only read when this is on."
+      },
+      "jsonOutputSchema": {
+        "type": "string",
+        "description": "JSON schema the structured output must match, as a string. Read only when requireJsonOutput is true. Used only when jsonOutputSchemaData is empty."
+      },
+      "jsonOutputSchemaData": {
+        "type": "array",
+        "description": "jsonOutputSchema fed from an upstream edge into \"jsonOutputSchemaIn\". Takes precedence over jsonOutputSchema. Land an edge reference here — setting only jsonOutputSchema means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "reasoning": {
+        "type": "boolean",
+        "description": "Turns on reasoning for a model whose catalogue entry supports it; ignored for other models. Anthropic reasoning models think unless this is false; every other provider thinks only when this is true or the model always reasons."
+      },
+      "aiEffort": {
+        "type": "string",
+        "description": "Reasoning effort for a model that reasons (openai, anthropic adaptive-thinking models, xai, groq reasoning models, moonshot kimi-k3, perplexity). Unset or any other value runs as \"low\"; grok-3-mini runs \"medium\" as \"low\".",
+        "enum": ["low", "medium", "high"]
+      },
+      "isWebEnabled": {
+        "type": "boolean",
+        "description": "Gives the model a web search tool. Only openai, anthropic and gemini models get one; other providers ignore it."
+      },
+      "multimodalEnabled": {
+        "type": "boolean",
+        "description": "When true, file and image URLs found in the prompt, persona and memory are sent to the model as files. If any are found and the model is not a vision model, the run fails."
+      },
+      "autoToken": {
+        "type": "boolean",
+        "description": "When false, the provider's token field (aiTokens, anthropicToken, geminiMaxOutputTokens, groqMaxTokens or max_tokens) caps the output. When true or unset, the provider default applies and those fields are ignored."
+      },
+      "aiTokens": {
+        "type": "number",
+        "description": "openai, xai, mistral, moonshot and cloudflare: max output tokens. Read only when autoToken is false."
+      },
+      "aiTemperature": {
+        "type": "number",
+        "description": "Temperature for openai (runs without reasoning), xai, mistral and cloudflare models."
+      },
+      "aiFp": {
+        "type": "number",
+        "description": "openai only, runs without reasoning: frequency penalty."
+      },
+      "aiPp": {
+        "type": "number",
+        "description": "openai only, runs without reasoning: presence penalty."
+      },
+      "anthropicToken": {
+        "type": "number",
+        "description": "anthropic only: max output tokens. Read only when autoToken is false."
+      },
+      "anthropicTemperature": {
+        "type": "number",
+        "description": "anthropic only, models without reasoning support: temperature."
+      },
+      "anthropicTopP": {
+        "type": "number",
+        "description": "anthropic only, models without reasoning support: top P."
+      },
+      "anthropicTopK": {
+        "type": "number",
+        "description": "anthropic only, models without reasoning support: top K."
+      },
+      "geminiMaxOutputTokens": {
+        "type": "number",
+        "description": "gemini only: max output tokens. Read only when autoToken is false."
+      },
+      "temperature": {"type": "number", "description": "gemini only, runs without reasoning: temperature."},
+      "topP": {"type": "number", "description": "gemini only, runs without reasoning: top P."},
+      "topK": {"type": "number", "description": "gemini only, runs without reasoning: top K."},
+      "groqMaxTokens": {
+        "type": "number",
+        "description": "groq only: max output tokens. Read only when autoToken is false."
+      },
+      "geminiTemp": {
+        "type": "number",
+        "description": "groq only, despite the name: temperature for runs without reasoning. The editor writes Groq's temperature here."
+      },
+      "geminiTopP": {
+        "type": "number",
+        "description": "groq only, despite the name: top P for runs without reasoning. The editor writes Groq's top P here."
+      },
+      "seed": {"type": "number", "description": "groq only: sampling seed."},
+      "groqStop": {
+        "type": "string",
+        "description": "groq only: stop sequences, one per line."
+      },
+      "max_tokens": {
+        "type": "number",
+        "description": "perplexity only: max output tokens. Read only when autoToken is false."
+      },
+      "perplexityTemperature": {"type": "number", "description": "perplexity only: temperature."},
+      "perplexityTopP": {"type": "number", "description": "perplexity only: top P."},
+      "perplexityTopK": {"type": "number", "description": "perplexity only: top K."},
+      "search_context_size": {
+        "type": "string",
+        "description": "perplexity only: how much web search context the model gets.",
+        "enum": ["low", "medium", "high"]
+      },
+      "memory": {
+        "type": "boolean",
+        "description": "Chat memory. When true and the run has a session, earlier prompt and answer pairs of that session are sent before the prompt, and the new pair is stored after the run."
+      },
+      "selectedType": {
+        "type": "string",
+        "description": "Which memory is sent when memory is true. Defaults to \"Load All Entries\"; any other value also sends every entry.",
+        "enum": [
+          "Load All Entries", "Load First X Entries", "Load Last X Entries", "Load First X Words",
+          "Load Last X Words"
+        ]
+      },
+      "selectedIndex": {
+        "type": "number",
+        "description": "Number of memory entries sent for \"Load First X Entries\" and \"Load Last X Entries\". Defaults to 5."
+      },
+      "selectedNumber": {
+        "type": "number",
+        "description": "Number of memory words sent for \"Load First X Words\" and \"Load Last X Words\". Defaults to 50."
+      },
+      "clearOnExecution": {
+        "type": "boolean",
+        "description": "When true, a full agent run clears the node's previous text before it executes."
+      },
+      "streamEnabled": {
+        "type": "boolean",
+        "description": "Chatbot runs only: when true, the text of the generator wired to the chatbot's output streams to the chat client as it is written."
+      }
+    },
+    "required": ["aiModel"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"text": {"type": "string", "description": "Generated text output"}}
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "fileLink", "role": "data"},
+      {"handle": "logs", "role": "data"},
+      {"handle": "output", "role": "data"},
+      {"handle": "output-memory", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "input"},
+      {"handle": "inputAdd"},
+      {"handle": "jsonOutputSchemaIn"},
+      {"handle": "modelSettings"},
+      {"handle": "promptIn", "dataField": "prompt"},
+      {"handle": "contentIn", "dataField": "content"},
+      {"handle": "instructionIn", "dataField": "instruction"},
+      {"handle": "personaIn", "dataField": "persona"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/AiTextGenerator.tsx",
+    "frontFields": [
+      "aiModel", "aiSystem", "clearOnExecution", "collapsed", "contentData", "executionStatus",
+      "fileLink", "fileLinkSize", "fileType", "id", "inputSize", "jsonOutputSchemaData", "label",
+      "logs", "logsSize", "memory", "outputSize", "placement", "previewIndex", "previewResponses",
+      "prompt", "promptData", "saveOutput", "selectedChat", "selectedIndex", "selectedNumber",
+      "selectedType", "sensitiveFields", "text", "userSessionsChat"
+    ],
+    "workerModule": "src/modules/nodes/text-generator",
+    "workerFields": [
+      "aiEffort", "aiFp", "aiModel", "aiPp", "aiSystem", "aiTemperature", "aiTokens",
+      "anthropicTemperature", "anthropicToken", "anthropicTopK", "anthropicTopP", "autoToken",
+      "content", "contentData", "errorMessage", "errorStatusCode", "executionStatus",
+      "geminiMaxOutputTokens", "geminiTemp", "geminiTopK", "geminiTopP", "groqMaxTokens",
+      "groqSeed", "groqStop", "groqTemperature", "groqTopP", "instruction", "instructionData",
+      "isWebEnabled", "jsonOutputSchema", "jsonOutputSchemaData", "logs", "max_tokens", "memory",
+      "multimodalEnabled", "nodeUsedTokens", "perplexityTemperature", "perplexityTokens",
+      "perplexityTopK", "perplexityTopP", "persona", "personaData", "previewIndex",
+      "previewResponses", "prompt", "promptData", "reasoning", "requireJsonOutput",
+      "search_context_size", "seed", "selectedIndex", "selectedNumber", "selectedType",
+      "temperature", "text", "topK", "topP", "userSessionsChat"
+    ]
+  },
+  "internalFields": {
+    "groqSeed": "Declared on the worker's node data type but read nowhere: the Groq seed is read from seed, which is the field the editor writes.",
+    "geminiTopK": "Declared on the worker's node data type but read nowhere: the gemini top K is read from topK, which is the field the editor writes.",
+    "groqTemperature": "Legacy Groq temperature. The executor still reads it ahead of geminiTemp, but the editor never writes it; set geminiTemp.",
+    "groqTopP": "Legacy Groq top P. The executor still reads it ahead of geminiTopP, but the editor never writes it; set geminiTopP.",
+    "perplexityTokens": "Legacy perplexity token limit, read only when max_tokens is empty; the editor writes max_tokens.",
+    "userSessionsChat": "Chat memory store: one {id, memories} object per session, which the platform appends to after each run while memory is on. Not configuration.",
+    "selectedChat": "Editor state: which session the memory panel shows. The executor picks the session from the run's sessionId.",
+    "logs": "Run output the platform writes: the last run's reasoning, sources, tool calls and finish reason. The logs source handle carries it.",
+    "logsSize": "Editor metric: the size of logs, computed for display.",
+    "saveOutput": "Editor toggle that shows a file-link output on the node. No executor of this type reads it or creates a file.",
+    "fileType": "File type picked in the editor's file-link dialog. No executor of this type reads it.",
+    "fileLink": "File-link output the editor shows when saveOutput is on. No executor of this type writes it.",
+    "fileLinkSize": "Editor metric: the size of fileLink, computed for display."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```
+
+## Related pages
+
+- [Worker: text generator](/worker/node/text-generator)

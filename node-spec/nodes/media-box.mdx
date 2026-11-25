@@ -1,0 +1,73 @@
+---
+title: "Media Box"
+sidebarTitle: "Media Box"
+description: "Displays a list of media assets. The media type is auto-detected per URL — there is no separate \"mediaType\" field."
+---
+
+<Info>
+  Node type `mediaBox` in the [Utility](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## Specification
+
+```json node-spec
+{
+  "type": "mediaBox",
+  "label": "Media Box",
+  "category": "Utility",
+  "description": "Displays a list of media assets. The media type is auto-detected per URL — there is no separate \"mediaType\" field.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "urls": {
+        "type": "array",
+        "description": "The media assets typed or uploaded into the node, one object per asset (image/video/audio type is auto-detected from each URL). A bare string entry is dropped. URLs arriving over an edge are read from the source at render time and are not stored here. The editor writes text from this list; a client that sets urls without opening the editor should set text as well.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "url": {"type": "string"},
+            "id": {"type": "string"},
+            "fileName": {"type": "string"}
+          },
+          "required": ["url"]
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "The asset URLs joined with \", \", written by the editor from urls. Downstream nodes receive this value."
+      }
+    }
+  },
+  "handles": {
+    "sourceHandles": [{"handle": "mediaOutput", "role": "data"}],
+    "targetHandles": [{"handle": "input"}, {"handle": "mediaInput"}],
+    "patterned": [
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": false
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/MediaBox.tsx",
+    "frontFields": [
+      "activeTab", "collapsed", "externalFiles", "sensitiveFields", "size", "text", "urls"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {
+    "activeTab": "Editor state: which tab the node shows, url (the list) or preview; it does not change what the node delivers.",
+    "externalFiles": "Transient: browser File objects the canvas hands over when files are dropped to create the node; the editor uploads them once into urls and never saves them.",
+    "size": "Editor layout: the width and height the node was resized to on the canvas."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

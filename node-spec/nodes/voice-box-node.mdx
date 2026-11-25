@@ -1,0 +1,153 @@
+---
+title: "Ai Voice Generator (Voice Box Node)"
+sidebarTitle: "Ai Voice Generator"
+description: "Converts text to speech via ElevenLabs or Groq. Which voice field applies depends entirely on aiSystem. Every run needs a voice: call list_voices (with provider \"elevenlabs\" or \"groq\") to get the ids the user can pick, show them the names, and set the chosen id. When an elevenlabs node is written without voiceId, the default voice pNInz6obpgDQGcFmaJgB (Adam) is saved on the node and reported under appliedDefaults. A voice id that the provider does not know is refused."
+---
+
+<Info>
+  Node type `voiceBoxNode` in the [AI](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Voice Generator — Converts text to speech using ElevenLabs or other providers.
+FIELDS:
+- text: The text to speak. Often piped in from upstream.
+- voiceId: ElevenLabs voice ID.
+- stability / similarity_boost / style: Voice tuning parameters (0 to 1).
+TIP: Spoken text should be conversational, not formal written style. Short sentences work better for natural speech.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "voiceBoxNode",
+  "label": "Voice Box Node",
+  "category": "AI",
+  "description": "Converts text to speech via ElevenLabs or Groq. Which voice field applies depends entirely on aiSystem. Every run needs a voice: call list_voices (with provider \"elevenlabs\" or \"groq\") to get the ids the user can pick, show them the names, and set the chosen id. When an elevenlabs node is written without voiceId, the default voice pNInz6obpgDQGcFmaJgB (Adam) is saved on the node and reported under appliedDefaults. A voice id that the provider does not know is refused.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "Fallback text, used only when textData is empty. Supports \"{{<nodeId>.<key>}}\" interpolation, resolved against that node's schema entry for <key> at run time; an unresolved placeholder is left in the string as-is."
+      },
+      "textData": {
+        "type": "array",
+        "description": "Text content fed from an upstream edge into \"text-input\", joined with newlines. Takes precedence over text. The joined text is also run through \"{{<nodeId>.<key>}}\" interpolation before use.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "aiSystem": {
+        "type": "string",
+        "description": "Voice provider. Determines which of voiceId/groqVoice is read. PlayHT is no longer offered for new nodes.",
+        "enum": ["elevenlabs", "groq"]
+      },
+      "voiceId": {
+        "type": "string",
+        "description": "elevenlabs only — voice id, one of the ids returned by list_voices with provider \"elevenlabs\". Defaults to pNInz6obpgDQGcFmaJgB (Adam) when omitted."
+      },
+      "groqVoice": {
+        "type": "string",
+        "description": "groq only — voice id, one of the ids returned by list_voices with provider \"groq\" (lowercase, e.g. \"troy\"). Required for groq."
+      },
+      "stability": {
+        "type": "number",
+        "description": "elevenlabs only — 0 to 1. Higher values give a steadier, less expressive delivery. The run uses 0.5 when unset."
+      },
+      "similarity_boost": {
+        "type": "number",
+        "description": "elevenlabs only — similarity, 0 to 1: how closely the generated audio follows the chosen voice. The run uses 0.5 when unset."
+      },
+      "style": {
+        "type": "number",
+        "description": "elevenlabs only — 0 to 1. Amount of style exaggeration. The run uses 0.5 when unset."
+      },
+      "use_speaker_boost": {
+        "type": "boolean",
+        "description": "elevenlabs only — boosts similarity to the original speaker. Defaults to true."
+      },
+      "voice": {"type": "string", "description": "Legacy playht nodes only — voice name."},
+      "speed": {
+        "type": "number",
+        "description": "Legacy playht nodes only — speech speed multiplier."
+      },
+      "quality": {
+        "type": "string",
+        "description": "Legacy playht nodes only — the editor offers draft, low, medium, high and premium. Defaults to medium."
+      },
+      "outputFormat": {
+        "type": "string",
+        "description": "Legacy playht nodes only — the editor offers mp3, wav, ogg and flac. Defaults to mp3."
+      },
+      "sampleRate": {
+        "type": "number",
+        "description": "Legacy playht nodes only — sample rate in Hz. Defaults to 22050."
+      },
+      "clearOnExecution": {
+        "type": "boolean",
+        "description": "When true, a full agent run clears the node's previous audioUrl before it executes."
+      }
+    },
+    "required": ["aiSystem"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"audioUrl": {"type": "string", "description": "URL of the generated audio file"}}
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "input"},
+      {"handle": "modelSettings"},
+      {"handle": "text-input", "dataField": "text"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/AiAudioGenerator.tsx",
+    "frontFields": [
+      "audioUrl", "clearOnExecution", "data", "disabled", "executionStatus", "flowTrigger", "id",
+      "label", "nodeUsedTokens", "placement", "previewIndex", "previewResponses", "restData",
+      "sensitiveFields", "similarity_boost", "stability", "style", "text", "textData",
+      "use_speaker_boost", "usedTokens"
+    ],
+    "workerModule": "src/modules/nodes/voice-generator",
+    "workerFields": [
+      "aiModel", "aiSystem", "audioUrl", "errorMessage", "errorStatusCode", "executionStatus",
+      "groqVoice", "outputFormat", "previewResponses", "quality", "sampleRate", "similarityBoost",
+      "similarity_boost", "speed", "stability", "style", "text", "textData", "use_speaker_boost",
+      "voice", "voiceId", "voiceSystem"
+    ]
+  },
+  "internalFields": {
+    "aiModel": "Written by the editor together with aiSystem: each provider has one fixed voice model. The executor uses it only to label the saved audio and falls back to the provider's model, so it never changes the voice.",
+    "voiceSystem": "Legacy provider field of older nodes (\"elevenlabs.io\", \"play.ht\", \"Groq\"), read only when aiSystem is empty. Set aiSystem instead.",
+    "similarityBoost": "Legacy spelling of similarity_boost, read only when similarity_boost is unset.",
+    "disabled": "Editor state: disables the text field on the canvas. No executor reads it.",
+    "data": "Not a node field: the extractor reads the voice list queries' destructuring ({ data: ... } = use...VoicesQuery()) in the component as a data field.",
+    "restData": "Not a node field: the extractor reads the rest element of the component's const { text, ...restData } = data as a data field."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

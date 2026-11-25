@@ -1,0 +1,178 @@
+---
+title: "Webpage Scraper (Web Crawling)"
+sidebarTitle: "Webpage Scraper"
+description: "Crawls a single URL (via ScrapingBee, Oxylabs, or the BuiltWith API) and returns extracted text."
+---
+
+<Info>
+  Node type `webCrawling` in the [Integration](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Web Scraper — Scrapes a URL and returns its page content as text.
+FIELDS:
+- url: The target URL to scrape. Can receive dynamic URLs from upstream nodes.
+TIP: Works best on content-heavy pages. Some sites block scraping.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "webCrawling",
+  "label": "Web Crawling",
+  "category": "Integration",
+  "description": "Crawls a single URL (via ScrapingBee, Oxylabs, or the BuiltWith API) and returns extracted text.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "system": {
+        "type": "string",
+        "description": "Which provider to use. Defaults to \"scrapingBee\".",
+        "enum": ["scrapingBee", "oxylab", "builtWithApi"]
+      },
+      "scrapingBeeType": {
+        "type": "string",
+        "description": "ScrapingBee extraction mode, used only when system is \"scrapingBee\". Defaults to \"scrapingbee-text\".",
+        "enum": ["scrapingbee-text", "scrapingbee-links"]
+      },
+      "type": {
+        "type": "string",
+        "description": "BuiltWith API lookup, used only when system is \"builtWithApi\". Defaults to \"free\". \"free\", \"domain\", \"keywords\" and \"relationship\" need url; \"technology\" needs technology (since optional); \"trends\" needs technology; \"companyToUrl\" needs companyName; \"trust\" needs url and words.",
+        "enum": [
+          "free", "domain", "keywords", "relationship", "technology", "trends", "companyToUrl",
+          "trust"
+        ]
+      },
+      "url": {
+        "type": "string",
+        "description": "URL to crawl. Required for ScrapingBee and Oxylabs, and for the BuiltWith lookups that take a URL."
+      },
+      "technology": {
+        "type": "string",
+        "description": "BuiltWith API only: technology name for the \"technology\" and \"trends\" lookups."
+      },
+      "since": {
+        "type": "string",
+        "description": "BuiltWith API only: since-date filter for the \"technology\" lookup."
+      },
+      "companyName": {
+        "type": "string",
+        "description": "BuiltWith API only: company name for the \"companyToUrl\" lookup."
+      },
+      "words": {"type": "string", "description": "BuiltWith API only: keywords for the \"trust\" lookup."},
+      "urlData": {
+        "type": "array",
+        "description": "url fed from an upstream edge. Takes precedence over url: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only url means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "technologyData": {
+        "type": "array",
+        "description": "technology fed from an upstream edge into the \"webCrawlTechnology\" handle. Takes precedence over technology: the executor reads this first and falls back to the plain field only when this is empty.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "sinceData": {
+        "type": "array",
+        "description": "since fed from an upstream edge into the \"webCrawlSince\" handle. Takes precedence over since: the executor reads this first and falls back to the plain field only when this is empty.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "companyNameData": {
+        "type": "array",
+        "description": "companyName fed from an upstream edge into the \"webCrawlCompanyName\" handle. Takes precedence over companyName: the executor reads this first and falls back to the plain field only when this is empty.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "wordsData": {
+        "type": "array",
+        "description": "words fed from an upstream edge into the \"webCrawlWords\" handle. Takes precedence over words: the executor reads this first and falls back to the plain field only when this is empty.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"text": {"type": "string", "description": "Extracted text/response content"}}
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"},
+      {"handle": "webCrawlSource", "role": "data"}
+    ],
+    "targetHandles": [
+      {"handle": "input"},
+      {"handle": "webCrawlCompanyName", "dataField": "companyName"},
+      {"handle": "webCrawlTechnology", "dataField": "technology"},
+      {"handle": "webCrawlUrl", "dataField": "url"},
+      {"handle": "webCrawlSince", "dataField": "since"},
+      {"handle": "webCrawlWords", "dataField": "words"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/WebCrawling.tsx",
+    "frontFields": [
+      "canceled", "collapsed", "companyName", "executionStatus", "flowTrigger", "id", "label",
+      "nodeUsedTokens", "paused", "placement", "previewIndex", "scrapingBeeType",
+      "sensitiveFields", "since", "system", "technology", "text", "type", "url", "urlData",
+      "usedTokens", "words"
+    ],
+    "workerModule": "src/modules/nodes/web-crawling",
+    "workerFields": [
+      "companyName", "companyNameData", "errorMessage", "errorStatusCode", "executionStatus",
+      "scrapingBeeType", "since", "sinceData", "system", "technology", "technologyData", "text",
+      "type", "url", "urlData", "words", "wordsData"
+    ]
+  },
+  "internalFields": {},
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

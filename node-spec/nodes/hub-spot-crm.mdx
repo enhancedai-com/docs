@@ -1,0 +1,284 @@
+---
+title: "HubSpot CRM"
+sidebarTitle: "HubSpot CRM"
+description: "Reads from and writes to HubSpot (deals, contacts, companies). It is thirdPartyIntegration with the provider fixed to 'hubspot': same panels, same fields, same execution engine, so identical configuration yields identical results on either node — they are interchangeable for reads AND writes. RUNTIME BEHAVIOUR: it executes on the server (Temporal worker), so it produces output in every trigger — canvas run, API, cron, chatbot, form and batch — and downstream nodes can consume its result. Set mode to 'pull' to read or 'push' to write; a write also needs pushAction. WHEN CREATING A NODE use the generic field names — mode and pullObjectType (lowercase plural). selectedObjectType/selectedResponseType are the legacy spellings this node stored before the panels were unified: they are still honoured for flows saved back then, and pullObjectType wins whenever both are present."
+---
+
+<Info>
+  Node type `hubSpotCRM` in the [Integration](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## Specification
+
+```json node-spec
+{
+  "type": "hubSpotCRM",
+  "label": "HubSpot CRM",
+  "category": "Integration",
+  "description": "Reads from and writes to HubSpot (deals, contacts, companies). It is thirdPartyIntegration with the provider fixed to 'hubspot': same panels, same fields, same execution engine, so identical configuration yields identical results on either node — they are interchangeable for reads AND writes. RUNTIME BEHAVIOUR: it executes on the server (Temporal worker), so it produces output in every trigger — canvas run, API, cron, chatbot, form and batch — and downstream nodes can consume its result. Set mode to 'pull' to read or 'push' to write; a write also needs pushAction. WHEN CREATING A NODE use the generic field names — mode and pullObjectType (lowercase plural). selectedObjectType/selectedResponseType are the legacy spellings this node stored before the panels were unified: they are still honoured for flows saved back then, and pullObjectType wins whenever both are present.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "mode": {
+        "type": "string",
+        "description": "'pull' reads records, 'push' creates or updates them. Absent means pull, which is what every flow saved before writes landed relies on.",
+        "enum": ["pull", "push"]
+      },
+      "pullObjectType": {
+        "type": "string",
+        "description": "HubSpot object to read, in the API spelling. Preferred over selectedObjectType and wins when both are set.",
+        "enum": ["deals", "contacts", "companies"]
+      },
+      "pushAction": {
+        "type": "string",
+        "description": "Which write to perform, when mode is push. Omitting it makes the run fail with the supported list.",
+        "enum": [
+          "upsert_contact", "upsert_company", "create_contact", "create_company", "create_deal",
+          "update_contact", "update_company", "update_deal"
+        ]
+      },
+      "selectedObjectType": {
+        "type": "string",
+        "description": "Legacy spelling of pullObjectType, as a human label mapped at run time: 'Deal' to deals, 'Contact' to contacts, 'Company' to companies. Read only when pullObjectType is absent, which is how flows saved before the panels were unified are still honoured. Prefer pullObjectType on new nodes; when both are set this one is ignored.",
+        "enum": ["Deal", "Contact", "Company"]
+      },
+      "selectedResponseType": {
+        "type": "string",
+        "description": "Legacy list-vs-single switch, honoured only when pullObjectType is absent. 'Details' keeps entityId, so the run returns the single record it names; 'List', or no value at all, clears both entityId and entityIdData and returns many records. When pullObjectType is present this field is ignored entirely and entityId alone decides between one record and a list.",
+        "enum": ["List", "Details"]
+      },
+      "limit": {
+        "type": "number",
+        "description": "Maximum number of records a list read returns, defaulting to 10."
+      },
+      "integrationId": {
+        "type": "string",
+        "description": "Id of the saved HubSpot connection to use. When it is empty, the run uses the HubSpot connection of the user running the flow; a selected connection the running user cannot reach fails the run."
+      },
+      "blobConfig": {
+        "type": "string",
+        "description": "A JSON object, as a string, copied over node data at run time when it has a \"provider\" key; the provider itself stays hubspot. The editor rewrites it with a snapshot of the node's settings on every edit, and that snapshot wins over node data for every key except the edge-fed ones (entityId, query, limit, email, domain, dealname, recordId). A client that changes pullObjectType, pushAction, selectedProperties, sortBy, sortOrder, dealstatus, dealstage or hubspotProperties without the editor must also set blobConfig to \"\" or the old snapshot value is used."
+      },
+      "selectedProperties": {
+        "type": "array",
+        "description": "hubspot: which HubSpot property names a pull returns. Empty fetches the default set.",
+        "items": {"type": "string"}
+      },
+      "entityId": {
+        "type": "string",
+        "description": "hubspot: id of the single record to read. Setting it is what selects one record instead of a list. Used only when entityIdData is empty."
+      },
+      "entityIdData": {
+        "type": "array",
+        "description": "entityId fed from an upstream edge. Takes precedence over entityId.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "query": {
+        "type": "string",
+        "description": "hubspot: search term applied to a pull, matched against the record name. Used only when queryData is empty."
+      },
+      "queryData": {
+        "type": "array",
+        "description": "query fed from an upstream edge. Takes precedence over query.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "sortBy": {
+        "type": "string",
+        "description": "hubspot: property name a pull sorts by, and the accepted values depend on pullObjectType. deals: createdate, closedate, hs_lastmodifieddate, dealname. contacts: createdate, hs_lastmodifieddate, firstname, lastname. companies: createdate, hs_lastmodifieddate, name."
+      },
+      "sortOrder": {
+        "type": "string",
+        "description": "hubspot: sort direction of a pull, applied only when sortBy is set. \"ASC\" sorts ascending; any other value, an absent one included, sorts descending. The editor shows ASC when the field is unset but does not store it, so set it explicitly.",
+        "enum": ["ASC", "DESC"]
+      },
+      "dealstatus": {
+        "type": "string",
+        "description": "hubspot: deal status a pull filters on, defaulting to all. Only offered when pullObjectType is deals.",
+        "enum": ["all", "open", "won", "lost"]
+      },
+      "email": {
+        "type": "string",
+        "description": "hubspot: identifies the contact on upsert_contact, where it is required — the contact is created if the email is new and updated if it already exists. Used only when emailData is empty."
+      },
+      "emailData": {
+        "type": "array",
+        "description": "email fed from an upstream edge. Takes precedence over email.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "domain": {
+        "type": "string",
+        "description": "hubspot: identifies the company on upsert_company, where it is required. The company is created if the domain is new and updated if exactly one matches; if several companies share it the run fails, and they must be merged in HubSpot first. Used only when domainData is empty."
+      },
+      "domainData": {
+        "type": "array",
+        "description": "domain fed from an upstream edge. Takes precedence over domain.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "dealname": {
+        "type": "string",
+        "description": "hubspot: name of the deal on create_deal, where HubSpot requires it. Used only when dealnameData is empty."
+      },
+      "dealnameData": {
+        "type": "array",
+        "description": "dealname fed from an upstream edge. Takes precedence over dealname.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "pipeline": {
+        "type": "string",
+        "description": "hubspot: pipeline id on create_deal. The editor uses it only to list that pipeline's stages for dealstage; the run does not send it to HubSpot, which receives only dealname, dealstage and hubspotProperties. The valid ids come from the connected portal, so they are not enumerated here."
+      },
+      "dealstage": {
+        "type": "string",
+        "description": "hubspot: stage id for create_deal, required. The valid ids come from the selected pipeline in the connected portal."
+      },
+      "recordId": {
+        "type": "string",
+        "description": "hubspot: id of the record an update_contact, update_company or update_deal acts on. Required by all three, and the run fails if no record has it. pinecone: the record id an update_metadata push changes, required there, or the id an upsert_records push writes; empty upsert ids default to one id per connection, so every node on that connection overwrites the same record. Used only when recordIdData is empty."
+      },
+      "recordIdData": {
+        "type": "array",
+        "description": "recordId fed from an upstream edge. Takes precedence over recordId.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "hubspotProperties": {
+        "type": "object",
+        "description": "hubspot: extra HubSpot properties to write, as a map of property name to value. Applied on top of the fields above; a name HubSpot reports as read-only or calculated is rejected.",
+        "additionalProperties": {"type": "string"}
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {"type": "string", "description": "JSON string of the records returned by HubSpot"},
+      "output": {"type": "string", "description": "Mirror of text, kept for downstream nodes that read \"output\"."}
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "blobConfig"},
+      {"handle": "input"},
+      {"handle": "entityId", "dataField": "entityId"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/ThirdPartyIntegration/ThirdPartyIntegrationNode.tsx",
+    "frontFields": [
+      "blobConfig", "collapsed", "executionError", "executionStatus", "flowTrigger", "id",
+      "integrationId", "label", "mode", "output", "outputSize", "placement", "previewIndex",
+      "sensitiveFields", "text"
+    ],
+    "workerModule": "src/modules/nodes/third-party-integration",
+    "workerFields": [
+      "Data", "amountDollars", "blobConfig", "blobConfigData", "blockKitJson", "connectedByUserId",
+      "content", "currency", "customHeaders", "customerEmail", "customerId", "customerName",
+      "dateFrom", "dateTo", "description", "dueDate", "errorMessage", "errorStatusCode",
+      "executionStatus", "fileUrl", "idPrefix", "ids", "integrationId", "invoiceId", "label",
+      "limit", "metadataFilter", "metadataJson", "mode", "name", "namespaceOverride",
+      "paginationToken", "payload", "post_at", "priceRecurringInterval", "productId",
+      "productName", "provider", "pushDataInput", "queryById", "queryText", "queryVector",
+      "recordId", "searchQuery", "statusFilter", "text", "textData", "title", "vectorsJson"
+    ]
+  },
+  "internalFields": {
+    "amountDollars": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "blobConfigData": "Read by the shared builder as an edge-fed blobConfig (payload-builder.ts:155-170), but no handle on this node maps to it (node-target-fields.ts maps only entityId for hubSpotCRM), so nothing fills it.",
+    "blockKitJson": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "connectedByUserId": "Editor-only: the panels pass it when loading option lists (DynamicFieldRenderer.tsx:160-190, PullModePanel.tsx:86). The run ignores it and resolves the connection from integrationId or the running user (third-party-integration.service.ts:49-53).",
+    "content": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "currency": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "customerEmail": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "customerId": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "customerName": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "customHeaders": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "Data": "Edge-filled by the platform: a value wired into the input or blobConfig handle lands here (no dataField maps them). The shared builder turns it into pushDataInput and, on a push, text (payload-builder.ts:196-219); the hubspot adapter reads neither.",
+    "dateFrom": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "dateTo": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "description": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "dueDate": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "fileUrl": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "idPrefix": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "ids": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "invoiceId": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "metadataFilter": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "metadataJson": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "name": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "namespaceOverride": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "paginationToken": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "payload": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "post_at": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "priceRecurringInterval": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "productId": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "productName": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "provider": "Forced to \"hubspot\" at run time (dedicated-integration-node.ts:36-55), so a stored value never changes what this node calls.",
+    "pushDataInput": "Filled by the shared builder from upstream text (payload-builder.ts:196-210); the hubspot adapter never reads it.",
+    "queryById": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "queryText": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "queryVector": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "searchQuery": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "statusFilter": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "textData": "Upstream-text companion of the shared builder (payload-builder.ts:201-219); the hubspot adapter never reads the text it produces.",
+    "title": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it.",
+    "vectorsJson": "Another provider's key in the worker's shared Third Party Integration payload interface (third-party-integration.type.ts); this node always runs the hubspot adapter, which never reads it."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

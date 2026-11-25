@@ -1,0 +1,54 @@
+---
+title: "SuperChat node guide"
+description: "How SuperChat's node guide is assembled from the node pages, and the order it reads them in."
+---
+
+SuperChat loads a node guide into its system prompt: what each node does and what goes in its main fields. The guide is not written here. Each node page holds its own section in a `superchat-guide` block, and the sync joins them in back `src/app-api/superchat/knowledge/node-guide.md` under the title and intro below, in this order.
+
+- A node page with a `superchat-guide` block must be listed in `order`, and every type in `order` must have that block. The sync fails otherwise.
+- The guide is prose for SuperChat. Field names, types and accepted values belong in the `node-spec` block, which SuperChat reads through `read_node_type`.
+- A version saved in the SuperChat prompt admin overrides the generated guide. While one is active, a change here does not reach SuperChat.
+
+```json node-spec-guide
+{
+  "title": "Node guide",
+  "intro": "What each node type does and what goes in its main fields. Imported on 2026-09-29 from the \"Full Cheat Sheet Extractable\" text box of the production flow `a05191aa` (last edited 2026-03-16). Product owns its accuracy from here; see `README.md` in this folder for the review list.",
+  "order": [
+    "commandTextNode",
+    "scripting",
+    "textBox",
+    "richTextBox",
+    "outputController",
+    "webSearch",
+    "webCrawling",
+    "webAmazon",
+    "webTrends",
+    "arrayNode",
+    "conditionNode",
+    "mathFunction",
+    "varInputNode",
+    "outputObjectNode",
+    "imageGenerator",
+    "imageReaderNode",
+    "animationNode",
+    "voiceBoxNode",
+    "audioReaderNode",
+    "fluxObject",
+    "commandContentNode",
+    "storedDataCaller",
+    "tableProcessor",
+    "outputTable",
+    "nodesBox",
+    "deepRefNode",
+    "pullData",
+    "pushData",
+    "sqlQuerier",
+    "fileSave",
+    "apiCaller",
+    "fluxBox",
+    "usCensusNode",
+    "secApiNode",
+    "stickyNote"
+  ]
+}
+```

@@ -1,0 +1,189 @@
+---
+title: "Large Memory (Command Content Node)"
+sidebarTitle: "Large Memory"
+description: "Searches a vector-memory namespace (Pinecone) for content relevant to a query."
+---
+
+<Info>
+  Node type `commandContentNode` in the [AI](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Large Memory / RAG — Vector-based memory for large document storage and semantic retrieval.
+FIELDS:
+- Text input data for the knowledge base.
+TIP: Use when the agent needs to reference a large body of knowledge that won't fit in a single prompt context.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "commandContentNode",
+  "label": "Command Content Node (Vector Memory Search)",
+  "category": "AI",
+  "description": "Searches a vector-memory namespace (Pinecone) for content relevant to a query.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Fallback search query text, used only when queryData is empty. Read as-is at run time — this field does not go through the product's nodeId/key placeholder-interpolation step; a template literal written here is sent to the search verbatim, braces included. Use queryData to receive an upstream value instead."
+      },
+      "nameSpace": {
+        "type": "object",
+        "description": "The vector namespace to search, as the stored namespace object — not its name. The executor reads nameSpace.id and nameSpace.name (flux.service.ts:7326); a bare string leaves both undefined and the run fails with \"id or nameSpace is required\".",
+        "properties": {
+          "id": {"type": "string", "description": "Namespace (pod) id."},
+          "name": {"type": "string", "description": "Namespace (pod) name."}
+        },
+        "required": ["id", "name"]
+      },
+      "model": {
+        "type": "string",
+        "description": "OpenAI chat model that writes the answer from the matched passages. Defaults to gpt-5.4; not used when returnRaw is true. The embedding model comes from the pod, not from this field."
+      },
+      "topK": {"type": "number", "description": "Max number of matches to retrieve. Defaults to 10."},
+      "returnRaw": {
+        "type": "boolean",
+        "description": "When true, text.result holds the matched passages instead of a model-written answer."
+      },
+      "queryData": {
+        "type": "array",
+        "description": "query fed from an upstream edge. Takes precedence over query: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only query means an edge-linked value never arrives. When populated, its joined text is also run through \"{{<nodeId>.<key>}}\" interpolation before use; the plain query fallback is not interpolated.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "podIdData": {
+        "type": "array",
+        "description": "podId fed from an upstream edge. Takes precedence over podId: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only podId means an edge-linked value never arrives. When populated, its joined text is also run through \"{{<nodeId>.<key>}}\" interpolation before use; an unresolved placeholder that survives interpolation is treated as no value and the node falls back to the statically selected pod.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "textInputData": {
+        "type": "array",
+        "description": "Text content to add to the vector namespace before the search, delivered from an upstream edge into the \"textInput\" handle. The text of every item is joined and added as one document. Its text is run through \"{{<nodeId>.<key>}}\" interpolation before being written to the namespace. There is no plain-field fallback for this input.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "textInputDeleteData": {
+        "type": "array",
+        "description": "File to remove from the vector namespace before the search, delivered from an upstream edge into the \"textInputDelete\" handle. Only the first item's text is read: the id or text of the file to remove. There is no plain-field fallback for this input.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "clearOnExecution": {
+        "type": "boolean",
+        "description": "When true, a full agent run clears text.result before the node executes."
+      }
+    },
+    "required": ["nameSpace"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "object",
+        "properties": {
+          "result": {"type": "string"},
+          "linesWhereQuestionWasFound": {
+            "type": "array",
+            "description": "Source passages matched.",
+            "items": {
+              "type": "object",
+              "properties": {"lines": {"type": "string"}, "pageContent": {"type": "string"}}
+            }
+          },
+          "referencesHeader": {
+            "type": "object",
+            "description": "Header of the pod's references, or null when it has none.",
+            "properties": {"pageContent": {"type": "string"}}
+          }
+        }
+      }
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "content"},
+      {"handle": "input"},
+      {"handle": "podId", "dataField": "podId"},
+      {"handle": "textInput", "dataField": "textInput"},
+      {"handle": "textQuery", "dataField": "query"},
+      {"handle": "textInputDelete", "dataField": "textInputDelete"}
+    ],
+    "patterned": [
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/LargeMemory.tsx",
+    "frontFields": [
+      "applyDimensionsToUpload", "applyFiltersToUpload", "clearFiltersOnExecution",
+      "clearOnExecution", "connectedContent", "executionStatus", "id", "label", "model",
+      "nameSpace", "placement", "podIdData", "query", "queryData", "returnRaw", "searchType",
+      "sensitiveFields", "systemAi", "text", "topK"
+    ],
+    "workerModule": "src/modules/nodes/large-memory",
+    "workerFields": [
+      "applyDimensionsToUploads", "filters", "maxTokenModel", "model", "nameSpace", "podIdData",
+      "query", "queryData", "returnRaw", "textInputData", "textInputDeleteData", "topK",
+      "uploadMetadata", "uploadNewContent"
+    ]
+  },
+  "internalFields": {
+    "systemAi": "Editor setting in the node's settings dialog. No executor reads it.",
+    "searchType": "Editor setting in the node's settings dialog (similarity or similarity-ner). No executor reads it.",
+    "connectedContent": "Editor state: the connected content items the node has listed and processed. No executor reads it.",
+    "applyFiltersToUpload": "Editor setting for the node's upload panel. No executor reads it.",
+    "applyDimensionsToUpload": "Editor setting for the node's upload panel. No executor reads it; the executor reads the differently named applyDimensionsToUploads.",
+    "clearFiltersOnExecution": "Editor setting: clears the filters the editor holds after a completed run. No executor reads it.",
+    "filters": "Metadata filter the executor applies to the search. The editor keeps its filters in local state and never writes this field, so stored nodes do not carry it.",
+    "uploadNewContent": "Ids of files the executor waits for before searching. The editor never writes this field to the node.",
+    "uploadMetadata": "Passed into the vector search request; the worker's search ignores it. The editor never writes this field to the node.",
+    "applyDimensionsToUploads": "Passed into the vector search request; the worker's search ignores it. The editor never writes this field to the node.",
+    "maxTokenModel": "Passed into the vector search request (minimum 4000); the worker's search ignores it. The editor never writes this field to the node."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```
+
+## Related pages
+
+- [Worker: large memory dynamic pod](/worker/node/large-memory-dynamic-pod)

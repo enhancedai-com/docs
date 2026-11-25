@@ -1,0 +1,134 @@
+---
+title: "Search Trends (Web Trends)"
+sidebarTitle: "Search Trends"
+description: "Retrieves Google Trends data (via SerpApi). Required field is \"query\", not \"category\"/\"maxResults\". RUNTIME BEHAVIOUR: this node is resolved by the builder, which calls the provider from the browser — there is no server-side executor. Inside a running flow it produces no output at all: the run reports completed and the node stores only its own configuration, so nothing downstream can consume a result. Use it on the canvas, not as a step another node reads from."
+---
+
+<Info>
+  Node type `webTrends` in the [Integration](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Google Trends — Retrieves trend data for search terms.
+FIELDS:
+- query: The search term to get trends for.
+- type: Request kind — "trends" (uses query and data_type) or "trends-now" (current trending searches).
+- data_type: Data to retrieve for "trends" — TIMESERIES, GEO_MAP, GEO_MAP_0, RELATED_TOPICS or RELATED_QUERIES.
+TIP: Use for market research, content planning, or competitive analysis.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "webTrends",
+  "label": "Web Trends",
+  "category": "Integration",
+  "description": "Retrieves Google Trends data (via SerpApi). Required field is \"query\", not \"category\"/\"maxResults\". RUNTIME BEHAVIOUR: this node is resolved by the builder, which calls the provider from the browser — there is no server-side executor. Inside a running flow it produces no output at all: the run reports completed and the node stores only its own configuration, so nothing downstream can consume a result. Use it on the canvas, not as a step another node reads from.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string",
+        "description": "Which Google Trends request the editor sends. Defaults to \"trends\". \"trends\" uses query, data_type, region, tz, cat, group and date; \"trends-now\" uses frequency, geo, hl, catTrends and dateTrendsNow.",
+        "enum": ["trends", "trends-now"]
+      },
+      "query": {
+        "type": "string",
+        "description": "Search term, type \"trends\" only. Fallback, used only when queryData is empty."
+      },
+      "queryData": {
+        "type": "array",
+        "description": "Query fed from an upstream edge into the \"query\" handle. Takes precedence over query: when non-empty, its joined texts replace query.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "data_type": {
+        "type": "string",
+        "description": "Type \"trends\" only: TIMESERIES, GEO_MAP, GEO_MAP_0, RELATED_TOPICS or RELATED_QUERIES. The editor pre-fills TIMESERIES."
+      },
+      "region": {
+        "type": "string",
+        "description": "Type \"trends\" only: COUNTRY, REGION, DMA, CITY, or empty for none."
+      },
+      "geo": {
+        "type": "string",
+        "description": "Type \"trends-now\" only: country code, e.g. \"US\". The \"trends\" request does not send it."
+      },
+      "hl": {"type": "string", "description": "Type \"trends-now\" only: language code, e.g. \"en\"."},
+      "tz": {"type": "number", "description": "Type \"trends\" only: timezone offset in minutes, e.g. 420."},
+      "cat": {
+        "type": "string",
+        "description": "Type \"trends\" only: Google Trends category id; \"0\" means all categories."
+      },
+      "catTrends": {
+        "type": "string",
+        "description": "Type \"trends-now\" only: category, sent when frequency is not \"daily\". The editor pre-fills \"all\"."
+      },
+      "frequency": {
+        "type": "string",
+        "description": "Type \"trends-now\" only. Defaults to \"daily\" in the editor.",
+        "enum": ["daily", "realtime"]
+      },
+      "group": {
+        "type": "string",
+        "description": "Type \"trends\" only: images, news, froogle or youtube; \"Web Search\" sends no group."
+      },
+      "date": {"type": "string", "description": "Type \"trends\" only: time range, e.g. \"now 7-d\" or \"today 12-m\"."},
+      "dateTrendsNow": {
+        "type": "string",
+        "description": "Type \"trends-now\" only: date as YYYY-MM-DD, sent when frequency is \"daily\"."
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"text": {"type": "string", "description": "Serialized trends result"}}
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"},
+      {"handle": "web-trends-source", "role": "data"}
+    ],
+    "targetHandles": [{"handle": "input"}, {"handle": "query", "dataField": "query"}],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/WebTrends.tsx",
+    "frontFields": [
+      "canceled", "cat", "catTrends", "collapsed", "data_type", "date", "dateTrendsNow", "engine",
+      "flowTrigger", "frequency", "geo", "group", "hl", "id", "label", "output", "paused",
+      "placement", "previewIndex", "query", "queryData", "region", "run", "sensitiveFields",
+      "text", "type", "tz"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {
+    "engine": "Editor display only: the engine select has no field name, so nothing writes this, and no request sends it.",
+    "output": "Response format the editor sends with each request, fixed at \"json\": no control writes it.",
+    "run": "Dead editor field: the component passes a handler that would write it, but the Node wrapper never calls that handler, and nothing reads it."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```
