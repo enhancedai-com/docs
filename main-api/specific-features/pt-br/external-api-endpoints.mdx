@@ -5,7 +5,7 @@ description: "Índice completo de todos os endpoints do FluxPrompt acessíveis c
 
 Esta página é o índice da superfície HTTP externa da plataforma: todos os endpoints que você pode chamar com um header `api-key`, agrupados por área, com uma linha de propósito e um link para o guia detalhado quando ele existe.
 
-Os caminhos são exatos. Não há prefixo global de rota nem segmento de versão de API — `POST /v1/chat/completions` é a única rota com `v1`, e isso faz parte do formato compatível com a OpenAI.
+Os caminhos são exatos. Não há prefixo global de rota nem segmento de versão de API — só as rotas da Completions API (`/v1/chat/completions`, `/v1/models` e `/v1/messages`) têm `v1`, como parte dos formatos compatíveis com a OpenAI e a Anthropic.
 
 ## Como ler a coluna de autenticação
 
@@ -88,6 +88,8 @@ Superfície compatível com a OpenAI sobre todos os provedores suportados. Docum
 | --- | --- | --- | --- | --- |
 | `POST` | `/v1/chat/completions` | Executa um chat completion em qualquer modelo disponível. Retorna JSON, ou um stream SSE quando `stream: true`. | api-key | [Chat completions](/main-api/specific-features/completions-api/chat-completions) |
 | `GET` | `/v1/models` | Lista os modelos que a chave pode usar. | api-key | [Listar modelos](/main-api/specific-features/completions-api/list-models) |
+| `POST` | `/v1/messages` | Executa um completion no formato Messages da Anthropic. Retorna JSON, ou um stream SSE quando `stream: true`. | api-key, x-api-key ou Bearer | [Messages](/main-api/specific-features/completions-api/messages) |
+| `POST` | `/v1/messages/count_tokens` | Conta os tokens de entrada de uma requisição Messages. | api-key, x-api-key ou Bearer | [Messages](/main-api/specific-features/completions-api/messages) |
 
 ## Memory Pods
 

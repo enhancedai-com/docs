@@ -5,7 +5,7 @@ description: "Complete index of every FluxPrompt endpoint reachable with an API 
 
 This page is the index of the platform's external HTTP surface: every endpoint you can call with an `api-key` header, grouped by area, with a one-line purpose and a link to the detailed guide where one exists.
 
-Paths are exact. There is no global route prefix and no API version segment — `POST /v1/chat/completions` is the only route with a `v1` in it, and that is part of its OpenAI-compatible shape.
+Paths are exact. There is no global route prefix and no API version segment — only the Completions API routes (`/v1/chat/completions`, `/v1/models` and `/v1/messages`) carry a `v1`, as part of their OpenAI- and Anthropic-compatible shapes.
 
 ## How to read the auth column
 
@@ -88,6 +88,8 @@ OpenAI-compatible surface over every supported provider. Documented in the [Comp
 | --- | --- | --- | --- | --- |
 | `POST` | `/v1/chat/completions` | Run a chat completion against any available model. Returns JSON, or an SSE stream when `stream: true`. | api-key | [Chat completions](/main-api/specific-features/completions-api/chat-completions) |
 | `GET` | `/v1/models` | List the models the calling key is allowed to use. | api-key | [List models](/main-api/specific-features/completions-api/list-models) |
+| `POST` | `/v1/messages` | Run a completion in the Anthropic Messages format. Returns JSON, or an SSE stream when `stream: true`. | api-key, x-api-key or Bearer | [Messages](/main-api/specific-features/completions-api/messages) |
+| `POST` | `/v1/messages/count_tokens` | Count the input tokens of a Messages request. | api-key, x-api-key or Bearer | [Messages](/main-api/specific-features/completions-api/messages) |
 
 ## Memory Pods
 
