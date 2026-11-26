@@ -42,8 +42,8 @@ When the projection applies, each dispatch carries a `NodeInputProjection`:
 
 The API sends no projection, and keeps projecting itself, when:
 
-- The flow has a connected node of a type the worker cannot project: `arrayNode`, `fluxObject`,
-  `nodesBox`, `libraryNode`, `fluxBox`, `tableProcessor` or `dynamicSettingsNode`.
+- The flow has a connected node of a type the worker cannot project: `arrayNode`, `nodesBox`,
+  `libraryNode` or `fluxBox`.
 - The node belongs to another flow than the one that opened the run, such as a sub-flow.
 
 ## The run seed
