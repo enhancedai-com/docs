@@ -135,6 +135,7 @@
                       "main-api/specific-features/cancel-a-run",
                       "main-api/specific-features/execution-limits",
                       "main-api/specific-features/claim-check-authorization",
+                      "main-api/specific-features/form-run-and-plan-company-flags",
                       "main-api/specific-features/redis-ttl-audit",
                       "main-api/specific-features/companion-docs",
                       {
@@ -187,6 +188,7 @@
                           "main-api/specific-features/completions-api/overview",
                           "main-api/specific-features/completions-api/how-it-works",
                           "main-api/specific-features/completions-api/chat-completions",
+                          "main-api/specific-features/completions-api/messages",
                           "main-api/specific-features/completions-api/list-models",
                           "main-api/specific-features/completions-api/completion-logs",
                           "main-api/specific-features/completions-api/token-usage-dashboard"
@@ -540,6 +542,7 @@
                       "main-api/specific-features/cancel-a-run",
                       "main-api/specific-features/execution-limits",
                       "main-api/specific-features/claim-check-authorization",
+                      "main-api/specific-features/pt-br/form-run-and-plan-company-flags",
                       "main-api/specific-features/redis-ttl-audit",
                       "main-api/specific-features/companion-docs",
                       {
@@ -592,6 +595,7 @@
                           "main-api/specific-features/completions-api/overview",
                           "main-api/specific-features/completions-api/how-it-works",
                           "main-api/specific-features/completions-api/chat-completions",
+                          "main-api/specific-features/completions-api/messages",
                           "main-api/specific-features/completions-api/list-models",
                           "main-api/specific-features/completions-api/completion-logs",
                           "main-api/specific-features/completions-api/token-usage-dashboard"

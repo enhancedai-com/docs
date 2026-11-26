@@ -66,8 +66,8 @@ proxy/
 - `enabled: Boolean(url)`.
 
 **Front — modal changes**:
-- `ExpandImageModal.tsx` line 780: `<img src={`${import.meta.env.VITE_API_URL}/proxy?url=${imageUrl}`} />` → `const { src } = useProxiedImage(imageUrl); return src ? <img src={src} /> : <Spinner />;`.
-- `MaskImageEditModal.tsx` line 27: `useImage(`${import.meta.env.VITE_API_URL}/proxy?url=${imageUrl}`, 'anonymous')` → `const { src } = useProxiedImage(imageUrl); const [image] = useImage(src ?? '', 'anonymous');`.
+- `ExpandImageModal.tsx` line 780: `` <img src={`${import.meta.env.VITE_API_URL}/proxy?url=${imageUrl}`} /> `` → `const { src } = useProxiedImage(imageUrl); return src ? <img src={src} /> : <Spinner />;`.
+- `MaskImageEditModal.tsx` line 27: `` useImage(`${import.meta.env.VITE_API_URL}/proxy?url=${imageUrl}`, 'anonymous') `` → `const { src } = useProxiedImage(imageUrl); const [image] = useImage(src ?? '', 'anonymous');`.
 
 **Error UX**: 401 is already handled by the global axios interceptor (logs the user out). 403 shows a toast "This image host is not allowed."
 
@@ -104,7 +104,7 @@ Five raw-fetch call sites receive user URLs today. Each one is replaced with `Sa
 | `nodes/push-data/push-data.service.ts:438` | `fetch(url)` inside `uploadMicrosoftRawFiles` | Same, inside the already-injectable `PushDataService`. |
 | `nodes/text-generator/multimodal-file-processor.ts:131–192` | `fetchWithTimeout` + `downloadFile` + `detectMimeFromHead` | All three use raw `fetch`. Replace with `safeFetch.get` / `safeFetch.getBuffer` / **new** `safeFetch.head(url, ctx)`. `AbortSignal.timeout` moves into the SafeFetch call. HEAD stays — it is the pre-flight MIME check that lets us refuse an unsupported file before downloading the whole body. |
 
-Each site today has its own `UserConfigError` with `userMessage`/`devMessage`. Preserve those messages; add a top-level catch for `BlockedAddressError` / `RedirectRefusedError` → `UserConfigError({ userMessage: "This URL points to an address that is not allowed.", devMessage: `egress refused: ${err.deniedRange}` })`.
+Each site today has its own `UserConfigError` with `userMessage`/`devMessage`. Preserve those messages; add a top-level catch for `BlockedAddressError` / `RedirectRefusedError` → `` UserConfigError({ userMessage: "This URL points to an address that is not allowed.", devMessage: `egress refused: ${err.deniedRange}` }) ``.
 
 ### Component D — Back: port A9 egress, guard `/api_call`, delete DownloaderService.downloadFile
 
@@ -155,7 +155,7 @@ Deployment: dev → `EGRESS_POLICY_MODE=report`; staging and prod → `EGRESS_PO
 
 ### Spec update
 
-`.claude/tasks/worker-flow-execution-epic/TASK-S6B-SSRF-GAPS.md` gains a "Sweep (recorded)" section with the 5 worker fetch sites + the 3 back sites, each listed with file:line and the final state (`guarded via SafeFetch` / `deleted` / `guarded via egress port`). Final line: "No other outbound fetch of a user-supplied URL remained unguarded as of <merge date>."
+`.claude/tasks/worker-flow-execution-epic/TASK-S6B-SSRF-GAPS.md` gains a "Sweep (recorded)" section with the 5 worker fetch sites + the 3 back sites, each listed with file:line and the final state (`guarded via SafeFetch` / `deleted` / `guarded via egress port`). Final line: "No other outbound fetch of a user-supplied URL remained unguarded as of `<merge date>`."
 
 ## Verification
 

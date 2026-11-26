@@ -8,17 +8,23 @@ Completion logs is an admin page that lists every Completions API request as an 
 The data comes from the `completion_log` table, which stores one row per request to the Completions API.
 
 <Info>
-This page is admin-facing. A company admin sees the logs for their company and can filter by any member; a non-admin sees only their own requests, and the user filter is hidden.
+This page is admin-facing. A company admin sees the logs of their company members and can filter by any of them, except platform staff and support accounts, whose requests are hidden. A non-admin sees only their own requests, and the user filter is hidden.
 </Info>
 
 ## What the page shows
 
 The log table is backed by `GET /completions/logs`. The endpoint resolves the caller's company and role from their session, then scopes the results:
 
-- **Company admin** — sees all logs for the selected company, and can filter by any company member with the user dropdown.
+- **Company admin** — sees the logs of the selected company's members, and can filter by a company member with the user dropdown. Rows from platform staff and support accounts are hidden. See [Platform staff and support accounts](#platform-staff-and-support-accounts).
 - **Non-admin** — sees only their own logs. The user filter is not shown.
 
-The page loads the last 7 days by default and shows 25 rows per page.
+The page loads the last 7 days by default and shows 25 rows per page. A date range can span at most 31 days. A wider range returns `400 range_too_wide`.
+
+### Platform staff and support accounts
+
+When a company admin views the logs, requests made by platform staff and support accounts that are members of the company are left out. Their rows do not appear in the table or in the CSV export, even when you filter by user.
+
+Non-admins are not affected, because they see only their own requests.
 
 ## Filters
 
@@ -27,10 +33,10 @@ Filters are applied server-side and map directly onto the query parameters of `G
 | Filter | Query param | Notes |
 | --- | --- | --- |
 | From / To | `from`, `to` | ISO date range. Defaults to the last 7 days. |
-| Status | `status` | `ok` (HTTP 2xx) or `error` (HTTP 4xx/5xx). Empty means all. |
+| Status | `status` | `ok` (HTTP 200) or `error` (HTTP 400 and above). Empty means all. |
 | Provider | `provider` | One of `anthropic`, `openai`, `gemini`, `groq`, `perplexity`, `xai`, `moonshot`, `mistral`, `typesafe`, `cloudflare`. |
-| User | `userId` | Admin only. Filters to a single company member by user ID. |
-| Model | `model` | Free-text match on the model id (for example, `claude-opus`). |
+| User | `userId` | Admin only. Filters to a single company member by user ID (a UUID). |
+| Model | `model` | Exact match on the model id (for example, `claude-sonnet-4-6`). |
 
 Changing any filter and refreshing re-runs the query from the first page. Filters are sent only when set, so an empty filter is omitted from the request.
 
@@ -58,8 +64,8 @@ Each row maps to a `completion_log` record. The table surfaces the fields that m
 | Model | `model` | The model id that ran. |
 | Provider | `provider` | The provider the model resolved to. |
 | Status | `status`, `errorCode` | HTTP status, shown green for 2xx and red for 4xx/5xx. When an `errorCode` is present it is shown instead of the numeric status. |
-| Flux In | `fluxInputTokens` | Input tokens billed in flux (FluxPrompt's billing unit). |
-| Flux Out | `fluxOutputTokens` | Output tokens billed in flux. |
+| Flux in | `fluxInputTokens` | Input tokens billed in flux (FluxPrompt's billing unit). |
+| Flux out | `fluxOutputTokens` | Output tokens billed in flux. |
 | Cost | `cost` | Monetary cost of the request. Zero renders as `—`. |
 | Latency | `latencyMs` | End-to-end request latency in milliseconds. |
 | Mode | `stream` | `Stream` for streamed requests, `Sync` for non-streamed. |
@@ -71,11 +77,17 @@ Each log stores two distinct token measurements:
 - **Provider tokens** (`inputTokens`, `outputTokens`) — the raw token counts reported by the model provider. These are integers.
 - **Flux tokens** (`fluxInputTokens`, `fluxOutputTokens`) — the input and output tokens converted into flux, FluxPrompt's billing unit. These are decimals and are what the account is actually billed.
 
-The table displays the flux columns because they reflect what was billed. Both pairs, plus the provider tokens, are included in the CSV export so you can reconcile the raw provider usage against the billed amount.
+The table displays the flux columns because they reflect what was billed. Both pairs are included in the CSV export so you can reconcile the raw provider usage against the billed amount.
+
+### Cache tokens
+
+When a request uses [prompt caching](/main-api/specific-features/completions-api/chat-completions#prompt-caching), the log also stores `cacheReadTokens` (input tokens read from the cache) and `cacheWriteTokens` (input tokens written to the cache). Both are provider token counts, and both are `0` when no cache was used. The `GET /completions/logs` response returns them on each row, but the table and the CSV export do not show them.
 
 ### Status and error codes
 
 `status` is the HTTP status code of the request. A request that failed carries an `errorCode` (for example, the code behind a `402` insufficient-quota rejection). The table shows the `errorCode` when present, which makes failed requests easier to scan than a bare status number.
+
+A failed request is logged with zero tokens and zero cost, and its `provider` is empty.
 
 ### Correlation ID
 
@@ -83,7 +95,7 @@ Every log carries a `correlationId` that ties the row back to a specific request
 
 ## CSV export
 
-The **Export CSV** button calls `GET /completions/logs/export` with the current filters (date range, status, provider, model, user) — but without `cursor` or `limit`, so the export covers the whole filtered set rather than a single page.
+The **Export CSV** button calls `GET /completions/logs/export` with the current filters (date range, status, provider, model, user). The export contains the 100 most recent rows that match the filters. To export more, narrow the date range and export again.
 
 The endpoint responds with `text/csv` and a `Content-Disposition: attachment; filename="completion-logs.csv"` header, and the browser downloads `completion-logs.csv` directly.
 
@@ -91,10 +103,10 @@ The endpoint responds with `text/csv` and a `Content-Disposition: attachment; fi
 GET /completions/logs/export?from=2026-06-01&to=2026-06-29&status=error&provider=anthropic
 ```
 
-The export contains every field on the log record, including the provider token counts and the `correlationId` that the table omits.
+The CSV has these columns: `id`, `createdAt`, `userId`, `model`, `provider`, `stream`, `status`, `errorCode`, `inputTokens`, `outputTokens`, `fluxInputTokens`, `fluxOutputTokens`, `cost`, `latencyMs`, and `correlationId`. It includes the provider token counts and the `correlationId` that the table omits. It does not include the user name or the cache token counts.
 
 <Tip>
-To audit failures across a company, set the status filter to **Error**, pick the date range, and export. The CSV gives you the `errorCode` and `correlationId` for every failed request in one file.
+To audit failures across a company, set the status filter to **Error**, pick a date range, and export. The CSV gives you the `errorCode` and `correlationId` for the most recent failed requests in one file. Use a narrow date range so the 100-row limit does not cut off the failures you need.
 </Tip>
 
 ## What's next

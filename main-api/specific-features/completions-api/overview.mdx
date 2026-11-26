@@ -1,15 +1,28 @@
 ---
 title: "Completions API overview"
-description: "FluxPrompt's OpenRouter-like, OpenAI-compatible completions endpoint: pick any model we support, send a minimal payload, and we resolve the provider and run it for you."
+description: "FluxPrompt's OpenRouter-like completions API: pick any model we support, send an OpenAI-compatible or Anthropic-compatible request, and we resolve the provider and run it for you."
 ---
 
-The Completions API is FluxPrompt's OpenRouter-like endpoint. You pick any AI model FluxPrompt supports, send a minimal OpenAI-compatible payload, and the API resolves the right provider, fills in the missing parameters from the model's metadata, calls the model, and returns the response.
+The Completions API is FluxPrompt's OpenRouter-like endpoint. You pick any AI model FluxPrompt supports, send a minimal request, and the API resolves the right provider, fills in the missing parameters from the model's metadata, calls the model, and returns the response.
 
-Because the request and response shapes match OpenAI's `/v1/chat/completions`, off-the-shelf OpenAI SDKs work by swapping the `baseURL` to point at FluxPrompt.
+The API speaks two wire formats. The request and response shapes of `/v1/chat/completions` match OpenAI, so off-the-shelf OpenAI SDKs work by swapping the `baseURL` to point at FluxPrompt. The shapes of `/v1/messages` match the Anthropic Messages API, so Anthropic SDKs and Claude Code work the same way. Both formats run any model, regardless of provider.
 
-```http
-POST /v1/chat/completions
-```
+## Endpoints
+
+| Method | Path | Wire format | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/v1/chat/completions` | OpenAI | Run a chat completion. See [Chat completions](/main-api/specific-features/completions-api/chat-completions). |
+| `POST` | `/v1/messages` | Anthropic | Run a message. See [Messages](/main-api/specific-features/completions-api/messages). |
+| `POST` | `/v1/messages/count_tokens` | Anthropic | Count the input tokens of a Messages request. See [Messages](/main-api/specific-features/completions-api/messages#count-tokens). |
+| `GET` | `/v1/models` | OpenAI | List the models your key can use. See [List models](/main-api/specific-features/completions-api/list-models). |
+
+## What you can do
+
+- **Stream.** Set `stream: true` on either endpoint to receive server-sent events.
+- **Call tools.** Send function tools and receive tool calls on both endpoints, on models that support tool calling.
+- **Send images.** Add image content to user messages, on models that accept images.
+- **Cache prompts.** Send cache markers and a session identifier, and read cache usage back in `usage`.
+- **Reason.** Send each provider's native reasoning parameters. `/v1/chat/completions` returns the reasoning output; `/v1/messages` forwards the thinking settings but does not return thinking blocks.
 
 ## How it works
 
@@ -24,7 +37,7 @@ POST /v1/chat/completions
     Missing parameters such as `max_tokens` are filled from the model's metadata and provider defaults.
   </Step>
   <Step title="The model runs and returns">
-    FluxPrompt calls the model and returns an OpenAI-shaped `chat.completion` response.
+    FluxPrompt calls the model and returns the response in the wire format you used: an OpenAI-shaped `chat.completion` or an Anthropic-shaped `message`.
   </Step>
 </Steps>
 
@@ -47,7 +60,9 @@ The provider is selected automatically from the model id. Current providers:
 
 ## Authentication
 
-Every request authenticates with an API key sent in the `api-key` header. The key can be a user API key or a company-space API key, and it determines model gating and billing.
+Every request authenticates with an API key. The key can be a user API key or a company-space API key, and it determines model gating and billing.
+
+On `/v1/chat/completions` and `/v1/models`, send the key in the `api-key` header.
 
 ```http
 api-key: <your-api-key>
@@ -55,8 +70,15 @@ content-type: application/json
 ```
 
 <Warning>
-The header is literally `api-key`. Not `x-api-key`, not `Authorization`, and no `Bearer` prefix — send the raw value.
+On `/v1/chat/completions` and `/v1/models`, the header is literally `api-key`. Not `x-api-key`, not `Authorization`, and no `Bearer` prefix — send the raw value.
 </Warning>
+
+The Anthropic-compatible endpoints (`/v1/messages` and `/v1/messages/count_tokens`) also accept the key in the `x-api-key` header or as a bearer token, so Anthropic SDKs work without extra header configuration.
+
+| Endpoint | Accepted headers |
+| --- | --- |
+| `/v1/chat/completions`, `/v1/models` | `api-key` |
+| `/v1/messages`, `/v1/messages/count_tokens` | `api-key`, `x-api-key`, or `Authorization: Bearer <your-api-key>` |
 
 ### API key types
 
@@ -65,18 +87,27 @@ The header is literally `api-key`. Not `x-api-key`, not `Authorization`, and no 
 | User API key | On your user profile | Requests run as that user; gating and billing follow your account. |
 | Space API key | On a company space | Requests run as the company owner of that space; gating and billing follow the space. |
 
-## OpenAI SDK compatibility
+## SDK compatibility
 
-Because the path and payload mirror OpenAI, you can reuse existing OpenAI SDKs by pointing the client at FluxPrompt's base URL and sending the key in the `api-key` header.
+Because the paths and payloads mirror OpenAI and Anthropic, you can reuse existing SDKs by pointing the client at FluxPrompt's base URL.
 
 <Note>
-The OpenAI SDKs send credentials in the `Authorization` header by default. FluxPrompt expects the `api-key` header, so configure the client to send that header (most SDKs allow custom default headers).
+The OpenAI SDKs send credentials in the `Authorization` header by default. `/v1/chat/completions` expects the `api-key` header, so configure the client to send that header (most SDKs allow custom default headers). Anthropic SDKs need no header changes on `/v1/messages`, because the endpoint accepts `x-api-key` and bearer tokens.
 </Note>
 
 ## What's next
 
 <CardGroup cols={2}>
   <Card title="Chat completions" icon="message-square" href="/main-api/specific-features/completions-api/chat-completions">
-    `POST /v1/chat/completions` — full request parameters, response shape, and the error table.
+    `POST /v1/chat/completions` — request parameters, content parts, tool calling, prompt caching, streaming, limits, and the error table.
+  </Card>
+  <Card title="Messages" icon="messages-square" href="/main-api/specific-features/completions-api/messages">
+    `POST /v1/messages` and `POST /v1/messages/count_tokens` — the Anthropic-compatible endpoints.
+  </Card>
+  <Card title="List models" icon="list" href="/main-api/specific-features/completions-api/list-models">
+    `GET /v1/models` — available models with context length and prompt caching support.
+  </Card>
+  <Card title="How it works" icon="route" href="/main-api/specific-features/completions-api/how-it-works">
+    How a request flows through FluxPrompt, and how billing works.
   </Card>
 </CardGroup>

@@ -9,7 +9,7 @@ List the models your API key can use with the completions API. The response is a
 | --- | --- |
 | `GET` | `/v1/models` |
 
-The endpoint returns only models that are active, not deprecated, enabled for your company, and on a supported provider (`openai`, `anthropic`, `gemini`, `groq`, `perplexity`, `xai`, `moonshot`, `mistral`, `typesafe`, `cloudflare`).
+The endpoint returns only text models that are active, not deprecated, enabled for your company, and on a supported provider (`openai`, `anthropic`, `gemini`, `groq`, `perplexity`, `xai`, `moonshot`, `mistral`, `typesafe`, `cloudflare`). The list is sorted by model id.
 
 ## Request
 
@@ -66,7 +66,10 @@ On success, returns an OpenAI-shaped list object. Each item is a model entry wit
       "provider": "anthropic",
       "supports_reasoning": true,
       "context_window": 200000,
-      "max_output_tokens": 64000
+      "context_length": 200000,
+      "max_input_tokens": 200000,
+      "max_output_tokens": 64000,
+      "supports_prompt_caching": true
     }
   ]
 }
@@ -107,27 +110,27 @@ On success, returns an OpenAI-shaped list object. Each item is a model entry wit
 </ResponseField>
 
 <ResponseField name="data[].context_window" type="integer">
-  Maximum context tokens.
+  Maximum context tokens. `0` when the model has no recorded context window.
+</ResponseField>
+
+<ResponseField name="data[].context_length" type="integer">
+  Maximum context tokens. Same value as `context_window`.
+</ResponseField>
+
+<ResponseField name="data[].max_input_tokens" type="integer | null">
+  Maximum input tokens. Falls back to the context window when the model has no separate input limit, and is `null` when neither is recorded.
 </ResponseField>
 
 <ResponseField name="data[].max_output_tokens" type="integer | null">
-  Maximum output tokens. Also the default cap for `max_tokens` in chat completions. `null` when the model has no recorded ceiling: the provider's default applies, and a non-streamed request is capped at 16,384 tokens.
+  Maximum output tokens. Also the default cap for `max_tokens` in chat completions. `null` when the model has no recorded ceiling: the provider's default applies. A non-streamed request is capped at 16,384 tokens even when the model's ceiling is higher.
+</ResponseField>
+
+<ResponseField name="data[].supports_prompt_caching" type="boolean">
+  Whether the model runs on a provider that supports prompt caching: `anthropic`, `openai`, `gemini`, `xai`, `groq`, `moonshot`, or `cloudflare`. See [Prompt caching](/main-api/specific-features/completions-api/chat-completions#prompt-caching).
 </ResponseField>
 
 ## Errors
 
-Errors use the OpenAI-compatible envelope:
-
-```json
-{
-  "error": {
-    "message": "Unauthorized",
-    "type": "invalid_request_error",
-    "code": "unauthorized"
-  }
-}
-```
-
-| HTTP | `code` | Cause |
-| --- | --- | --- |
-| `401` | `unauthorized` | Missing or invalid `api-key` header. |
+| HTTP | Cause |
+| --- | --- |
+| `401` | Missing or invalid `api-key` header. |

@@ -1,6 +1,6 @@
 ---
 title: "Chat completions"
-description: "POST /v1/chat/completions — OpenAI-compatible completion endpoint. Send a model and messages; FluxPrompt resolves the provider, fills in defaults, and returns the response."
+description: "POST /v1/chat/completions — OpenAI-compatible completion endpoint. Send a model and messages; FluxPrompt resolves the provider, fills in defaults, and returns the response. Supports images, tool calling, prompt caching, and streaming."
 ---
 
 Send a chat completion request to any model FluxPrompt supports. The provider is resolved from the `model` id, missing parameters are filled in automatically, and the response comes back in OpenAI's `chat.completion` shape.
@@ -8,6 +8,10 @@ Send a chat completion request to any model FluxPrompt supports. The provider is
 | Method | Path |
 | --- | --- |
 | `POST` | `/v1/chat/completions` |
+
+<Tip>
+To use the Anthropic Messages format instead, see [Messages](/main-api/specific-features/completions-api/messages).
+</Tip>
 
 ## Request
 
@@ -18,30 +22,271 @@ api-key: <your-api-key>
 content-type: application/json
 ```
 
+Optionally, send `x-session-id` (or `x-claude-code-session-id`) to give FluxPrompt a stable session identifier for prompt caching. See [Prompt caching](#prompt-caching).
+
 ### Body
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `model` | string | yes | The model id. The provider is resolved from it internally — you never send a provider name. |
-| `messages` | array | yes | OpenAI chat format. Each item is `{ "role": "system" \| "user" \| "assistant", "content": string }`. |
-| `max_tokens` | integer | no | Defaults to the model's maximum output tokens. |
-| `temperature` | number | no | Passed through where the provider supports it; ignored otherwise. |
-| `top_p` | number | no | Passed through where the provider supports it; ignored otherwise. |
-| `stop` | string \| array | no | Passed through where the provider supports it; ignored otherwise. |
+| `messages` | array | yes | OpenAI chat format, from 1 to 10,000 items. See [Messages](#messages). |
+| `max_tokens` | integer | no | Defaults to the model's maximum output tokens. A non-streamed request is capped at 16,384 tokens. |
+| `max_completion_tokens` | integer | no | Alias of `max_tokens`. If you send both, `max_tokens` wins. |
+| `temperature` | number | no | From 0 to 2. Passed through where the provider supports it; ignored otherwise. |
+| `top_p` | number | no | From 0 to 1. Passed through where the provider supports it; ignored otherwise. |
+| `stop` | array of strings | no | Up to 4 sequences of at most 100 characters each. Passed through where the provider supports it; ignored otherwise. |
+| `seed` | integer | no | Passed through where the provider supports it; ignored otherwise. |
+| `presence_penalty` | number | no | From -2 to 2. Passed through where the provider supports it; ignored otherwise. |
+| `frequency_penalty` | number | no | From -2 to 2. Passed through where the provider supports it; ignored otherwise. |
 | `stream` | boolean | no | Defaults to `false`. Set to `true` for a server-sent event stream — see [Streaming](#streaming). |
+| `stream_options` | object | no | `{ "include_usage": true }` sends usage in its own final chunk. See [Streaming](#streaming). |
+| `tools` | array | no | Up to 128 function tools. See [Tool calling](#tool-calling). |
+| `tool_choice` | string \| object | no | `auto`, `none`, `required`, or a named function. See [Tool calling](#tool-calling). |
+| `parallel_tool_calls` | boolean | no | Whether the model may call several tools in one turn. |
+| `cache_control` | object | no | A prompt cache marker. See [Prompt caching](#prompt-caching). |
+| `prompt_cache_key` | string | no | A cache affinity key of at most 256 characters. See [Prompt caching](#prompt-caching). |
+| `prompt_cache_retention` | string | no | `in_memory` or `24h`. See [Prompt caching](#prompt-caching). |
+| `session_id` | string | no | A session identifier of at most 256 characters, used for cache affinity. |
 | `deprecated_model_behavior` | string | no | FluxPrompt extension. `"error"` (default) or `"substitute"`. See [Deprecated models](#deprecated-models). |
-| _provider params_ | any | no | Any extra top-level field (e.g. `thinking`, `reasoning_effort`, `thinkingConfig`) is forwarded to the resolved provider. Use **each provider's own official parameter names and shape** — FluxPrompt translates them to the engine internally. See [Advanced provider parameters](#advanced-provider-parameters). |
+| _provider params_ | any | no | Any other top-level field (for example `thinking`, `reasoning_effort`, `thinkingConfig`) is forwarded to the resolved provider. Use **each provider's own official parameter names and shape** — FluxPrompt translates them to the engine internally. See [Advanced provider parameters](#advanced-provider-parameters). |
 
 <Note>
 Optional parameters that the underlying provider doesn't support are accepted and ignored rather than rejected, matching gateway behavior.
 </Note>
 
+### Messages
+
+Each item in `messages` has a `role` and a `content`.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `role` | string | `system`, `developer`, `user`, `assistant`, or `tool`. `developer` behaves like `system`. |
+| `content` | string \| array \| null | A string of at most 4,000,000 characters, or an array of up to 100 [content parts](#content-parts). `null` is allowed only on `assistant` messages, for example when the message carries only tool calls. |
+| `tool_calls` | array | Assistant messages only. The tool calls the model made in an earlier turn. See [Tool calling](#tool-calling). |
+| `tool_call_id` | string | Tool messages only. The id of the tool call this message answers. |
+| `cache_control` | object | Optional cache marker for the message. See [Prompt caching](#prompt-caching). |
+
+### Content parts
+
+Instead of a string, `content` can be an array of parts. Two part types are supported: `text` and `image_url`.
+
+| Part | Shape | Notes |
+| --- | --- | --- |
+| Text | `{ "type": "text", "text": "..." }` | The `text` is at most 4,000,000 characters. |
+| Image | `{ "type": "image_url", "image_url": { "url": "...", "detail": "auto" } }` | `detail` is optional: `auto`, `low`, or `high`. |
+
+Each part can also carry a `cache_control` marker.
+
+```json Text and image
+{
+  "model": "claude-sonnet-4-6",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "What is in this picture?" },
+        {
+          "type": "image_url",
+          "image_url": { "url": "https://example.com/photo.jpg", "detail": "auto" }
+        }
+      ]
+    }
+  ]
+}
+```
+
+Image rules:
+
+- Images are allowed only in `user` messages.
+- The URL must be `https`, or a base64 data URL such as `data:image/png;base64,...`. Inline images can be `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/heic`, or `image/heif`, and at most 20 MB.
+- The model must accept images. Otherwise the request fails with `400 model_not_vision_capable`.
+- A URL that breaks these rules fails with `400 invalid_image_url`.
+
+In `system`, `developer`, `assistant`, and `tool` messages, FluxPrompt joins the text parts with newlines and uses them as a single string.
+
+### Tool calling
+
+Send `tools` to let the model call your functions. The model must support tool calling; otherwise the request fails with `400 model_not_tool_capable`.
+
+<Steps>
+  <Step title="Describe your tools">
+    Add up to 128 tools to `tools`. Each tool is `{ "type": "function", "function": { "name", "description", "parameters" } }`. The `name` matches `^[a-zA-Z0-9_-]{1,64}$`, the `description` is at most 100,000 characters, and `parameters` is a JSON Schema object. You can also set `strict` on the function.
+  </Step>
+  <Step title="Choose how the model uses them">
+    Set `tool_choice` to `auto` (the model decides), `none` (no tool calls), `required` (the model must call a tool), or `{ "type": "function", "function": { "name": "get_weather" } }` to force one tool. A named tool must exist in `tools`, or the request fails with `400 invalid_tool_choice`.
+  </Step>
+  <Step title="Read the tool calls">
+    When the model calls tools, the response `message` has a `tool_calls` array and `finish_reason` is `tool_calls`. If the model produced no text, `content` is `null`.
+  </Step>
+  <Step title="Send the results back">
+    Append the assistant message with its `tool_calls`, then one `tool` message per call with the matching `tool_call_id`, and send the conversation again.
+  </Step>
+</Steps>
+
+```bash Tool call request (cURL)
+curl -X POST "https://api.fluxprompt.ai/v1/chat/completions" \
+  -H "api-key: <your-api-key>" \
+  -H "content-type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4-6",
+    "messages": [
+      { "role": "user", "content": "What is the weather in Lisbon?" }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_weather",
+          "description": "Get the current weather for a city.",
+          "parameters": {
+            "type": "object",
+            "properties": { "city": { "type": "string" } },
+            "required": ["city"]
+          }
+        }
+      }
+    ],
+    "tool_choice": "auto"
+  }'
+```
+
+```json Response with a tool call
+{
+  "id": "cmpl-1718600000123",
+  "object": "chat.completion",
+  "created": 1718600000,
+  "model": "claude-sonnet-4-6",
+  "provider": "anthropic",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "toolu_01A09q90qw90lq917835lq9",
+            "type": "function",
+            "function": { "name": "get_weather", "arguments": "{\"city\":\"Lisbon\"}" }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": { "prompt_tokens": 82, "completion_tokens": 21, "total_tokens": 103 }
+}
+```
+
+```json Follow-up with the tool result
+{
+  "model": "claude-sonnet-4-6",
+  "messages": [
+    { "role": "user", "content": "What is the weather in Lisbon?" },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "toolu_01A09q90qw90lq917835lq9",
+          "type": "function",
+          "function": { "name": "get_weather", "arguments": "{\"city\":\"Lisbon\"}" }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "toolu_01A09q90qw90lq917835lq9",
+      "content": "22 degrees Celsius and sunny"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get the current weather for a city.",
+        "parameters": {
+          "type": "object",
+          "properties": { "city": { "type": "string" } },
+          "required": ["city"]
+        }
+      }
+    }
+  ]
+}
+```
+
+Tool message rules:
+
+- A `tool` message needs a `tool_call_id` that matches a tool call in an earlier `assistant` message. Otherwise the request fails with `400 invalid_tool_message`.
+- `tool_calls` are allowed only in `assistant` messages, and each call's `arguments` is a JSON string of at most 1,000,000 characters.
+- A response that contains tool calls always has `finish_reason: "tool_calls"`, even when you forced a named tool.
+
+### Prompt caching
+
+Prompt caching lets a provider reuse the processed start of a long prompt across requests. FluxPrompt passes your cache markers and a session identifier through, and reports cache usage in the response. The `supports_prompt_caching` field of [List models](/main-api/specific-features/completions-api/list-models) shows which models run on a provider that supports caching.
+
+**Cache markers.** Add `"cache_control": { "type": "ephemeral" }` to mark a cache breakpoint. You can set it at the top level of the request, on a message, on a content part, or on a tool.
+
+- `type` must be `ephemeral`.
+- `ttl` is optional. Use `"5m"` or omit it. `"1h"` is rejected with `400 cache_ttl_not_supported`.
+- Anthropic models accept at most four cache markers per request. More than four returns `400 too_many_cache_markers`.
+
+**Session affinity.** FluxPrompt passes a cache session key to the provider with each request, so requests that share a key can share a cache. FluxPrompt picks the key in this order:
+
+1. The `prompt_cache_key` body field.
+2. The `session_id` body field.
+3. The `x-session-id` or `x-claude-code-session-id` request header.
+4. A key FluxPrompt derives from your account, the first system message, the first user message, and the tool names.
+
+Set `prompt_cache_retention` to `in_memory` or `24h` to pass a cache retention preference to the provider.
+
+**Cache usage.** When the provider reports cache activity, `usage` includes these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `prompt_tokens_details.cached_tokens` | Input tokens read from the cache. |
+| `prompt_tokens_details.cache_write_tokens` | Input tokens written to the cache. |
+| `cache_read_input_tokens` | Same value as `cached_tokens`, in Anthropic naming. |
+| `cache_creation_input_tokens` | Same value as `cache_write_tokens`, in Anthropic naming. |
+| `cache_creation.ephemeral_5m_input_tokens` | Cache write tokens in the 5-minute cache. |
+| `cache_creation.ephemeral_1h_input_tokens` | Cache write tokens in the 1-hour cache. |
+
+On this endpoint, `prompt_tokens` includes the cached and cache-write tokens. The same activity is recorded per request in [Completion logs](/main-api/specific-features/completions-api/completion-logs).
+
+```json Usage with cache activity
+{
+  "usage": {
+    "prompt_tokens": 12050,
+    "completion_tokens": 140,
+    "total_tokens": 12190,
+    "prompt_tokens_details": { "cached_tokens": 11800, "cache_write_tokens": 0 },
+    "cache_read_input_tokens": 11800,
+    "cache_creation_input_tokens": 0,
+    "cache_creation": { "ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 0 }
+  }
+}
+```
+
+### Limits
+
+| Limit | Value | Error |
+| --- | --- | --- |
+| Items in `messages` | 10,000 | `400 invalid_request_error` |
+| Characters in a string `content` or a text part | 4,000,000 | `400 invalid_request_error` |
+| Parts in one `content` array | 100 | `400 invalid_request_error` |
+| Inline image size | 20 MB | `400 invalid_image_url` |
+| Tools | 128 | `400 invalid_request_error` |
+| Tool calls per assistant message | 128 | `400 invalid_request_error` |
+| Extra provider params | 256,000 characters, nested at most 6 levels deep | `400 passthrough_too_large`, `400 passthrough_too_deep` |
+| Tools, parameters, and other non-message fields | About 1.5 million characters after serialization | `400 payload_too_large` |
+
 <Warning>
-**Payload limits.** Extra provider params are capped at **256,000 characters** — requests above
-that return `400 passthrough_too_large`. The **total request** (messages + params) must also stay
-under **~1.5 MB** — requests above that return `400 payload_too_large`. Credentials/transport keys
-(e.g. `api_key`, `base_url`, `headers`) are stripped for security and never forwarded.
+**Payload limits.** Extra provider params are capped at **256,000 characters** — requests above that return `400 passthrough_too_large`. Credentials and transport keys (for example `api_key`, `base_url`, `headers`) are stripped for security and never forwarded.
 </Warning>
+
+**Large requests.** Messages larger than 256 KB are stored temporarily in S3 and passed to the model runner by a signed link, so long agent sessions fit. Only the non-message part of the request counts toward the 1.5 million character limit when this happens. FluxPrompt deletes the temporary objects when the call ends.
 
 ### Advanced provider parameters
 
@@ -60,6 +305,10 @@ converted to adaptive automatically instead of being rejected).
 When the model produces reasoning, it comes back on `choices[].message.reasoning_content`
 (and `delta.reasoning_content` when streaming), with reasoning token counts under
 `usage.completion_tokens_details`. See [Response fields](#response-fields).
+
+<Warning>
+FluxPrompt refuses provider options that change the provider's price but are not billed yet. The request returns `400 unsupported_provider_option`, and `error.param` names the option. For Anthropic models, the refused options are `speed`, `service_tier`, `inference_geo`, `container`, `mcp_servers`, `anthropic_beta`, and `compaction`. For OpenAI models, the refused option is `service_tier`. FluxPrompt matches these names regardless of case, underscores, and hyphens, so `serviceTier` is refused too.
+</Warning>
 
 ```bash Reasoning (cURL)
 curl -X POST "https://api.fluxprompt.ai/v1/chat/completions" \
@@ -137,7 +386,7 @@ On success, returns an OpenAI-shaped `chat.completion` object. The `model` field
 
 ```json
 {
-  "id": "cmpl_8c5b1b1c3a4f",
+  "id": "cmpl-1718600000123",
   "object": "chat.completion",
   "created": 1718600000,
   "model": "claude-sonnet-4-6",
@@ -183,11 +432,15 @@ On success, returns an OpenAI-shaped `chat.completion` object. The `model` field
 </ResponseField>
 
 <ResponseField name="choices" type="array">
-  The generated completions. Each entry has an `index`, a `message`, and a `finish_reason`. The `message` is `{ role, content }`, plus `reasoning_content` (string) when the model produced reasoning / extended thinking.
+  The generated completions. Each entry has an `index`, a `message`, and a `finish_reason`. The `message` is `{ role, content }`, plus `reasoning_content` (string) when the model produced reasoning / extended thinking, and `tool_calls` (array) when the model called tools. `content` is `null` when the model produced only tool calls.
+</ResponseField>
+
+<ResponseField name="choices[].finish_reason" type="string">
+  Why the model stopped: `stop` (natural end or stop sequence), `length` (hit `max_tokens`), `tool_calls` (the model called a tool), or `content_filter`. A response that holds tool calls always reports `tool_calls`.
 </ResponseField>
 
 <ResponseField name="usage" type="object">
-  Token counts: `prompt_tokens`, `completion_tokens`, and `total_tokens`. When the provider reports them, also includes `completion_tokens_details.reasoning_tokens` (reasoning/thinking tokens) and `prompt_tokens_details.cached_tokens` (cached input tokens).
+  Token counts: `prompt_tokens`, `completion_tokens`, and `total_tokens`. When the provider reports them, also includes `completion_tokens_details.reasoning_tokens` (reasoning/thinking tokens), `prompt_tokens_details.cached_tokens` (cached input tokens), and the cache fields described in [Prompt caching](#prompt-caching).
 </ResponseField>
 
 <ResponseField name="provider_metadata" type="object">
@@ -195,7 +448,7 @@ On success, returns an OpenAI-shaped `chat.completion` object. The `model` field
 </ResponseField>
 
 <Note>
-`reasoning_content`, `usage.completion_tokens_details`, `usage.prompt_tokens_details`, and `provider_metadata` are present only when the model/provider produces them — a plain completion omits them. Request reasoning via [Advanced provider parameters](#advanced-provider-parameters).
+`reasoning_content`, `tool_calls`, `usage.completion_tokens_details`, `usage.prompt_tokens_details`, the cache fields, and `provider_metadata` are present only when the model/provider produces them — a plain completion omits them. Request reasoning via [Advanced provider parameters](#advanced-provider-parameters).
 </Note>
 
 ```json Response with reasoning
@@ -228,20 +481,24 @@ Set `stream: true` to receive the completion incrementally as server-sent events
 
 ### Stream behavior
 
-- Each chunk has `object: "chat.completion.chunk"` and carries a `delta` instead of a full `message`. The `delta.content` field holds the next slice of text.
+- Each chunk has `object: "chat.completion.chunk"` and carries a `delta` instead of a full `message`. The `delta.content` field holds the next slice of text. The first chunk also carries `delta.role: "assistant"`.
 - When the model is reasoning, those slices arrive as `delta.reasoning_content` (emitted before the text content).
+- When the model calls tools, the complete tool calls arrive in a single chunk as `delta.tool_calls`, each with an `index`, before the final chunk. They are not split into argument fragments.
 - Intermediate chunks have `finish_reason: null`.
-- The terminal chunk carries the final `finish_reason` (for example `"stop"`) and a `usage` object with `prompt_tokens`, `completion_tokens`, and `total_tokens` (plus `completion_tokens_details` / `prompt_tokens_details` when reported), and `provider_metadata` when the provider returns it.
+- The terminal chunk carries the final `finish_reason` (for example `"stop"` or `"tool_calls"`) and a `usage` object with `prompt_tokens`, `completion_tokens`, and `total_tokens` (plus the detail and cache fields when reported), and `provider_metadata` when the provider returns it.
+- If you set `stream_options.include_usage` to `true`, the terminal chunk has no `usage`. Instead, one more chunk follows with an empty `choices` array and the `usage` object.
+- While the stream is open, FluxPrompt sends a `: keep-alive` comment every 15 seconds. SSE clients ignore comments.
 - The stream ends with a literal `data: [DONE]` line.
+- If a failure happens after the stream opens, FluxPrompt sends one `data` event with an `error` object, then closes the stream without `[DONE]`.
 
 ```text Event stream
-data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-sonnet-4-6","provider":"anthropic","choices":[{"index":0,"delta":{"reasoning_content":"Let me recall the field equations…"},"finish_reason":null}]}
+data: {"id":"cmpl-1718600000123","object":"chat.completion.chunk","created":1718600000,"model":"claude-sonnet-4-6","provider":"anthropic","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"Let me recall the field equations…"},"finish_reason":null}]}
 
-data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-sonnet-4-6","provider":"anthropic","choices":[{"index":0,"delta":{"role":"assistant","content":"Spacetime"},"finish_reason":null}]}
+data: {"id":"cmpl-1718600000123","object":"chat.completion.chunk","created":1718600000,"model":"claude-sonnet-4-6","provider":"anthropic","choices":[{"index":0,"delta":{"content":"Spacetime"},"finish_reason":null}]}
 
-data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-sonnet-4-6","provider":"anthropic","choices":[{"index":0,"delta":{"content":" tells matter how to move."},"finish_reason":null}]}
+data: {"id":"cmpl-1718600000123","object":"chat.completion.chunk","created":1718600000,"model":"claude-sonnet-4-6","provider":"anthropic","choices":[{"index":0,"delta":{"content":" tells matter how to move."},"finish_reason":null}]}
 
-data: {"id":"cmpl_8c5b1b1c3a4f","object":"chat.completion.chunk","created":1718600000,"model":"claude-sonnet-4-6","provider":"anthropic","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":28,"completion_tokens":16,"total_tokens":44}}
+data: {"id":"cmpl-1718600000123","object":"chat.completion.chunk","created":1718600000,"model":"claude-sonnet-4-6","provider":"anthropic","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":28,"completion_tokens":16,"total_tokens":44}}
 
 data: [DONE]
 ```
@@ -281,6 +538,8 @@ stream = client.chat.completions.create(
 )
 
 for chunk in stream:
+    if not chunk.choices:
+        continue
     delta = chunk.choices[0].delta
     if delta.content:
         print(delta.content, end="", flush=True)
@@ -299,11 +558,13 @@ FluxPrompt marks some models as deprecated. The `deprecated_model_behavior` para
 | Value | Behavior |
 | --- | --- |
 | `"error"` (default) | Returns `400 model_deprecated`. The contract stays predictable — no silent swaps. |
-| `"substitute"` | Transparently runs the model's replacement. The response `model` field reflects the model that actually ran, so you can detect the swap. |
+| `"substitute"` | Transparently runs the model's replacement. The response `model` field reflects the model that actually ran, so you can detect the swap. If the model has no replacement, the request returns `400 model_deprecated`. |
 
 ## Timeouts
 
-Non-streaming requests have a synchronous cap of roughly 120 seconds. Requests that exceed it return `504 timeout`. For long generations, use `stream: true` to receive output incrementally, or lower `max_tokens`.
+Non-streaming requests have a synchronous cap of 120 seconds. Requests that exceed it return `504 timeout`. For long generations, use `stream: true` to receive output incrementally, or lower `max_tokens`.
+
+Streaming requests are not subject to the 120-second cap. A streamed request can run for up to 12 minutes, after which it ends with a `timeout` error.
 
 ## Errors
 
@@ -312,23 +573,52 @@ Errors use the OpenAI-compatible envelope:
 ```json
 {
   "error": {
-    "message": "Model not found",
+    "message": "Model 'gpt-unknown' not found.",
     "type": "invalid_request_error",
     "code": "model_not_found"
   }
 }
 ```
 
+`error.code` is `null` when the error has no specific code, and `error.param` names the offending field when the error is about one field.
+
+### Request and model errors
+
 | HTTP | `code` | Cause |
 | --- | --- | --- |
-| `401` | `unauthorized` | Missing or invalid `api-key` header. |
+| `400` | `null` | The body failed validation: a missing required field, a wrong type, or a value out of range. The `message` lists each problem. |
 | `400` | `model_not_found` | The model is unknown or inactive. |
-| `400` | `model_deprecated` | The model is deprecated and `deprecated_model_behavior` is `"error"` (the default). |
-| `400` | `unsupported_provider` | The model's provider can't be run by the engine. |
-| `403` | `model_not_enabled` | The model is disabled for the caller's company or space. |
+| `400` | `model_deprecated` | The model is deprecated and `deprecated_model_behavior` is `"error"` (the default), or it has no replacement. |
+| `400` | `unsupported_provider` | The model's provider can't be run by this API. |
+| `400` | `model_not_vision_capable` | The request has images, and the model does not accept images. |
+| `400` | `invalid_image_url` | An image URL is not `https` or a base64 image data URL, an inline image is empty or larger than 20 MB, or an image is in a message that is not a `user` message. |
+| `400` | `model_not_tool_capable` | The request has `tools`, and the model does not support tool calling. |
+| `400` | `invalid_tool_choice` | `tool_choice` names a function that is not in `tools`. |
+| `400` | `invalid_tool_message` | A `tool` message has no `tool_call_id` that matches an earlier assistant tool call, or `tool_calls` is on a message that is not an `assistant` message. |
+| `400` | `cache_ttl_not_supported` | A cache marker sets `ttl` to `"1h"`. |
+| `400` | `too_many_cache_markers` | An Anthropic model request has more than four cache markers. |
+| `400` | `unsupported_provider_option` | A provider option changes the provider price and is not billed yet. See [Advanced provider parameters](#advanced-provider-parameters). |
+| `400` | `invalid_provider_option` | The provider rejected a parameter you sent. The `message` explains what to change. |
+| `400` | `passthrough_too_large` | The extra provider params exceed 256,000 characters. |
+| `400` | `passthrough_too_deep` | The extra provider params are nested more than 6 levels deep. |
+| `400` | `payload_too_large` | The tools, parameters, and other non-message fields are too large to execute. |
+| `400` | `context_length_exceeded` | The prompt is longer than the model's context window. The `message` follows the provider's wording and `param` is `messages`. |
+
+### Authentication, billing, and availability errors
+
+| HTTP | `code` | Cause |
+| --- | --- | --- |
+| `401` | `null` | Missing or invalid `api-key` header. The `type` is `authentication_error`. |
 | `402` | `insufficient_quota` | The caller has no active subscription or no remaining credits. Returned by a pre-flight check before the model runs. |
-| `504` | `timeout` | A synchronous request exceeded the ~120s cap. Use `stream: true` for long generations. |
+| `403` | `model_not_enabled` | The model is disabled for the caller's company or space. |
+| `429` | `rate_limit_exceeded` | The provider rate-limited the request. The `type` is `rate_limit_error`. The `retry-after` response header holds the seconds to wait before you retry. |
+| `504` | `timeout` | A synchronous request exceeded the 120-second cap, or a streamed request exceeded 12 minutes. Use `stream: true` for long generations. |
+| `529` | `overloaded` | The provider is overloaded. The `type` is `overloaded_error`. Retry after a short delay. |
 
 <Info>
 `402 insufficient_quota` is enforced by a pre-flight credit check: when the caller has no active subscription or no remaining credits, the request is rejected before the model runs.
 </Info>
+
+<Tip>
+Handle `429` and `529` with a retry and backoff. Honor the `retry-after` header on `429` when it is present.
+</Tip>
