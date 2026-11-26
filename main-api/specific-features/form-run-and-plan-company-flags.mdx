@@ -1,0 +1,86 @@
+---
+title: "Form run access and plan company flags"
+description: "Two access rules that ship in report-only mode and enforce behind their own feature flags: form_run_access_enforce for running an agent through a form, and plan_company_enforce for the plan limit when you create or duplicate an agent in another organization's folder."
+---
+
+Two access rules decide who can run an agent through a form and which organization's plan counts a new agent. Each rule always runs and always logs what it would refuse. A feature flag of its own decides whether the rule only logs or also refuses:
+
+| Flag | Rule |
+|---|---|
+| `form_run_access_enforce` | Who can run an agent through `POST /flux/formapi-v1`. |
+| `plan_company_enforce` | Which organization's plan counts an agent that you create or duplicate in a folder. |
+
+Both flags are seeded **off**, so a deploy changes no behavior. You turn each one on separately, after its log lines show that it would refuse no legitimate request.
+
+## The form run rule
+
+`POST /flux/formapi-v1?formId=<id>&flowId=<id>` runs one agent of a form, the way the form page does. The rule refuses a call when one of these conditions is true:
+
+- `flowId` is not one of the form's agents. The form's agents are its `activeFlows`, or `activeFlowId` when `activeFlows` is empty. A form built in the legacy builder also counts the agents of its submit buttons.
+- The form is not a published **External** form, and the caller is neither the form's owner nor an active member of the organization that owns the form's space. Without a JWT, the caller is anonymous.
+- The request carries a `versionId`.
+
+A published **External** form stays open to any caller. The full caller table is in [Run a form](/main-api/specific-features/external-api-endpoints#run-a-form).
+
+| Flag | Behavior when the rule refuses |
+|---|---|
+| **Off** (default) | The agent runs as before. The back logs `Form run access (report-only): would refuse {…}`. |
+| **On** | The route answers `403` with the message of the first reason, runs nothing, and logs `Form run access: refused {…}`. |
+
+The messages, in the order the rule checks the reasons:
+
+| Reason | Message |
+|---|---|
+| `flowNotInForm` | `This agent is not part of the form.` |
+| `loginRequired` | `Log in to use this form.` |
+| `noFormAccess` | `You do not have access to this form.` |
+| `versionIdPresent` | `This form cannot run a specific agent version.` |
+
+When the rule itself fails, for example on a database error, the flag decides again. Off, the agent runs and the back logs `Form run access (report-only): evaluation failed`. On, the route answers `403` with `We could not check your access to this form. Please try again.`, runs nothing, and logs `Form run access: evaluation failed`. The response never carries the internal error.
+
+Each log line carries `formId`, `flowId`, `callerUserId` (`anon` without a JWT), `ip`, `formStatus`, `publishType`, `flowSource`, `reasons`, `versionIdPresent`, `formOwnerId` and `isPreviewLikely`. `isPreviewLikely` is `true` when the caller can open the form in the builder, which is what a builder preview looks like.
+
+## The plan company rule
+
+When you create or duplicate an agent in a folder that belongs to an organization, the plan and slot limits count against that organization, not against the organization you have selected. The rule matters only when the two differ: the folder's organization has no room, and your selected organization has room.
+
+| Flag | Behavior when the folder's organization has no room |
+|---|---|
+| **Off** (default) | The agent is created on your selected organization's plan, and the back logs `Plan company (report-only): would refuse {…}` with `userId`, `folderId`, `folderCompanyId`, `selectedCompanyId`, `limitCode` and `route` (`createFlow` or `duplicateFlow`). |
+| **On** | You get the folder organization's own refusal, and nothing is created. No extra log line is written. |
+
+The refusal is the same one you get in a folder of your own organization when your plan is full: `402` with a `plan_limit` error such as `flow_limit_reached`, or `400` with `Please buy a product to create more flows` when you have no plan.
+
+While the flag is off, deleting an agent that was created this way releases its slot on the folder's organization, not on the organization that counted it. Each such pair leaves one organization's counter one too high and the other's one too low. Turning the flag on stops new pairs.
+
+## Turn a flag on or off
+
+1. Sign in with an internal staff account.
+2. Open **Admin Dashboard → Feature Flags**.
+3. Switch the flag. The change is written to the flag's audit history.
+
+The back caches each flag for five seconds, so a change takes effect within seconds, without a deploy. If the flag cannot be read, the back treats it as off, so a database error never refuses a request.
+
+<Note>
+  Turn the flags on one at a time. After you turn on `form_run_access_enforce`, search the back log
+  for `Form run access: refused` and `Form run access: evaluation failed`, and check that each
+  refusal is one you expect: an anonymous caller on a draft or **Internal** form, an agent that is not
+  in the form, or a `versionId`. A refusal of a form owner, an organization member or a builder
+  preview (`isPreviewLikely: true`) means you should turn the flag off and report it. With
+  `plan_company_enforce` on, a refusal writes no log line; watch for reports of the plan error
+  instead.
+</Note>
+
+## Migrations
+
+| Migration | What it does |
+|---|---|
+| `SeedFormRunAndPlanCompanyEnforceFlags1795310000000` | Seeds `form_run_access_enforce` and `plan_company_enforce` as **off**. It does nothing when a flag already exists. |
+
+## Files
+
+`back/src/app-api/forms/form-run-access.ts` (`evaluateFormRunAccess`, `checkFormRunAccess`) ·
+`back/src/app-api/forms/internal-form-access.ts` (`resolveFormDelivery`) ·
+`back/src/app-api/flux/flux.controller.ts` (`formApi`) ·
+`back/src/app-api/folw/flow.controller.ts` (`admitOnPlanCompany`) ·
+`back/src/app-api/product/company-of-flow.ts`

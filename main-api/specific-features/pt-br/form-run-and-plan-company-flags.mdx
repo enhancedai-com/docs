@@ -1,0 +1,86 @@
+---
+title: "Flags de acesso ao formulário e de plano da empresa"
+description: "Duas regras de acesso que saem em modo report-only e passam a recusar atrás de feature flags próprias: form_run_access_enforce para executar um agente por um formulário, e plan_company_enforce para o limite do plano ao criar ou duplicar um agente na pasta de outra organização."
+---
+
+Duas regras de acesso decidem quem pode executar um agente por um formulário e o plano de qual organização conta um agente novo. Cada regra sempre roda e sempre registra no log o que recusaria. Uma feature flag própria decide se a regra só registra ou também recusa:
+
+| Flag | Regra |
+|---|---|
+| `form_run_access_enforce` | Quem pode executar um agente por `POST /flux/formapi-v1`. |
+| `plan_company_enforce` | O plano de qual organização conta um agente que você cria ou duplica numa pasta. |
+
+As duas flags são criadas **desligadas**, então um deploy não muda nenhum comportamento. Você liga cada uma separadamente, depois que as linhas de log mostram que ela não recusaria nenhuma requisição legítima.
+
+## A regra de execução do formulário
+
+`POST /flux/formapi-v1?formId=<id>&flowId=<id>` executa um agente de um formulário, do mesmo jeito que a página do formulário. A regra recusa uma chamada quando uma destas condições é verdadeira:
+
+- `flowId` não é um dos agentes do formulário. Os agentes do formulário são os seus `activeFlows`, ou `activeFlowId` quando `activeFlows` está vazio. Um formulário criado no builder legado também conta os agentes dos seus botões de envio.
+- O formulário não é um formulário **External** publicado, e quem chama não é o dono do formulário nem membro ativo da organização dona do space do formulário. Sem JWT, quem chama é anônimo.
+- A requisição traz um `versionId`.
+
+Um formulário **External** publicado continua aberto para qualquer chamador. A tabela completa de chamadores está em [Executar um formulário](/main-api/specific-features/pt-br/external-api-endpoints#executar-um-formulário).
+
+| Flag | Comportamento quando a regra recusa |
+|---|---|
+| **Desligada** (padrão) | O agente executa como antes. O back registra `Form run access (report-only): would refuse {…}`. |
+| **Ligada** | A rota responde `403` com a mensagem do primeiro motivo, não executa nada e registra `Form run access: refused {…}`. |
+
+As mensagens, na ordem em que a regra verifica os motivos:
+
+| Motivo | Mensagem |
+|---|---|
+| `flowNotInForm` | `This agent is not part of the form.` |
+| `loginRequired` | `Log in to use this form.` |
+| `noFormAccess` | `You do not have access to this form.` |
+| `versionIdPresent` | `This form cannot run a specific agent version.` |
+
+Quando a própria regra falha, por exemplo num erro de banco, a flag decide de novo. Desligada, o agente executa e o back registra `Form run access (report-only): evaluation failed`. Ligada, a rota responde `403` com `We could not check your access to this form. Please try again.`, não executa nada e registra `Form run access: evaluation failed`. A resposta nunca traz o erro interno.
+
+Cada linha de log traz `formId`, `flowId`, `callerUserId` (`anon` sem JWT), `ip`, `formStatus`, `publishType`, `flowSource`, `reasons`, `versionIdPresent`, `formOwnerId` e `isPreviewLikely`. `isPreviewLikely` é `true` quando quem chama pode abrir o formulário no builder, que é como um preview do builder aparece.
+
+## A regra de plano da empresa
+
+Quando você cria ou duplica um agente numa pasta que pertence a uma organização, os limites de plano e de slots contam nessa organização, não na organização que você selecionou. A regra só importa quando as duas são diferentes: a organização da pasta não tem espaço, e a sua organização selecionada tem.
+
+| Flag | Comportamento quando a organização da pasta não tem espaço |
+|---|---|
+| **Desligada** (padrão) | O agente é criado no plano da sua organização selecionada, e o back registra `Plan company (report-only): would refuse {…}` com `userId`, `folderId`, `folderCompanyId`, `selectedCompanyId`, `limitCode` e `route` (`createFlow` ou `duplicateFlow`). |
+| **Ligada** | Você recebe a recusa da própria organização da pasta, e nada é criado. Nenhuma linha de log extra é escrita. |
+
+A recusa é a mesma que você recebe numa pasta da sua própria organização quando o seu plano está cheio: `402` com um erro `plan_limit` como `flow_limit_reached`, ou `400` com `Please buy a product to create more flows` quando você não tem plano.
+
+Enquanto a flag está desligada, apagar um agente criado desse jeito libera o slot na organização da pasta, não na organização que o contou. Cada par assim deixa o contador de uma organização um acima e o da outra um abaixo. Ligar a flag impede novos pares.
+
+## Ligar ou desligar uma flag
+
+1. Entre com uma conta de staff interno.
+2. Abra **Admin Dashboard → Feature Flags**.
+3. Mude a flag. A mudança fica registrada no histórico de auditoria da flag.
+
+O back guarda cada flag em cache por cinco segundos, então uma mudança vale em segundos, sem deploy. Se a flag não puder ser lida, o back a trata como desligada, então um erro de banco nunca recusa uma requisição.
+
+<Note>
+  Ligue as flags uma de cada vez. Depois de ligar `form_run_access_enforce`, procure no log do back
+  `Form run access: refused` e `Form run access: evaluation failed`, e confira se cada recusa é
+  esperada: um chamador anônimo num formulário rascunho ou **Internal**, um agente que não está no
+  formulário, ou um `versionId`. A recusa de um dono de formulário, de um membro da organização ou de
+  um preview do builder (`isPreviewLikely: true`) significa que você deve desligar a flag e relatar.
+  Com `plan_company_enforce` ligada, uma recusa não gera linha de log; acompanhe relatos do erro de
+  plano.
+</Note>
+
+## Migrations
+
+| Migration | O que faz |
+|---|---|
+| `SeedFormRunAndPlanCompanyEnforceFlags1795310000000` | Cria `form_run_access_enforce` e `plan_company_enforce` **desligadas**. Não faz nada quando uma flag já existe. |
+
+## Arquivos
+
+`back/src/app-api/forms/form-run-access.ts` (`evaluateFormRunAccess`, `checkFormRunAccess`) ·
+`back/src/app-api/forms/internal-form-access.ts` (`resolveFormDelivery`) ·
+`back/src/app-api/flux/flux.controller.ts` (`formApi`) ·
+`back/src/app-api/folw/flow.controller.ts` (`admitOnPlanCompany`) ·
+`back/src/app-api/product/company-of-flow.ts`
