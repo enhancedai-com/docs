@@ -64,7 +64,7 @@ If any of the three repos is on an environment branch (`production`, `staging`, 
 
 Add an entry for your type to `back/src/shared/node-dispatch/node-dispatch-registry.ts` with all five fields set on purpose:
 
-- `execution: "worker"` (the class of the type: `worker`, `source`, `visual`, `back`, `sink` or `state`; a `back`, `sink` or `state` entry must also name its owner in `handoffOwner`)
+- `execution: "worker"` (the class of the type: `worker`, `source`, `visual`, `back`, `sink` or `state`; a `back` entry, or a `sink` entry without a worker module, must also name its owner in `handoffOwner`)
 - `flowDispatch: "worker"` (your type is dispatched to the worker in a full flow run)
 - `legacyEndpoint` (the verdict of the legacy single-node endpoint: `"refuse-migrated"` for a worker type, or `"accept"`, `"refuse-mutating"`, `"refuse-unsupported"`)
 - `prefetchSafe: true | false` (is prefetch resolution safe for your type)
