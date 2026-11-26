@@ -109,6 +109,7 @@ All five live on the `/flux` controller. Documented in the [Memory Pods API guid
 | `GET` | `/flux/executions/:id` | Status of a queued api-v2 run: `pending`, `in_progress`, `completed` (with `output`, `tokensUsed`, `totalCost`, `durationMs`) or `error` (with `errorMessage`). Scoped to the caller. | api-key |
 | `POST` | `/flux/api-v2-webhook?flowId=<id>` | Fire-and-forget webhook trigger: the whole request body is fed into the flow's first variable input node and the run is queued. | none |
 | `POST` | `/flux/run-public-flow/:id` | Run a published chatbot's flow as the flow's owner. Who can call it depends on how the chatbot is published; see [Run a published chatbot](#run-a-published-chatbot). | none or JWT |
+| `POST` | `/flux/formapi-v1?formId=<id>&flowId=<id>` | Run one agent of a form, the way the form page does. Answers `200` as soon as the run is queued. Who can call it depends on how the form is published; see [Run a form](#run-a-form). | none or JWT |
 
 The `api` and `webhook` URLs returned by `GET /integrations/agents` are exactly these first two routes, pre-filled with the flow id.
 
@@ -139,6 +140,33 @@ When the route refuses a call, it answers `400` and does not run the flow:
 | `This chatbot is shared inside its organization and your account does not have access to its space.` | The chatbot is published for **Only people with access to this space**, and you are neither the flow's owner nor an active member of the organization that owns its space. |
 
 When the run itself fails, the route answers right away with an error response: the status and message of a refusal that the run raises, or `500` for an unexpected failure. The `500` response does not include the internal cause.
+
+### Run a form
+
+`POST /flux/formapi-v1?formId=<id>&flowId=<id>` runs one agent of a form. It takes the same body as `api-v2` and answers `200` with `{"status":"success","data":{"message":"success request"}}` as soon as the run is queued; the agent then runs in the background.
+
+The form's publish setting decides who can run it:
+
+| Form | Who can run its agents |
+| --- | --- |
+| Published, **External** (`status: published`, `publishType: external`) | Any caller, with or without a JWT. |
+| Published **Internal** (`publishType: internal`), or any draft | A caller who sends a valid JWT and is the form's owner or an active member of the organization that owns the form's space. The form builder's preview runs this way. |
+
+In every case, `flowId` must be one of the form's agents, and the request must not carry a `versionId`. Like the chatbot route, this route reads only a JWT, so a request that carries only an API key counts as anonymous.
+
+The route refuses these calls before the access rule:
+
+| Status | Message | Cause |
+| --- | --- | --- |
+| `404` | `Form not found` | `formId` is missing, is not a UUID, or matches no form. |
+| `400` | `Your organization has not enabled running for User accounts. Ask an Owner or an Admin to turn on "Allow Users to run flows".` | Your role in the form's organization is User, and the organization does not let Users run agents. |
+
+<Note>
+  The access rule refuses only while the `form_run_access_enforce` flag is on. With the flag off, a
+  call the rule would refuse still runs, and the back logs it. The `403` messages, the log lines and
+  how to turn the flag on are in
+  [Form run access and plan company flags](/main-api/specific-features/form-run-and-plan-company-flags).
+</Note>
 
 ### Batch processing
 

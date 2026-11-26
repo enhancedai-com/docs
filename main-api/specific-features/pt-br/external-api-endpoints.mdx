@@ -109,6 +109,7 @@ Os cinco ficam no controller `/flux`. Documentados no [guia da Memory Pods API](
 | `GET` | `/flux/executions/:id` | Status de uma execução api-v2 enfileirada: `pending`, `in_progress`, `completed` (com `output`, `tokensUsed`, `totalCost`, `durationMs`) ou `error` (com `errorMessage`). Restrito ao chamador. | api-key |
 | `POST` | `/flux/api-v2-webhook?flowId=<id>` | Gatilho de webhook sem espera: o corpo inteiro da requisição entra no primeiro node de variable input do flow e a execução é enfileirada. | none |
 | `POST` | `/flux/run-public-flow/:id` | Executa o flow de um chatbot publicado, como o dono do flow. Quem pode chamar depende de como o chatbot foi publicado; veja [Executar um chatbot publicado](#executar-um-chatbot-publicado). | none or JWT |
+| `POST` | `/flux/formapi-v1?formId=<id>&flowId=<id>` | Executa um agente de um formulário, do mesmo jeito que a página do formulário. Responde `200` assim que a execução entra na fila. Quem pode chamar depende de como o formulário foi publicado; veja [Executar um formulário](#executar-um-formulário). | none or JWT |
 
 As URLs `api` e `webhook` retornadas por `GET /integrations/agents` são exatamente as duas primeiras rotas, já preenchidas com o id do flow.
 
@@ -139,6 +140,33 @@ Quando a rota recusa uma chamada, ela responde `400` e não executa o flow:
 | `This chatbot is shared inside its organization and your account does not have access to its space.` | O chatbot está publicado para **Only people with access to this space**, e você não é o dono do flow nem membro ativo da organização dona do space. |
 
 Quando a própria execução falha, a rota responde na hora com uma resposta de erro: o status e a mensagem de uma recusa que a execução levanta, ou `500` para uma falha inesperada. A resposta `500` não inclui a causa interna.
+
+### Executar um formulário
+
+`POST /flux/formapi-v1?formId=<id>&flowId=<id>` executa um agente de um formulário. Ela recebe o mesmo corpo que o `api-v2` e responde `200` com `{"status":"success","data":{"message":"success request"}}` assim que a execução entra na fila; o agente então executa em segundo plano.
+
+A configuração de publicação do formulário decide quem pode executá-lo:
+
+| Formulário | Quem pode executar seus agentes |
+| --- | --- |
+| Publicado, **External** (`status: published`, `publishType: external`) | Qualquer chamador, com ou sem JWT. |
+| Publicado **Internal** (`publishType: internal`), ou qualquer rascunho | Um chamador que envia um JWT válido e é o dono do formulário ou membro ativo da organização dona do space do formulário. O preview do builder de formulários executa desse jeito. |
+
+Em todos os casos, `flowId` precisa ser um dos agentes do formulário, e a requisição não pode trazer um `versionId`. Como na rota do chatbot, esta rota lê apenas um JWT, então uma requisição que traz apenas uma API key conta como anônima.
+
+A rota recusa estas chamadas antes da regra de acesso:
+
+| Status | Mensagem | Causa |
+| --- | --- | --- |
+| `404` | `Form not found` | `formId` está ausente, não é um UUID, ou não corresponde a nenhum formulário. |
+| `400` | `Your organization has not enabled running for User accounts. Ask an Owner or an Admin to turn on "Allow Users to run flows".` | O seu papel na organização do formulário é User, e a organização não deixa Users executarem agentes. |
+
+<Note>
+  A regra de acesso só recusa enquanto a flag `form_run_access_enforce` está ligada. Com a flag
+  desligada, uma chamada que a regra recusaria ainda executa, e o back registra no log. As mensagens
+  `403`, as linhas de log e como ligar a flag estão em
+  [Flags de acesso ao formulário e de plano da empresa](/main-api/specific-features/pt-br/form-run-and-plan-company-flags).
+</Note>
 
 ### Processamento em lote
 
