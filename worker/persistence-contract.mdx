@@ -2,29 +2,38 @@
 title: Persistence contract
 description: Own-row writes only — the rule that lets parallelism be safe.
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f, back@master 9609806b
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## The rule
 
 An activity writes only to the `node_executions` row keyed by its own `(execId, nodeId)`.
 
+The write targets the newest row for that pair (`latestNodeExecutionId` in `worker/src/modules/nodes/shared/latest-node-execution.ts`: `ORDER BY "createdAt" DESC, id DESC LIMIT 1`). Since 2026-10-14 the partial unique index `UQ_NODE_EXECUTIONS_EXEC_NODE` on `back/src/entities/node_execution.entity.ts` allows only one row per `(execId, nodeId)`.
+
 ## Why the rule exists
 
-Parallel siblings in a flow run at the same time, so the only way they do not race on the database is for each one to write to a row that no other activity touches. The identity key `(execId, nodeId)` is unique per row — one activity owns one row — and that is enough to guarantee no lost update: there is no second writer to race against.
+Parallel siblings in a flow run at the same time, so the only way they do not race on the database is for each one to write to a row that no other activity touches. The identity key `(execId, nodeId)` is unique per row (one activity owns one row), and that is enough to guarantee no lost update: there is no second writer to race against.
 
-## The JSONB merge
+## What a success write does
 
-`persistNodeSuccess` (defined in `worker/src/modules/nodes/shared/persist-node-success.ts`) delegates to `persistNodeOutcome`, which issues `UPDATE node_executions SET "outputData" = $1::jsonb`. On the success path this is a **full replace** of `outputData` with the serialized payload, not a JSONB merge — each successful call rewrites the row's output from scratch. The merge-with-concat operator (`coalesce("outputData", '{}'::jsonb) || $1::jsonb`) is only used by `persistCancelledNodeOutcome` and by `recordNodeExecutionMetadata` (which merges into `metadata`, not `outputData`). The rule in [The rule](#the-rule) is still what keeps parallelism safe: because only the row's own activity writes to it, the full replace is always writing over its own prior value, so there is no cross-activity clobber.
+`persistNodeSuccess` (in `worker/src/modules/nodes/shared/persist-node-success.ts`) adds `executionStatus: "COMPLETED"`, `errorMessage: null` and `errorStatusCode: null` to the payload and delegates to `persistNodeOutcome` (in `persist-node-outcome.ts`), which makes two writes:
+
+1. **The live node.** It merges the payload into `flows_nodes.data` (`coalesce(data, '{}'::jsonb) || $1::jsonb`) for the node's `(node_id, flow_id, flow_version_history_id)`, leaving out the input fields in `LIVE_WRITE_EXCLUDED_FIELDS` (`prompt`, `promptData`, `content`, `jsonRequestBody` and others). This is what the editor shows after a run. Two runs of the same flow share this row, so the last one to finish wins there; the per-run record is `node_executions`.
+2. **The run row.** It runs `UPDATE node_executions SET "outputData" = $1::jsonb ... AND "cancelledAt" IS NULL`. On the success path this is a **full replace** of `outputData`, not a JSONB merge, and it does nothing when the row was already cancelled.
+
+The merge-with-concat operator on `outputData` is used only by `persistCancelledNodeOutcome`, which also sets `cancelledAt`. `recordNodeExecutionMetadata` merges into `metadata`, not `outputData`. `persistRunNodeOutcome` writes the run row only, without touching `flows_nodes`.
+
+The rule in [The rule](#the-rule) is what keeps parallelism safe: because only the row's own activity writes to it, the full replace always writes over its own prior value, so there is no cross-activity clobber.
 
 ## The 256 KB claim check
 
-Payloads larger than 256 KB are not stored on the row directly. Instead the activity uploads the payload via [`/worker/store-payload`](/worker/callback-reference#store-payload) and stores only the resulting claim-check key on the row. The reader resolves the key via [`/worker/get-payload`](/worker/callback-reference#get-payload).
+Payloads larger than 256 KB are not stored on the row directly. `offloadIfLarge` uploads the payload through [`POST /worker/store-payload`](/worker/callback-reference#store-payload) and stores `{ __claimRef: <key>, bytes, preview }` on the row instead, where `preview` is the first 200 characters. If the upload fails or returns a non-2xx status, the payload is stored inline. A reader resolves the key through [`POST /worker/get-payload`](/worker/callback-reference#get-payload) (`resolveClaimRef` in `resolve-claim-ref.ts`). The wire contract for both routes is `claim-check.contract.json`, with an identical copy in back and worker.
 
 See [TASK-S5 — Claim-check authorization](https://github.com/enhancedai-com/Workflow/blob/main/.claude/tasks/worker-flow-execution-epic/TASK-S5-CLAIM-CHECK-AUTHZ.md) for why the key is scoped to its run.
 
-The threshold is controlled by `CLAIM_CHECK_THRESHOLD_BYTES` in `worker/src/modules/nodes/shared/persist-node-outcome.ts` — defaulted to 262144 bytes (256 KB) and overridable per environment via the `CLAIM_CHECK_THRESHOLD_BYTES` env var.
+The threshold is `CLAIM_CHECK_THRESHOLD_BYTES` in `worker/src/modules/nodes/shared/persist-node-outcome.ts`: 262144 bytes (256 KB) by default, overridable per environment through the `CLAIM_CHECK_THRESHOLD_BYTES` env var.
 
 ## What breaks if you violate the rule
 

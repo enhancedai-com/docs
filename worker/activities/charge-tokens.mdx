@@ -2,28 +2,30 @@
 title: "chargeTokens"
 description: "Records token usage for billing purposes"
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## Overview
 
-The `chargeTokensActivity` records token consumption for billing and usage tracking. It sends token usage information to the main API, which handles billing calculations and usage limits.
+The `chargeTokensActivity` records token consumption for billing. It posts the token usage to the main API, which resolves the paying plan, prices the call and writes the charge. The activity lives in `src/modules/temporal/activities/activities.service.ts`.
 
 ## Purpose
 
-- Track token consumption for billing
-- Record input and output token usage
-- Update user/flow usage statistics
-- Enable usage-based billing calculations
+- Charge the plan that pays for the flow for the tokens a node consumed
+- Record input and output token usage, plus web search calls when the model made any
+- Tie the charge to the execution and node (`execId`, `nodeId`), so the credits show up on the node's `node_executions` row
 
 ## When it's executed
 
-This activity is called after successful AI model operations:
+`processSingleNode` calls it in four places:
 
-1. **After text generation**: Records tokens used in text generation operations
-2. **After model calls**: Tracks tokens consumed by any AI model interaction
-3. **Before completion**: Executes before marking the workflow as complete
+1. **After a Text Generator run**: once the node returns `inputTokens` and `outputTokens`. A response without both fails the node with `Failed to get input and output tokens`.
+2. **After an Image Reader run**: when the node returns a `charge` (provider-billed OCR or vision), with the Image Reader charge `label` and the `nodeType`.
+3. **After a Text Generator failure**: when the failure carries the tokens already spent, the workflow charges them before it records the error. A charge failure here is logged as `charge_after_failure_failed` and does not replace the original error.
+4. **After a cancelled run**: when the cancel settlement says the partial output should be charged.
+
+The Image Generator and the MCP path inside Third Party Integration post to the same `/worker/charge-tokens` endpoint directly, not through this activity.
 
 ## Signature
 
@@ -35,8 +37,11 @@ async chargeTokensActivity({
   outputTokens: number,
   model: string,
   aiSystem: string,
+  label?: string,
+  nodeType?: string,
   execId?: string,
   nodeId?: string,
+  webSearchCalls?: number,
 }): Promise<boolean>
 ```
 
@@ -45,104 +50,57 @@ async chargeTokensActivity({
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `flowId` | `string` | ID of the flow that consumed the tokens |
-| `userId` | `string` | ID of the user who owns the flow |
+| `userId` | `string` | ID of the user who ran the flow |
 | `inputTokens` | `number` | Number of input tokens consumed |
 | `outputTokens` | `number` | Number of output tokens generated |
-| `model` | `string` | Name/identifier of the AI model used |
-| `aiSystem` | `string` | AI system/provider (e.g., `openai`, `anthropic`) |
+| `model` | `string` | Model identifier |
+| `aiSystem` | `string` | AI system/provider (for example `openai`, `anthropic`) |
+| `label` | `string` (optional) | Label of the charge; the back defaults it to `Text` |
+| `nodeType` | `string` (optional) | Node type; the back uses it to pick a per-node credit multiplier |
 | `execId` | `string` (optional) | Execution id the charge belongs to |
 | `nodeId` | `string` (optional) | Node id the charge belongs to |
+| `webSearchCalls` | `number` (optional) | Web search calls the model made, charged at the provider's web search price |
 
 ## Outputs
 
-Returns `true` if token charging was successful, `false` otherwise.
+Returns `true` when the back answers `success: true`, `false` otherwise. On a refusal the activity logs `charge-tokens refused` with the status code, message and error code. The workflow does not branch on the returned value.
 
 ## Implementation details
 
-The activity makes an HTTP POST request to the main API's token charging endpoint:
+The activity calls `postCharge` (`src/modules/temporal/activities/charge-request.ts`):
 
 ```
 POST ${URL_MAIN_API}/worker/charge-tokens
 ```
 
-The request includes:
-- `flowId`: Flow identifier
-- `userId`: User identifier
-- `inputTokens`: Input token count
-- `outputTokens`: Output token count
-- `model`: Model name
-- `aiSystem`: AI system/provider
-- `execId`: Execution identifier (optional)
-- `nodeId`: Node identifier (optional)
+- The request carries the `internal-api-key` header with `INTERNAL_API_KEY`. The back's `InternalApiGuard` rejects a missing or wrong key with 401.
+- `postCharge` makes up to 5 attempts (`CHARGE_REQUEST_ATTEMPTS`). A 5xx reply or a network error is retried with exponential backoff starting at 1 second; any reply below 500 is returned at once. A network error on the last attempt throws.
+- The Temporal proxy runs the activity with `maximumAttempts: 1` and a 60-second `startToCloseTimeout` (`SINGLE_ATTEMPT_GROUP_TIMEOUT_MS`), so the retries happen inside `postCharge`, not in Temporal.
 
-The request is authenticated using the `INTERNAL_API_KEY` header.
+## Back endpoint
+
+`WorkerController.chargeTokens` in `back/src/temporal/worker.controller.ts`:
+
+- **Request body**: `{ flowId, userId, inputTokens, outputTokens, model, aiSystem, execId?, nodeId?, label?, usedTokens?, billingFlowId?, webSearchCalls?, nodeType? }`
+- It resolves the provider, finds the user product through `getUserProductFromFlow`, and calls `productService.updateTokens`.
+- **Response on success**: `200 { success: true, message: 'Tokens charged successfully', tokens, cost }`
+- **Response on failure**: `500 { success: false, message: 'Failed to charge tokens' }`. Because it is a 5xx, the worker retries it before returning `false`.
 
 ## Example usage in workflow
 
 ```typescript
-// After successful text generation
-const output = await textGeneratorActivity({
-  nodeId,
-  sessionId,
-  userId,
-});
-
-// Charge tokens for the operation
 await chargeTokensActivity({
-  flowId: node.flowId,
+  flowId: node.flow_id,
   userId,
   inputTokens: output.inputTokens,
   outputTokens: output.outputTokens,
   model: node.data.aiModel,
-  aiSystem: node.data.AiSystem,
+  aiSystem: node.data.aiSystem,
+  execId,
+  nodeId,
+  webSearchCalls: output.webSearchCalls,
 });
 ```
-
-## Error handling
-
-The activity returns `false` if:
-
-- The API request fails
-- Token charging cannot be processed
-- The user has exceeded usage limits
-- The billing system is unavailable
-
-The workflow should handle failures appropriately:
-
-```typescript
-const success = await chargeTokensActivity({
-  flowId,
-  userId,
-  inputTokens,
-  outputTokens,
-  model,
-  aiSystem,
-});
-
-if (!success) {
-  // Log error but don't fail the workflow
-  // Token charging failures are logged but don't block execution
-}
-```
-
-## Token calculation
-
-Tokens are typically calculated by:
-
-- **Input tokens**: Count of tokens in the prompt/messages sent to the model
-- **Output tokens**: Count of tokens in the response generated by the model
-
-The AI model provider's API usually returns these values as part of the response.
-
-## API integration
-
-The activity communicates with the main API's internal endpoint:
-
-- **Endpoint**: `/worker/charge-tokens`
-- **Method**: POST
-- **Authentication**: Internal API key (`INTERNAL_API_KEY`)
-- **Request body**: `{ flowId, userId, inputTokens, outputTokens, model, aiSystem, execId?, nodeId? }`
-- **Response**: `{ success: boolean }`
 
 ## Related documentation
 

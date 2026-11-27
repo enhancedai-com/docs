@@ -3,8 +3,8 @@ title: "Display box"
 sidebarTitle: "Display box"
 description: "Temporal activity for the display box node: aggregates text inputs and optionally generates output files (TXT, PDF, DOCX) via the main API."
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f, back@master 9609806b
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## Overview
@@ -15,17 +15,14 @@ The **display box** node (technical name Output Controller, node type `outputCon
 
 ## When it runs
 
-`displayBoxActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **display box** (`NodeType.DISPLAY_BOX`, stored value `outputController`).
+`displayBoxActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **display box** (`NodeType.DISPLAY_BOX`, stored value `outputController`), through the `UNIFORM_NODE_ACTIVITIES` map in `workflows/node-activities.ts`. Its proxy has a `startToCloseTimeout` of 12 minutes and a 30-second heartbeat timeout; the activity heartbeats through `withKeepAliveHeartbeat` while the file is generated.
 
 ## Activity signature
 
 ```typescript
-async displayBoxActivity({
-  nodeId: string,
-  sessionId: string,
-  userId: string,
-  flowId: string,
-}): Promise<DisplayBoxResponse>
+async displayBoxActivity(
+  props: ExecuteNodeActivityProps,
+): Promise<DisplayBoxResponse>
 ```
 
 `DisplayBoxResponse`:
@@ -41,9 +38,9 @@ async displayBoxActivity({
 
 Text is resolved via the `resolveText` helper:
 
-1. If `textData` is a non-empty array, join all items' `text` fields with newlines.
+1. If `textData` is an array, join all items' `text` fields with newlines. An empty array gives an empty string; it does not fall back to `text`.
 2. Otherwise, use the static `text` field.
-3. If both are empty, return an empty string.
+3. If neither is set, return an empty string.
 
 `textData` (edge-driven) always takes precedence over the static `text` field.
 
@@ -63,17 +60,17 @@ Types reference: [`DisplayBoxNodeData`](https://github.com/enhancedai-com/Flux-P
 | Field | Role |
 | ----- | ---- |
 | `saveOutput` | Boolean. When `true`, triggers file generation via the main API. |
-| `fileExtension` | File format suffix (e.g. `.pdf`, `.docx`, `.txt`). Leading dot is stripped; defaults to `txt`. |
+| `fileExtension` | File format suffix (e.g. `.pdf`, `.docx`, `.txt`). Leading dot is stripped; defaults to `txt`. Allowed: `txt`, `pdf`, `docx`, `md`, `json`, `csv`, `html` (case-insensitive). |
 | `customFileName` | Optional user-defined filename for the generated file. |
 | `useDocRaptor` | Boolean. When `true`, uses DocRaptor for PDF generation with advanced styling. |
 | `fileLink` | Stored file metadata `{ src, name }` after generation. Preserved from previous runs if no new file is generated. |
 
 ## End-to-end flow
 
-1. **Load node** — `SELECT` from `flows_nodes` by `nodeId`; read `data` and `flowId`.
-2. **Resolve text** — Concatenate `textData[]` with newlines, or fall back to `text`.
+1. **Load node** — `fetchNodeRow` reads the run's input snapshot (`node_executions.input`) during a run, or `flows_nodes.data` when there is no `execId`.
+2. **Resolve text** — Concatenate `textData[]` with newlines, or fall back to `text`. With `saveOutput` on, validate the text, `fileExtension` and `customFileName`.
 3. **Generate file** (conditional) — If `saveOutput` is `true`, call `POST {URL_MAIN_API}/worker/generate-file` with the resolved text, file extension, and options. The request has a **10-minute timeout**.
-4. **Persist** — `UPDATE flows_nodes` with merged `data`, setting `text`, `fileLink`, `executionStatus: 'COMPLETED'`, and clearing error fields.
+4. **Persist** — `persistNodeSuccess` merges `text`, `fileLink`, `executionStatus: 'COMPLETED'` and cleared error fields into `flows_nodes.data` and writes them to the run's `node_executions.outputData`.
 5. **Return** — `{ text, fileLink }`.
 
 ## File generation API call
@@ -98,7 +95,7 @@ Request body:
 }
 ```
 
-The response returns `{ fileLink: { src, name } }` which is persisted on the node.
+The back handler is `WorkerController.generateFile` (`back/src/temporal/worker.controller.ts`, guarded by `InternalApiGuard`). It uploads the text through `uploadService.uploadText` and returns `{ fileLink: { src, name } }`, which is persisted on the node. The worker rejects a response whose `fileLink.src` or `fileLink.name` is missing.
 
 **Timeout:** 10 minutes (`AbortSignal.timeout`). Authentication uses the `internal-api-key` header with `INTERNAL_API_KEY` from environment.
 
@@ -125,12 +122,14 @@ On success, the stored JSON includes all original node data plus:
 
 | Cause | Error |
 | ----- | ----- |
-| Node not found in `flows_nodes` | `Node not found` |
+| Node row not found | `NodeNotFoundError`: "This node no longer exists. Refresh the page." |
 | `saveOutput` is true but the resolved text is empty | `UserConfigError`, field `text`: "Display Box has no content to save." |
 | `saveOutput` is true and `fileExtension` is set to something outside the allow-list (`txt`, `pdf`, `docx`, `md`, `json`, `csv`, `html`) | `UserConfigError`, field `fileExtension`: "File extension '\<value\>' is not supported." |
 | `saveOutput` is true and `customFileName` contains characters outside `/^[\w\-. ]{1,100}$/` | `UserConfigError`, field `customFileName`: "File name has invalid characters." |
-| File generation API returns non-2xx | Thrown with status code and response body (logged with context) |
-| File generation timeout (>10 min) | Abort signal timeout error |
+| File generation API returns 4xx | `UserConfigError`: "File generation rejected the input. Check the content." |
+| File generation API returns 5xx | `IntegrationError`: "File generation service is unavailable. Try again." |
+| Request fails or times out (>10 min) | `IntegrationError`: "File generation service is unavailable. Try again." |
+| Non-JSON response, or a `fileLink` without `src`/`name` | `IntegrationError`: "File generation service returned an invalid response." |
 
 ## Related documentation
 

@@ -3,8 +3,8 @@ title: "Functions"
 sidebarTitle: "Functions"
 description: "Temporal activity for the Functions node: evaluate a formula against named variables using hot-formula-parser."
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f, back@master 9609806b
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 <Note>
@@ -19,16 +19,14 @@ The **Functions** node evaluates a spreadsheet-style expression stored on the no
 
 ## When it runs
 
-`mathFunctionActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **Functions** (`NodeType.FUNCTION`, stored value `mathFunction`).
+`mathFunctionActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **Functions** (`NodeType.FUNCTION`, stored value `mathFunction`), through the `UNIFORM_NODE_ACTIVITIES` map in `workflows/node-activities.ts`. Its proxy has a `startToCloseTimeout` of 10 seconds and a single attempt.
 
 ## Activity signature
 
 ```typescript
-async mathFunctionActivity({
-  nodeId: string,
-  sessionId: string,
-  userId: string,
-}): Promise<MathFunctionResponse>
+async mathFunctionActivity(
+  props: ExecuteNodeActivityProps,
+): Promise<MathFunctionResponse>
 ```
 
 `MathFunctionResponse`:
@@ -43,11 +41,11 @@ The activity returns `{ result }`; the same value is written to `flows_nodes.dat
 
 ## End-to-end flow
 
-1. **Load node** — `SELECT` from `flows_nodes` by `nodeId`; read `data`.
+1. **Load node** — `fetchNodeRow` reads the run's input snapshot (`node_executions.input`) during a run, or `flows_nodes.data` when there is no `execId`.
 2. **Resolve the formula** — prefer `formulaData` (an array of `{ text }` tokens, joined with `" "`) when it has entries; otherwise fall back to the plain `formula` string. Throws a `UserConfigError` ("Formula is required.") if both are empty, and another if the resolved formula exceeds `MAX_FORMULA_LENGTH` (500 characters).
 3. **Register variables** — for each entry in `variables` with a non-empty `name`, call `parser.setVariable(name, parseVariableValue(value))`. `parseVariableValue` coerces `value` to a `number` when it parses as one, to a `boolean` for the literal strings `"true"`/`"false"`, and otherwise leaves it as a string.
 4. **Evaluate** — `parser.parse(formula)` (`hot-formula-parser`'s `Parser`, not `expr-eval`). A non-empty `error` or a `null`/`undefined` `result` both throw a `UserConfigError`.
-5. **Persist** — `UPDATE flows_nodes` with `data` containing `result` and `executionStatus: "COMPLETED"`.
+5. **Persist** — `persistNodeSuccess` writes `data` with `result` and `executionStatus: "COMPLETED"` to `flows_nodes.data` and to the run's `node_executions.outputData`.
 6. **Return** — `{ result }`.
 
 ## Node `data` fields (Worker expectations)
@@ -72,8 +70,8 @@ On success, the service sets:
 
 | Field | Role |
 | ----- | ---- |
-| `result` | Numeric evaluation result. |
-| `executionStatus` | `"COMPLETED"`. |
+| `result` | Evaluation result: a number, or a JSON string when the parser returns an object. |
+| `executionStatus` | `"COMPLETED"` (`errorMessage` and `errorStatusCode` are reset to `null`). |
 
 Other `data` fields are preserved via spread (`...nodeData`).
 
@@ -88,7 +86,7 @@ All expected failures are structured `UserConfigError`s with a `field: "formula"
 | `hot-formula-parser` returns a non-empty `error` | `Formula has an error: <error>.` |
 | `hot-formula-parser` returns a `null`/`undefined` result (e.g. an unconnected/undefined variable) | `Formula could not be evaluated. Check that every variable used in the formula is connected and has a value.` |
 
-A missing node row throws before validation is reached (`Node not found`).
+A missing node row throws a `NodeNotFoundError` ("This node no longer exists. Refresh the page.") before validation is reached.
 
 ## Related documentation
 

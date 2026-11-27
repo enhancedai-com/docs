@@ -2,8 +2,8 @@
 title: "notifyStatus"
 description: "Sends status updates to users about node execution status"
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## Overview
@@ -19,17 +19,18 @@ The `notifyStatusActivity` sends real-time status updates to users about the exe
 
 ## When it's executed
 
-This activity is called at three key points:
+`processSingleNode` calls it at four points:
 
-1. **Workflow start**: When a node execution begins (status: `PENDING`)
-2. **Workflow completion**: When a node executes successfully (status: `COMPLETED`)
-3. **Workflow failure**: When a node execution fails (status: `FAILED`)
+1. **Node start**: first thing in the workflow (status: `PENDING`)
+2. **Node completion**: after the success log is written (status: `COMPLETED`)
+3. **Node failure**: after the error log is written (status: `FAILED`, with `userMessage` and `message` both set to the user-facing message)
+4. **Node cancellation**: after the cancelled node is settled (status: `CANCELLED`)
 
 ## Signature
 
 ```typescript
 async notifyStatusActivity({
-  nodes: Record<string, { status: string; userMessage?: string; message?: string }>,
+  nodes: Record<string, NodeStatusUpdate>,
   userId: string,
   flowId: string,
   execId?: string,
@@ -42,7 +43,7 @@ async notifyStatusActivity({
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `nodes` | `Record<string, { status: string; userMessage?: string; message?: string }>` | Object mapping node IDs to their status objects. Each status object contains a `status` field (`PENDING`, `COMPLETED`, `FAILED`, or `CANCELLED`), plus optional `userMessage`/`message` text (used on failure) |
+| `nodes` | `Record<string, NodeStatusUpdate>` | Object mapping node IDs to their status objects. `NodeStatusUpdate` is `{ status: NodeStatus; userMessage?: string; message?: string }`, where `NodeStatus` is `PENDING`, `RUNNING`, `COMPLETED`, `FAILED` or `CANCELLED`. The text fields are set on failure |
 | `userId` | `string` | ID of the user to notify |
 | `flowId` | `string` | ID of the flow containing the nodes |
 | `execId` | `string` (optional) | Execution id for this notification |
@@ -51,11 +52,13 @@ async notifyStatusActivity({
 
 ## Outputs
 
-Returns `void`. The activity completes when the notification is successfully sent.
+Returns `void`. The activity completes once the event is handed to the Redis client; it does not wait for the browser to receive it.
 
 ## Implementation details
 
-The activity uses the `NotificationService` to send status updates. It formats the payload and calls the notification service's `sendStatusUpdate` method, which handles the actual delivery mechanism (WebSocket, HTTP webhook, etc.).
+The activity passes the payload to `NotificationService.sendStatusUpdate` (`src/modules/notification/notification.service.ts`). The service emits the `room_status_updated` event (`RUN_STATUS_UPDATED` in `notification-events.ts`) through a NestJS Redis `ClientProxy` registered as `REDIS_SERVICE`, using `REDIS_HOST` and `REDIS_PORT` (default `6379`).
+
+On the back, `TemporalController.handleRoomUpdated` (`back/src/temporal/temporal.controller.ts`) listens for `room_status_updated` and calls `NotificationsGateway.sendToUser`, which emits the same event over Socket.io to the flow room of `userId` and `flowId`. The front reads node status from that socket event.
 
 ## Example usage in workflow
 
@@ -69,6 +72,9 @@ await notifyStatusActivity({
   },
   userId,
   flowId,
+  execId,
+  flowVersionHistoryId,
+  runId,
 });
 
 // Notify successful completion
@@ -80,6 +86,9 @@ await notifyStatusActivity({
   },
   userId,
   flowId,
+  execId,
+  flowVersionHistoryId,
+  runId,
 });
 
 // Notify failure
@@ -87,10 +96,15 @@ await notifyStatusActivity({
   nodes: {
     [nodeId]: {
       status: "FAILED",
+      userMessage: detail.userMessage,
+      message: detail.userMessage,
     },
   },
   userId,
   flowId,
+  execId,
+  flowVersionHistoryId,
+  runId,
 });
 ```
 
@@ -99,8 +113,10 @@ await notifyStatusActivity({
 | Status | Description | When used |
 |--------|-------------|-----------|
 | `PENDING` | Node execution has started | At workflow start |
+| `RUNNING` | Node is running | Part of the `NodeStatus` type; `processSingleNode` does not send it |
 | `COMPLETED` | Node executed successfully | After successful completion |
 | `FAILED` | Node execution encountered an error | When an error occurs |
+| `CANCELLED` | Node run was cancelled | After a cancelled node is settled |
 
 ## Related documentation
 

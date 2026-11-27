@@ -661,12 +661,12 @@
                   {
                     "group": "Developer guides",
                     "pages": [
-                      "worker/pt-br/execution-lifecycle",
-                      "worker/pt-br/how-to-add-a-node-type",
-                      "worker/pt-br/callback-reference",
-                      "worker/pt-br/error-taxonomy",
-                      "worker/pt-br/persistence-contract",
-                      "worker/pt-br/running-locally"
+                      "worker/execution-lifecycle",
+                      "worker/how-to-add-a-node-type",
+                      "worker/callback-reference",
+                      "worker/error-taxonomy",
+                      "worker/persistence-contract",
+                      "worker/running-locally"
                     ]
                   },
                   {
@@ -825,6 +825,30 @@
     {
       "source": "/mcp/pt-br/tools/list-node-types",
       "destination": "/mcp/pt-br/tools/nodes-and-edges"
+    },
+    {
+      "source": "/worker/pt-br/execution-lifecycle",
+      "destination": "/worker/execution-lifecycle"
+    },
+    {
+      "source": "/worker/pt-br/how-to-add-a-node-type",
+      "destination": "/worker/how-to-add-a-node-type"
+    },
+    {
+      "source": "/worker/pt-br/callback-reference",
+      "destination": "/worker/callback-reference"
+    },
+    {
+      "source": "/worker/pt-br/error-taxonomy",
+      "destination": "/worker/error-taxonomy"
+    },
+    {
+      "source": "/worker/pt-br/persistence-contract",
+      "destination": "/worker/persistence-contract"
+    },
+    {
+      "source": "/worker/pt-br/running-locally",
+      "destination": "/worker/running-locally"
     },
     {
       "source": "/worker/activities/scripting",

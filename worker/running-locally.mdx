@@ -2,13 +2,13 @@
 title: Running and debugging locally
 description: Bring the local stack up, find a run in Temporal, read node_executions, read worker logs.
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f, back@master 9609806b
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## Stack overview
 
-The local stack is defined in `docker/devdb/docker-compose.devdb.yaml` and brings up the following services:
+The local stack is defined in `docker/devdb/docker-compose.devdb.yaml` at the workspace root (the Workflow repository) and brings up the following services:
 
 - **back** — the NestJS API.
 - **worker** — the Temporal worker process.
@@ -41,14 +41,20 @@ The local stack is defined in `docker/devdb/docker-compose.devdb.yaml` and bring
 
 ## Finding a run in Temporal UI
 
-Open the local Temporal UI at `http://localhost:8080/` (served by the `temporal-ui` container). Workflows are named after the workflow function — `processSingleNode`, `processAgent`, etc. — and you can search by `workflowId`, which looks like `exec-<execId>` or `node-<execId>-<nodeId>` depending on the workflow. Clicking a workflow opens its event timeline; each activity and its retries are visible there.
+Open the local Temporal UI at `http://localhost:8080/` (served by the `temporal-ui` container) in the `default` namespace. Workflows are named after the workflow function (`processFlow`, `processSingleNode`, `processBatch`, `runScheduledFlow`, `deliverRunOutputs`) and you can search by `workflowId`:
+
+- `run-<runId>` for a full run on the workflow route (`processFlow`).
+- `node-process-<nodeId>-<execId>` for one node (`processSingleNode`), whether a child of `processFlow` or started by the back directly.
+- `batch-process-<batchFileId>` for a CSV batch (`processBatch`).
+
+Clicking a workflow opens its event timeline; each activity and its retries are visible there.
 
 ## Reading `node_executions`
 
 Connect to the local `app_db` database (host `localhost`, port `5434`, user `postgres`) and run:
 
 ```sql
-SELECT "execId", "nodeId", "type", "isError", "input", "outputData", "output", "createdAt"
+SELECT "execId", "runId", "nodeId", "type", "isError", "input", "outputData", "output", "cancelledAt", "createdAt"
 FROM node_executions
 WHERE "execId" = '<execId>'
 ORDER BY "createdAt";
@@ -65,14 +71,14 @@ The entity is defined in `back/src/entities/node_execution.entity.ts`. Note that
 
 ## Reading worker logs
 
-Worker logs are printed to the `worker` container's stdout. Follow them with `docker logs -f fluxprompt-worker-local` (the container name set in the compose file). To isolate a single run, pipe through grep by `execId`: `docker logs fluxprompt-worker-local 2>&1 | grep '<execId>'`. The log setup lives in `worker/src/main.ts`.
+Worker logs are printed to the `worker` container's stdout. Follow them with `docker logs -f fluxprompt-worker-local` (the container name set in the compose file). To isolate a single run, pipe through grep by `execId` or `runId`: `docker logs fluxprompt-worker-local 2>&1 | grep '<execId>'`. The worker logs with `console.log` and `console.error`; `src/main.ts` only boots the Nest application context and starts the Temporal worker. Flow-level lines from `processFlow` carry a `[B4]` prefix.
 
 ## When a node silently did nothing
 
 If the row has `isError = false` but `outputData` is empty (or missing a field you expected), check in this order:
 
-1. Did the workflow have a `case` for your type? Open `worker/src/modules/temporal/workflows/process-single-node.workflow.ts` and search for `NodeType.<YOUR_TYPE>`.
-2. Did the activity run? Look at the Temporal event timeline for `<node>Activity` — if it is missing, step 5 of [How to add a node type](/worker/how-to-add-a-node-type) was skipped (binding or proxy).
-3. Did `persistNodeSuccess` write? Look at the worker log for a `persistNodeSuccess` line with the matching `(execId, nodeId)`.
+1. Does the workflow dispatch your type? Open `worker/src/modules/temporal/workflows/process-single-node.workflow.ts` and search for `NodeType.<YOUR_TYPE>`; most types have no explicit `case` and are resolved from `UNIFORM_NODE_ACTIVITIES` in `workflows/node-activities.ts`.
+2. Did the activity run? Look at the Temporal event timeline for `<node>Activity`. If there is no `node-process-<nodeId>-<execId>` workflow at all, the back never dispatched the node; if the activity failed as not registered, step 5 of [How to add a node type](/worker/how-to-add-a-node-type) was skipped.
+3. Did `persistNodeSuccess` write? It does not log, so check the row itself: `outputData.executionStatus` is `"COMPLETED"` after a success write, and `updatedAt` moves. A row with `cancelledAt` set is never overwritten by a success write.
 
-The silent no-op is almost always a missing binding in `worker.service.ts` or a missing proxy entry in `workflows/configs.ts` — the two layers it is easiest to forget.
+A node that never ran at all in a full run usually has no `node.type === '<type>'` branch in the legacy loop of `FluxService.apiV2` (layer 7 of [How to add a node type](/worker/how-to-add-a-node-type)): that loop has no generic dispatch and skips the type without an error. A missing binding in `worker.service.ts` is louder: the activity task fails in the Temporal timeline because the activity is not registered on the worker.

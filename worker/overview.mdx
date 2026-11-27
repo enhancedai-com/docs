@@ -2,8 +2,8 @@
 title: "Worker overview"
 description: "Learn how the Worker service processes workflows using Temporal orchestration"
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## What is the Worker?
@@ -57,12 +57,16 @@ Workflows define the execution logic and orchestrate activities. They are determ
 - Can handle retries and error scenarios
 - Maintain state throughout execution
 
-**Available workflows:**
+**Registered workflows** (exported from `src/modules/temporal/workflows/index.ts`):
 
 - [`processSingleNode`](/worker/workflows/process-single-node) - Executes a single node in a workflow
 - [`processFlow`](/worker/workflows/process-single-node#related-documentation) - Runs a full flow: dispatches a `processSingleNode` child workflow per node, in topological order
 - [`processBatch`](/worker/workflows/process-batch) - Runs a registered CSV batch as a durable workflow: one child `processFlow` per row, five rows in flight, `continueAsNew` every 100 rows, `stopAfterFailures` cap
-- [`processAgent`](/worker/workflows/process-agent) - Executes a complete agent workflow (in development)
+- `runScheduledFlow` - Runs one fire of a flow schedule: resolves the schedule, then runs the flow as a child `processFlow`
+- `deliverRunOutputs` - Delivers a finished run's outputs by email or callback (see [`deliverEmailActivity` and friends](/worker/activities/deliver-run-outputs))
+- `completionWorkflow` - Wraps `completionActivity` for the completions API
+
+[`processAgent`](/worker/workflows/process-agent) still exists in `process-agent.workflow.ts`, but `index.ts` does not export it, so the worker does not register it.
 
 ### Activities
 
@@ -76,18 +80,19 @@ Activities are the actual operations performed by workflows. They can:
 
 **Available activities:**
 
-The worker registers 32 activities in total (`worker.service.ts:33-119`) — one per node type it can execute, plus shared cross-cutting activities. The full table lives on [Worker service](/worker/workflows/worker-service#registered-activities); the ones most worth knowing up front:
+The worker registers 64 activities in total (`worker.service.ts:39-215`): one per node type it can execute, the per-type validation and charging activities, the run, batch and schedule bookkeeping activities, and four delivery activities from `DeliveryActivities`. The full table lives on [Worker service](/worker/workflows/worker-service#registered-activities); the ones most worth knowing up front:
 
 - [`notifyStatusActivity`](/worker/activities/notify-status) - Sends status updates to users
-- [`getNodeInfoActivity`](/worker/activities/get-info-database) - Fetches node type/flow_id/data before dispatch (`getInfoInDatabaseActivity` is also registered but is dead code — nothing calls it)
+- [`getNodeInfoActivity`](/worker/activities/get-info-database) - Fetches node type/flow_id/data before dispatch (`getInfoInDatabaseActivity` is also registered but is dead code: nothing calls it)
 - [`validateModelAccessActivity`](/worker/activities/validate-model-access) - Validates user access to AI models
 - [`textGeneratorActivity`](/worker/node/text-generator) - Runs the AI Text Generator node (LLM call, persistence, token usage)
 - [`chargeTokensActivity`](/worker/activities/charge-tokens) - Records token usage for billing
 - [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs) - Creates execution logs (and updates node state on error)
 - [`scriptingActivity`](/worker/node/scripting) - Runs user JavaScript or Python via Lambda
 - [`nodeExecutionErrorActivity`](/worker/activities/node-execution-error) - Called on node error; currently a no-op
-- [`generateFileActivity`](/worker/activities/generate-file) - Generates output files; registered but not currently called from any live workflow
-- Fifteen more node-execution activities (`mathFunctionActivity`, `counterActivity`, [`imageGeneratorActivity`](/worker/node/image-generator), `webCrawlingActivity`, `largeMemoryActivity`, `webSearchActivity`, `voiceGeneratorActivity`, `mcpActivity`, `thirdPartyIntegrationActivity`, `apiCallerActivity`, `sqlQuerierActivity`, `displayBoxActivity`, `pullDataActivity`, `pushDataActivity`, `audioTranscriberActivity`) plus their per-type validation/charging activities and `persistCancelledNodeActivity`/`completionActivity` — see [Worker service](/worker/workflows/worker-service#registered-activities) for the complete list
+- [`generateFileActivity`](/worker/activities/generate-file) - Generates output files; registered but not called from any live workflow
+- [`deliverEmailActivity`, `deliverCallbackActivity`](/worker/activities/deliver-run-outputs) - Deliver a run's outputs for `deliverRunOutputs`
+- The other node-execution activities (`mathFunctionActivity`, `counterActivity`, [`imageGeneratorActivity`](/worker/node/image-generator), `imageReaderActivity`, `webCrawlingActivity`, `largeMemoryActivity`, `webSearchActivity`, `webAmazonActivity`, `voiceGeneratorActivity`, `mcpActivity`, `thirdPartyIntegrationActivity`, `apiCallerActivity`, `sqlQuerierActivity`, `displayBoxActivity`, `dataOutputActivity`, `pullDataActivity`, `pushDataActivity`, `fileSaveActivity`, `reportBuilderActivity`, `aiVideoGeneratorActivity`, `secApiNodeActivity`, `usCensusNodeActivity`, `audioTranscriberActivity`) and the rest; see [Worker service](/worker/workflows/worker-service#registered-activities) for the complete list
 
 ## Execution flow
 
@@ -115,9 +120,12 @@ The Worker implements comprehensive error handling:
 The Worker requires the following environment variables:
 
 - `TEMPORAL_ADDRESS` - Temporal server address (default: `localhost:7233`)
+- `TEMPORAL_TASK_QUEUE` - Task queue name (default: `enhanced-ai-queue`; set a unique value per environment)
 - `URL_MAIN_API` - Main API URL for internal API calls
 - `INTERNAL_API_KEY` - API key for authenticating with the main API
-- Database connection variables (for direct database access)
+- Database connection variables `TYPEORM_*` (for direct database access) and `REDIS_HOST`/`REDIS_PORT`
+
+The full, validated list is the Zod schema in `src/env.ts`; see [Environment variables](/worker/environment-variables).
 
 See the [development guide](/worker/development) for complete setup details.
 

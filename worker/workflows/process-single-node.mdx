@@ -2,13 +2,13 @@
 title: "processSingleNode"
 description: "Detailed documentation of the processSingleNode workflow that executes individual nodes"
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## Overview
 
-The `processSingleNode` workflow executes a single node within a workflow. It handles the complete lifecycle of node execution, including validation, processing, token charging, file generation, and error handling.
+The `processSingleNode` workflow executes a single node within a workflow. It handles the complete lifecycle of node execution, including input resolution, credit and access checks, processing, charging, cancellation, and error handling. Source: `src/modules/temporal/workflows/process-single-node.workflow.ts` in the worker repo.
 
 ## Purpose
 
@@ -18,7 +18,6 @@ This workflow is designed to:
 - Validate user access to required AI models
 - Process the node based on its type
 - Track token usage for billing
-- Generate output files when configured
 - Handle errors gracefully with comprehensive logging
 - Notify users of execution status changes
 
@@ -34,6 +33,8 @@ export async function processSingleNode(
   execId: string = "",
   runId: string = "",
   socketId: string | null = null,
+  runToken: string = "",
+  inputResolution: WorkerInputResolution | null = null,
 ): Promise<NodeExecutionResult>
 ```
 
@@ -48,7 +49,9 @@ export async function processSingleNode(
 | `flowVersionHistoryId` | `string \| null` | Version snapshot the node is read from; `null` for the working copy |
 | `execId` | `string` | Execution id the outputs are persisted under |
 | `runId` | `string` | Run the node belongs to; carried into every status event and log row |
-| `socketId` | `string \| null` | Passed through to the node activity so streamed output reaches the right client |
+| `socketId` | `string \| null` | Passed to `textGeneratorActivity` so streamed output reaches the right client |
+| `runToken` | `string` | Run-scoping token passed to the activities that read or write `node_executions` |
+| `inputResolution` | `WorkerInputResolution \| null` | When set, the worker resolves the node's input itself with `resolveNodeInputActivity` before reading the node |
 
 ### Return value
 
@@ -93,14 +96,20 @@ The workflow follows this sequence:
   <Step title="Set initial status">
     Notifies the user that the node execution has started by setting status to `PENDING` using [`notifyStatusActivity`](/worker/activities/notify-status).
   </Step>
+  <Step title="Resolve the node input">
+    When `inputResolution` is passed (and the `worker-input-resolution` patch applies), calls `resolveNodeInputActivity` so the worker writes the node's resolved input before it reads the node. See [Node input projection](/worker/node-input-projection).
+  </Step>
   <Step title="Retrieve node information">
     Fetches the node's `type`/`flow_id`/(trimmed) `data` using [`getNodeInfoActivity`](/worker/activities/get-info-database) — **not** `getInfoInDatabaseActivity`, which is dead code (see that page).
   </Step>
   <Step title="Validate node exists">
     Throws an error if the node is not found — in practice this is unreachable, since `getNodeInfoActivity` itself already throws (`NodeNotFoundError`) when no row matches.
   </Step>
+  <Step title="Check credit">
+    For paid node types, calls `nodeCreditGateActivity` (see [Node type dispatch](#node-type-dispatch)).
+  </Step>
   <Step title="Process by node type">
-    Dispatches on `node.type`. Five types have dedicated inline handling (`TEXT_GENERATOR`, `LARGE_MEMORY`, `WEB_SEARCH`, `VOICE`, `AUDIO_TRANSCRIBER` — each with its own access-validation/charging calls); everything else goes through a single generic path, `resolveNodeActivity(node.type)`, which looks the type up in `UNIFORM_NODE_ACTIVITIES` (`node-activities.ts`) and, if found, calls that activity with a uniform prop shape. See [Node type dispatch](#node-type-dispatch) for the full table. A type matching neither throws `Node type ${node.type} not supported`.
+    Dispatches on `node.type`. Eight types have dedicated inline handling (`TEXT_GENERATOR`, `LARGE_MEMORY`, `WEB_SEARCH`, `SEC_API_NODE`, `US_CENSUS_NODE`, `VOICE`, `AUDIO_TRANSCRIBER`, `IMAGE_READER` — each with its own access-validation or charging calls); everything else goes through a single generic path, `resolveNodeActivity(node.type)`, which looks the type up in `UNIFORM_NODE_ACTIVITIES` (`node-activities.ts`) and, if found, calls that activity with a uniform prop shape. See [Node type dispatch](#node-type-dispatch) for the full table. A type matching neither throws `Node type ${node.type} not supported`.
   </Step>
   <Step title="Log successful execution">
     Creates an execution log entry with success status using [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs).
@@ -112,17 +121,20 @@ The workflow follows this sequence:
 
 ## Node type dispatch
 
-Nearly every `NodeType` is implemented today. The switch in `process-single-node.workflow.ts` has five explicit cases, each with type-specific access validation and/or post-run charging:
+The switch in `process-single-node.workflow.ts` has eight explicit cases, each with type-specific access validation and/or post-run charging:
 
 | Node type | Activity | Extra steps |
 | --- | --- | --- |
 | `TEXT_GENERATOR` | `textGeneratorActivity` | `validateModelAccessActivity` before; `chargeTokensActivity` after (requires both `inputTokens`/`outputTokens` in the result; also sends the result's `webSearchCalls`) |
 | `LARGE_MEMORY` | `largeMemoryActivity` | `validateLargeMemoryAccessActivity` before; `chargeLargeMemoryUsageActivity` after |
 | `WEB_SEARCH` | `webSearchActivity` | `validateApiAccessActivity` before (capability derived from `node.data.type`: `"News"` → `google_news`, everything else → `google_search`); `chargeApiCallActivity` after |
+| `SEC_API_NODE` | `secApiNodeActivity` | `validateApiAccessActivity` (capability `sec_data`) before; `chargeApiCallActivity` (model `sec-data`) after |
+| `US_CENSUS_NODE` | `usCensusNodeActivity` | `validateApiAccessActivity` (capability `us_census_data`) before; `chargeApiCallActivity` (model `us-census-data`) after |
 | `VOICE` | `voiceGeneratorActivity` | `chargeVoiceActivity` after, with the provider/model/`usedTokens` the activity itself returned |
 | `AUDIO_TRANSCRIBER` | `audioTranscriberActivity` | `nodeCreditGateActivity` before; `chargeTranscriptionActivity` after, with the `model`/`usedTokens` from the `charge` the activity returned (skipped when `charge` is `null`) — see [AI audio transcriber](/worker/node/audio-transcriber#billing) |
+| `IMAGE_READER` | `imageReaderActivity` | `chargeTokensActivity` after, labelled `OCR`, with the tokens and model from the `charge` the activity returned (skipped when `charge` is `null`) |
 
-Before dispatch, the workflow also calls `nodeCreditGateActivity` for `TEXT_GENERATOR`, `LARGE_MEMORY`, `WEB_SEARCH`, `VOICE`, `IMAGE_GENERATOR`, `WEB_CRAWLING`, `MCP` and `AUDIO_TRANSCRIBER`. The gate refuses the node with a `402` `UserConfigError` when the account paying for the flow can no longer be charged.
+Before dispatch, the workflow also calls `nodeCreditGateActivity` for the types in `PAID_NODE_TYPES` (`TEXT_GENERATOR`, `LARGE_MEMORY`, `WEB_SEARCH`, `VOICE`, `IMAGE_GENERATOR`, `WEB_CRAWLING`, `MCP`, `SEC_API_NODE`, `US_CENSUS_NODE`, `IMAGE_READER`) and for `AUDIO_TRANSCRIBER`. The activity posts to the main API's `POST /worker/node-credit-gate`; the gate refuses the node with a `402` `UserConfigError` when the account paying for the flow can no longer be charged.
 
 All other types dispatch through the generic path, `resolveNodeActivity(node.type)` against `UNIFORM_NODE_ACTIVITIES` (`node-activities.ts`), with no extra validation/charging step wrapping the call beyond that credit gate:
 
@@ -134,13 +146,18 @@ All other types dispatch through the generic path, `resolveNodeActivity(node.typ
 | `COUNTER` | `counterActivity` |
 | `SQL_QUERIER` | `sqlQuerierActivity` |
 | `DISPLAY_BOX` | `displayBoxActivity` |
+| `OUTPUT` (Data Output) | `dataOutputActivity` |
 | `PULL_DATA` | `pullDataActivity` |
 | `PUSH_DATA` | `pushDataActivity` |
+| `FILE_SAVE` | `fileSaveActivity` |
 | `MCP` | `mcpActivity` |
 | `HUB_SPOT_CRM` | `thirdPartyIntegrationActivity` |
 | `THIRD_PARTY_INTEGRATION` | `thirdPartyIntegrationActivity` |
 | `IMAGE_GENERATOR` | `imageGeneratorActivity` |
+| `AI_VIDEO_GENERATOR` | `aiVideoGeneratorActivity` |
+| `WEB_AMAZON` | `webAmazonActivity` |
 | `WEB_CRAWLING` | `webCrawlingActivity` |
+| `REPORT_BUILDER` | `reportBuilderActivity` |
 
 A `NodeType` outside both tables throws `Node type ${node.type} not supported` — that's now the exception, not the default case it used to be.
 
@@ -163,10 +180,10 @@ The workflow implements comprehensive error handling:
 
 <Steps>
   <Step title="Catch errors">
-    All errors are caught in a try-catch block
+    All errors are caught in a try-catch block. A cancellation (or a cancelled scope) takes the cancel path instead: `persistCancelledNodeActivity`, a charge of the partial tokens for a `TEXT_GENERATOR` node, a `Step cancelled before it finished` log row and a `CANCELLED` status.
   </Step>
   <Step title="Extract error information">
-    Extracts error message and stack trace for logging
+    `extractNodeError` returns the `devMessage`, `userMessage`, `category` and `field` for logging; the stack comes from the error's `cause` or the error itself
   </Step>
   <Step title="Charge what the node spent before failing">
     When a `TEXT_GENERATOR` node fails after the provider answered, the node error carries a `spent` object (`inputTokens`, `outputTokens`, `webSearchCalls`). The workflow charges it with [`chargeTokensActivity`](/worker/activities/charge-tokens) before it reports the failure, so the tokens the provider already billed are not lost. If that charge fails, the workflow logs `charge_after_failure_failed` and continues with the original error. Other node types and errors without `spent` skip this step.
@@ -178,7 +195,7 @@ The workflow implements comprehensive error handling:
     Calls [`nodeExecutionErrorActivity`](/worker/activities/node-execution-error) — currently a no-op; the real node-state update on failure already happened in the previous step, inside `generateExecutionLogsActivity`'s `isError` branch.
   </Step>
   <Step title="Notify failure">
-    Updates the node status to `FAILED` using [`notifyStatusActivity`](/worker/activities/notify-status)
+    Updates the node status to `FAILED`, with the `userMessage`, using [`notifyStatusActivity`](/worker/activities/notify-status)
   </Step>
   <Step title="Re-throw error">
     Re-throws the error to allow Temporal to handle retries if configured
@@ -190,10 +207,11 @@ The workflow implements comprehensive error handling:
 This workflow uses the following activities:
 
 - [`notifyStatusActivity`](/worker/activities/notify-status) - Status notifications (start, completion, failure, cancellation)
+- `resolveNodeInputActivity` - Writes the resolved node input when `inputResolution` is passed
 - [`getNodeInfoActivity`](/worker/activities/get-info-database) - Fetches node type/flow_id/trimmed data (`getInfoInDatabaseActivity` is registered but unused — see that page)
 - `validateModelAccessActivity`, `validateLargeMemoryAccessActivity`, `validateApiAccessActivity` - Per-type access validation
-- `textGeneratorActivity`, `largeMemoryActivity`, `webSearchActivity`, `voiceGeneratorActivity`, `audioTranscriberActivity` - The five explicitly-switched node types
-- `scriptingActivity`, `mathFunctionActivity`, `apiCallerActivity`, `counterActivity`, `sqlQuerierActivity`, `displayBoxActivity`, `pullDataActivity`, `pushDataActivity`, `mcpActivity`, `thirdPartyIntegrationActivity`, `imageGeneratorActivity`, `webCrawlingActivity` - The remaining node types, dispatched generically via `resolveNodeActivity` (see [Node type dispatch](#node-type-dispatch))
+- `textGeneratorActivity`, `largeMemoryActivity`, `webSearchActivity`, `secApiNodeActivity`, `usCensusNodeActivity`, `voiceGeneratorActivity`, `audioTranscriberActivity`, `imageReaderActivity` - The eight explicitly-switched node types
+- `scriptingActivity`, `mathFunctionActivity`, `apiCallerActivity`, `counterActivity`, `sqlQuerierActivity`, `displayBoxActivity`, `dataOutputActivity`, `pullDataActivity`, `pushDataActivity`, `fileSaveActivity`, `mcpActivity`, `thirdPartyIntegrationActivity`, `imageGeneratorActivity`, `aiVideoGeneratorActivity`, `webAmazonActivity`, `webCrawlingActivity`, `reportBuilderActivity` - The remaining node types, dispatched generically via `resolveNodeActivity` (see [Node type dispatch](#node-type-dispatch))
 - `nodeCreditGateActivity` - Credit gate before the paid node types
 - `chargeTokensActivity`, `chargeLargeMemoryUsageActivity`, `chargeApiCallActivity`, `chargeVoiceActivity`, `chargeTranscriptionActivity` - Per-type billing
 - [`persistCancelledNodeActivity`](/worker/workflows/worker-service) - Persists a cancelled node's partial output
@@ -213,18 +231,18 @@ The node status progresses through these states:
 
 ## Example usage
 
+The main API starts the workflow by name. This is `POST /process/single-node` in back's `src/temporal/temporal.controller.ts`; the full-run path in `flux.service.ts` passes the remaining arguments too.
+
 ```typescript
-// Triggered by Temporal when a node execution is requested
-await processSingleNode(
-  "node-123",
-  "user-456",
-  "session-789",
-  "flow-abc"
-);
+await this.temporalService.client.start("processSingleNode", {
+  taskQueue: process.env.TEMPORAL_TASK_QUEUE || "enhanced-ai-queue",
+  args: [nodeId, user.id, sessionId, flowId, flowVersionHistoryId ?? null],
+  workflowId: `node-process-${nodeId}-${Date.now()}`,
+});
 ```
 
 ## Related documentation
 
 - [Worker overview](/worker/overview)
 - [Activities documentation](/worker/activities/notify-status)
-- [processAgent workflow](/worker/workflows/process-agent) (in development)
+- [processAgent workflow](/worker/workflows/process-agent) (not registered)

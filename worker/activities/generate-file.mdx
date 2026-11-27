@@ -2,28 +2,19 @@
 title: "🚧 generateFile"
 description: "Generates output files from node execution results"
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## Overview
 
-The `generateFileActivity` creates output files from node execution results. It's used when nodes are configured to save their output to a file.
+The `generateFileActivity` asks the main API to turn a node's text into a file and returns the file URL. It lives in `src/modules/temporal/activities/activities.service.ts`.
 
-## Purpose
+<Warning>
+This activity makes a real HTTP call, but it is **dead code**: no live workflow invokes it. It is registered in `worker.service.ts` and proxied in `workflows/configs.ts`, and the only reference in a workflow is a commented-out block in `process-agent.workflow.ts`. `processAgent` itself is not exported from `workflows/index.ts`, so the worker does not register it. Until something calls this activity, it never runs in production.
+</Warning>
 
-- Generate output files from node results
-- Save node outputs for later retrieval
-- Provide file URLs for download
-- Support file-based output storage
-
-## When it's executed
-
-This activity is called conditionally:
-
-1. **After successful execution**: Only when `saveOutput` is enabled in node configuration
-2. **When file type is specified**: Requires `fileType` to be configured
-3. **Before completion**: Executes before marking the workflow as complete
+The back endpoint behind it, `POST /worker/generate-file`, is live: the Display Box (`display-box.service.ts`) and Report Builder (`report-builder.service.ts`) services call it directly with `fetch`, not through this activity.
 
 ## Signature
 
@@ -38,85 +29,29 @@ async generateFileActivity({
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `nodeId` | `string` | ID of the node generating the file |
-| `fileType` | `string` | File extension/type (e.g., `txt`, `json`, `md`) |
+| `nodeId` | `string` | ID of the node whose text becomes the file |
+| `fileType` | `string` | File type passed to the back's `uploadService.uploadText` |
 
 ## Outputs
 
-Returns the `file` field from the main API's JSON response (a URL string pointing to the generated file).
+Returns the `file` field of the back's JSON response: the URL of the uploaded file. When the back refuses the request (for example 400 because the node has no text), the response has no `file` and the activity returns `undefined`; it does not check the HTTP status.
 
 ## Implementation details
 
-<Warning>
-This activity makes a real HTTP call — it is not a stub — but it is currently **dead code**: nothing in `process-single-node.workflow.ts` (or any other live workflow) invokes `generateFileActivity`. The only reference to it in a workflow is a commented-out block in `process-agent.workflow.ts` (`process-agent`, a workflow that is itself not wired into the active node-dispatch path). Until something calls it, this activity never runs in production.
-</Warning>
+The activity sends `POST ${URL_MAIN_API}/worker/generate-file` with `{ nodeId, fileType }` and the `internal-api-key` header, then returns `data.file`. The file is generated on the back, not in the worker.
 
-The implementation makes a real `POST ${URL_MAIN_API}/worker/generate-file` request with `{ nodeId, fileType }` in the body and the standard `internal-api-key` header, and returns `data.file` from the parsed JSON response. The actual file generation happens on the main API side, not in this activity — the worker only forwards the request and relays the resulting URL.
+## Back endpoint
 
-## Example usage in workflow
+`WorkerController.generateFile` in `back/src/temporal/worker.controller.ts`:
 
-```typescript
-// Check if file generation is enabled
-if (node.data.saveOutput && node.data.fileType) {
-  const fileUrl = await generateFileActivity({
-    nodeId,
-    fileType: node.data.fileType,
-  });
+- **Request body**: `{ nodeId, fileType, text?, customFileName?, useDocRaptor?, userId?, flowId?, flowVersionHistoryId?, spaceId?, provider? }`
+- Without `text`, it reads `data.text` from the node row. Without any text, it returns `400 { success: false, message: 'No text content available to generate file' }`.
+- It uploads the file with `uploadService.uploadText`; an upload failure returns `500 { success: false, message: 'Failed to generate file' }`.
+- With `userId`, it records the file through `generatedFileService.persist` (provider defaults to `outputController`).
+- It writes `fileLink` (`{ src, name }`) onto the node's `data` and appends the URL to `data.fileLinks`.
+- **Response on success**: `200 { success: true, message: 'File generated successfully', file, fileLink }`
 
-  if (!fileUrl) {
-    throw new Error("Failed to generate file");
-  }
-
-  // File URL can be saved to database or returned to user
-  // TODO: Save fileUrl to database
-}
-```
-
-## Configuration
-
-File generation is controlled by node configuration:
-
-- `saveOutput`: Boolean flag enabling file generation
-- `fileType`: String specifying the file extension/type
-
-## Supported file types
-
-The activity accepts any file type string. Common types include:
-
-- `txt` - Plain text files
-- `json` - JSON data files
-- `md` - Markdown files
-- `csv` - CSV data files
-- `html` - HTML files
-
-## Error handling
-
-The activity may return an empty string or throw an error if:
-
-- File generation fails
-- The file type is invalid
-- Storage is unavailable
-- The node ID is invalid
-
-The workflow should validate the returned URL:
-
-```typescript
-const fileUrl = await generateFileActivity({
-  nodeId,
-  fileType: node.data.fileType,
-});
-
-if (!fileUrl) {
-  throw new Error("Failed to generate file");
-}
-```
-
-## Future implementation
-
-The HTTP call itself is real and already implemented; what's outstanding is wiring a caller back up. Reintroducing this would mean:
-
-- Un-commenting/porting the `process-agent.workflow.ts` call site (or adding an equivalent one to `process-single-node.workflow.ts`) so a node with `saveOutput`/`generateFile.enabled` actually triggers this activity
-- Confirming the main API's `/worker/generate-file` endpoint still matches this request/response shape
+Because this activity sends only `nodeId` and `fileType`, the back looks the node up by `nodeId` alone, without the flow and version scope (`flowId`, `flowVersionHistoryId`) the other callers can pass.
 
 ## Related documentation
 

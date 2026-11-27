@@ -3,8 +3,8 @@ title: "API caller"
 sidebarTitle: "API caller"
 description: "Temporal activity for the API caller node: HTTP requests with polling, output filtering, query params, JSON or form bodies, custom headers, Basic auth, and TLS options."
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f, back@master 9609806b
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 <Note>
@@ -13,22 +13,20 @@ In the flow builder canvas this node's sidebar label is **Api Caller**; the tech
 
 ## Overview
 
-The **API caller** node performs HTTP requests configured on the node row, with optional **polling** and **output filtering**. The Worker resolves the URL and credentials (preferring **edge-linked** values when present), merges query parameters into the URL, builds headers and body from `contentType` and related fields, executes the request with [undici](https://undici.nodejs.org/)'s `Agent` (optional TLS verification control), then optionally polls for a desired condition and filters the response before storing and returning the result.
+The **API caller** node performs HTTP requests configured on the node row, with optional **polling** and **output filtering**. The Worker resolves the URL and credentials (preferring **edge-linked** values when present), merges query parameters into the URL, builds headers and body from `contentType` and related fields, executes the request through an [undici](https://undici.nodejs.org/) `Agent` from `SafeFetchService.getDispatcher` (egress policy plus optional TLS verification control), then optionally polls for a desired condition and filters the response before storing and returning the result.
 
 [`apiCallerActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`ApiCallerService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/api-caller/api-caller.service.ts).
 
 ## When it runs
 
-`apiCallerActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **API caller** (`NodeType.API_CALLER`, stored value `apiCaller`).
+`apiCallerActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **API caller** (`NodeType.API_CALLER`, stored value `apiCaller`), through the `UNIFORM_NODE_ACTIVITIES` map in `workflows/node-activities.ts`. Its proxy has a `startToCloseTimeout` of 5 minutes, a 30-second heartbeat timeout, a single attempt, and `WAIT_CANCELLATION_COMPLETED` cancellation. The activity runs inside `runCancellableNode`, which heartbeats every 3 seconds and aborts the in-flight request when the run is cancelled.
 
 ## Activity signature
 
 ```typescript
-async apiCallerActivity({
-  nodeId: string,
-  sessionId: string,
-  userId: string,
-}): Promise<ApiCallerResponse>
+async apiCallerActivity(
+  props: ExecuteNodeActivityProps,
+): Promise<ApiCallerResponse | CancelledNodeOutput>
 ```
 
 `ApiCallerResponse`:
@@ -39,21 +37,21 @@ async apiCallerActivity({
 }
 ```
 
-The returned string is the **filtered** output when an output filter is configured and the response schema matches; otherwise it is the raw response body.
+The returned string is the **filtered** output when an output filter is configured and the response schema matches; otherwise it is the raw response body. When it is larger than `APICALLER_MAX_RESULT_BYTES` (default 1,000,000 bytes), the activity returns only its first 100,000 characters plus a truncation marker; the full output is still persisted (and offloaded to the claim-check store above 256 KB) for downstream nodes.
 
 ## Resolving URL and secrets (edge vs static)
 
-Some fields can come either from **static** properties on `data` or from the **first row** of an edge-driven array (when the UI passes dynamic inputs):
+Some fields can come either from **static** properties on `data` or from an edge-driven array (when the UI passes dynamic inputs):
 
 | Concept | Static field | Edge-driven (takes precedence when non-empty) |
 | ------- | ------------ | --------------------------------------------- |
-| Request URL | `url` | `urlData[0].text` |
-| Custom headers (JSON) | `jsonAuth` | `jsonAuthData[0].text` |
-| Request body (JSON) | `jsonRequestBody` | `jsonRequestBodyData[0].text` |
-| Basic auth username | `username` | `usernameData[0].text` |
-| Basic auth password | `password` | `passwordData[0].text` |
+| Request URL | `url` | `urlData` |
+| Custom headers (JSON) | `jsonAuth` | `jsonAuthData` |
+| Request body (JSON) | `jsonRequestBody` | `jsonRequestBodyData` |
+| Basic auth username | `username` | `usernameData` |
+| Basic auth password | `password` | `passwordData` |
 
-Resolution rule: if the `*Data` array exists and has **length &gt; 0**, use **`[0].text`**; otherwise use the static field. After resolution, **`url` is required** — if still missing, the service throws: `No URL provided: urlData and url are both missing or empty`.
+Resolution rule (`resolveEdgeData`): if the `*Data` array has entries, drop duplicate items by `id`, then concatenate the non-empty `text` values with no separator; if that gives a non-empty string, use it, otherwise use the static field. After resolution, **`url` is required** — if still missing, the service throws a `UserConfigError`: `URL is required.`
 
 ## Node `data` fields
 
@@ -65,15 +63,16 @@ Types reference: [`ApiCallerNodeData`](https://github.com/enhancedai-com/Flux-Pr
 | ----- | ---- |
 | `method` | HTTP method: `GET`, `POST`, `PUT`, `DELETE`, or `PATCH`. |
 | `url` | Base URL string (used if `urlData` is absent or empty). |
-| `urlData` | Optional `EdgeDataItem[]`; first item's `text` overrides `url` when present. |
-| `queryParams` | Optional `{ key, value }[]`. Each pair is appended to the URL search string (`key` required; `value` may be `undefined` and is skipped with the key). |
+| `urlData` | Optional `EdgeDataItem[]` (`{ id, text, label }`); its joined `text` overrides `url` when non-empty. |
+| `queryParams` | Optional `{ key, value }[]`. Each pair is set on the URL with `searchParams.set` (pairs with an empty `key` or an `undefined` `value` are skipped). |
+| `requestTimeoutMs` | Optional per-request timeout. Default: **30,000 ms**. |
 
 ### Headers and auth
 
 | Field | Role |
 | ----- | ---- |
-| `jsonAuth` | String containing **JSON** of header key/value pairs (e.g. `{"Authorization":"Bearer …"}`). Parsed with `JSON.parse` and merged into the request headers. If parsing fails, throws `Invalid JSON in authentication headers`. |
-| `jsonAuthData` | Optional; first `text` overrides `jsonAuth` when non-empty. |
+| `jsonAuth` | String containing **JSON** of header key/value pairs (e.g. `{"Authorization":"Bearer …"}`), or JSON text that parses to a string of `Name: Value` lines. Merged into the request headers. See [Errors](#errors) for the parse failures. |
+| `jsonAuthData` | Optional edge override for `jsonAuth`. |
 | `username` | If set, triggers **HTTP Basic** auth: `Authorization: Basic base64(username:password)`. Password defaults to empty string when omitted. |
 | `password` | Used with Basic auth when `username` is set. |
 | `passwordData` / `usernameData` | Optional edge overrides for `password` / `username`. |
@@ -82,14 +81,14 @@ If both `jsonAuth` (custom headers) and Basic auth apply, Basic sets `Authorizat
 
 | Field | Role |
 | ----- | ---- |
-| `contentType` | Optional. When set, becomes `Content-Type` on the request. Also drives how the body is built (see [Request body](#request-body)). |
+| `contentType` | Optional: `application/json` or `application/x-www-form-urlencoded`. When set, becomes `Content-Type` on the request. Also drives how the body is built (see [Request body](#request-body)). When a body is sent and no `Content-Type` header is set by either source, the worker sends `application/json`. |
 
 ### Request body
 
 | Field | Role |
 | ----- | ---- |
 | `jsonRequestBody` | String. Interpretation depends on `contentType` (and effective content type — see below). |
-| `jsonRequestBodyData` | Optional edge override; first `text` overrides `jsonRequestBody` when non-empty. |
+| `jsonRequestBodyData` | Optional edge override for `jsonRequestBody`. |
 | `formDataParams` | `{ key, value }[]` for `application/x-www-form-urlencoded` bodies. |
 
 **Effective content type** for body building is `nodeData.contentType ?? headers['Content-Type']` (headers already include `jsonAuth` and possibly `Content-Type` from `contentType`).
@@ -98,17 +97,23 @@ Behavior of `buildRequestBody`:
 
 - **`application/x-www-form-urlencoded`**
   - If `formDataParams` has entries: build `URLSearchParams` from key/value pairs (skip entries with missing `key` or `undefined` value).
-  - Else if `jsonRequestBody` is set: parse it as JSON into an object, then append each key with `String(value)` into `URLSearchParams`.
+  - Else if `jsonRequestBody` is set: parse it strictly as JSON into an object, then append each key with `String(value)` into `URLSearchParams`.
 - **Other content types (including `application/json`)**
-  - If `jsonRequestBody` is set: parse with a tolerant path — first strict `JSON.parse`; on failure, a regex tries to add quotes around unquoted object keys, then parse again. If both fail, throws `Invalid JSON in request body`.
+  - If `jsonRequestBody` is set: parse it with strict `JSON.parse` (`parseJsonStrict`) and send it re-serialized. There is no tolerant fallback; invalid JSON fails with `Request body is not valid JSON.`
 
-If no body applies, the request is sent **without** a body (`undefined`).
+If no body applies, the request is sent **without** a body (`undefined`). A body with `GET`, `HEAD`, or no method (which defaults to `GET`) fails the run (see [Errors](#errors)).
 
 ### TLS
 
 | Field | Role |
 | ----- | ---- |
-| `validateCertificate` | Boolean; default **`true`** if omitted. When `false`, the undici `Agent` uses `connect.rejectUnauthorized: false` (allows self-signed or mismatched certificates). |
+| `validateCertificate` | Boolean; default **`true`** if omitted. When `false`, the dispatcher's connector uses `rejectUnauthorized: false` (allows self-signed or mismatched certificates). |
+
+### Egress and response handling
+
+- The dispatcher resolves each host through the egress policy (`modules/egress/egress-policy.ts`). A host that does not resolve, or resolves to a denied address range, fails with a non-retryable `BlockedAddressError` (`Request blocked by egress policy: …`).
+- Redirects are not followed (`redirect: "manual"`). A 3xx response fails with `RedirectRefusedError`: `Request blocked: redirect responses are not followed. …`
+- A response whose `content-type` is an image, video, audio, PDF or `application/octet-stream` is returned as a `data:<type>;base64,…` URI. Text responses have NUL characters stripped.
 
 ### Polling
 
@@ -126,7 +131,7 @@ The polling strategy is chosen automatically:
 - **Status-based**: When `pollingConditionField` or `pollingConditionMatch` are empty. Retries until the HTTP status is 2xx or the timeout expires.
 - **Condition-based**: When both fields are set. Retries while the extracted JSON field matches the regex pattern; stops when it no longer matches.
 
-Temporal [`Context.current().heartbeat()`](https://docs.temporal.io/develop/typescript/activity-heartbeats) is called before each polling retry to keep the activity alive during long-running polls.
+The activity [heartbeats](https://docs.temporal.io/develop/typescript/activity-heartbeats) with `{ phase: "polling" }` before each polling retry, on top of the 3-second keep-alive heartbeat from `runCancellableNode`. The number of retries is `floor(pollingRetryDuration / pollingInterval)`.
 
 ### Output filtering
 
@@ -156,15 +161,15 @@ Both modes support array-root responses by iterating each item and applying filt
 
 ## End-to-end flow
 
-1. Load `flows_nodes` by `nodeId` and cast `data` to `ApiCallerNodeData`.
+1. Load the node with `fetchNodeRow` (the run's `node_executions.input` during a run, `flows_nodes.data` otherwise) and cast `data` to `ApiCallerNodeData`. Resolve the user's company id for the egress log.
 2. Resolve URL, auth, and body fields (edge vs static).
 3. Construct `URL`, apply `queryParams` via `searchParams.set`.
-4. Build `RequestInit`: method, headers, body, and `dispatcher` with TLS options.
-5. Execute the initial `fetch(url, options)`.
-6. **If polling is enabled**, delegate to the polling pipeline (status-based or condition-based). On timeout, persist error and throw.
-7. **If polling is disabled** and the status is outside 2xx, persist error and throw `HTTP <status>: <body>`.
+4. Build `RequestInit`: method, headers, body, and the egress-policy `dispatcher` with TLS options.
+5. Execute the initial `fetch(url, options)` with `redirect: "manual"` and the request timeout.
+6. **If polling is enabled**, delegate to the polling pipeline (status-based or condition-based). On timeout, throw a `TimeoutError`.
+7. **If polling is disabled** and the status is outside 2xx, throw (4xx → `UserConfigError`, otherwise `IntegrationError`).
 8. Apply output filter if configured (with schema hash validation).
-9. `UPDATE flows_nodes`: merge data with `text` (raw response), `filteredText` (filtered output if applicable), `executionStatus: 'COMPLETED'`, and clear error fields.
+9. `persistNodeSuccess`: merge the resolved data with `text` (raw response), `filteredText` (filtered output if applicable), `executionStatus: 'COMPLETED'`, and cleared error fields into `flows_nodes.data` and the run's `node_executions.outputData`.
 10. Return `{ result: outputText }`.
 
 ## Persisted node `data`
@@ -183,13 +188,14 @@ Both modes support array-root responses by iterating each item and applying filt
 
 ### On failure
 
+`ApiCallerService` writes nothing on failure. The `processSingleNode` workflow's failure path calls [`generateExecutionLogsActivity`](/worker/activities/generate-execution-logs), which marks the run's `node_executions` row `isError = true` with the error as its `output`, and merges into `flows_nodes.data`:
+
 | Field | Role |
 | ----- | ---- |
-| `text` | Error message string. |
-| `errorMessage` | Error description. |
-| `errorStatusCode` | HTTP status code (or `null` for non-HTTP errors like polling timeout). |
-| `pollingCallCount` | Total HTTP requests made before failure. |
-| `executionStatus` | `'FAILED'`. |
+| `errorMessage` | `<userMessage> — <devMessage>` (or just one of them when they are equal or one is missing). |
+| `text` | Cleared to `""` so a stale response is not shown. |
+| `response` | Cleared to `null`. |
+| `jsonRequestBody` | Cleared to `""` when the body was fed by an edge (`jsonRequestBodyData` non-empty). |
 
 ## Errors
 
@@ -197,7 +203,7 @@ All are structured errors (`UserConfigError` unless noted) with a real `userMess
 
 | Cause | userMessage |
 | ----- | ----- |
-| Missing node | `Node not found` |
+| Missing node | `This node no longer exists. Refresh the page.` (`NodeNotFoundError`) |
 | Missing URL after resolution | `URL is required.` (`requireField`) |
 | URL fails to parse | `URL is malformed.` |
 | GET/HEAD configured with a request body (`BODYLESS_METHODS`) | `The <METHOD> method cannot send a request body. Select POST, PUT or PATCH, or remove the request body.` |
@@ -209,6 +215,11 @@ All are structured errors (`UserConfigError` unless noted) with a real `userMess
 | HTTP 4xx response | `The remote server rejected the request (HTTP <status>)<: reason>` (`UserConfigError`) |
 | HTTP response outside 2xx and not 4xx (e.g. 5xx) | `The remote server failed (HTTP <status>)<: reason>. Try again.` (`IntegrationError`) |
 | Polling exhausts its retry duration without a match | `Polling did not match '<pollingConditionField>' within <N>s.` (`TimeoutError`) |
+| Request exceeds `requestTimeoutMs` | `The remote server did not respond in time. Try again.` (`TimeoutError`) |
+| Network failure | `The remote server did not respond. Try again.` (`IntegrationError`) |
+| Host blocked by the egress policy, or a redirect response | `Request blocked …` (`BlockedAddressError` / `RedirectRefusedError`) |
+| Output filter set but the response is not JSON | `The response is not valid JSON, so the filter could not be applied.` (`IntegrationError`) |
+| Output filter fails while applying | `The response filter could not be applied.` (`IntegrationError`) |
 
 `<reason>`, when present, is a short excerpt pulled from the response body's `error`/`message`/`userMessage`/`detail` field (or the raw body text), capped at 300 characters.
 

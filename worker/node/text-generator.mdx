@@ -1,10 +1,10 @@
 ---
 title: "AI text generator"
 sidebarTitle: "AI text generator"
-description: "Temporal activity that runs the AI Text Generator node: Vercel AI SDK streamText, provider routing, memory, web search, and simplified multimodal handling."
+description: "Temporal activity that runs the AI Text Generator node: Vercel AI SDK streamText, provider routing, memory, web search, structured output and multimodal input."
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f, back@master 9609806b
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 <Note>
@@ -13,22 +13,22 @@ Also known as **Text generator** (the Worker module and this page's original tit
 
 ## Overview
 
-The **AI Text Generator** node produces LLM output using the Vercel AI SDK (`streamText`, consumed internally). The worker loads node configuration from Postgres, resolves the model via `system_ai_models`, builds a unified system prompt and messages, calls the provider, persists results on the node row, and returns token usage to the workflow for billing.
+The **AI Text Generator** node produces LLM output using the Vercel AI SDK (`streamText`, consumed internally; `generateObject` when JSON output is required). The worker loads the node's input, resolves the model through `system_ai_models`, builds a system prompt, a user prompt and messages, calls the provider, persists the result, and returns token usage to the workflow for billing.
 
 [`textGeneratorActivity`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/temporal/activities/activities.service.ts) delegates to [`TextGeneratorService.process`](https://github.com/enhancedai-com/Flux-Prompt-Worker/blob/main/src/modules/nodes/text-generator/text-generator.service.ts).
 
 ## When it runs
 
-`textGeneratorActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **AI Text Generator** (`NodeType.TEXT_GENERATOR`). The workflow typically calls [`validateModelAccessActivity`](/worker/activities/validate-model-access) before execution and [`chargeTokensActivity`](/worker/activities/charge-tokens) afterward using the returned token counts.
+`textGeneratorActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow, which has an explicit `case NodeType.TEXT_GENERATOR` (it is not in the `UNIFORM_NODE_ACTIVITIES` map). Inside the cancellation scope the workflow first calls [`validateModelAccessActivity`](/worker/activities/validate-model-access) with `data.aiModel` and `data.aiSystem`, then the activity. Afterwards it calls [`chargeTokensActivity`](/worker/activities/charge-tokens) with the returned token counts and `webSearchCalls`. When the run is cancelled mid-stream, the activity returns a `CancelledNodeOutput` and the workflow settles the node as cancelled instead.
+
+The proxy (`workflows/configs.ts`) uses a `startToCloseTimeout` of 30 minutes, a 2-minute heartbeat timeout, the `RETRY_ON_WORKER_LOSS` retry policy, and `WAIT_CANCELLATION_COMPLETED` cancellation. The activity runs inside `runCancellableNode`, heartbeats on every stream event, and arms a stream-stall watchdog (`STREAM_STALL_LIMIT_MS`, 5 minutes without stream progress).
 
 ## Activity signature
 
 ```typescript
-async textGeneratorActivity({
-  nodeId: string,
-  sessionId: string,
-  userId: string,
-}): Promise<TextGeneratorResponse>
+async textGeneratorActivity(
+  props: ExecuteNodeActivityProps,
+): Promise<TextGeneratorResponse | CancelledNodeOutput>
 ```
 
 `TextGeneratorResponse`:
@@ -38,186 +38,193 @@ async textGeneratorActivity({
   output?: string;
   inputTokens?: number;
   outputTokens?: number;
+  webSearchCalls?: number;
 }
 ```
 
-The activity returns only these fields; richer state (generated text, logs, previews, memory) is written to `flows_nodes.data` inside `TextGeneratorService.process`.
+The activity returns only these fields; the generated text and logs are written by `TextGeneratorService.process` (see [Persisted node `data`](#persisted-node-data-highlights)). When `flowId` is set, each text chunk is also pushed to the editor through `notificationService.sendStreamChunk` (best effort; a failed emit never fails the activity).
 
 ## Module structure
 
-The text generator module is split into focused pure functions, each in its own file:
-
 | File | Responsibility |
 | ---- | -------------- |
-| `text-generator.service.ts` | Orchestrator: fetch node, build payload, call `streamText`, persist output |
-| `build-system-prompt.ts` | Unified system prompt from persona, instructions, context, and prompt |
-| `build-messages.ts` | Messages array from filtered memory entries |
-| `build-provider-options.ts` | Provider-specific options (temperature, topP, reasoning, tokens) |
+| `text-generator.service.ts` | Orchestrator: fetch node, resolve model, build payload, call the provider, persist output. Also serves `generateCompletion` for the Completions API (`completionActivity`). |
+| `build-system-prompt.ts` | `buildSystemPrompt` (persona) and `buildUserPrompt` (prompt, instruction, content) |
+| `build-messages.ts` | Messages array from filtered session memories |
+| `build-provider-options.ts` | Provider-specific options (tokens, sampling, reasoning) and the `AI_COMPANY_TO_SYSTEM` map |
 | `build-web-search-tools.ts` | Web search tools per provider |
-| `build-logs.ts` | Structured log type definition (logs are built inline during stream consumption) |
-| `extract-multimodal-content.ts` | URL detection in prompt, content part classification |
+| `build-logs.ts` | `buildLogs` helper for the structured log shape |
+| `extract-multimodal-content.ts` | URL detection in prompts and memories |
+| `multimodal-file-processor.ts` | Download, validate and encode multimodal files per provider |
 | `process-memory-filter.ts` | Memory filtering by entry count or word count |
-| `text-generator.types.ts` | TypeScript interfaces and enums |
+| `classify-provider-error.ts` | Reads provider status, context overflow and retry-after from provider errors |
+| `evaluation-models.ts`, `run-evaluation.ts` | TypeSafe evaluation models (`modelType = "Evaluation"`) |
+| `build-completion-*.ts`, `completion-usage.ts` | Completions API path only: messages, tools, prompt caching, cache usage |
+| `text-generator.types.ts` | TypeScript interfaces and the `AiSystems` enum |
 | `text-generator.module.ts` | NestJS module definition |
-
-All files except the service export pure functions with no NestJS dependency.
 
 ## End-to-end flow
 
-1. **Load node** — `SELECT` from `flows_nodes` by `nodeId`; read `data` (prompt, provider fields, memory flags, etc.).
-2. **Resolve model field** — From `data.AiSystem`, pick which property holds the model id (`aiModel`, `groqModel`, `geminiModel`, `anthropicModel`, or `perplexityType`).
-3. **Load model metadata** — `SELECT` from `system_ai_models` where `modelName` matches (`aiCompany`, limits, `supportsReasoning`, etc.).
-4. **Instantiate model** — Map `aiCompany` to a Vercel AI SDK client (`openai`, `anthropic`, `gemini`, `perplexity`, `xai`, `groq`) and return a `LanguageModel`. Anthropic ids are normalized via an internal map.
-5. **Extract multimodal content** — If `multimodalEnabled`, extract file URLs from the prompt, classify as `image` or `file`, and return cleaned prompt without URLs.
-6. **Build system prompt** — Compose a single string with four sections: `# Persona`, `# Instructions`, `# Context`, `# Task`. Each section resolves from `*Data` arrays and fallback string fields. If all sections are empty, a default generic prompt is used.
-7. **Build messages** — When memory is enabled, filter the active session's memories and convert to `ModelMessage[]`. When messages are empty (no memory, no multimodal), a fallback user message is added to trigger the model.
-8. **Build tools and options** — Attach web search tools if enabled. Build provider-specific options (temperature, max tokens, reasoning effort, stop sequences, etc.).
-9. **Call LLM** — `streamText` with model, system, messages, tools, and options. The stream is consumed internally; the final text, token usage, and steps are awaited.
-10. **Build logs** — Extract structured logs from the first step result: `reasoning`, `sources`, `toolCalls`, `toolResults`, `finishReason`. Saved as a JSON string.
-11. **Persist** — `UPDATE flows_nodes` with `text`, `logs`, `executionStatus: "COMPLETED"`, accumulated `nodeUsedTokens`, appended `previewResponses`, and updated `userSessionsChat` when memory is enabled.
-12. **Return** — `output`, `inputTokens`, `outputTokens` from `result.totalUsage`.
+1. **Load node** — `fetchNodeRow` reads the run's input snapshot (`node_executions.input`) during a run, or `flows_nodes.data` when there is no `execId`.
+2. **Hydrate memory** — when `memory` is on and there is a `sessionId`, read the session's stored memories from `session_state_entries` (`scopeType = 'memory'`) and merge them into `userSessionsChat`.
+3. **Validate provider** — `data.aiSystem`, when set, must be one of the `AiSystems` values or `perplexity`; otherwise `UserConfigError` ("AI provider '…' is not supported.").
+4. **Load model metadata** — `data.aiModel` is required ("Select a model before running this node."). `SELECT` from `system_ai_models` where `modelName` matches (`aiCompany`, `isVisionModel`, token limits, `contextWindow`, `supportsReasoning`, `reasoningAlwaysOn`, `supportsStructuredOutput`, `modelType`). A missing row fails with "The selected model is no longer available. Pick a different model." A model with `modelType = "Evaluation"` takes the TypeSafe evaluation path instead of the steps below.
+5. **Instantiate model** — map `aiCompany` (lowercased) to an `AiProviderService` client: `openai`, `anthropic`, `gemini`, `perplexity`, `xai`, `groq`, `moonshot`, `mistral`, `cloudflare`. Anthropic ids are normalized through `ANTHROPIC_MODEL_MAP`. An unconfigured provider fails with "This model's provider is not configured."
+6. **Build prompts** — `buildSystemPrompt` and `buildUserPrompt` (see [Prompt structure](#prompt-structure)).
+7. **Extract multimodal content** — if `multimodalEnabled`, find file URLs in the prompts and memories and process them (see [Multimodal](#multimodal)).
+8. **Build tools and options** — attach web search tools when `isWebEnabled`; build provider options; resolve the JSON schema when `requireJsonOutput` is on.
+9. **Build messages** — filtered session memories as `ModelMessage[]`, with the user prompt and file parts added to the last user message (or a new one). With no prompt, no files and no memory, a fallback user message is sent: "Complete the task described in the system instructions."
+10. **Call LLM** — `streamText` (or `generateObject` for structured output). If the provider rejects a sampling parameter as unsupported, the call is retried once without `temperature`, `topP`, `topK`, `frequencyPenalty` and `presencePenalty`.
+11. **Consume the stream** — collect text, reasoning, sources, tool calls and results, and usage from the `text-delta`, `reasoning-delta`, `source`, `tool-call`, `tool-result`, `finish-step`, `finish`, `abort` and `error` events. A response with no text, no reasoning and no tokens fails with "The model returned no response. Try again." Reasoning is capped at 200,000 characters.
+12. **Persist** — see [Persisted node `data`](#persisted-node-data-highlights). If persisting fails after the provider answered, the error carries the spent tokens so the workflow still charges them.
+13. **Return** — `output` (`text`, falling back to the reasoning text), `inputTokens`, `outputTokens`, `webSearchCalls`.
 
-## System prompt structure
+## Prompt structure
 
-All stable configuration is placed in the system prompt. The `buildSystemPrompt` function composes these sections in order, skipping empty ones:
+`buildSystemPrompt` returns only the persona: `personaData` (edge items, joined with blank lines) or the `persona` field. It is passed as the system instructions when non-empty.
+
+`buildUserPrompt` builds the user turn:
 
 ```text
-# Persona
-[from personaData array and/or persona string]
+<prompt>
 
-# Instructions
-[from instructionData array and/or instruction string]
+Instructions in crafting your response: <instruction>
 
-# Context
-[from contentData array and/or content string]
-
-# Task
-[from promptData array and/or prompt string]
+For the prompt mentioned above, here is the referenced content or context: <content>
 ```
 
-Each `*Data` array field takes priority, with the corresponding string field appended as a fallback. When multimodal URLs are extracted from the prompt, the cleaned prompt (without URLs) is used for the `# Task` section.
+Each part resolves from its `*Data` edge array (items deduplicated by `id` and joined with blank lines) and falls back to the plain field (`prompt`, `instruction`, `content`). Empty parts are left out. When multimodal files are found, the URLs are stripped from the prompts before they are sent.
 
 ## Persisted node `data` highlights
 
+`persistNodeSuccess` writes to `flows_nodes.data` and the run's `node_executions.outputData`:
+
 | Field | Role |
 | ----- | ----- |
-| `text` | Model output string |
-| `logs` | JSON string with structured execution data (see logs structure below) |
-| `executionStatus` | Set to `COMPLETED` on success |
-| `nodeUsedTokens` | Accumulated total token count (previous value + input + output tokens from this run) |
-| `previewResponses` | Previous outputs plus the new output appended (last 3 kept) |
-| `userSessionsChat` | When `memory` is true, the current session's `memories` gain new user/assistant entries |
+| `text` | Model output (`text`, or the reasoning text when the model returned no text) |
+| `logs` | Structured execution data object (see [Logs structure](#logs-structure)) |
+| `executionStatus` | `COMPLETED`, with `errorMessage` and `errorStatusCode` cleared |
+| `nodeUsedTokens` | Previous value plus this run's input and output tokens |
+| `userSessionsChat` | When `memory` is on and there is a prompt, the current session gains the user and assistant entries. The same two entries are appended to `session_state_entries`. `userSessionsChat` is one of the input fields the live `flows_nodes` write skips, so it lands only in `node_executions.outputData`. |
+
+The worker does not write `previewResponses`.
 
 ## Logs structure
 
-Logs are saved as a JSON string containing:
-
 ```typescript
 {
-  reasoning: string | null;    // thinking/reasoning text from the model
+  reasoning: string | null;    // thinking/reasoning text, capped at 200,000 characters
   sources: Array<{             // web search sources
     url: string;
-    title: string;
+    title: string;             // falls back to the URL's domain
     id: string;
   }>;
-  toolCalls: Array<any>;       // tool calls made during generation
-  toolResults: Array<any>;     // tool call results
-  finishReason: string;        // "stop", "length", "tool-calls", etc.
+  toolCalls: Array<any>;
+  toolResults: Array<any>;
+  finishReason: string;        // "stop", "length", "tool-calls", ... ; "cancelled" on a cancelled partial
+  evaluation?: { modelId, warnings, rounding }; // evaluation models only
 }
 ```
 
-Fields are captured during stream consumption from the following event types: `text-delta`, `reasoning-delta`, `source`, `tool-call`, `tool-result`, and `finish`.
-
 ## Web search
 
-When `node.webSearch` is true, provider-specific tools are attached:
+When `isWebEnabled` is true, tools are attached by the provider that `AI_COMPANY_TO_SYSTEM` maps the model's `aiCompany` to:
 
-| `AiSystem` | Tool key | SDK call |
-| ---------- | -------- | -------- |
+| Provider | Tool key | SDK call |
+| -------- | -------- | -------- |
 | OpenAI | `web_search` | `openai.tools.webSearch({})` |
 | Anthropic | `web_search` | `anthropic.tools.webSearch_20250305({})` |
 | Gemini | `enterprise_web_search` | `google.tools.googleSearch({})` |
 
-Other providers (Perplexity, xAI, Groq) return no tools when web search is requested.
+Other providers get no tools when web search is requested. Perplexity models search on their own; `search_context_size` is passed as `web_search_options`.
 
 ### Web search billing
 
 The service counts the tool calls named `web_search` in the run and returns the count as `webSearchCalls`. The workflow passes it to [`chargeTokensActivity`](/worker/activities/charge-tokens), and the back bills each call at the provider's web search price (`webSearchPriceKeyFor` in `back/src/app-api/product/web-search-price-key.ts`):
 
-| `AiSystem` | Web search price key |
-| ---------- | -------------------- |
+| Provider | Web search price key |
+| -------- | -------------------- |
 | OpenAI | `open-ai-web-search` |
 | Anthropic | `anthropic-web-search` |
-| Gemini | None — Gemini searches are not charged |
+| Gemini | None — its tool is named `enterprise_web_search`, so it is not counted |
 
 The same count is charged when the node fails after the provider answered (see [Error handling](/worker/workflows/process-single-node#error-handling)).
 
+## Structured output
+
+When `requireJsonOutput` is true:
+
+- The model must have `supportsStructuredOutput = true`, or the run fails with "The selected model does not support required JSON output. Turn it off or pick a compatible model."
+- The schema comes from `jsonOutputSchemaData` or `jsonOutputSchema`; empty fails with "Add a JSON schema before running with Require JSON Output on.", invalid JSON with "The JSON schema is not valid JSON. Fix it before running."
+- The worker calls `generateObject` with the schema and stores the object pretty-printed (`JSON.stringify(object, null, 2)`) as `text`.
+- Output that does not match the schema fails with a `SchemaValidationError` ("The model could not produce output matching the required JSON schema."), carrying the spent tokens.
+
 ## Multimodal
 
-When `multimodalEnabled` is true, `extractMultimodalContent` (`extract-multimodal-content.ts`) finds URLs in the user prompt, system prompt, and loaded session memories via regex, keeps only the ones with a supported file extension, and dedupes them — up to **`MAX_URLS = 10`** per execution, not 3. Supported extensions: `jpg`, `jpeg`, `png`, `gif`, `webp`, `heic`, `heif`, `bmp`, `tiff`/`tif`, `svg`, `avif`, `pdf`. Matched URLs are stripped out of the prompt/system-prompt/memory text to avoid duplication.
+When `multimodalEnabled` is true, `extractMultimodalContent` finds URLs in the user prompt, the system prompt and the loaded session memories, keeps only the ones with a supported file extension, and dedupes them, up to **`MAX_URLS = 10`** per execution. Supported extensions: `jpg`, `jpeg`, `png`, `gif`, `webp`, `heic`, `heif`, `bmp`, `tiff`/`tif`, `svg`, `avif`, `pdf`. Matched URLs are stripped out of the prompt, system prompt and memory text.
 
-Only **images and PDFs** are actually supported end to end — `fileTypeFromMime` (`multimodal-file-processor.ts`) recognizes only `image/*` and `application/pdf`; any other resolved MIME type throws a `UserConfigError` ("Unsupported file format…"). There is no audio/video handling despite file extensions like those not being explicitly excluded from the initial URL match.
+Only **images and PDFs** are processed. The model must be flagged `isVisionModel = true`, or the run fails with "The selected model does not support multimodal input. Turn Multimodal off or pick a vision-capable model." The model's `aiCompany` is then mapped to a provider; a provider without an entry in `PROVIDER_LIMITS` (Perplexity, Moonshot, Cloudflare) fails with "The selected model provider does not support multimodal input."
 
-Before any file is processed, the model must be flagged multimodal-capable (`modelInfo.isVisionModel === true`) or the run fails with a `UserConfigError` ("The selected model does not support multimodal input…"). The model's `aiCompany` is then mapped to a provider key (`AI_COMPANY_TO_SYSTEM`); `perplexity` and `moonshot` map to a provider key that has no entry in the limits table below, so multimodal input on those providers always fails with "The selected model provider does not support multimodal input."
+For each URL, `processMultimodalUrls` (`multimodal-file-processor.ts`), using `SafeFetchService`:
 
-For each URL, `processMultimodalUrls` (`multimodal-file-processor.ts`):
-
-1. **Downloads the file** — `GET` with a 30s timeout and a `MAX_DOWNLOAD_BYTES = 100MB` cap (checked against `Content-Length`; a network error, non-2xx response, or oversized file throws `UserConfigError`).
-2. **Resolves its MIME type** — from the response's `Content-Type` header, falling back to the file extension.
-3. **Validates format and size** against the model's provider (see the per-provider limits table below) — an unsupported MIME type or a file over that provider's per-type byte limit throws `UserConfigError`.
-4. **Enforces per-execution image/PDF counts** against the same table, after all URLs are downloaded.
-5. **Encodes the file** — providers that support sending a direct image URL (`supportsDirectImageUrl`) get the original URL back as `data`; everything else (including all PDFs, and images on providers without direct-URL support) is **base64-encoded** from the downloaded bytes (`download.buffer.toString("base64")`).
+1. **Checks the type with a `HEAD` request** — when it answers with a content type that is neither an image nor a PDF, the run fails ("Only images and PDFs are allowed.").
+2. **Downloads the file** — with a 5-minute timeout and a `MAX_DOWNLOAD_BYTES = 100 MB` cap. A network error, non-2xx response or oversized file throws `UserConfigError`.
+3. **Resolves its MIME type** — from the response's `Content-Type`, falling back to the file extension when the header is missing or `application/octet-stream`.
+4. **Validates format and size** against the provider's allowed MIME types and per-type byte limit.
+5. **Enforces per-execution image and PDF counts**, after all URLs are processed.
+6. **Encodes the file** — on providers with `supportsDirectImageUrl`, images are sent as the original URL; everything else (all PDFs, and images on other providers) is base64-encoded from the downloaded bytes.
 
 ### Per-provider limits (`PROVIDER_LIMITS`)
 
-| Provider | Max images | Max PDFs | Max image size | Max PDF size | Direct image URL? |
-| -------- | ---------- | -------- | --------------- | ------------- | ------------------ |
-| OpenAI | 10 | 1 | 26 MB | 43 MB | Yes |
-| Anthropic | 100 | 5 | 5 MB | 6 MB | No (base64) |
-| Gemini | 3600 | 3600 | 26 MB | 26 MB | No (base64) |
-| Groq | 1 | 0 | 5 MB | — | No (base64) |
-| xAI | 10 | 0 | 26 MB | — | Yes |
+| Provider | Max images | Max PDFs | Max image size | Max PDF size | Image MIME types | Direct image URL? |
+| -------- | ---------- | -------- | -------------- | ------------ | ---------------- | ----------------- |
+| OpenAI | 10 | 1 | 26 MB | 43 MB | jpeg, png, gif, webp | Yes |
+| Anthropic | 100 | 5 | 5 MB | 6 MB | jpeg, png, gif, webp | No (base64) |
+| Gemini | 3600 | 3600 | 26 MB | 26 MB | jpeg, png, webp, heic, heif | No (base64) |
+| Groq | 1 | 0 | 5 MB | — | jpeg, png | No (base64) |
+| xAI | 10 | 0 | 26 MB | — | jpeg, png | Yes |
+| Mistral | 8 | 0 | 10 MB | — | jpeg, png, gif, webp | Yes |
 
-Both count limits are enforced together — e.g. a Groq run with 2 images fails even though each individual image is under the byte limit.
-
-Content parts are always sent as `{ type: "file", data, mediaType }` — including images; the Vercel AI SDK's `{ type: "image", image }` shape is not used — where `data` is either the original URL or a base64 string per the encoding rule above, and `mediaType` is the resolved MIME type (not a fixed `application/octet-stream`). These parts are appended after a `{ type: "text", text: userPrompt }` part and injected into the last user message; if no user messages exist, a new user message is created with the content parts.
+File parts are always sent as `{ type: "file", data, mediaType }`, including images, where `data` is the URL or the base64 string and `mediaType` is the resolved MIME type. They follow a `{ type: "text", text: userPrompt }` part in the last user message; if the last message is not a user message, a new user message is added.
 
 ## Session memory
 
-When `memory` is true, `sessionId` identifies which session to load from `userSessionsChat`. The `processMemoryFilter` function applies one of five filter strategies:
+When `memory` is true and the run has a `sessionId`, the session's memories are loaded from `session_state_entries` and merged into `userSessionsChat`. `processMemoryFilter` applies one of five strategies:
 
 | `selectedType` | Behavior |
 | -------------- | -------- |
-| `Load First X Entries` | First N memory entries (by `selectedIndex`) |
-| `Load Last X Entries` | Last N memory entries (by `selectedIndex`) |
-| `Load First X Words` | First N words across all memories (by `selectedNumber`) |
-| `Load Last X Words` | Last N words across all memories (by `selectedNumber`) |
-| `Load All Entries` | All memories with valid content (default) |
+| `Load First X Entries` | First N entries (`selectedIndex`, default 5) |
+| `Load Last X Entries` | Last N entries (`selectedIndex`, default 5) |
+| `Load First X Words` | First N words across all memories (`selectedNumber`, default 50) |
+| `Load Last X Words` | Last N words across all memories (`selectedNumber`, default 50) |
+| `Load All Entries` | All memories with valid content (default, and any unknown value) |
 
-Filtered memories are converted to `ModelMessage[]` with their original roles. After generation, if a prompt was provided, new user and assistant memory entries are appended to the active session with timestamps.
+Filtered memories become `ModelMessage[]` with their original roles (`system` memories become system messages). After generation, if there was a user prompt, a user entry and an assistant entry with timestamps are appended (see [Persisted node `data`](#persisted-node-data-highlights)).
 
 ## Provider-specific generation options
 
-`buildProviderOptions` branches on `modelInfo.aiCompany` (lowercased):
+`buildProviderOptions` branches on the provider mapped from `modelInfo.aiCompany`. Max output tokens are only sent when `autoToken` is explicitly `false` and the configured value is a positive number; otherwise the provider's default applies.
 
-- **Anthropic** — `anthropicToken`, `anthropicTemperature`, `anthropicTopP`, `anthropicTopK`. Temperature/topP/topK disabled when reasoning is active.
-- **Gemini** — `geminiMaxOutputTokens`, `temperature`, `topP`, `topK`. Temperature/topP/topK disabled when reasoning is active.
-- **OpenAI** — `aiTokens`, `aiTemperature`, `aiPp` (topP), `aiFp` (topK), `aiEffort` → `providerOptions.openai.reasoningEffort`.
-- **Perplexity** — `max_tokens`/`perplexityTokens`, temperature, topP, topK, `search_context_size` in provider options.
-- **xAI** — `aiTokens`, `aiTemperature`.
-- **Groq** — `groqMaxTokens`, temperature/topP (with Gemini fallbacks), `seed`, `groqStop` as stop sequences.
+- **Anthropic** — `anthropicToken`. Thinking is on when the model supports reasoning and either `reasoningAlwaysOn` is set or `reasoning` is not `false`. Adaptive-thinking models (Claude 4.6+ and 5 families) get `thinking: { type: "adaptive" }` with `effort` from `aiEffort`; older models get `thinking: { type: "enabled", budgetTokens }` at 80% of max output (at least 1,024). Without reasoning support: `anthropicTemperature`, `anthropicTopP`, `anthropicTopK`.
+- **Gemini** — `geminiMaxOutputTokens`; `temperature`, `topP`, `topK` unless reasoning is active.
+- **OpenAI** — `aiTokens`. With reasoning: `providerOptions.openai.reasoningEffort` from `aiEffort`. Without: `aiTemperature`, `aiPp` → `presencePenalty`, `aiFp` → `frequencyPenalty` (and `reasoningEffort` when `aiEffort` is set).
+- **Perplexity** — `max_tokens`/`perplexityTokens`, `perplexityTemperature`, `perplexityTopP`, `perplexityTopK`; `search_context_size` as `web_search_options`; `reasoning_effort` on reasoning models.
+- **xAI** — `aiTokens`, `aiTemperature`; `reasoningEffort` on reasoning models (`grok-3-mini` accepts only low/high).
+- **Mistral** — `aiTokens`, `aiTemperature`; `reasoningEffort` `high` or `none` on reasoning models.
+- **Moonshot** — `aiTokens`; `reasoningEffort` for `kimi-k3` models, or `thinking` enabled/disabled on other reasoning models (`kimi-k2.7` is always on).
+- **Groq** — `groqMaxTokens`; `groqTemperature`/`groqTopP` (falling back to `geminiTemp`/`geminiTopP`) unless reasoning; `seed`; `groqStop` as stop sequences; `reasoningEffort` for `gpt-oss`, `qwen-qwq` and `deepseek-r1` models.
+- **Other providers** (Cloudflare) — `aiTokens` or `geminiMaxOutputTokens`, `aiTemperature`.
 
-**Reasoning logic:** When `modelInfo.supportsReasoning` is true and either `node.reasoning` is true or `modelInfo.reasoningAlwaysOn` is true, temperature/topP/topK are omitted and max output tokens default to the model maximum. The model output may include `reasoningText` separately from `text`; the final output selects `text` first, falling back to `reasoningText`.
-
-**Auto token:** When `autoToken` is true, max output tokens are set to `modelInfo.maxOutputToken` regardless of the configured value.
+Reasoning is active when `modelInfo.supportsReasoning` is true and either `reasoning` is true or `modelInfo.reasoningAlwaysOn` is true. Effort values outside low/medium/high fall back to `low`.
 
 ### Anthropic model normalization
 
-Display names are mapped to actual API model IDs via `ANTHROPIC_MODEL_MAP`:
+`getCorrectAnthropicModel` maps a model id to the API id when it contains one of the `ANTHROPIC_MODEL_MAP` keys; other ids pass through unchanged:
 
-| Display name | API model ID |
-| ------------ | ------------ |
+| Key | API model ID |
+| --- | ------------ |
 | `claude-4-5-sonnet-latest` | `claude-sonnet-4-5-20250929` |
+| `claude-3-sonnet-20240229` | `claude-3-sonnet-20240229` |
 | `claude-4-5-opus` | `claude-opus-4-5-20251101` |
 | `claude-4-5-sonnet` | `claude-sonnet-4-5-20250929` |
 | `claude-4-5-haiku` | `claude-haiku-4-5-20251001` |
@@ -227,18 +234,25 @@ Display names are mapped to actual API model IDs via `ANTHROPIC_MODEL_MAP`:
 | `claude-3-opus` | `claude-3-opus-20240229` |
 | `claude-3-haiku` | `claude-3-haiku-20240307` |
 
-### Provider-to-model field mapping
+### Model and provider fields
 
-| `AiSystem` | Model field |
-| ---------- | ----------- |
-| `openai` | `aiModel` |
-| `groq` | `groqModel` |
-| `gemini` | `geminiModel` |
-| `anthropicai` | `anthropicModel` |
-| `perplexityai` | `perplexityType` |
-| `xai` | `aiModel` |
+The model always comes from `data.aiModel`; the provider client comes from the model's `aiCompany` in `system_ai_models`. `data.aiSystem` is only validated and passed to model-access checks and billing. The `AiSystems` values are `openai`, `anthropic`, `gemini`, `groq`, `perplexityai`, `xai`, `moonshot`, `mistral`, `typesafe`, `cloudflare`.
 
-Unsupported or missing providers throw during model selection.
+## Provider errors
+
+`translateProviderError` maps provider failures to the [error taxonomy](/worker/error-taxonomy):
+
+| Condition | Error | userMessage |
+| --- | --- | --- |
+| Context window exceeded | `ContextLengthError` | The prompt is too long for this model's context window. |
+| Rate limit (HTTP 429) | `ProviderError`, retryable | The model is rate-limited. Try again in a moment. |
+| Provider overloaded | `ProviderError`, retryable, 529 | The model provider is overloaded. Try again shortly. |
+| Content filter or refusal | `ProviderError` | The model refused this prompt. |
+| Other token-limit message | `UserConfigError` | The prompt is too long for this model. |
+| Network, fetch or timeout | `IntegrationError` | The model provider is unreachable. Try again. |
+| Anything else | `ProviderError` | The model returned an error. Try again. |
+
+Errors raised after the stream started carry the tokens spent so far, so the workflow can charge them.
 
 ## Related documentation
 

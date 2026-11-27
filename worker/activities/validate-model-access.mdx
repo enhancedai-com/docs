@@ -2,28 +2,21 @@
 title: "validateModelAccess"
 description: "Validates that a user has access to use a specific AI model"
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## Overview
 
-The `validateModelAccessActivity` checks whether a user has permission to use a specific AI model and system. This validation ensures proper access control and billing before executing AI operations.
+The `validateModelAccessActivity` asks the main API whether the plan behind a flow can use a given AI model and provider. It lives in `src/modules/temporal/activities/activities.service.ts`.
 
-## Purpose
-
-- Verify user permissions for AI models
-- Enforce access control policies
-- Prevent unauthorized model usage
-- Ensure billing is properly configured
+<Warning>
+The check does not block the run today. `processSingleNode` awaits the activity but ignores the returned value, and the activity returns `false` instead of throwing when access is refused. A refusal is only visible in the worker log (`validate-model-access refused`). Whether a paying plan exists is enforced earlier by `nodeCreditGateActivity`, which throws a `UserConfigError` (status 402) when the back refuses the node.
+</Warning>
 
 ## When it's executed
 
-This activity is called before executing any AI model operations:
-
-1. **Before text generation**: Validates access before calling AI models
-2. **Model-specific operations**: Before any operation that requires a specific model
-3. **Access verification**: As part of the workflow validation phase
+`processSingleNode` calls it only for the Text Generator (`commandTextNode`), inside the cancellation scope and right before `textGeneratorActivity`, with the `aiModel` and `aiSystem` read by `getNodeInfoActivity`.
 
 ## Signature
 
@@ -40,74 +33,43 @@ async validateModelAccessActivity({
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `flowId` | `string` | ID of the flow requesting model access |
-| `model` | `string` | Name/identifier of the AI model to validate |
-| `aiSystem` | `string` | AI system/provider (e.g., `openai`, `anthropic`) |
+| `model` | `string` | Model identifier to validate |
+| `aiSystem` | `string` | AI system/provider (for example `openai`, `anthropic`) |
 
 ## Outputs
 
-Returns `true` if the user has access to the model, `false` otherwise. The workflow should throw an error if validation fails.
+Returns `data.success` from the back's JSON reply: `true` when access is validated, `false` when the back refuses. A reply without `success` (for example a 401 from the internal API guard) returns `undefined`. When the reply is not `ok` or not successful, the activity logs `validate-model-access refused` with `flowId`, `model`, `aiSystem`, the status code, message and error code.
 
 ## Implementation details
-
-The activity makes an HTTP POST request to the main API's validation endpoint:
 
 ```
 POST ${URL_MAIN_API}/worker/validate-model-access
 ```
 
-The request includes:
-- `flowId`: Flow identifier
-- `model`: Model name
-- `aiSystem`: AI system/provider
+- **Request body**: `{ flowId, model, aiSystem }`
+- **Header**: `internal-api-key` with `INTERNAL_API_KEY`
+- There is no retry inside the activity. The Temporal proxy runs it with `maximumAttempts: 1` and a 60-second `startToCloseTimeout` (`SINGLE_ATTEMPT_GROUP_TIMEOUT_MS`), so a network error or a non-JSON reply fails the activity and the node.
 
-The request is authenticated using the `INTERNAL_API_KEY` header.
+## Back endpoint
+
+`WorkerController.validateModelAccess` in `back/src/temporal/worker.controller.ts`:
+
+- It resolves the provider from `model` and `aiSystem`, builds the plan filter with `buildAiSystemWhere`, and looks up the paying user product with `productService.getUserProductFromFlow(flowId, aiSystemWhere, model)`.
+- **No matching product**: `403 { success: false, message: 'User does not have access to this model' }`
+- **Match**: `200 { success: true, message: 'Model access validated' }`
 
 ## Example usage in workflow
 
 ```typescript
-// Validate model access before processing
-await validateModelAccessActivity({
-  flowId: node.flowId,
-  model: node.data.aiModel,
-  aiSystem: node.data.AiSystem,
+const output = await cancelScope.run(async () => {
+  await validateModelAccessActivity({
+    flowId: node.flow_id,
+    model: node.data.aiModel,
+    aiSystem: node.data.aiSystem,
+  });
+  return await textGeneratorActivity({ execId, nodeId, sessionId, userId, flowId, flowVersionHistoryId, runToken, socketId });
 });
-
-// If validation fails, the activity throws an error
-// If successful, continue with model operations
 ```
-
-## Error handling
-
-The activity returns `false` if:
-
-- The user doesn't have access to the specified model
-- The flow doesn't have permission for the model
-- The model is not available in the user's plan
-- The API request fails
-
-The workflow should check the return value and throw an error if validation fails:
-
-```typescript
-const hasAccess = await validateModelAccessActivity({
-  flowId,
-  model,
-  aiSystem,
-});
-
-if (!hasAccess) {
-  throw new Error("User does not have access to this model");
-}
-```
-
-## API integration
-
-The activity communicates with the main API's internal endpoint:
-
-- **Endpoint**: `/worker/validate-model-access`
-- **Method**: POST
-- **Authentication**: Internal API key (`INTERNAL_API_KEY`)
-- **Request body**: `{ flowId, model, aiSystem }`
-- **Response**: `{ success: boolean }`
 
 ## Related documentation
 
