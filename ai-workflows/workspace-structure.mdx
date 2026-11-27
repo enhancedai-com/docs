@@ -1,27 +1,34 @@
 ---
 title: "Workspace structure"
-description: "Map of the Flux-Prompt / EnhancedAI monorepo."
+description: "Map of the Flux-Prompt / EnhancedAI workspace: the Workflow repo at the root and the product repos cloned inside it."
 ---
 
-The workspace is a VS Code multi-root wrapper around five git repositories.
+The workspace root is the **Workflow** repo (`enhancedai-com/Workflow`), which holds the shared Claude Code tooling. The product repos are cloned inside it as separate git repositories, with these exact folder names, and the Workflow repo gitignores them.
 
-## apps/
+## Product repos
 
-| Path | Role | Production branch |
-|---|---|---|
-| `apps/Flux-Prompt` | NestJS backend API | `main` |
-| `apps/Flux-Prompt-Frontend` | React (Vite) frontend | `main` |
-| `apps/Flux-Prompt-Worker` | Temporal worker | `main` |
-| `apps/FluxPrompt-MCP` | Public MCP server | `main` |
-| `apps/docs` | Mintlify docs (this site) | `main` |
+| Folder | Repo | Role | Production branch |
+|---|---|---|---|
+| `back/` | Flux-Prompt | NestJS backend API | `main` |
+| `front/` | Flux-Prompt-Frontend | React (Vite) frontend | `main` |
+| `worker/` | Flux-Prompt-Worker | Temporal worker that executes flow nodes | `main` |
+| `mcp/` | FluxPrompt-MCP | Public MCP server | `main` |
+| `docs/` | docs | Mintlify docs (this site) | `main` |
+| `memflux/` | MemFlux | Unified memory service | `main` |
 
-Every product repo uses `develop` (dev), `staging`, and `main` (production). See [Git workflow](/getting-started/git-workflow) for the full branch strategy.
+`back`, `front`, `worker` and `mcp` use `develop` (dev), `staging`, and `main` (production). `docs` has only `main`. `memflux` has its own model (`main` plus `release/*`). See [Git workflow](/getting-started/git-workflow) for the full branch strategy.
 
-## Other top-level folders
+Run git commands inside the folder of the repo you are changing.
 
-- `.claude/` — workspace Claude Code configuration: `agents/`, `skills/`, `kb/`, `tasks/`, `settings.json`, `settings.local.json`.
-- `docker/` — local infra (Postgres, Redis) for Flux-Prompt backend.
-- `scripts/` — workspace scripts, including `guardrails/` hooks (block-sensitive-writes, confirm-shared-state).
-- `debug-playwright/` — scripted E2E runs against the deployed front.
+## Workflow repo folders
+
+- `CLAUDE.md`, `ONBOARDING.md`: workspace instructions and the setup guide.
+- `.claude/`: shared Claude Code configuration: `agents/`, `skills/`, `rules/`, `hooks/`, `kb/`, `tasks/`, `output-styles/`, `settings.json`.
+- `.mcp.json`: the MCP servers the workspace loads.
+- `.env.example`: template for the workspace-root `.env` that the DB-tunnel skills read.
+- `docker/`: the local stack (`docker/devdb/`: Postgres, Redis, Temporal, back and worker).
+- `scripts/`: workspace scripts, such as `deploy-direct/`.
+- `debug-playwright/`: scripted E2E runs against the deployed front.
+- `guide/`: the offline workshop site.
 
 See [Where things live](./where-things-live) for artifacts (skills, agents, rules, hooks, memory, guardrails).

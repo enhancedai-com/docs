@@ -5,7 +5,10 @@ description: "Regras de código por repo que o agent segue automaticamente."
 
 ## O que é uma rule
 
-Um arquivo `.md` em `apps/<repo>/.claude/rules/` que documenta um padrão que o agent deve seguir quando trabalha naquele repo. As rules são carregadas automaticamente pelo Claude Code; você não precisa invocá-las.
+Um arquivo `.md` que documenta um padrão que o agent deve seguir. O Claude Code carrega as rules automaticamente; você não precisa invocá-las. Elas ficam em dois lugares:
+
+- **Rules do workspace**, em `.claude/rules/` do repo Workflow. `investigation.md`, `git-and-envs.md` e `prod-and-infra.md` carregam sempre; `back.md`, `front.md` e `worker.md` carregam quando você mexe naquele repo.
+- **Rules do repo**, em `<repo>/.claude/rules/` dentro de cada repo de produto (`back/`, `front/`, `worker/`).
 
 ## Quando escrever uma
 
@@ -37,9 +40,10 @@ description: One-sentence summary. Starts with "Apply when..." so the agent know
 
 ## Exemplos reais
 
-- `apps/Flux-Prompt-Frontend/.claude/rules/node-run-flush.md`
-- `apps/Flux-Prompt-Frontend/.claude/rules/react-query.md`
-- `apps/Flux-Prompt/.claude/rules/code-standards.md`
+- `.claude/rules/investigation.md` (repo Workflow)
+- `front/.claude/rules/node-run-flush.md`
+- `front/.claude/rules/react-query.md`
+- `back/.claude/rules/code-standards.md`
 
 ## Rules vs skills vs hooks
 

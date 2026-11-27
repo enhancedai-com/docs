@@ -133,9 +133,9 @@ A 5–10 min window around the failure timestamp is usually enough.
 | `[SpaceRunLog gate]` present, `persisted` missing | Unhandled crash or hang | `flows_logs` should also have an `Error while running` row |
 | `userBilled.email` ≠ `user.email` | Normal — workspace owner ≠ flow author | No action; don't conflate them |
 
-## Worked example — Therabee "Whoops!" incident
+## Worked example — the "Whoops!" transcription incident
 
-Customer reported the InTake flow returning JSON full of `"Whoops! audio didn't transcribe quite right..."` in every field.
+A customer reported an intake flow returning JSON full of `"Whoops! audio didn't transcribe quite right..."` in every field.
 
 <Steps>
   <Step title="DB">

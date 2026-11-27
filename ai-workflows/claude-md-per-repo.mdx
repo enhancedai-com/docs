@@ -9,7 +9,7 @@ The root `CLAUDE.md` describes the **workspace** (artifact locations, branch str
 
 | Content | Root | Per-repo |
 |---|---|---|
-| Workspace layout, `apps/*` list | ✓ | — |
+| Workspace layout, list of product repo folders | ✓ | — |
 | Branch strategy | ✓ | — |
 | Where things live (skills/agents/etc.) | ✓ | — |
 | Repo-specific architecture | — | ✓ |
@@ -23,4 +23,5 @@ When in doubt: specifics go in the sub-repo file, cross-cutting goes in the root
 
 - Added a new skill or agent → update the root.
 - Changed a repo's build command → update the sub-repo (and the root quickstart if the command is in the quickstart snippet).
-- New coding rule for the frontend → `apps/Flux-Prompt-Frontend/.claude/rules/` and a one-liner in the sub-repo CLAUDE.md.
+- New coding rule for the frontend → `front/.claude/rules/` and a one-liner in the sub-repo CLAUDE.md.
+- New rule for every repo, or for how the team works → the Workflow repo's `.claude/rules/` and a one-liner in the root CLAUDE.md.

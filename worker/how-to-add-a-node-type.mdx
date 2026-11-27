@@ -12,7 +12,7 @@ state_verified_against: worker@develop 5fe389f, back@master 9609806b
 - A feature branch in each repo you will touch: `feat/<task_code>` in `back`, `worker`, and `front`. **Same branch name in each repo.**
 - The local stack running. See [Running and debugging locally](/worker/running-locally).
 
-If any of the three repos is on an environment branch (`production`, `staging`, `master`, `main`, `develop`), stash and switch to the feature branch before writing anything.
+Never write on an environment branch (`main`, `staging`, `develop`, or the frozen legacy `production` and `master`). If a repo has uncommitted work, do not stash it: create a worktree off `origin/main` for your feature branch instead.
 
 ## The seven layers
 
@@ -75,7 +75,7 @@ The class drives the worker workflow gate, the prefetch skip set and the legacy 
 Then regenerate the machine-readable contract:
 
 ```bash
-cd apps/Flux-Prompt && pnpm generate:node-dispatch-contract
+cd back && pnpm generate:node-dispatch-contract
 ```
 
 Two Jest specs fail if the registry and the contract drift: `node-dispatch-contract.spec.ts`, `node-types-contract.spec.ts`.
@@ -87,14 +87,14 @@ Two Jest specs fail if the registry and the contract drift: `node-dispatch-contr
 1. Regenerate the contract and run its spec:
 
    ```bash
-   cd apps/Flux-Prompt && pnpm generate:node-dispatch-contract
+   cd back && pnpm generate:node-dispatch-contract
    pnpm test -- --testPathPattern=node-dispatch-contract
    ```
 
 2. Run the worker's node module spec (scoped):
 
    ```bash
-   cd apps/Flux-Prompt-Worker && pnpm test -- --testPathPattern=modules/nodes/<node>
+   cd worker && pnpm test -- --testPathPattern=modules/nodes/<node>
    ```
 
 3. Trigger a run locally that uses your type and read the row from `node_executions` — see [Running and debugging locally](/worker/running-locally).

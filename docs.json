@@ -563,11 +563,11 @@
                       "ai-workflows/pt-br/where-things-live",
                       "ai-workflows/pt-br/claude-md-per-repo",
                       "ai-workflows/pt-br/rules",
-                      "ai-workflows/pt-br/hooks",
+                      "ai-workflows/hooks",
                       "ai-workflows/pt-br/skills-overview",
                       "ai-workflows/pt-br/tasks-and-kb",
                       "ai-workflows/pt-br/local-memory",
-                      "ai-workflows/pt-br/claude-code-guardrails"
+                      "ai-workflows/claude-code-guardrails"
                     ]
                   },
                   {
@@ -873,6 +873,18 @@
     {
       "source": "/client/development",
       "destination": "/getting-started/welcome/environment-setup"
+    },
+    {
+      "source": "/ai-workflows/internal-developer-workflows/skills/tlc-spec-driven",
+      "destination": "/engineering/ways-of-working/delivery"
+    },
+    {
+      "source": "/ai-workflows/pt-br/claude-code-guardrails",
+      "destination": "/ai-workflows/claude-code-guardrails"
+    },
+    {
+      "source": "/ai-workflows/pt-br/hooks",
+      "destination": "/ai-workflows/hooks"
     }
   ]
 }
