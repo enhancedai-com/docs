@@ -15,41 +15,165 @@
         "default": true,
         "tabs": [
           {
-            "tab": "Guides",
+            "tab": "Product guide",
             "groups": [
               {
-                "group": "Getting started",
+                "group": "Concepts",
+                "public": true,
                 "pages": [
                   "index",
-                  {
-                    "group": "Welcome",
-                    "pages": [
-                      "getting-started/welcome/index",
-                      "getting-started/welcome/team",
-                      "getting-started/welcome/the-product",
-                      "getting-started/welcome/first-week",
-                      "getting-started/welcome/environment-setup",
-                      "getting-started/welcome/claude-code",
-                      "getting-started/welcome/mintlify-quickstart",
-                      "getting-started/welcome/first-30-days",
-                      "getting-started/welcome/culture",
-                      "getting-started/welcome/fun-stuff"
-                    ]
-                  },
-                  "getting-started/overview",
-                  "getting-started/git-workflow",
-                  "getting-started/delivery-workflow"
+                  "product-guide/concepts"
+                ]
+              },
+              {
+                "group": "SuperChat",
+                "public": true,
+                "pages": [
+                  "product-guide/superchat/overview",
+                  "product-guide/superchat/building-agents"
+                ]
+              },
+              {
+                "group": "Organizations and roles",
+                "public": true,
+                "pages": [
+                  "product-guide/organizations/overview",
+                  "product-guide/organizations/roles-and-permissions",
+                  "product-guide/organizations/onboarding"
+                ]
+              },
+              {
+                "group": "Running agents",
+                "public": true,
+                "pages": [
+                  "product-guide/running-agents/overview",
+                  "product-guide/running-agents/schedules",
+                  "product-guide/running-agents/logs-and-retention"
                 ]
               },
               {
                 "group": "Integrations",
+                "public": true,
                 "pages": [
-                  "integrations/slack"
+                  "main-api/specific-features/integrations/overview",
+                  "integrations/slack",
+                  "main-api/specific-features/integrations/wordpress",
+                  "main-api/specific-features/integrations/slack",
+                  "main-api/specific-features/integrations/clickup",
+                  "main-api/specific-features/integrations/notion",
+                  "main-api/specific-features/integrations/stripe",
+                  "main-api/specific-features/integrations/quickbooks",
+                  "main-api/specific-features/integrations/supabase",
+                  "main-api/specific-features/integrations/zapier",
+                  "main-api/specific-features/integrations/mcp",
+                  "main-api/specific-features/integrations/google",
+                  "main-api/specific-features/integrations/hubspot",
+                  "main-api/specific-features/integrations/microsoft",
+                  "client/specific-features/mcp-user-guide"
+                ]
+              }
+            ]
+          },
+          {
+            "tab": "API & MCP",
+            "groups": [
+              {
+                "group": "Completions API",
+                "public": true,
+                "pages": [
+                  "main-api/specific-features/completions-api/overview",
+                  "main-api/specific-features/completions-api/how-it-works",
+                  "main-api/specific-features/completions-api/chat-completions",
+                  "main-api/specific-features/completions-api/messages",
+                  "main-api/specific-features/completions-api/list-models",
+                  "main-api/specific-features/completions-api/completion-logs",
+                  "main-api/specific-features/completions-api/token-usage-dashboard"
                 ]
               },
               {
-                "group": "Ai Workflows",
+                "group": "Integrations API",
+                "public": true,
                 "pages": [
+                  "main-api/specific-features/external-api-endpoints",
+                  "main-api/specific-features/integrations-api/overview",
+                  "main-api/specific-features/integrations-api/list-folders",
+                  "main-api/specific-features/integrations-api/list-agents",
+                  "main-api/specific-features/integrations-api/create-agent",
+                  "main-api/specific-features/integrations-api/get-agent",
+                  "main-api/specific-features/integrations-api/update-agent",
+                  "main-api/specific-features/integrations-api/companion-docs",
+                  "main-api/specific-features/integrations-api/errors-and-tips"
+                ]
+              },
+              {
+                "group": "Memory Pods API",
+                "public": true,
+                "pages": [
+                  "main-api/specific-features/memory-pods-api/overview",
+                  "main-api/specific-features/memory-pods-api/create-pod",
+                  "main-api/specific-features/memory-pods-api/list-pods",
+                  "main-api/specific-features/memory-pods-api/add-document",
+                  "main-api/specific-features/memory-pods-api/delete-document",
+                  "main-api/specific-features/memory-pods-api/replace-document",
+                  "main-api/specific-features/memory-pods-api/errors-and-tips"
+                ]
+              },
+              {
+                "group": "MCP",
+                "public": true,
+                "pages": [
+                  "mcp/overview",
+                  "mcp/authentication",
+                  {
+                    "group": "Connect your AI client",
+                    "public": true,
+                    "pages": [
+                      "mcp/connect/claude-desktop",
+                      "mcp/connect/claude-code",
+                      "mcp/connect/codex",
+                      "mcp/connect/cursor",
+                      "mcp/connect/n8n",
+                      "mcp/connect/opencode"
+                    ]
+                  },
+                  {
+                    "group": "Tool reference",
+                    "public": true,
+                    "pages": [
+                      "mcp/tools/writing-safely",
+                      "mcp/tools/agents-and-folders",
+                      "mcp/tools/nodes-and-edges",
+                      "mcp/tools/versioning",
+                      "mcp/tools/running-agents",
+                      "mcp/tools/prompts-and-resources"
+                    ]
+                  },
+                  "mcp/troubleshooting",
+                  "mcp/changelog"
+                ]
+              }
+            ]
+          },
+          {
+            "tab": "Engineering",
+            "groups": [
+              {
+                "group": "Ways of working",
+                "pages": [
+                  "engineering/ways-of-working/index",
+                  "engineering/ways-of-working/delivery",
+                  "engineering/ways-of-working/bug-investigation",
+                  "engineering/ways-of-working/data-integrity",
+                  "engineering/ways-of-working/two-worlds",
+                  "engineering/ways-of-working/model-provider",
+                  "engineering/ways-of-working/testing",
+                  "engineering/ways-of-working/environment",
+                  "engineering/ways-of-working/security",
+                  "engineering/ways-of-working/presentation-decks",
+                  "engineering/ways-of-working/skills-and-agents",
+                  "engineering/ways-of-working/glossary",
+                  "getting-started/git-workflow",
+                  "getting-started/delivery-workflow",
                   "ai-workflows/claude-code-setup",
                   "ai-workflows/create-docs-agent",
                   {
@@ -77,7 +201,6 @@
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel",
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod",
                           "ai-workflows/internal-developer-workflows/skills/db-migration",
-                          "ai-workflows/internal-developer-workflows/skills/tlc-spec-driven",
                           "ai-workflows/internal-developer-workflows/skills/mcp-validation"
                         ]
                       },
@@ -91,113 +214,59 @@
                           "ai-workflows/internal-developer-workflows/agents/mcp-validator"
                         ]
                       },
-                      {
-                        "group": "Playbooks",
-                        "pages": [
-                          "ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation",
-                          "ai-workflows/internal-developer-workflows/playbooks/memory-leak-diagnosis",
-                          "ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow",
-                          "ai-workflows/internal-developer-workflows/playbooks/db-investigation-quickstart",
-                          "ai-workflows/internal-developer-workflows/playbooks/validating-the-mcp",
-                          "ai-workflows/internal-developer-workflows/playbooks/terraform-mcp-deploy"
-                        ]
-                      },
                       "ai-workflows/internal-developer-workflows/best-practices"
                     ]
                   }
                 ]
               },
               {
+                "group": "Runbooks",
+                "pages": [
+                  "ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation",
+                  "ai-workflows/internal-developer-workflows/playbooks/memory-leak-diagnosis",
+                  "ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow",
+                  "ai-workflows/internal-developer-workflows/playbooks/db-investigation-quickstart",
+                  "ai-workflows/internal-developer-workflows/playbooks/validating-the-mcp",
+                  "ai-workflows/internal-developer-workflows/playbooks/terraform-mcp-deploy"
+                ]
+              },
+              {
+                "group": "Architecture",
+                "pages": [
+                  "getting-started/overview",
+                  "main-api/specific-features/flow-data-architecture",
+                  "main-api/specific-features/objects-system",
+                  "main-api/specific-features/memory-pods-architecture",
+                  "main-api/specific-features/third-party-integrations-architecture",
+                  "main-api/specific-features/companion-docs",
+                  "main-api/specific-features/form-run-and-plan-company-flags"
+                ]
+              },
+              {
+                "group": "Execution",
+                "pages": [
+                  "main-api/specific-features/flow-and-single-node-execution",
+                  "main-api/specific-features/async-flow-execution",
+                  "main-api/specific-features/cancel-a-run",
+                  "main-api/specific-features/execution-limits",
+                  "main-api/specific-features/claim-check-authorization",
+                  "main-api/specific-features/check-multiple-targets",
+                  "main-api/specific-features/edge-propagation-backend"
+                ]
+              },
+              {
                 "group": "Main API",
                 "pages": [
-                  "main-api/overview",
-                  "main-api/development",
                   "main-api/environment-variables",
+                  "main-api/specific-features/local-development",
+                  "main-api/specific-features/master-api-key",
+                  "main-api/specific-features/add-new-model",
+                  "main-api/specific-features/add-multimodal-model",
                   {
                     "group": "Version control",
                     "pages": [
                       "main-api/version-control",
                       "main-api/version-control-api"
-                    ]
-                  },
-                  {
-                    "group": "Specific features",
-                    "pages": [
-                      "main-api/specific-features/flow-data-architecture",
-                      "main-api/specific-features/objects-system",
-                      "main-api/specific-features/check-multiple-targets",
-                      "main-api/specific-features/edge-propagation-backend",
-                      "main-api/specific-features/add-new-model",
-                      "main-api/specific-features/add-multimodal-model",
-                      "main-api/specific-features/memory-pods-architecture",
-                      "main-api/specific-features/flow-and-single-node-execution",
-                      "main-api/specific-features/async-flow-execution",
-                      "main-api/specific-features/cancel-a-run",
-                      "main-api/specific-features/execution-limits",
-                      "main-api/specific-features/claim-check-authorization",
-                      "main-api/specific-features/form-run-and-plan-company-flags",
-                      "main-api/specific-features/redis-ttl-audit",
-                      "main-api/specific-features/companion-docs",
-                      {
-                        "group": "Integrations",
-                        "pages": [
-                          "main-api/specific-features/integrations/overview",
-                          "main-api/specific-features/third-party-integrations-architecture",
-                          "main-api/specific-features/integrations/wordpress",
-                          "main-api/specific-features/integrations/slack",
-                          "main-api/specific-features/integrations/clickup",
-                          "main-api/specific-features/integrations/notion",
-                          "main-api/specific-features/integrations/stripe",
-                          "main-api/specific-features/integrations/quickbooks",
-                          "main-api/specific-features/integrations/supabase",
-                          "main-api/specific-features/integrations/zapier",
-                          "main-api/specific-features/integrations/mcp",
-                          "main-api/specific-features/integrations/google",
-                          "main-api/specific-features/integrations/hubspot",
-                          "main-api/specific-features/integrations/microsoft"
-                        ]
-                      },
-                      {
-                        "group": "Integrations API",
-                        "pages": [
-                          "main-api/specific-features/integrations-api/overview",
-                          "main-api/specific-features/integrations-api/list-folders",
-                          "main-api/specific-features/integrations-api/list-agents",
-                          "main-api/specific-features/integrations-api/create-agent",
-                          "main-api/specific-features/integrations-api/get-agent",
-                          "main-api/specific-features/integrations-api/update-agent",
-                          "main-api/specific-features/integrations-api/companion-docs",
-                          "main-api/specific-features/integrations-api/errors-and-tips"
-                        ]
-                      },
-                      {
-                        "group": "Memory Pods API",
-                        "pages": [
-                          "main-api/specific-features/memory-pods-api/overview",
-                          "main-api/specific-features/memory-pods-api/create-pod",
-                          "main-api/specific-features/memory-pods-api/list-pods",
-                          "main-api/specific-features/memory-pods-api/add-document",
-                          "main-api/specific-features/memory-pods-api/delete-document",
-                          "main-api/specific-features/memory-pods-api/replace-document",
-                          "main-api/specific-features/memory-pods-api/errors-and-tips"
-                        ]
-                      },
-                      {
-                        "group": "Completions API",
-                        "pages": [
-                          "main-api/specific-features/completions-api/overview",
-                          "main-api/specific-features/completions-api/how-it-works",
-                          "main-api/specific-features/completions-api/chat-completions",
-                          "main-api/specific-features/completions-api/messages",
-                          "main-api/specific-features/completions-api/list-models",
-                          "main-api/specific-features/completions-api/completion-logs",
-                          "main-api/specific-features/completions-api/token-usage-dashboard"
-                        ]
-                      },
-                      "main-api/specific-features/local-development",
-                      "main-api/specific-features/external-api-endpoints",
-                      "main-api/specific-features/master-api-key",
-                      "main-api/specific-features/output-controller-stall-incident"
                     ]
                   }
                 ]
@@ -263,8 +332,6 @@
               {
                 "group": "Client",
                 "pages": [
-                  "client/overview",
-                  "client/development",
                   "client/environment-variables",
                   "client/version-control",
                   {
@@ -276,63 +343,48 @@
                       "client/specific-features/input-size-tracking",
                       "client/specific-features/add-multimodal-model",
                       "client/specific-features/third-party-integration-node",
-                      "client/specific-features/mcp-node",
-                      "client/specific-features/mcp-user-guide"
+                      "client/specific-features/mcp-node"
                     ]
                   }
                 ]
               },
               {
-                "group": "FluxPrompt MCP",
+                "group": "MCP server",
                 "pages": [
-                  "mcp/overview",
-                  "mcp/authentication",
+                  "api-reference/introduction",
                   "mcp/environment-variables",
-                  {
-                    "group": "Connect your AI client",
-                    "pages": [
-                      "mcp/connect/claude-desktop",
-                      "mcp/connect/claude-code",
-                      "mcp/connect/codex",
-                      "mcp/connect/cursor",
-                      "mcp/connect/n8n",
-                      "mcp/connect/opencode",
-                      "mcp/connect/local-dev"
-                    ]
-                  },
-                  {
-                    "group": "Tool reference",
-                    "pages": [
-                      "mcp/tools/writing-safely",
-                      "mcp/tools/agents-and-folders",
-                      "mcp/tools/nodes-and-edges",
-                      "mcp/tools/versioning",
-                      "mcp/tools/running-agents",
-                      "mcp/tools/prompts-and-resources"
-                    ]
-                  },
-                  "mcp/troubleshooting",
-                  "mcp/changelog"
+                  "mcp/connect/local-dev",
+                  "api-reference/mcp/tokens",
+                  "api-reference/mcp/oauth",
+                  "api-reference/mcp/mcp-server-oauth",
+                  "api-reference/mcp/internal"
+                ]
+              },
+              {
+                "group": "Incidents and audits",
+                "pages": [
+                  "main-api/specific-features/output-controller-stall-incident",
+                  "main-api/specific-features/redis-ttl-audit"
                 ]
               }
             ]
           },
           {
-            "tab": "🚧 API reference",
+            "tab": "Team",
             "groups": [
               {
-                "group": "API documentation",
+                "group": "Welcome",
                 "pages": [
-                  "api-reference/introduction"
-                ]
-              },
-              {
-                "group": "FluxPrompt MCP",
-                "pages": [
-                  "api-reference/mcp/tokens",
-                  "api-reference/mcp/oauth",
-                  "api-reference/mcp/mcp-server-oauth",
-                  "api-reference/mcp/internal"
+                  "getting-started/welcome/index",
+                  "getting-started/welcome/team",
+                  "getting-started/welcome/the-product",
+                  "getting-started/welcome/first-week",
+                  "getting-started/welcome/environment-setup",
+                  "getting-started/welcome/claude-code",
+                  "getting-started/welcome/mintlify-quickstart",
+                  "getting-started/welcome/first-30-days",
+                  "getting-started/welcome/culture",
+                  "getting-started/welcome/fun-stuff"
                 ]
               }
             ]
@@ -343,35 +395,165 @@
         "language": "pt-BR",
         "tabs": [
           {
-            "tab": "Guides",
+            "tab": "Guia do produto",
             "groups": [
               {
-                "group": "Getting started",
+                "group": "Conceitos",
+                "public": true,
                 "pages": [
-                  "index",
-                  {
-                    "group": "Bem-vindo",
-                    "pages": [
-                      "getting-started/welcome/pt-br/overview",
-                      "getting-started/welcome/pt-br/team",
-                      "getting-started/welcome/pt-br/the-product",
-                      "getting-started/welcome/pt-br/first-week",
-                      "getting-started/welcome/pt-br/environment-setup",
-                      "getting-started/welcome/pt-br/claude-code",
-                      "getting-started/welcome/pt-br/mintlify-quickstart",
-                      "getting-started/welcome/pt-br/first-30-days",
-                      "getting-started/welcome/pt-br/culture",
-                      "getting-started/welcome/pt-br/fun-stuff"
-                    ]
-                  },
-                  "getting-started/overview",
-                  "getting-started/pt-br/git-workflow",
-                  "getting-started/pt-br/delivery-workflow"
+                  "pt-br/index",
+                  "product-guide/pt-br/concepts"
                 ]
               },
               {
-                "group": "Ai Workflows",
+                "group": "SuperChat",
+                "public": true,
                 "pages": [
+                  "product-guide/pt-br/superchat/overview",
+                  "product-guide/pt-br/superchat/building-agents"
+                ]
+              },
+              {
+                "group": "Organizações e papéis",
+                "public": true,
+                "pages": [
+                  "product-guide/pt-br/organizations/overview",
+                  "product-guide/pt-br/organizations/roles-and-permissions",
+                  "product-guide/pt-br/organizations/onboarding"
+                ]
+              },
+              {
+                "group": "Executar agentes",
+                "public": true,
+                "pages": [
+                  "product-guide/pt-br/running-agents/overview",
+                  "product-guide/pt-br/running-agents/schedules",
+                  "product-guide/pt-br/running-agents/logs-and-retention"
+                ]
+              },
+              {
+                "group": "Integrações",
+                "public": true,
+                "pages": [
+                  "main-api/specific-features/integrations/overview",
+                  "integrations/slack",
+                  "main-api/specific-features/integrations/wordpress",
+                  "main-api/specific-features/integrations/slack",
+                  "main-api/specific-features/integrations/clickup",
+                  "main-api/specific-features/integrations/notion",
+                  "main-api/specific-features/integrations/stripe",
+                  "main-api/specific-features/integrations/quickbooks",
+                  "main-api/specific-features/integrations/supabase",
+                  "main-api/specific-features/integrations/zapier",
+                  "main-api/specific-features/integrations/mcp",
+                  "main-api/specific-features/integrations/google",
+                  "main-api/specific-features/integrations/hubspot",
+                  "main-api/specific-features/integrations/microsoft",
+                  "client/specific-features/mcp-user-guide"
+                ]
+              }
+            ]
+          },
+          {
+            "tab": "API e MCP",
+            "groups": [
+              {
+                "group": "Completions API",
+                "public": true,
+                "pages": [
+                  "main-api/specific-features/completions-api/overview",
+                  "main-api/specific-features/completions-api/how-it-works",
+                  "main-api/specific-features/completions-api/chat-completions",
+                  "main-api/specific-features/completions-api/messages",
+                  "main-api/specific-features/completions-api/list-models",
+                  "main-api/specific-features/completions-api/completion-logs",
+                  "main-api/specific-features/completions-api/token-usage-dashboard"
+                ]
+              },
+              {
+                "group": "Integrations API",
+                "public": true,
+                "pages": [
+                  "main-api/specific-features/pt-br/external-api-endpoints",
+                  "main-api/specific-features/integrations-api/overview",
+                  "main-api/specific-features/integrations-api/list-folders",
+                  "main-api/specific-features/integrations-api/list-agents",
+                  "main-api/specific-features/integrations-api/create-agent",
+                  "main-api/specific-features/integrations-api/get-agent",
+                  "main-api/specific-features/integrations-api/update-agent",
+                  "main-api/specific-features/integrations-api/companion-docs",
+                  "main-api/specific-features/integrations-api/errors-and-tips"
+                ]
+              },
+              {
+                "group": "Memory Pods API",
+                "public": true,
+                "pages": [
+                  "main-api/specific-features/memory-pods-api/overview",
+                  "main-api/specific-features/memory-pods-api/create-pod",
+                  "main-api/specific-features/memory-pods-api/list-pods",
+                  "main-api/specific-features/memory-pods-api/add-document",
+                  "main-api/specific-features/memory-pods-api/delete-document",
+                  "main-api/specific-features/memory-pods-api/replace-document",
+                  "main-api/specific-features/memory-pods-api/errors-and-tips"
+                ]
+              },
+              {
+                "group": "MCP",
+                "public": true,
+                "pages": [
+                  "mcp/pt-br/overview",
+                  "mcp/pt-br/authentication",
+                  {
+                    "group": "Conectar seu cliente de IA",
+                    "public": true,
+                    "pages": [
+                      "mcp/pt-br/connect/claude-desktop",
+                      "mcp/pt-br/connect/claude-code",
+                      "mcp/pt-br/connect/codex",
+                      "mcp/pt-br/connect/cursor",
+                      "mcp/pt-br/connect/n8n",
+                      "mcp/pt-br/connect/opencode"
+                    ]
+                  },
+                  {
+                    "group": "Referência de ferramentas",
+                    "public": true,
+                    "pages": [
+                      "mcp/pt-br/tools/writing-safely",
+                      "mcp/pt-br/tools/agents-and-folders",
+                      "mcp/pt-br/tools/nodes-and-edges",
+                      "mcp/pt-br/tools/versioning",
+                      "mcp/pt-br/tools/running-agents",
+                      "mcp/pt-br/tools/prompts-and-resources"
+                    ]
+                  },
+                  "mcp/pt-br/troubleshooting",
+                  "mcp/pt-br/changelog"
+                ]
+              }
+            ]
+          },
+          {
+            "tab": "Engineering",
+            "groups": [
+              {
+                "group": "Ways of working",
+                "pages": [
+                  "engineering/ways-of-working/index",
+                  "engineering/ways-of-working/delivery",
+                  "engineering/ways-of-working/bug-investigation",
+                  "engineering/ways-of-working/data-integrity",
+                  "engineering/ways-of-working/two-worlds",
+                  "engineering/ways-of-working/model-provider",
+                  "engineering/ways-of-working/testing",
+                  "engineering/ways-of-working/environment",
+                  "engineering/ways-of-working/security",
+                  "engineering/ways-of-working/presentation-decks",
+                  "engineering/ways-of-working/skills-and-agents",
+                  "engineering/ways-of-working/glossary",
+                  "getting-started/pt-br/git-workflow",
+                  "getting-started/pt-br/delivery-workflow",
                   "ai-workflows/claude-code-setup",
                   "ai-workflows/create-docs-agent",
                   {
@@ -399,7 +581,6 @@
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel",
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod",
                           "ai-workflows/internal-developer-workflows/skills/db-migration",
-                          "ai-workflows/internal-developer-workflows/skills/tlc-spec-driven",
                           "ai-workflows/internal-developer-workflows/skills/mcp-validation"
                         ]
                       },
@@ -413,113 +594,59 @@
                           "ai-workflows/internal-developer-workflows/agents/mcp-validator"
                         ]
                       },
-                      {
-                        "group": "Playbooks",
-                        "pages": [
-                          "ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation",
-                          "ai-workflows/internal-developer-workflows/playbooks/memory-leak-diagnosis",
-                          "ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow",
-                          "ai-workflows/internal-developer-workflows/playbooks/db-investigation-quickstart",
-                          "ai-workflows/internal-developer-workflows/playbooks/validating-the-mcp",
-                          "ai-workflows/internal-developer-workflows/playbooks/terraform-mcp-deploy"
-                        ]
-                      },
                       "ai-workflows/internal-developer-workflows/best-practices"
                     ]
                   }
                 ]
               },
               {
+                "group": "Runbooks",
+                "pages": [
+                  "ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation",
+                  "ai-workflows/internal-developer-workflows/playbooks/memory-leak-diagnosis",
+                  "ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow",
+                  "ai-workflows/internal-developer-workflows/playbooks/db-investigation-quickstart",
+                  "ai-workflows/internal-developer-workflows/playbooks/validating-the-mcp",
+                  "ai-workflows/internal-developer-workflows/playbooks/terraform-mcp-deploy"
+                ]
+              },
+              {
+                "group": "Architecture",
+                "pages": [
+                  "getting-started/overview",
+                  "main-api/specific-features/flow-data-architecture",
+                  "main-api/specific-features/objects-system",
+                  "main-api/specific-features/memory-pods-architecture",
+                  "main-api/specific-features/third-party-integrations-architecture",
+                  "main-api/specific-features/companion-docs",
+                  "main-api/specific-features/pt-br/form-run-and-plan-company-flags"
+                ]
+              },
+              {
+                "group": "Execution",
+                "pages": [
+                  "main-api/specific-features/flow-and-single-node-execution",
+                  "main-api/specific-features/async-flow-execution",
+                  "main-api/specific-features/cancel-a-run",
+                  "main-api/specific-features/execution-limits",
+                  "main-api/specific-features/claim-check-authorization",
+                  "main-api/specific-features/check-multiple-targets",
+                  "main-api/specific-features/edge-propagation-backend"
+                ]
+              },
+              {
                 "group": "Main API",
                 "pages": [
-                  "main-api/overview",
-                  "main-api/development",
                   "main-api/pt-br/environment-variables",
+                  "main-api/specific-features/local-development",
+                  "main-api/specific-features/master-api-key",
+                  "main-api/specific-features/add-new-model",
+                  "main-api/specific-features/add-multimodal-model",
                   {
                     "group": "Version control",
                     "pages": [
                       "main-api/version-control",
                       "main-api/version-control-api"
-                    ]
-                  },
-                  {
-                    "group": "Specific features",
-                    "pages": [
-                      "main-api/specific-features/flow-data-architecture",
-                      "main-api/specific-features/objects-system",
-                      "main-api/specific-features/check-multiple-targets",
-                      "main-api/specific-features/edge-propagation-backend",
-                      "main-api/specific-features/add-new-model",
-                      "main-api/specific-features/add-multimodal-model",
-                      "main-api/specific-features/memory-pods-architecture",
-                      "main-api/specific-features/flow-and-single-node-execution",
-                      "main-api/specific-features/async-flow-execution",
-                      "main-api/specific-features/cancel-a-run",
-                      "main-api/specific-features/execution-limits",
-                      "main-api/specific-features/claim-check-authorization",
-                      "main-api/specific-features/pt-br/form-run-and-plan-company-flags",
-                      "main-api/specific-features/redis-ttl-audit",
-                      "main-api/specific-features/companion-docs",
-                      {
-                        "group": "Integrations",
-                        "pages": [
-                          "main-api/specific-features/integrations/overview",
-                          "main-api/specific-features/third-party-integrations-architecture",
-                          "main-api/specific-features/integrations/wordpress",
-                          "main-api/specific-features/integrations/slack",
-                          "main-api/specific-features/integrations/clickup",
-                          "main-api/specific-features/integrations/notion",
-                          "main-api/specific-features/integrations/stripe",
-                          "main-api/specific-features/integrations/quickbooks",
-                          "main-api/specific-features/integrations/supabase",
-                          "main-api/specific-features/integrations/zapier",
-                          "main-api/specific-features/integrations/mcp",
-                          "main-api/specific-features/integrations/google",
-                          "main-api/specific-features/integrations/hubspot",
-                          "main-api/specific-features/integrations/microsoft"
-                        ]
-                      },
-                      {
-                        "group": "Integrations API",
-                        "pages": [
-                          "main-api/specific-features/integrations-api/overview",
-                          "main-api/specific-features/integrations-api/list-folders",
-                          "main-api/specific-features/integrations-api/list-agents",
-                          "main-api/specific-features/integrations-api/create-agent",
-                          "main-api/specific-features/integrations-api/get-agent",
-                          "main-api/specific-features/integrations-api/update-agent",
-                          "main-api/specific-features/integrations-api/companion-docs",
-                          "main-api/specific-features/integrations-api/errors-and-tips"
-                        ]
-                      },
-                      {
-                        "group": "Memory Pods API",
-                        "pages": [
-                          "main-api/specific-features/memory-pods-api/overview",
-                          "main-api/specific-features/memory-pods-api/create-pod",
-                          "main-api/specific-features/memory-pods-api/list-pods",
-                          "main-api/specific-features/memory-pods-api/add-document",
-                          "main-api/specific-features/memory-pods-api/delete-document",
-                          "main-api/specific-features/memory-pods-api/replace-document",
-                          "main-api/specific-features/memory-pods-api/errors-and-tips"
-                        ]
-                      },
-                      {
-                        "group": "Completions API",
-                        "pages": [
-                          "main-api/specific-features/completions-api/overview",
-                          "main-api/specific-features/completions-api/how-it-works",
-                          "main-api/specific-features/completions-api/chat-completions",
-                          "main-api/specific-features/completions-api/messages",
-                          "main-api/specific-features/completions-api/list-models",
-                          "main-api/specific-features/completions-api/completion-logs",
-                          "main-api/specific-features/completions-api/token-usage-dashboard"
-                        ]
-                      },
-                      "main-api/specific-features/local-development",
-                      "main-api/specific-features/pt-br/external-api-endpoints",
-                      "main-api/specific-features/master-api-key",
-                      "main-api/specific-features/output-controller-stall-incident"
                     ]
                   }
                 ]
@@ -532,7 +659,7 @@
                   "worker/pt-br/environment-variables",
                   "worker/node-input-projection",
                   {
-                    "group": "Guias para desenvolvedor",
+                    "group": "Developer guides",
                     "pages": [
                       "worker/pt-br/execution-lifecycle",
                       "worker/pt-br/how-to-add-a-node-type",
@@ -585,8 +712,6 @@
               {
                 "group": "Client",
                 "pages": [
-                  "client/overview",
-                  "client/development",
                   "client/pt-br/environment-variables",
                   "client/version-control",
                   {
@@ -598,63 +723,48 @@
                       "client/specific-features/input-size-tracking",
                       "client/specific-features/add-multimodal-model",
                       "client/specific-features/third-party-integration-node",
-                      "client/specific-features/mcp-node",
-                      "client/specific-features/mcp-user-guide"
+                      "client/specific-features/mcp-node"
                     ]
                   }
                 ]
               },
               {
-                "group": "FluxPrompt MCP",
+                "group": "MCP server",
                 "pages": [
-                  "mcp/pt-br/overview",
-                  "mcp/pt-br/authentication",
+                  "api-reference/introduction",
                   "mcp/pt-br/environment-variables",
-                  {
-                    "group": "Conectar seu cliente de IA",
-                    "pages": [
-                      "mcp/pt-br/connect/claude-desktop",
-                      "mcp/pt-br/connect/claude-code",
-                      "mcp/pt-br/connect/codex",
-                      "mcp/pt-br/connect/cursor",
-                      "mcp/pt-br/connect/n8n",
-                      "mcp/pt-br/connect/opencode",
-                      "mcp/pt-br/connect/local-dev"
-                    ]
-                  },
-                  {
-                    "group": "Referência de ferramentas",
-                    "pages": [
-                      "mcp/pt-br/tools/writing-safely",
-                      "mcp/pt-br/tools/agents-and-folders",
-                      "mcp/pt-br/tools/nodes-and-edges",
-                      "mcp/pt-br/tools/versioning",
-                      "mcp/pt-br/tools/running-agents",
-                      "mcp/pt-br/tools/prompts-and-resources"
-                    ]
-                  },
-                  "mcp/pt-br/troubleshooting",
-                  "mcp/pt-br/changelog"
+                  "mcp/pt-br/connect/local-dev",
+                  "api-reference/pt-br/mcp/tokens",
+                  "api-reference/pt-br/mcp/oauth",
+                  "api-reference/pt-br/mcp/mcp-server-oauth",
+                  "api-reference/pt-br/mcp/internal"
+                ]
+              },
+              {
+                "group": "Incidents and audits",
+                "pages": [
+                  "main-api/specific-features/output-controller-stall-incident",
+                  "main-api/specific-features/redis-ttl-audit"
                 ]
               }
             ]
           },
           {
-            "tab": "🚧 API reference",
+            "tab": "Team",
             "groups": [
               {
-                "group": "API documentation",
+                "group": "Bem-vindo",
                 "pages": [
-                  "api-reference/introduction"
-                ]
-              },
-              {
-                "group": "FluxPrompt MCP",
-                "pages": [
-                  "api-reference/pt-br/mcp/tokens",
-                  "api-reference/pt-br/mcp/oauth",
-                  "api-reference/pt-br/mcp/mcp-server-oauth",
-                  "api-reference/pt-br/mcp/internal"
+                  "getting-started/welcome/pt-br/overview",
+                  "getting-started/welcome/pt-br/team",
+                  "getting-started/welcome/pt-br/the-product",
+                  "getting-started/welcome/pt-br/first-week",
+                  "getting-started/welcome/pt-br/environment-setup",
+                  "getting-started/welcome/pt-br/claude-code",
+                  "getting-started/welcome/pt-br/mintlify-quickstart",
+                  "getting-started/welcome/pt-br/first-30-days",
+                  "getting-started/welcome/pt-br/culture",
+                  "getting-started/welcome/pt-br/fun-stuff"
                 ]
               }
             ]
@@ -668,16 +778,10 @@
     "dark": "/logo/dark.svg"
   },
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
     "primary": {
       "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
+      "label": "Open FluxPrompt",
+      "href": "https://app.fluxprompt.ai"
     }
   },
   "contextual": {
@@ -698,12 +802,30 @@
     }
   },
   "redirects": [
-    { "source": "/mcp/tools/list-agents", "destination": "/mcp/tools/agents-and-folders" },
-    { "source": "/mcp/tools/get-agent", "destination": "/mcp/tools/agents-and-folders" },
-    { "source": "/mcp/tools/list-node-types", "destination": "/mcp/tools/nodes-and-edges" },
-    { "source": "/mcp/pt-br/tools/list-agents", "destination": "/mcp/pt-br/tools/agents-and-folders" },
-    { "source": "/mcp/pt-br/tools/get-agent", "destination": "/mcp/pt-br/tools/agents-and-folders" },
-    { "source": "/mcp/pt-br/tools/list-node-types", "destination": "/mcp/pt-br/tools/nodes-and-edges" },
+    {
+      "source": "/mcp/tools/list-agents",
+      "destination": "/mcp/tools/agents-and-folders"
+    },
+    {
+      "source": "/mcp/tools/get-agent",
+      "destination": "/mcp/tools/agents-and-folders"
+    },
+    {
+      "source": "/mcp/tools/list-node-types",
+      "destination": "/mcp/tools/nodes-and-edges"
+    },
+    {
+      "source": "/mcp/pt-br/tools/list-agents",
+      "destination": "/mcp/pt-br/tools/agents-and-folders"
+    },
+    {
+      "source": "/mcp/pt-br/tools/get-agent",
+      "destination": "/mcp/pt-br/tools/agents-and-folders"
+    },
+    {
+      "source": "/mcp/pt-br/tools/list-node-types",
+      "destination": "/mcp/pt-br/tools/nodes-and-edges"
+    },
     {
       "source": "/worker/activities/scripting",
       "destination": "/worker/node/scripting"
@@ -735,6 +857,22 @@
     {
       "source": "/main-api/specific-features/zapier-user-guide",
       "destination": "/main-api/specific-features/integrations/zapier"
+    },
+    {
+      "source": "/main-api/overview",
+      "destination": "/getting-started/overview"
+    },
+    {
+      "source": "/main-api/development",
+      "destination": "/main-api/specific-features/local-development"
+    },
+    {
+      "source": "/client/overview",
+      "destination": "/getting-started/overview"
+    },
+    {
+      "source": "/client/development",
+      "destination": "/getting-started/welcome/environment-setup"
     }
   ]
 }

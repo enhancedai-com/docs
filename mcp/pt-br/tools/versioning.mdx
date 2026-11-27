@@ -70,8 +70,14 @@ Publica em produção uma versão existente.
 | `dryRun` / `idempotencyKey` | | | Veja [escrevendo com segurança](/mcp/pt-br/tools/writing-safely). |
 
 ```json
-{ "dryRun": false, "applied": true, "versionId": "8f21…", "deployed": true }
+{ "dryRun": false, "applied": true, "versionId": "8f21…", "deployed": true,
+  "deployedVersionId": "51c0…", "deployedVersionName": "V 1.2" }
 ```
+
+Publicar funciona como no editor: o conteúdo da versão é copiado para a **versão ativa**
+(`deployedVersionId`), que recebe um nome novo como `V 1.2` e guarda todos os estados ativos anteriores
+no histórico. Publicar a própria versão ativa é recusado. Para desfazer uma publicação, veja
+[`rollback_version`](#rollback_version).
 
 <Tip>
   Publicar muda o que o tráfego real executa. Inspecione o dry-run primeiro e confirme com o usuário
@@ -82,6 +88,95 @@ Publica em produção uma versão existente.
 <Warning>
   O `publish_version` publica **em produção**. Não existe alvo de staging nem parâmetro `target` — um argumento extra como `target: "staging"` é descartado e devolvido em `unknownArguments`, enquanto a versão vai ao ar.
 </Warning>
+
+## `export_agent`
+
+Retorna os nodes e edges de um agente em JSON — o mesmo JSON que o editor mostra em **Agent JSON** e
+aceita de volta em **Edit Agent JSON**. Exige o escopo `read`.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | string (UUID) | Sim | Agente a exportar. |
+| `versionId` | string | Não | Uma versão deste agente para exportar no lugar da versão ativa. Só vale quando o agente tem controle de versão ligado. |
+
+```json
+{ "versionId": "51c0…", "nodes": [ … ], "edges": [ … ] }
+```
+
+- Sem `versionId`, você recebe a versão ativa — a que uma execução usa.
+- O `versionId` da resposta é a versão de onde a exportação foi lida. `null` significa que o agente não
+  tem controle de versão, ou ainda não tem versão ativa; confira `versionControlEnabled` com o `get_agent`.
+- Todos os campos armazenados são mantidos. A importação do editor lê só `nodes` e `edges`, então a
+  exportação inteira pode ser colada lá.
+- Para salvar uma exportação editada como nova versão, passe os `nodes` e `edges` dela para o `create_version`.
+
+<Tip>
+  Use o `get_agent` para inspecionar um agente: ele acrescenta os campos de versão e marca tipos de node
+  removidos. O `export_agent` serve para copiar ou fazer backup do grafo.
+</Tip>
+
+## `list_version_history`
+
+Retorna os estados salvos de uma versão, do mais recente para o mais antigo. Na **versão ativa**
+(`deployedVersionId` do `get_agent`), cada publicação acrescenta um estado, então esta é a lista dos
+estados ativos anteriores que você pode restaurar com o `rollback_version`. Exige o escopo `read`.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | string (UUID) | Sim | Agente de destino. |
+| `versionId` | string | Sim | Versão cujo histórico você quer, do `list_versions` ou do `get_agent`. |
+| `cursor` | string | Não | O `nextCursor` da página anterior, com os mesmos `agentId` e `versionId`. Trate como opaco. |
+
+Retorna `versionId`, `history`, `total` e `nextCursor` (só quando há mais resultados). Cada item:
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `historyId` | string | Passe para o `rollback_version`. |
+| `versionName` | string \| null | Nome daquele estado. |
+| `isCurrent` | boolean | `true` para o estado que a versão mostra agora. |
+| `updatedAt` | ISO 8601 | Quando aquele estado foi salvo. |
+
+## `rollback_version`
+
+Restaura uma versão para um dos estados salvos anteriores, do mesmo jeito que o editor faz. O estado
+escolhido é copiado para um **novo** estado atual, então o próprio rollback pode ser desfeito. Exige o
+escopo `write` e o interruptor de escrita do workspace.
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `agentId` | string (UUID) | Sim | Agente de destino. |
+| `versionId` | string | Sim | Versão a restaurar, do `list_versions` ou do `get_agent`. |
+| `historyId` | string | Sim | Estado a restaurar, do `list_version_history` para o mesmo `versionId`. |
+| `dryRun` / `idempotencyKey` | | | Veja [escrevendo com segurança](/mcp/pt-br/tools/writing-safely). |
+
+```json
+{ "dryRun": false, "applied": true, "versionId": "51c0…", "historyId": "e93a…" }
+```
+
+Recusado com `validation_error` quando:
+
+- o `historyId` pertence a outra versão — chame o `list_version_history` com o mesmo `versionId`;
+- o `historyId` já é o estado atual daquela versão.
+
+<Warning>
+  Na versão ativa, um rollback **muda na hora o que é executado**. Inspecione o dry-run e confirme com o
+  usuário antes de aplicar, como no `publish_version`.
+</Warning>
+
+### Desfazer uma publicação
+
+<Steps>
+  <Step title="Ache a versão ativa">
+    Chame o `get_agent` e anote o `deployedVersionId`.
+  </Step>
+  <Step title="Liste os estados anteriores">
+    Chame o `list_version_history` com esse `versionId`. O estado com `isCurrent: true` é o que roda agora.
+  </Step>
+  <Step title="Restaure o que você quer">
+    Chame o `rollback_version` com o `historyId` do estado anterior — primeiro como dry-run, depois com
+    `dryRun: false` e um `idempotencyKey`.
+  </Step>
+</Steps>
 
 ## Editando uma versão existente
 
@@ -94,6 +189,8 @@ Veja [qual cópia estou editando?](/mcp/pt-br/tools/writing-safely).
 - *"Faça um snapshot das minhas mudanças no agente d2c2… como 'Add summariser'"*
 - *"Qual versão deste agente está publicada?"*
 - *"Publique a versão 8f21… em produção"*
+- *"Exporte o agente d2c2… em JSON"*
+- *"Desfaça a última publicação do agente d2c2…"*
 
 ## Relacionados
 

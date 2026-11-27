@@ -3,6 +3,19 @@ title: "Changelog"
 description: "Novidades na integração MCP do FluxPrompt."
 ---
 
+## 2026-11-18 — Execuções agendadas leem cron de seis campos corretamente
+
+**Um agendamento registrado nos Temporal Schedules agora dispara no dia e no mês que você definiu.**
+
+- O editor salva um agendamento como uma expressão cron de seis campos, com os segundos primeiro. Os
+  Temporal Schedules leem cinco campos (`minuto hora dia mês dia-da-semana`), então uma expressão de seis
+  campos era lida com todos os campos deslocados em um, e o mês era lido como ano.
+- Uma expressão de seis campos agora perde o campo de segundos antes de ser registrada no Temporal:
+  `20 20 4 1,31 * *` é registrada como `20 4 1,31 * *`. Uma expressão de cinco campos é registrada sem
+  mudança. Nesse caminho, uma execução começa no segundo `00` do minuto escolhido.
+- Nenhuma ferramenta do MCP mudou, e o MCP não cria agendamentos. Veja
+  [Agendamentos](/product-guide/pt-br/running-agents/schedules).
+
 ## 2026-11-17 — Categorias de node são descritas
 
 **O `list_node_types` agora diz o que cada categoria de node significa.**
@@ -10,6 +23,42 @@ description: "Novidades na integração MCP do FluxPrompt."
 - **`list_node_types`** retorna `categories`: um `name` e uma `description` por categoria, ao lado de `nodeTypes`.
 - **`get_node_type`** e o resource `fluxprompt://node-types` adicionam `categoryDescription` a cada tipo de node.
 - Nada foi removido nem renomeado. Um cliente que ignora os campos novos continua funcionando.
+
+## 2026-11-09 — Logs de execução, histórico de versões e exportação
+
+**Você pode ler qualquer execução de um agente, desfazer uma publicação e exportar um agente em JSON.**
+
+### Ferramentas novas
+- **[`list_runs`](/mcp/pt-br/tools/running-agents#list_runs)** — lista as execuções de um agente de
+  todas as origens (editor, API, webhook, agendamento, chat, MCP), da mais recente para a mais antiga,
+  filtradas por `status`, `trigger`, `since` (`1h`, `24h`, `7d`) ou por um intervalo `from`/`to` de até
+  7 dias dentro dos últimos 30.
+- **[`get_node_input`](/mcp/pt-br/tools/running-agents#get_node_input)** — o que um node recebeu em uma
+  execução, com redação e cortado em 20.000 caracteres.
+- **[`export_agent`](/mcp/pt-br/tools/versioning#export_agent)** — os nodes e edges da versão ativa, ou
+  de uma versão indicada, no formato **Agent JSON** do editor.
+- **[`list_version_history`](/mcp/pt-br/tools/versioning#list_version_history)** — os estados salvos de
+  uma versão; na versão ativa, um por publicação.
+- **[`rollback_version`](/mcp/pt-br/tools/versioning#rollback_version)** — restaura um estado anterior
+  como um novo estado atual, como o editor faz.
+
+### Mudanças
+- **Ler execuções exige `read`, não `execute`.** O `get_run_status`, o `get_run_nodes` e o
+  `get_node_output` se juntam às duas ferramentas novas no escopo `read`. Eles leem qualquer execução
+  que o dono da chave vê na página **Logs**. O `run_agent` e o `cancel_run` continuam com `execute`.
+- **Dados de execução são marcados como não confiáveis.** Entradas, saídas, prévias e erros dos nodes
+  vêm dentro de `untrustedContent`, ao lado de `contentTrust: "untrusted"` e de um `notice`.
+- **O `publish_version` publica como o editor.** Ele copia a versão para a versão ativa e retorna
+  `deployedVersionId` e `deployedVersionName`.
+- **O `create_version`** copia a versão ativa por padrão, ou um `sourceVersionId`, ou recebe `nodes` e
+  `edges` (o que o `export_agent` retorna). Em um agente sem controle de versão, a primeira chamada liga
+  o controle, como o botão do editor.
+- **A versão ativa é somente leitura.** Uma escrita no grafo que mira a versão ativa é recusada, assim
+  como uma escrita sem `versionId` em um agente que tem versão ativa. Chame o `create_version`, edite a
+  versão que ele retorna e depois publique.
+- **O `list_workspaces`** retorna um objeto `access` por workspace (`role`, `missingScopes`,
+  `limitedBy`, `howToGetMore`) e um `scopeGuide`. Uma chamada recusada diz qual escopo faltou e como
+  obtê-lo.
 
 ## 2026-10-29 — Tipos de node removidos são marcados e recusados
 

@@ -22,7 +22,7 @@ The pattern: **Explore → Plan → Execute**.
 2. **Plan** — Claude proposes the structure of the change; you review and adjust
 3. **Execute** — Claude implements once the plan is approved
 
-For a one-liner fix, skip plan mode. For "refactor how we handle X", always use it.
+For a one-liner fix, skip plan mode. For "refactor how we handle X", always use it. On a task branch, the `task-plan` skill writes the plan to `.claude/plans/<task id>.md` and the `guard-dev-loop` hook refuses code edits until it exists (and, from risk level 3, until a person approves it). See the [Delivery practice](/engineering/ways-of-working/delivery).
 
 <Tip>
   When the agent asks you to confirm an approach, take the 30 seconds to actually read what it proposes. Catching a wrong assumption at the plan stage costs nothing; catching it after 200 lines of changes is painful.
@@ -47,19 +47,13 @@ Claude can invoke multiple agents in a single message. **Use this whenever the w
 
 The rule: if step B reads anything step A produces, they're sequential. Otherwise, send them in one message.
 
-## 3. Let the model auto-pick the right subagent
+## 3. Pick a skill, an agent, or the hybrid
 
-The workspace ships with these custom subagents (full reference in [Agents](/ai-workflows/internal-developer-workflows/agents/db-investigator)):
+- A **skill** is a procedure Claude loads on demand and runs in your conversation, with your full context. Reach for one when you want to do the thing yourself with expert guidance: query prod read-only, migrate a flow, plan a task.
+- An **agent** is an isolated worker with its own context window. Delegate to one when the job should run apart and hand back a conclusion, not file dumps. `db-investigator` is the canonical example: it queries the real database read-only, diagnoses the cause and hands back a copy-paste reply.
+- The **hybrid** is a thin agent that runs a skill in isolation (`mcp-validator` runs `mcp-validation`, `terraform-infra-helper` runs `terraform-infra`): one source of truth, two entry points.
 
-| Agent | Use when |
-| --- | --- |
-| `db-investigator` | Teammate reports missing data |
-| `db-setup` | New teammate bootstrapping their environment |
-| `pr-creator` | Creating a PR from a ClickUp task |
-| `mintlify-docs-writer` | Writing docs in this repo |
-| `mcp-validator` | Validating the MCP integration before shipping |
-
-Claude often recognizes when to invoke them on its own from natural-language prompts. If it doesn't, just name the agent: *"use the db-investigator agent — ..."*.
+Claude often recognizes when to invoke them on its own from natural-language prompts. If it doesn't, name it: *"use the db-investigator agent — ..."*. Every skill and agent, one line each: [Skills and agents catalog](/engineering/ways-of-working/skills-and-agents).
 
 ## 4. Trust auto-memory, but verify before recommending
 
@@ -72,6 +66,8 @@ Claude Code can persist context across conversations (auto-memory). Useful for:
 **What to remember:** stable user/project/feedback signals. Surprising things. Things that took a session to figure out.
 
 **What NOT to remember:** ephemeral state, in-progress task details, anything `git log` or the current code can answer.
+
+**Team knowledge goes into the repo, not into one person's memory.** Personal preferences go in `CLAUDE.local.md` at the workspace root (gitignored). A fact the whole team needs becomes a rule in `.claude/rules/`, a skill, or a note in `.claude/kb/` through a PR.
 
 <Warning>
   Memory is a snapshot from when it was written. Before recommending action based on a memory ("the function `foo` does X"), grep to verify the function still exists and does what was remembered. Stale memory is worse than no memory.
@@ -149,5 +145,6 @@ These aren't independent rules — they reinforce each other:
 
 ## Related
 
+- [How we work with Claude Code](/engineering/ways-of-working) — the delivery loop, the mental models and the practice pages
 - [Internal developer workflows overview](/ai-workflows/internal-developer-workflows/overview) — the broader context for these patterns
 - [Onboarding](/ai-workflows/internal-developer-workflows/onboarding) — bootstrap the tooling so the patterns above can pay off

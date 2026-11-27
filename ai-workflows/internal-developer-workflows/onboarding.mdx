@@ -3,6 +3,10 @@ title: "Onboarding"
 description: "Go from a fresh clone to running queries against staging end-to-end. Manual walkthrough plus the db-setup agent that automates it."
 ---
 
+<Note>
+  This page covers database access. The full setup for every role (install, clone layout, starting Claude Code, the enforced rules) is [`ONBOARDING.md`](https://github.com/enhancedai-com/Workflow/blob/main/ONBOARDING.md) in the Workflow repo; how the team works day to day is [How we work with Claude Code](/engineering/ways-of-working).
+</Note>
+
 ## Goal
 
 By the end of this page, you will be able to run a SELECT against the staging database directly from your machine, through the AWS bastion, with Claude Code as the driver.
@@ -25,7 +29,7 @@ In any Claude Code conversation in the workspace:
     It will ask for your email/label for the SSH key, prompt for each `.env` value one at a time, and run a smoke test once everything is in place.
   </Step>
   <Step title="Send the handoff message">
-    The agent prints a message containing your public key to send to the admin (Guilherme). After he authorizes it on the bastion, the agent runs the smoke test.
+    The agent prints a message containing your public key to send to the admin. After the admin authorizes it on the bastion, the agent runs the smoke test.
   </Step>
 </Steps>
 
@@ -40,7 +44,7 @@ Use this if you want to understand what the agent does, or if you need to recove
 Run these checks. All but AWS CLI are mandatory.
 
 ```powershell
-node --version          # 18 or higher
+node --version          # 22 or higher
 pnpm --version
 git --version
 & "C:\Program Files\Amazon\AWSCLIV2\aws.exe" --version  # optional, for CloudWatch
@@ -48,7 +52,7 @@ git --version
 
 | Tool | Required | Install |
 | --- | --- | --- |
-| Node 18+ | yes | [nodejs.org](https://nodejs.org/) (LTS) |
+| Node 22+ | yes | [nodejs.org](https://nodejs.org/) (LTS) |
 | pnpm | yes | `npm install -g pnpm` |
 | git | yes | [git-scm.com](https://git-scm.com/) |
 | AWS CLI v2 | optional | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
@@ -93,7 +97,7 @@ Copy the example file:
 Copy-Item .\.env.example .\.env
 ```
 
-The file has the following variables. Get values from the admin (1Password, DM, or onboarding handoff). Never paste these into a chat or commit them.
+The file has the following variables. Get the values from a dev through a secure channel, never a chat message. Never paste them into a chat, a card or a commit.
 
 | Variable | What it is |
 | --- | --- |
@@ -129,7 +133,7 @@ foreach ($skill in @("ec2-tunnel", "ec2-tunnel-prod")) {
 
 ### 5. Hand off your public key
 
-Send a message to the admin (Guilherme) containing the contents of `~/.ssh/id_rsa.pub`. Suggested template:
+Send a message to the admin containing the contents of `~/.ssh/id_rsa.pub`. Suggested template:
 
 ```
 Hey, I'm new on the team and I generated my SSH key to access the bastion.
@@ -171,7 +175,7 @@ If it works, repeat with `$env:ENV = "staging"` to confirm the second set of cre
 
 ## After setup
 
-You now have read access to dev and staging, and (with `ec2-tunnel-prod`) read-only access to prod. Next steps:
+You now have access to dev and staging. Read-only prod is a separate, per-person grant: do not fill `PGPASSWORD_PROD` or `SSH_PASSPHRASE_PROD`, or smoke-test prod, until the admin has authorized your key on the prod bastion. Prod writes are never done through the tunnel; see [Data integrity and DB access](/engineering/ways-of-working/data-integrity). Next steps:
 
 <Columns cols={2}>
   <Card title="Use db-investigator" icon="magnifying-glass" href="/ai-workflows/internal-developer-workflows/agents/db-investigator">

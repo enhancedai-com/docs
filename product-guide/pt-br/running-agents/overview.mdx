@@ -1,0 +1,19 @@
+---
+title: "Executar agentes"
+description: "As formas de executar um agente da FluxPrompt: pelo editor, pela API, por webhook, num chatbot, por formulário ou por agendamento."
+---
+
+Um agente é um fluxo de nós que você constrói no editor da FluxPrompt. Depois de pronto, você pode executá-lo de várias formas:
+
+| Forma | Quando usar |
+|---|---|
+| Editor | Clique em **Run** para testar o agente inteiro, ou execute um único nó enquanto constrói. |
+| API | Chame `POST /flux/api-v2` com uma API key a partir do seu código. A chamada espera um pouco pelo resultado; uma execução mais longa devolve uma URL de status para consultar, ou chama o seu `callback_url` quando termina. |
+| Webhook | Deixe outro serviço, como o Zapier, iniciar o agente com um POST na URL de webhook dele. |
+| Chatbot | Publique o agente como um chatbot que mantém a conversa entre mensagens. |
+| Formulário | Compartilhe um formulário que as pessoas preenchem para executar o agente. |
+| Agendamento | Execute o agente automaticamente nos horários definidos no nó inicial. |
+
+Cada execução fica registrada, então você vê o que cada nó recebeu e devolveu. Uma execução pode ser cancelada enquanto está em andamento.
+
+As páginas deste grupo explicam cada forma de executar um agente em detalhe.

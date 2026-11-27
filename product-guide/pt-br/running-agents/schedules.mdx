@@ -1,0 +1,123 @@
+---
+title: "Agendamentos"
+description: "Execute um agente automaticamente de hora em hora, todo dia, toda semana ou todo mês."
+---
+
+## O que é
+
+Um agendamento executa um agente automaticamente nos horários que você escolhe — de hora em hora, todo dia,
+em alguns dias da semana ou em alguns dias do mês. Você não precisa abrir o editor: a execução acontece
+sozinha e aparece em **Logs** com o gatilho **Scheduled**.
+
+## Quem pode usar
+
+- O seu plano precisa incluir gatilhos agendados. Se não incluir, salvar um agendamento falha com
+  **You do not have access to this product** — faça upgrade do plano ou fale com o admin da sua organização.
+- Um agendamento pertence a quem o criou. Só essa pessoa pode alterá-lo ou apagá-lo.
+
+## Criar um agendamento
+
+<Steps>
+  <Step title="Abra as configurações do agente">
+    Abra o agente e depois **Settings** no node global (ou a aba **Settings** do agente, seção **General**).
+  </Step>
+  <Step title="Ligue Enable Auto Trigger">
+    Ligue **Enable Auto Trigger**. A janela **Set time** abre.
+  </Step>
+  <Step title="Escolha a frequência">
+    Em **Select Type**, escolha **hourly**, **daily**, **weekly** ou **monthly**.
+    - **hourly** — escolha o minuto de cada hora.
+    - **daily** — escolha o horário do dia.
+    - **weekly** — escolha os dias em **Select Days of the Week** e depois o horário.
+    - **monthly** — escolha os dias do mês e depois o horário.
+  </Step>
+  <Step title="Salve">
+    Clique em **Save**. O node global passa a mostrar o agendamento, por exemplo
+    *Runs every day at 09:00:00.*, e o agente ganha um selo de agendamento na barra lateral.
+  </Step>
+</Steps>
+
+<Tip>
+  Coloque a primeira execução pelo menos 5 minutos depois do horário atual, como a janela lembra. Um horário
+  que acabou de passar espera a próxima hora, dia, semana ou mês.
+</Tip>
+
+### Alterar ou remover um agendamento
+
+- **Alterar:** clique no agendamento no node global, mude o horário e clique em **Update**.
+- **Remover:** clique em **Delete** na janela **Set time**, ou desligue **Enable Auto Trigger**.
+- **Apagar o agente** também remove o agendamento dele.
+
+## Fuso horário
+
+Os agendamentos rodam no **horário do leste dos EUA** (horário de Nova York). O seletor de horário mostra
+**EST**, mas o agendamento segue o horário de Nova York o ano todo, inclusive o horário de verão de lá. Não
+existe configuração de fuso.
+
+Para rodar às 09:00 de São Paulo, por exemplo, converta primeiro para o horário de Nova York e lembre que a
+diferença muda quando o horário de verão começa ou termina em algum dos dois lugares.
+
+## O que é executado
+
+- **Qual versão:** com controle de versão ligado e uma versão publicada, o agendamento executa a versão
+  publicada. Caso contrário, executa o agente como ele está no editor. Edições não publicadas não mudam o
+  que uma execução agendada faz.
+- **Entradas:** a janela **Set time** não tem campos de entrada, então uma execução agendada não recebe
+  entrada digitada. Monte o agente para buscar os próprios dados na hora da execução — por exemplo com um
+  node **Pull Data**, **Api Caller** ou **Web Search** — ou para guardar nos nodes os valores de que precisa.
+- **Créditos:** uma execução agendada usa créditos como qualquer outra, cobrados do plano que cobre o agente.
+- **Entregas:** um node **Data Output** entrega o resultado (email ou callback) como nas outras execuções.
+
+## Pausa e próximas execuções
+
+Quando o agendamento permite, a janela **Set time** também mostra uma seção de status:
+
+- um indicador de status, **Active** ou **Paused**;
+- um botão **Pause** / **Resume**;
+- **Next runs**: os próximos cinco horários de execução, no horário do leste dos EUA.
+
+Se a janela não mostra essa seção, o seu agendamento não pode ser pausado: desligue **Enable Auto Trigger**
+para pará-lo e configure de novo depois.
+
+## O que acontece quando uma execução falha
+
+- Uma execução em que um node falha fica registrada em **Logs** com o status **Failed** e o gatilho
+  **Scheduled**. O agendamento continua rodando no próximo horário.
+- Uma execução que falhou não é repetida. Corrija o agente; a próxima execução agendada usa a correção se
+  ela estiver publicada.
+- Nenhum email ou alerta é enviado quando uma execução agendada falha. Confira em **Logs**, filtrando por
+  **Scheduled** e **Failed**.
+- Execuções perdidas enquanto a plataforma estava indisponível não são executadas depois.
+
+Quando a janela **Set time** mostra a seção de status:
+
+- Se ela mostra **Paused** e você não pausou, o agendamento se pausou sozinho depois de uma falha que não
+  pôde registrar como uma execução normal. Corrija o agente e clique em **Resume**.
+- Se uma execução ainda está rodando quando chega a hora da próxima, a próxima é pulada.
+
+## Limites
+
+| Limite | Valor |
+|--------|-------|
+| Frequência | hourly, daily, weekly ou monthly. Não existe a opção "a cada N minutos". |
+| Fuso horário | Horário do leste dos EUA, fixo |
+| Segundos | O seletor mostra segundos, mas não conte com eles: uma execução pode começar no segundo 00 do minuto escolhido. |
+| Entradas | Nenhuma |
+| Agendamentos por agente | Um, gerenciado nas configurações do agente |
+| Criado pelo MCP | Não suportado — configure agendamentos no editor |
+
+## Solução de problemas
+
+| Problema | O que conferir |
+|----------|----------------|
+| O agendamento não rodou no horário que eu esperava | O horário é o do leste dos EUA, não o seu horário local. |
+| **You do not have access to this product** ao salvar | O seu plano não inclui gatilhos agendados. |
+| Uma execução agendada fez algo diferente da minha execução no editor | O agendamento executa a versão publicada. Publique as suas mudanças. |
+| Uma execução agendada teve entrada vazia | Agendamentos não enviam entrada. Faça o agente buscar os próprios dados. |
+| Não encontro uma execução agendada | Abra **Logs** e use **Filter by trigger** com **Scheduled**. Logs mostram os últimos 30 dias. |
+| **Could not read the schedule settings, so nothing was changed. Try again.** | Um erro temporário. Tente de novo. |
+
+## Relacionados
+
+- [Logs e retenção](/product-guide/pt-br/running-agents/logs-and-retention)
+- [Conceitos](/product-guide/pt-br/concepts)

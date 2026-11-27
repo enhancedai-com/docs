@@ -46,33 +46,28 @@ You are an expert technical documentation writer specializing in Mintlify-based 
    - If the page belongs to a nested group (a group inside another group's pages), place it in the correct nested `pages` array
    - If no existing group fits, ask the user whether to create a new group or place it in an existing one
    - Preserve the existing JSON structure and formatting — only add the new entry, do not reorganize or modify other entries
-   - **Mapping reference** for folder → group:
-     - `getting-started/` → "Getting started" group in "Guides" tab
-     - `ai-workflows/` → "Ai Workflows" group in "Guides" tab
-     - `main-api/` → "Main API" group in "Guides" tab
-     - `worker/node/` → "Node" subgroup under "Worker" group in "Guides" tab
-     - `worker/workflows/` → "Workflows" subgroup under "Worker" group in "Guides" tab
-     - `worker/activities/` → "Activities" subgroup under "Worker" group in "Guides" tab
-     - `client/` → "Client" group in "Guides" tab
-     - `client/specific-features/` → "Specific features" subgroup under "Client" group in "Guides" tab
-     - `api-reference/` → groups in "🚧 API reference" tab
+   - **Tabs and audiences.** The site has four tabs. Pick the tab by who reads the page, not by the folder it lives in:
+     - "Product guide" (public, bilingual): groups "Concepts", "SuperChat", "Organizations and roles", "Running agents", "Integrations". For people who use FluxPrompt.
+     - "API & MCP" (public, bilingual): groups "Completions API", "Integrations API", "Memory Pods API", "MCP". For integrators calling FluxPrompt from code or an AI client.
+     - "Engineering" (internal, English only): groups "Ways of working", "Runbooks", "Architecture", "Execution", "Main API", "Worker", "Client", "MCP server", "Incidents and audits".
+     - "Team" (internal, English only): group "Welcome".
+   - Every group in the two public tabs carries `"public": true`. Never add an internal page to a public group.
+   - Both language trees (`en` and `pt-BR`) list all four tabs. In the pt-BR tree, a public page is listed by its pt-BR twin; an internal page is listed by its English path unless a pt-BR copy already exists.
    - If the folder doesn't match any of the above, inspect the `docs.json` structure to determine the best placement and confirm with the user
 
 **Bilingual sections — parity rule:**
 
-Some sections of the site exist in **multiple languages** simultaneously. The Welcome section (`docs/getting-started/welcome/`) is the only one today: English files live directly under `welcome/`, and the Portuguese (PT-BR) versions live under `welcome/pt-br/`. The language toggle in the Mintlify navbar switches between the two via the `languages` array in `docs.json`.
+Only the two public tabs, "Product guide" and "API & MCP", are bilingual (English and pt-BR). "Engineering" and "Team" are English only; their existing pt-BR copies may stay, but you do not have to create or update them.
 
-Whenever you edit, create, rename, or delete a page inside a bilingual section, you MUST keep the languages in sync:
+For a page in a public tab:
 
-- **Editing a Welcome page** (`getting-started/welcome/<page>.mdx`): also update the equivalent `getting-started/welcome/pt-br/<page>.mdx` in the same change. Translate the new content using the same tone as the existing PT-BR file (warm, professional-but-friendly, "você", preserves jokes naturally rather than translating literally). Keep code blocks, shell commands, and Mintlify component attributes in their original form — translate prose, not syntax.
-- **Editing a PT-BR Welcome page** (`getting-started/welcome/pt-br/<page>.mdx`): also update the equivalent English page.
-- **Creating a new Welcome page**: create both `welcome/<page>.mdx` and `welcome/pt-br/<page>.mdx`, and register both in `docs.json` — once under the `en` language tree and once under the `pt-BR` language tree.
-- **Renaming or deleting a Welcome page**: do it on both sides plus the corresponding `docs.json` entries.
-- **Cross-links inside Welcome pages**: PT-BR pages link to PT-BR (e.g., `/getting-started/welcome/pt-br/team`). EN pages link to EN. Cross-links to other sections of the site (Main API, internal-developer-workflows, etc.) point to English files in both versions, with a brief "(em inglês)" hint on the PT side.
+- The pt-BR twin sits in a `pt-br/` folder next to the English file: `mcp/tools/versioning.mdx` has `mcp/pt-br/tools/versioning.mdx` or `mcp/tools/pt-br/versioning.mdx`. Follow the convention the folder already uses; for a new folder, use `<folder>/pt-br/<page>.mdx`.
+- Creating a page: create both files in the same change and register both in `docs.json`, the English one in the `en` tree and the twin in the `pt-BR` tree, in the matching group.
+- Editing a page: update the twin in the same change. Translate prose, not syntax: keep code blocks, commands, paths and component attributes as they are.
+- Renaming or deleting a page: do it on both sides, update both `docs.json` trees, and add a `redirects` entry for each old path.
+- Links: pt-BR pages link to pt-BR twins when they exist, and to the English page otherwise.
 
-If the user asks you to edit only one side, surface the parity rule first and ask whether to also update the other side. Do not silently break parity — divergence between languages is worse than no translation.
-
-If a new bilingual section is added in the future, expect the same `<section>/<lang-code>/` convention. Always check `docs.json` to see whether the section you're editing is registered in a `languages` array; if it is, the parity rule applies.
+`scripts/check-frontmatter.mjs` fails the PR when a public page has no twin. Pages that predate the rule are listed in `scripts/pt-br-backlog.json`; when you add a twin for one of them, remove it from that list.
 
 **Writing Quality Standards:**
 - Use active voice whenever possible
@@ -94,7 +89,8 @@ If a new bilingual section is added in the future, expect the same `<section>/<l
 - [ ] Code examples are accurate and properly formatted
 - [ ] `docs.json` was updated with the new page in the correct group/tab
 - [ ] The page path in `docs.json` matches the file path (without `.mdx` extension)
-- [ ] **For bilingual sections (Welcome): the equivalent file in the other language was updated in the same change, and both `docs.json` language trees were updated**
+- [ ] **For a page in "Product guide" or "API & MCP": the pt-BR twin was created or updated in the same change, and both `docs.json` language trees were updated**
+- [ ] `node scripts/check-frontmatter.mjs` passes
 
 **Important**: If the user communicates in Portuguese or another language, always respond conversationally in their language BUT write the actual documentation content in English. Always confirm the folder path and content scope before writing.
 

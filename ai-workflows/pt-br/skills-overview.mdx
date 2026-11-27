@@ -25,7 +25,7 @@ triggers: [list, of, keywords, or, phrases]
 ---
 ```
 
-A fonte autoritativa é `.claude/skills/_STANDARD.md`. O linter é `scripts/skills-lint.mjs`.
+A fonte autoritativa é `.claude/skills/_STANDARD.md`.
 
 ## Skills ativas
 
@@ -54,17 +54,17 @@ A fonte autoritativa é `.claude/skills/_STANDARD.md`. O linter é `scripts/skil
 | `node-run-flush-check` | Verificar que o botão manual de Run/Get Data de um node type dá flush em toda edição pendente de campo antes de disparar, para o run usar o que está na tela e não dado velho do banco. |
 | `node-worker-migration` | Perfilar um node type em front/back/worker, decidir se a execução deve migrar para dentro do worker Temporal e (se go) iniciar o spec de migração + docs. |
 | `presentation-deck` | Montar um deck de slides HTML autocontido para uma reunião real — um arquivo, offline, navegável por teclado, com gráficos e diagramas derivados de dados defensáveis. |
-| `submodule-workflow` | Fazer e commitar mudanças com segurança no workspace que rastreia os repos de produto como submódulos git — previne os erros clássicos de pointer/detached-HEAD/ordem de push. |
 | `system-ai-model-capability-sync` | Checar se um campo novo ou alterado de capability em `system_ai_models` precisa ser conectado na UI do admin de AI Models. |
 | `terraform-infra` | Preencher os placeholders por ambiente de `<env>.tfvars` do Terraform do mcp consultando a conta AWS real, e validar que o config bate com conta/região alvo antes de plan/apply. |
 | `third-party-integrations` | Adicionar um provider novo ao node Third Party Integration ou mudar contratos de adapter/config — carrega a KB primeiro para os contratos de API ficarem consistentes entre adapters do backend e configs do frontend. |
+
+A lista completa e atual, uma linha por skill e agent, está no [catálogo de skills e agents](/engineering/ways-of-working/skills-and-agents) (em inglês).
 
 ## Como adicionar uma skill
 
 1. Crie a pasta: `.claude/skills/<kebab-name>/`.
 2. Escreva o `SKILL.md` com o frontmatter conforme `_STANDARD.md`.
-3. Rode `node scripts/skills-lint.mjs .claude/skills`.
-4. Abra um PR.
+3. Abra um PR no repo Workflow e adicione a skill ao [catálogo de skills e agents](/engineering/ways-of-working/skills-and-agents).
 
 ## Como mudar o padrão
 

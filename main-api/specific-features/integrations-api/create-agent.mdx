@@ -23,9 +23,9 @@ You always pick **where** the agent goes by combining (a) where the folder lives
 | Scenario | Send `spaceId`? | Send `folderId` or `folderName`? | Behavior |
 |----------|-----------------|----------------------------------|----------|
 | Existing folder in a team space | yes | `folderId` | Use that folder. Classic v1.1 path. |
-| Existing folder in your private area <Tag>v1.2</Tag> | **no** | `folderId` | Use that private folder. |
-| New or existing folder in a team space, by name <Tag>v1.2</Tag> | yes | `folderName` | Find-or-create the folder in that space. |
-| New or existing folder in your private area, by name <Tag>v1.2</Tag> | **no** | `folderName` | Find-or-create the folder in your private area. |
+| Existing folder in your private area <Badge>v1.2</Badge> | **no** | `folderId` | Use that private folder. |
+| New or existing folder in a team space, by name <Badge>v1.2</Badge> | yes | `folderName` | Find-or-create the folder in that space. |
+| New or existing folder in your private area, by name <Badge>v1.2</Badge> | **no** | `folderName` | Find-or-create the folder in your private area. |
 
 <Info>
 If you send **both** `folderId` and `folderName`, `folderId` wins and `folderName` is ignored.
@@ -33,7 +33,7 @@ If you send **both** `folderId` and `folderName`, `folderId` wins and `folderNam
 
 ## Drop a flow into a private folder
 
-<Tag>v1.2</Tag>
+<Badge>v1.2</Badge>
 
 A private folder is exactly the one you saw with `"space": null` in the [list folders](/main-api/specific-features/integrations-api/list-folders) response. To put an agent there, **just omit `spaceId` from the request body**. Don't send `null`, don't send an empty string — leave the field out entirely:
 
@@ -49,7 +49,7 @@ The agent will land in that private folder and show up under your personal area 
 
 ## Create a folder in the same step
 
-<Tag>v1.2</Tag>
+<Badge>v1.2</Badge>
 
 Don't have a destination folder yet? Send `folderName` instead of `folderId`. The API looks for an existing folder of yours with that name in scope; if none exists, it creates one and uses it:
 
@@ -115,7 +115,7 @@ This is **idempotent**: calling it 10 times with the same `folderName` and `spac
 </ParamField>
 
 <ParamField body="spaceId" type="string (uuid)">
-  The space this flow lives in. **Omit to target your private area.** <Tag>v1.2: now optional</Tag>
+  The space this flow lives in. **Omit to target your private area.** <Badge>v1.2: now optional</Badge>
 </ParamField>
 
 <ParamField body="folderId" type="string (uuid)">
@@ -123,7 +123,7 @@ This is **idempotent**: calling it 10 times with the same `folderName` and `spac
 </ParamField>
 
 <ParamField body="folderName" type="string">
-  Folder name. Find-or-create within scope. Required *unless* you supply `folderId`. Cannot be `"Shared"` or `"Default"`. <Tag>v1.2</Tag>
+  Folder name. Find-or-create within scope. Required *unless* you supply `folderId`. Cannot be `"Shared"` or `"Default"`. <Badge>v1.2</Badge>
 </ParamField>
 
 <ParamField body="content" type="object">
@@ -150,7 +150,7 @@ You must send **at least one** of `folderId` / `folderName`. Sending neither ret
     ```
   </Tab>
   <Tab title="B) Existing private folder">
-    <Tag>v1.2</Tag>
+    <Badge>v1.2</Badge>
 
     ```json
     {
@@ -161,7 +161,7 @@ You must send **at least one** of `folderId` / `folderName`. Sending neither ret
     ```
   </Tab>
   <Tab title="C) Inline folder, in a space">
-    <Tag>v1.2</Tag> — find-or-create the folder:
+    <Badge>v1.2</Badge> — find-or-create the folder:
 
     ```json
     {
@@ -173,7 +173,7 @@ You must send **at least one** of `folderId` / `folderName`. Sending neither ret
     ```
   </Tab>
   <Tab title="D) Inline folder, private">
-    <Tag>v1.2</Tag> — find-or-create in your private area:
+    <Badge>v1.2</Badge> — find-or-create in your private area:
 
     ```json
     {

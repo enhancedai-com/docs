@@ -1,34 +1,34 @@
-> **Customize this file**: Tailor this template to your project by noting specific contribution types you're looking for, adding a Code of Conduct, or adjusting the writing guidelines to match your style.
-
 # Contribute to the documentation
 
-Thank you for your interest in contributing to our documentation! This guide will help you get started.
+This repository is the FluxPrompt documentation site, published at https://docs.fluxprompt.ai from `main`. Read [AGENTS.md](AGENTS.md) first: it explains which tab a page belongs in, which pages need a pt-BR twin, the required frontmatter, and what must never be written in a page.
 
 ## How to contribute
 
-### Option 1: Edit directly on GitHub
+### Edit on GitHub
 
-1. Navigate to the page you want to edit
-2. Click the "Edit this file" button (the pencil icon)
-3. Make your changes and submit a pull request
+1. Open the page you want to change in this repository.
+2. Click **Edit this file** (the pencil icon).
+3. Make your change and open a pull request against `main`.
 
-### Option 2: Local development
+### Work locally
 
-1. Fork and clone this repository
-2. Install the Mintlify CLI: `npm i -g mint`
-3. Create a branch for your changes
-4. Make changes
-5. Navigate to the docs directory and run `mint dev`
-6. Preview your changes at `http://localhost:3000`
-7. Commit your changes and submit a pull request
-
-For more details on local development, see our [development guide](development.mdx).
+1. Clone this repository and create a branch from `main`, named `docs/<task-code>-<topic>`.
+2. Make your changes.
+3. Preview the site with `npx --yes mint@latest dev` and open `http://localhost:3000`.
+4. Run the checks the pull request runs:
+   ```bash
+   node scripts/check-frontmatter.mjs
+   npx --yes mint@latest broken-links
+   npx --yes mint@latest validate
+   ```
+5. Commit and open a pull request against `main`.
 
 ## Writing guidelines
 
-- **Use active voice**: "Run the command" not "The command should be run"
-- **Address the reader directly**: Use "you" instead of "the user"
-- **Keep sentences concise**: Aim for one idea per sentence
-- **Lead with the goal**: Start instructions with what the user wants to accomplish
-- **Use consistent terminology**: Don't alternate between synonyms for the same concept
-- **Include examples**: Show, don't just tell
+- **Use active voice**: "Run the command", not "The command should be run".
+- **Address the reader directly**: use "you", not "the user".
+- **Keep sentences short**: one idea per sentence.
+- **Lead with the goal**: start instructions with what the reader wants to do.
+- **Use consistent terms**: do not alternate between synonyms for the same thing.
+- **Show examples**: a request and its response explain more than a paragraph.
+- **Check the code**: verify behavior against `origin/main` of the product repository before you describe it.

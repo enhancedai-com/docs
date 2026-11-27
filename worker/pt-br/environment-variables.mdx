@@ -1,5 +1,6 @@
 ---
 title: "Variáveis de Ambiente"
+description: "Todas as variáveis de ambiente que o worker lê, do worker/.env.example e do schema em src/env.ts, com obrigatoriedade e função de cada uma."
 ---
 
 51 env vars no `worker/.env.example`. O schema Zod do `src/env.ts` valida essas mais 18 outras vars que não estão no `.env.example` (várias Obrigatórias) — os dois conjuntos estão na tabela abaixo, 69 linhas no total. Legenda: **Obrigatória** = a app quebra ou uma feature falha silenciosamente sem ela, **Opcional** = tem default/fallback no código.

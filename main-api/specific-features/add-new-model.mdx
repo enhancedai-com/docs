@@ -1,138 +1,82 @@
 ---
 title: "Add a new AI model"
-description: "Step-by-step guide to register a new AI model in the backend"
+description: "How a new AI model reaches the platform: the nightly sync from the Vercel AI Gateway proposes it, an admin approves it in the AI Models page, and only a new provider needs code."
+state_verified: 2026-11-27
+state_verified_against: back@main, front@main
 ---
 
-Adding a new AI model requires changes across several files: the model enum, the DTO validation layer, the technologies registry, and the pricing seeder. Follow each step in order to ensure the model is fully registered and available.
+You no longer add a model by editing enums, DTOs, a technologies file and a pricing seeder. The model catalog lives in the database (`system_ai_models` and `model_price`) and is kept up to date by a nightly sync from the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway). The sync proposes new models and price changes; a system admin approves or rejects each proposal in the admin panel. Nothing a proposal describes reaches customers until someone approves it.
+
+The sync shipped in back #1937 and front #2148 (2026-09-15). Back #2102 (2026-11-11) made the nightly run finish reliably and retire models their providers shut down.
+
+## How the nightly sync works
+
+`SyncAiModelsFromGatewayService` (`back/src/cronJobs/syncAiModelsFromGateway/`) runs `AiModelSyncService.sync()` every day at 04:00 under a cron lock, so only one API instance runs it. Each run is recorded in `ai_model_sync_runs`.
 
 <Steps>
-  <Step title="Add to the model enum">
-    If the model belongs to OpenAI, add it to the enum in `src/enums/openAIModel.enum.ts`. Other providers may not require an enum entry -- skip this step if no provider-specific enum exists for your target provider.
-
-    ```typescript
-    // src/enums/openAIModel.enum.ts
-    export enum OpenAIModel {
-      // ... existing entries
-      CLAUDE_4_HAIKU = 'claude-4-haiku',
-    }
-    ```
+  <Step title="Read the gateway catalog">
+    The sync reads the model list from `AI_GATEWAY_BASE_URL` (default `https://ai-gateway.vercel.sh/v1`). If the gateway returns fewer models than `AI_GATEWAY_MIN_CATALOG_SIZE` (default 100), the run aborts without writing anything.
   </Step>
-
-  <Step title="Add to the DTO">
-    Register the model string in the appropriate DTO array so that incoming API requests pass validation. Open `src/app-api/openAI/dto/openAi.dto.ts` and add the model to the correct category:
-
-    | DTO array | Use case |
-    |---|---|
-    | `OpenAITextModels` | Standard text-generation models |
-    | `OpenAICompletionModels` | Completion-style models |
-    | `OpenAIReasoningModels` | Chain-of-thought / reasoning models |
-    | `OpenAIImageModels` | Image-generation models |
-
-    ```typescript
-    // src/app-api/openAI/dto/openAi.dto.ts
-    export const OpenAITextModels = [
-      // ... existing models
-      'claude-4-haiku',
-    ];
-    ```
+  <Step title="Map each model to a provider we call">
+    The gateway keys models by their creator. Only creators mapped in `GATEWAY_CREATOR_TO_AI_COMPANY` (`back/src/shared/ai-model-gateway/gateway-model-mapper.ts`) are considered: Anthropic, OpenAI, Google (`gemini`), xAI, Mistral, Perplexity and Moonshot. Text and image models are mapped; ids ending in `-fast` or `-batch` are skipped. A model is also skipped when its own creator does not serve it, or when we already serve it under another host, because we only call the creator's API.
   </Step>
-
-  <Step title="Add to the technologies registry">
-    Create a technology entry in `src/technologies/technologies.ts`. Each entry requires the following configuration properties:
-
-    | Property | Description |
-    |---|---|
-    | `type` | One of `Text`, `Image`, `Audio`, or `OCR` |
-    | `system` | Provider key (see table below) |
-    | `model` | The model identifier string |
-    | `enabled` | Whether the model is active |
-    | `description` | Short human-readable label |
-
-    **Available providers:**
-
-    | Provider | `system` key |
-    |---|---|
-    | OpenAI | `openAi` |
-    | Anthropic | `anthropic` |
-    | Google Gemini | `gemini` |
-    | Groq | `groq` |
-    | Perplexity | `perplexity` |
-    | X AI | `xai` |
-    | Mistral | `mistral` |
-    | Replicate | `replicate` |
-    | Stability AI | `stabilityAi` |
-    | Ideogram | `ideogram` |
-    | Fal | `fal` |
-
-    ```typescript
-    // src/technologies/technologies.ts
-    {
-      type: 'Text',
-      system: 'anthropic',
-      model: 'claude-4-haiku',
-      enabled: true,
-      description: 'Claude 4 Haiku',
-    }
-    ```
+  <Step title="Update models we already have">
+    For a model already in `system_ai_models`, capability fields (token limits, context window, vision, reasoning, web search, structured output, streaming, temperature, description) are updated in place. `supportsImageOutput` is only ever raised to `true`, never lowered. A price that differs from the stored `model_price` row becomes an **update price** proposal; the stored price is not changed.
   </Step>
-
-  <Step title="Add pricing in the seeder">
-    Define input and output token prices in `src/database/seeders/modelPrice/data.ts`. Each model needs two entries -- one for input tokens and one for output tokens. Both entries require a `fluxConversion` value that maps the provider's token pricing to the internal credit system.
-
-    ```typescript
-    // src/database/seeders/modelPrice/data.ts
-    {
-      model: 'claude-4-haiku',
-      type: 'input',
-      price: 0.00025,
-      fluxConversion: 0.5,
-    },
-    {
-      model: 'claude-4-haiku',
-      type: 'output',
-      price: 0.00125,
-      fluxConversion: 2.5,
-    },
-    ```
+  <Step title="Propose new models">
+    A model we do not have becomes an **add model** proposal in `ai_model_sync_proposals`, carrying its capabilities and prices. If the gateway price is missing or outside the accepted range, the proposal is flagged and approving it creates the model switched off.
   </Step>
-
-  <Step title="Write the SQL script for production">
-    For production deployments, insert the pricing rows directly into the database. Use `gen_random_uuid()` to generate primary keys.
-
-    ```sql
-    INSERT INTO flux.public.model_price (id, model, type, price, flux_conversion)
-    VALUES
-      (gen_random_uuid(), 'claude-4-haiku', 'input', 0.00025, 0.5),
-      (gen_random_uuid(), 'claude-4-haiku', 'output', 0.00125, 2.5);
-    ```
-
-    <Warning>
-      Run this SQL in a transaction and verify the rows before committing. Incorrect pricing values affect billing for all users immediately.
-    </Warning>
+  <Step title="Retire models that disappeared">
+    A model missing from the gateway for `AI_GATEWAY_DEPRECATE_AFTER_MISSING_RUNS` consecutive runs (default 2) is deprecated automatically: it is archived in `system_ai_models_archive`, switched off, and, when `AI_GATEWAY_SYNC_REMAP_FLOWS` is not `false`, flow nodes and company technologies that used it are repointed at a replacement model. Groq and Cloudflare Workers AI models are checked against their own providers' catalogs the same way. If a whole catalog comes back empty, the sync treats it as a bad response and retires nothing.
+  </Step>
+  <Step title="Notify the reviewers">
+    When proposals are waiting, the sync posts a message to the Google Chat webhook in `AI_MODEL_SYNC_CHAT_WEBHOOK_URL` with a link to the review queue. Without the webhook, the message goes to the log.
   </Step>
 </Steps>
 
-## Full example: adding `claude-4-haiku` (Anthropic)
+## Review the proposals
 
-This example walks through every file you need to touch when adding an Anthropic text model.
+Proposals are reviewed by a system admin in the admin panel: **Admin → AI models → Sync** (`/admin/ai-models?tab=sync`; the older `/admin/ai-model-proposals` link redirects there). The tab shows a badge with the number of pending proposals and three sections:
 
-1. **Enum** -- Skip. Anthropic models do not use the OpenAI enum.
-2. **DTO** -- Add `'claude-4-haiku'` to `OpenAITextModels`.
-3. **Technologies** -- Add the entry with `system: 'anthropic'` and `type: 'Text'`.
-4. **Seeder** -- Add input and output pricing entries with appropriate `fluxConversion` values.
-5. **SQL** -- Write and run the production INSERT statement.
+| Section | What it lists | What approving does |
+|---|---|---|
+| New models | Models the gateway lists that we do not have | Creates the `system_ai_models` row and its `model_price` rows. The model is switched on only if the gateway sent a usable price; otherwise it is created switched off with no prices, and you price it and switch it on in **All models**. |
+| Price changes | Prices that differ from what we store | Writes the new `fluxConversion` on the `model_price` row. A change bigger than `AI_GATEWAY_PRICE_CHANGE_ALERT_RATIO` (default 5x) is flagged, because it is usually a unit mistake. |
+| Retired automatically | Models the last run deprecated | Nothing to approve; it is the record of what was retired and what replaced it. |
 
-## Pre-merge checklist
+Each proposal shows a **reach** badge that says whether our worker and the completions API can actually call that provider and modality. A model whose provider we cannot call is flagged; approving it adds a model nobody can run.
 
-Use this checklist before opening your pull request:
+Rejecting a proposal keeps it rejected: the next run does not raise the same model again, and a rejected price is raised again only if the provider changes it.
 
-- [ ] Model string is consistent across all files (enum, DTO, technologies, seeder, SQL).
-- [ ] The DTO array matches the model's capability (text, completion, reasoning, or image).
-- [ ] The `system` key in technologies matches an existing provider.
-- [ ] Both input and output pricing entries exist in the seeder.
-- [ ] The production SQL script uses `gen_random_uuid()` and targets the correct table.
-- [ ] The `enabled` flag in technologies is set to `true` if the model should be available immediately.
+The queue is served by `GET /ai-model-proposals`, `GET /ai-model-proposals/runs` and `POST /ai-model-proposals/decide`, all behind `JwtAuthGuard` and `MasterUserGuard`.
 
-<Tip>
-  After deploying, verify the model appears in the technology list by calling the relevant API endpoint or checking the admin panel.
-</Tip>
+## Add a model by hand
+
+Use **Admin → AI models → All models → Create new model** for a model the gateway does not list, such as a model from a provider outside `GATEWAY_CREATOR_TO_AI_COMPANY`. The form sets the identity, price, limits and capabilities in one step. Do not insert rows with SQL and do not add the model to a seeder.
+
+## When you need code
+
+You only change code when the model needs something the platform cannot do yet:
+
+- **A new provider.** Add it to the executable provider lists in `back/src/shared/ai-model-gateway/executable-providers.ts` and to the places that file's header lists (the worker text and image generators, `flow-node.service.ts`, and the front completion log providers). If the gateway should sync it, add its creator to `GATEWAY_CREATOR_TO_AI_COMPANY`.
+- **A new capability flag** on `system_ai_models`. Add the column with a migration, and check that the admin AI Models page can set it (see the `system-ai-model-capability-sync` skill in the workspace).
+- **A new modality**, such as a model type the sync does not map today.
+
+## Run the sync by hand
+
+A system admin can trigger a run with `POST /internal/ai-model-sync/run`. Pass `?dryRun=true` to compute the report without writing.
+
+## Environment variables
+
+| Variable | Default | Effect |
+|---|---|---|
+| `AI_GATEWAY_SYNC_ENABLED` | on | Set to `false` to stop the nightly run. `DISABLE_CRONS=true` also stops it. |
+| `AI_GATEWAY_SYNC_DRY_RUN` | `false` | Compute the report without writing. |
+| `AI_GATEWAY_SYNC_DEPRECATE` | `true` | Run the retirement pass. |
+| `AI_GATEWAY_SYNC_REMAP_FLOWS` | `true` | Repoint flow nodes at the replacement when a model is retired. |
+| `AI_GATEWAY_MIN_CATALOG_SIZE` | `100` | Abort the run below this many gateway models. |
+| `AI_GATEWAY_PRICE_CHANGE_ALERT_RATIO` | `5` | Flag price changes bigger than this multiple. |
+| `AI_GATEWAY_DEPRECATE_AFTER_MISSING_RUNS` | `2` | Consecutive missing runs before a model is retired. |
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | unset | Enable the Cloudflare Workers AI price and retirement pass. |
+| `AI_MODEL_SYNC_CHAT_WEBHOOK_URL` | unset | Google Chat webhook for the review message. |
+| `AI_MODEL_SYNC_REVIEW_URL` | production admin queue | Link the review message points at. |

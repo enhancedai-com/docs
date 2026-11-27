@@ -1,0 +1,130 @@
+---
+title: "SuperChat"
+description: "O assistente embutido no FluxPrompt: pergunte o que seus agentes fazem, por que uma execução falhou e como usar o produto."
+---
+
+## O que é
+
+O SuperChat é um assistente embutido no FluxPrompt. Você faz perguntas em linguagem natural e ele responde a
+partir dos seus agentes, das execuções e da documentação deles, e de um guia do produto que já vem nele.
+
+Use o SuperChat para:
+
+- entender o que um agente faz — o que entra, o que sai e do que ele depende;
+- descobrir por que uma execução falhou, começando pela execução mais recente de um agente;
+- saber o que um tipo de node faz e para que servem os campos dele;
+- ver o que tem dentro de um space ou de uma pasta;
+- achar um agente, space ou pasta pelo nome;
+- se orientar no produto: onde fica uma configuração, como agendar um agente, como funciona o controle de versão.
+
+O SuperChat segue agentes que chamam outros agentes. Quando um node **Agent Caller** ou **Library** chama
+outro agente, ele lê esse agente também antes de responder.
+
+<Note>
+  **O SuperChat explica e orienta. Ele não muda nada.** Ele não cria, edita, executa nem apaga agentes, nodes,
+  arquivos ou configurações. Quando você pede uma mudança, ele explica como você mesmo pode fazê-la.
+</Note>
+
+## Quem pode usar
+
+O SuperChat está disponível para as contas e organizações em que ele foi liberado. Se o botão **Superchat**
+não aparece na sua barra superior, ele ainda não foi liberado para a sua conta — fale com o seu gerente de
+conta ou com o suporte do FluxPrompt.
+
+- Você precisa estar logado.
+- Cada resposta custa **Flux Credits**, como qualquer outra chamada de IA. Se a sua conta está sem créditos,
+  o SuperChat não consegue responder.
+- O SuperChat só vê o que você vê: os agentes, spaces e pastas a que você tem acesso na organização em que
+  está trabalhando.
+
+## Abrir o SuperChat
+
+<Steps>
+  <Step title="Abra o painel">
+    Clique em **Superchat** na barra superior, ou aperte **Ctrl+K** (**⌘K** no Mac). O painel abre à direita.
+    O atalho não faz nada enquanto você está digitando num campo de texto.
+  </Step>
+  <Step title="Faça a pergunta">
+    Digite na caixa de baixo (**Ask about your agents…**) e aperte **Enter**.
+  </Step>
+  <Step title="Leia a resposta">
+    A resposta aparece enquanto é escrita. Use **Copy answer** para copiá-la. Aperte **Esc** para fechar o painel.
+  </Step>
+</Steps>
+
+### O que o SuperChat já sabe quando você pergunta
+
+- **Na página de um agente**, o SuperChat foca nesse agente. A dica embaixo da caixa diz **Asking about this agent**.
+- **Num board**, focar um painel **Agent flow** ou **Interface** torna o agente desse painel o foco.
+- **Em qualquer outro lugar**, pergunte sobre qualquer agente seu pelo nome. Se vários agentes combinarem,
+  o SuperChat responde sobre aquele cujo nome é exatamente igual, ou pergunta qual você quer dizer.
+
+O SuperChat também lê a documentação da organização, do space, da pasta e do agente em que você está.
+Quando parte dela não cabe, a resposta mostra **Some documentation was trimmed to fit this answer.**
+
+## Boas perguntas
+
+- *"O que este agente faz?"*
+- *"Por que a última execução falhou?"*
+- *"O que tem no space Marketing?"*
+- *"Quais dos meus agentes mandam email?"*
+- *"O que faz o campo Temperature do node de IA?"*
+- *"Como faço este agente rodar toda manhã?"*
+
+## Conversas
+
+- As suas conversas ficam salvas. Clique em **Conversations** (o ícone de relógio) para vê-las e use
+  **Rename** ou **Delete**. Uma conversa pertence a você e à organização em que você estava.
+- Clique em **New conversation** (**+**) para recomeçar.
+- Trocar de organização começa uma conversa nova.
+- Clique em **Stop answering** para parar uma resposta que está sendo escrita. A resposta fica marcada como **Stopped**.
+
+O SuperChat responde em inglês, a não ser que você pergunte em outro idioma — aí ele responde nesse idioma.
+
+## Aprender com as conversas
+
+O SuperChat pode salvar coisas duradouras que você diz — por exemplo, como você prefere as respostas — no
+documento do seu perfil, e regras sobre um agente na documentação desse agente. Quando isso acontece, o
+painel mostra **I learned from this conversation**, com cada item salvo e um botão **Undo**.
+
+- **Undo** devolve o texto que estava lá antes. Não funciona se alguém editou aquela seção depois que o
+  SuperChat salvou; nesse caso, edite a documentação.
+- Só a pessoa dona da conversa pode desfazer.
+- Salvar na documentação de um agente exige direitos de Admin ou Builder nesse agente.
+- Admins da organização podem desligar isso em Organization Settings, em **Let SuperChat learn from
+  conversations**. Desligado, o SuperChat continua lendo a documentação, mas nunca escreve nela.
+
+<Note>
+  Salvar o que foi aprendido é ligado por conta e ainda não está ativo em todas as contas. Se você nunca vê
+  **I learned from this conversation**, nada foi salvo.
+</Note>
+
+## Limites
+
+| Limite | Valor |
+|--------|-------|
+| Tamanho da pergunta | 4.000 caracteres |
+| Anexos | Não suportados — o SuperChat lê apenas perguntas em texto |
+| Memória da conversa | As mensagens mais recentes, cerca de 20.000 tokens, vão junto com cada pergunta. Mensagens mais antigas continuam na conversa, mas o SuperChat não as lê mais. |
+| Limite diário | Pode haver um limite diário de créditos do SuperChat por pessoa. Ele volta a zero à meia-noite UTC. |
+| Escopo | Perguntas sobre os seus agentes e o FluxPrompt. Para o resto, o SuperChat responde **I can not help with that request. Try asking about your agents or about FluxPrompt.** |
+
+## Solução de problemas
+
+| Você vê | O que significa | O que fazer |
+|---------|-----------------|-------------|
+| Nenhum botão **Superchat** | O SuperChat não está liberado para a sua conta. | Fale com o seu gerente de conta ou com o suporte. |
+| **SuperChat is not available for this account.** | Sua conta ou organização não está liberada. | Fale com o seu gerente de conta ou com o suporte. |
+| **SuperChat is paused for everyone right now. Please try again later.** | O SuperChat está desligado temporariamente para todas as contas. | Tente mais tarde. |
+| **Your account is out of credits, so SuperChat cannot answer.** | Os créditos do seu plano acabaram. | Adicione créditos ou faça upgrade do plano. |
+| **You reached today's SuperChat limit. It resets at midnight UTC.** | Você atingiu o limite diário. | Espere até a meia-noite UTC. |
+| **That agent or conversation was not found.** | O agente ou a conversa foi apagado, ou você não tem mais acesso. | Confira o nome ou pergunte sobre outro agente. |
+| **SuperChat could not answer right now. Please try again.** | Um erro temporário. | Clique em **Try again**. |
+| **This changed after SuperChat saved it, so it could not be undone. Edit the documentation instead.** | Alguém editou aquela seção depois que o SuperChat salvou. | Edite a documentação diretamente. |
+| Uma resposta diz que falta alguma informação | A documentação e o agente não têm esse detalhe. O SuperChat não chuta. | Acrescente o detalhe na documentação do agente ou confira o agente você mesmo. |
+
+## Relacionados
+
+- [Construindo agentes](/product-guide/pt-br/superchat/building-agents)
+- [Conceitos](/product-guide/pt-br/concepts)
+- [Logs e retenção](/product-guide/pt-br/running-agents/logs-and-retention)

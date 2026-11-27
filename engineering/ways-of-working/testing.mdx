@@ -1,0 +1,83 @@
+---
+title: "Testing"
+description: "Which test fits a scenario, the commands that work in each repo, the local execution matrix, and what each execution front records."
+---
+
+Tests come before the code: the card's `@auto` scenarios become failing tests, frozen while you loop ([Delivery practice](/engineering/ways-of-working/delivery)). This page is the reference for picking and running them.
+
+## Test type per scenario
+
+From the [`ticket-preanalysis`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/ticket-preanalysis/SKILL.md) skill:
+
+| Scenario | Test type |
+| --- | --- |
+| Calculation, limit, validation | Unit (Jest in back and worker, Vitest `unit` in front) |
+| Permission, organization, persistence, API | Integration (NestJS and database) |
+| A flow the user does on screen | E2E (Playwright), or Vitest `component` for a single component |
+| Concurrency or flow execution | Integration with N runs at once (`flux-e2e-local`, `flux-run-testing`) |
+| Appearance, hard-to-simulate integration, exploration | Manual (`@manual`) |
+
+## Commands that work
+
+```bash
+# back: always in-band, with a bigger heap
+cd back && pnpm test -- --testPathPattern=<file> --runInBand
+NODE_OPTIONS=--max-old-space-size=8192 npx tsc --noEmit -p tsconfig.json   # check the exit code
+
+# worker
+cd worker && pnpm test -- <file> --runInBand
+
+# front
+cd front && pnpm vitest run --project unit <file>
+cd front && pnpm vitest run --project component <file>
+cd front && pnpm lint:runtime    # the only CI check that catches an undeclared variable
+```
+
+<Warning>
+  Back Jest with default parallel workers gets SIGTERM-ed under memory pressure and reports "0 tests". Back `tsc` dies silently at the default heap (exit 134), so a grep for `error TS` prints nothing and reads as clean. The repo rules carry the details and a fast transpile-only config: [`.claude/rules/back.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/rules/back.md), [`front.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/rules/front.md), [`worker.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/rules/worker.md).
+</Warning>
+
+Never call a failure pre-existing from the test's name: run the same specs in a pristine worktree of the untouched env branch and compare.
+
+## The four execution fronts
+
+The editor's own Run buttons (World A) record nothing run-scoped. Everything else is World B and is what you assert against. See [The two execution worlds](/engineering/ways-of-working/two-worlds).
+
+| Front (World B) | Trigger | `node_executions` | Live status |
+| --- | --- | --- | --- |
+| API | `POST /flux/api-v2?flowId&sessionId&versionId` with the `api-key` header, sync | yes | yes |
+| Webhook | `POST /flux/api-v2-webhook?flowId&sessionId`, async, returns a `processId` | yes | yes |
+| In-app sub-flow | FlowCaller or LibraryNode running a referenced flow (beta-v2) | yes | yes |
+| Chatbot | `POST /flux/chatbot-api-socket` or the `/chatbot/:flowId` UI, streams | yes | no |
+| Form, public, batch, cron, Zapier, email, agents | formapi-v1, run-public-flow, batch-process, schedule, zapier, mail, agents | yes | yes |
+
+On an editor button run, assert the inline node output (`data.previewResponses`), not `node_executions`.
+
+## The local execution matrix
+
+The [`flux-e2e-local`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-e2e-local/SKILL.md) skill is the teammate entry point. It boots back, worker and Temporal against a local database, seeds deterministic fixture flows through the real endpoints, and runs the real api-v2, Temporal and worker path for AI text, Scripting, API Caller, a library sub-flow shape, the async callback contract, and an N-way concurrency burst. It asserts terminal status, `node_executions` (no error, data actually flowed) and a per-case duration budget, then writes a PASS/FAIL matrix. It refuses any non-local target.
+
+The [`flux-run-testing`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-run-testing/SKILL.md) skill covers building deterministic test flows and asserting each front, run scoping, live status and chatbot sessions.
+
+<Note>
+  The `e2e-playwright-runner` agent (the browser suite that switches models in the editor and checks concurrency isolation) is owner-only today: it needs the gitignored `debug-playwright/` suite. Teammates use `flux-e2e-local`.
+</Note>
+
+## Building deterministic test flows
+
+- `POST /flow/duplicate {flowId, folderId}` to clone a known light flow.
+- `PATCH /flow/add-node/:id` to add nodes.
+- `PATCH /flow/on-connect-edge/:id` to wire them.
+
+Build fixtures by copying a real node and editing values, never by inferring the shape from executor code. A starter node id must contain `flow-global-starter`, or the run is empty and still records success.
+
+## MCP and node types
+
+- [`mcp-validation`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/mcp-validation/SKILL.md) (or the `mcp-validator` agent): the local MCP gate before an MCP PR.
+- [`mcp-node-validation`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/mcp-node-validation/SKILL.md): proves a node type authored through the MCP delivers a value to the next node, reading `node_executions`.
+- [`mcp-node-schema-sync`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/mcp-node-schema-sync/SKILL.md): the node spec page matches the front and worker data shape.
+- [`node-run-flush-check`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/node-run-flush-check/SKILL.md): a node's Run button flushes pending edits before dispatching.
+
+## Testing on dev and staging
+
+QA tests on `https://dev.fluxprompt.ai` from the card with the [`qa-run`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/qa-run/SKILL.md) skill. To reproduce a deployed front-end bug with network and console capture, use [`e2e-debug-frontend`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/e2e-debug-frontend/SKILL.md). To prove a role gate without writing, send a deliberately invalid body: 403 means the guard blocked, 400 means it passed and validation refused.

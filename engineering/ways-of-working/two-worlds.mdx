@@ -1,0 +1,49 @@
+---
+title: "The two execution worlds"
+description: "A flow node runs down one of two code paths depending on the trigger. Most 'works in the editor, fails through the API' bugs live in the gap."
+---
+
+The single most useful mental model on this platform. Given a run, you should be able to say which world it executed in from the evidence alone: is there a `node_executions` row, an `execId`? The Claude-loadable version is [`.claude/kb/execution-two-worlds.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/kb/execution-two-worlds.md). The engine internals are in [Flow and single-node execution](/main-api/specific-features/flow-and-single-node-execution) and the [worker execution lifecycle](/worker/execution-lifecycle).
+
+## World A: editor run
+
+Triggered by the editor's per-node **Run Prompt**, the flow-level **Run Agent**, and **Run from start** or **Run from here** on the canvas.
+
+- The front orchestrates node by node. Each node's run effect watches `data.flowTrigger`, calls `onSubmit`, and that calls the back per-provider service directly. Output is written back into the node's own `data`, and the trigger propagates downstream in the browser.
+- No `node_executions` rows, no `execId` run scoping, no Temporal, no `room_status_updated` live status.
+- State lives on the shared `flows_nodes.data` row. See [Data integrity and DB access](/engineering/ways-of-working/data-integrity).
+
+## World B: apiV2 and Temporal
+
+One method (`flux.service.apiV2`, then `processNodeViaTemporal` per node, then the Temporal worker) reached by many triggers.
+
+- The only path that writes `node_executions` (one row per node, written before execution, so the row count shows how far the run reached), scopes runs by `execId` and `runId`, and emits `room_status_updated`. Chat mode streams.
+- Node order is a topological scheduler over control and data edges, with join and fan-in and dynamic condition pruning. A node that "ran with empty input" usually has a data edge whose provider did not run first. See the [`flux-execution-scheduler`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-execution-scheduler/SKILL.md) skill and [`.claude/kb/06-apiv2-execution-scheduler.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/kb/06-apiv2-execution-scheduler.md).
+
+| Trigger | Where it enters |
+| --- | --- |
+| api-v2 (sync), beta-v2 (in-app FlowCaller and LibraryNode), chatbot, formapi, run-public-flow | `flux.controller.ts` |
+| api-v2-webhook (async) and batch-process | Bull queue, `apiV2Job.processor.ts` |
+| Cron and scheduled runs | `schedule.controller.ts` |
+| Zapier, email (IMAP), agents | `zapier-webhook-trigger.service.ts`, `mail.service.ts`, `agents.service.ts` |
+
+<Note>
+  Node execution is split between back (inline) and worker (Temporal activities). Adding or changing a node type touches several dispatch gates; read the published contract `back/src/shared/node-dispatch/node-dispatch-contract.json` before claiming coverage, and see [How to add a node type](/worker/how-to-add-a-node-type).
+</Note>
+
+## The live-status nuance
+
+The editor shows live-status badges because it subscribes to `room_status_updated` through `subscribe_to_flow`. Those badges light up only when the flow runs through World B, for example when someone fires api-v2. The editor's own Run button shows its output inline in the node and emits no Temporal live status.
+
+## Diagnostic use
+
+- **No `node_executions` for this run?** It ran in World A. Stop hunting for Temporal artifacts or an `execId`.
+- **Works in the editor, fails through the API?** The bug is on the World B path (scheduler, claim-check hydration, provider routing under Temporal). Reproduce through the API or webhook with the `flux-run-testing` skill, never the editor.
+- **Live badges never light up?** The flow only ever ran in World A, or the editor is subscribed to a different flow.
+- **QA says it is still broken after a fix?** Prove which world the QA action took before fixing again ([Bug investigation](/engineering/ways-of-working/bug-investigation)).
+
+<Accordion title="Worked example: one split behind four bug reports">
+  A set of flows behaved differently in the editor and through the API: chat runs returned an empty `[]`, a text node dropped its context through the API, and a failed run did not show. Every one reproduced only on World B: a value the editor read from the node's `data` was stale or empty when the durable executor re-resolved inputs per run.
+
+  The fixes were all on the World B side: seed the chat session entries, re-resolve `*Data` inputs inside `processNodeViaTemporal`, stop persisting stripped input fields, and surface a failed run to the live node. When a bug is "fine in the editor", the editor is the wrong place to look.
+</Accordion>

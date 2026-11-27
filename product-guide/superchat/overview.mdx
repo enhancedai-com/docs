@@ -1,0 +1,131 @@
+---
+title: "SuperChat"
+description: "The assistant built into FluxPrompt: ask what your agents do, why a run failed, and how to use the product."
+---
+
+## What it is
+
+SuperChat is an assistant built into FluxPrompt. You ask it questions in plain language, and it answers from
+your own agents, their runs and their documentation, and from a built-in guide to the product.
+
+Use it to:
+
+- understand what an agent does — what goes in, what comes out, and what it depends on;
+- find out why a run failed, starting from the latest run of an agent;
+- learn what a node type does and what its fields are for;
+- see what is inside a space or a folder;
+- find an agent, space or folder by name;
+- get directions in the product: where a setting lives, how to schedule an agent, how version control works.
+
+SuperChat follows agents that call other agents. When an **Agent Caller** or **Library** node calls another
+agent, it reads that agent too before it answers.
+
+<Note>
+  **SuperChat explains and advises. It does not change anything.** It does not create, edit, run or delete
+  agents, nodes, files or settings. When you ask for a change, it tells you how to make it yourself.
+</Note>
+
+## Who can use it
+
+SuperChat is available to the accounts and organizations it has been enabled for. If the **Superchat**
+button is not in your top bar, it is not enabled for your account yet — contact your account manager or
+FluxPrompt support.
+
+- You must be signed in.
+- Each answer costs **Flux Credits**, like any other AI call. If your account is out of credits,
+  SuperChat cannot answer.
+- SuperChat only sees what you can see: the agents, spaces and folders you have access to in the
+  organization you are working in.
+
+## Open SuperChat
+
+<Steps>
+  <Step title="Open the panel">
+    Click **Superchat** in the top bar, or press **Ctrl+K** (**⌘K** on a Mac). The panel opens on the right.
+    The shortcut does nothing while you are typing in a text field.
+  </Step>
+  <Step title="Ask your question">
+    Type in the box at the bottom (**Ask about your agents…**) and press **Enter**.
+  </Step>
+  <Step title="Read the answer">
+    The answer appears as it is written. Use **Copy answer** to copy it. Press **Esc** to close the panel.
+  </Step>
+</Steps>
+
+### What SuperChat already knows when you ask
+
+- **On an agent's page**, SuperChat focuses on that agent. The hint under the box reads **Asking about this agent**.
+- **On a board**, focusing an **Agent flow** or **Interface** panel makes that panel's agent the focus.
+- **Anywhere else**, ask about any of your agents by name. If several agents match, SuperChat answers about
+  the one whose name matches exactly, or asks you which one you mean.
+
+SuperChat also reads the documentation of the organization, space, folder and agent you are working in.
+When some of it does not fit, the answer shows **Some documentation was trimmed to fit this answer.**
+
+## Good questions to ask
+
+- *"What does this agent do?"*
+- *"Why did the last run fail?"*
+- *"What is in the Marketing space?"*
+- *"Which of my agents send emails?"*
+- *"What does the Temperature field on the AI node do?"*
+- *"How do I run this agent every morning?"*
+
+## Conversations
+
+- Your conversations are saved. Click **Conversations** (the clock icon) to see them, and **Rename** or
+  **Delete** one. A conversation belongs to you and to the organization you were in.
+- Click **New conversation** (**+**) to start over.
+- Switching organization starts a new conversation.
+- Click **Stop answering** to stop an answer that is being written. The answer is marked **Stopped**.
+
+SuperChat answers in English, unless you ask your question in another language — then it answers in that
+language.
+
+## Learning from conversations
+
+SuperChat can save lasting things you tell it — for example, how you like answers written — to your
+profile document, and rules about an agent to that agent's documentation. When it does, the panel shows
+**I learned from this conversation**, with each saved item and an **Undo** button.
+
+- **Undo** puts back the text that was there before. It does not work if someone edited that section
+  after SuperChat saved it; edit the documentation instead.
+- Only the person whose conversation it was can undo it.
+- Saving to an agent's documentation needs Admin or Builder rights on that agent.
+- Organization admins can turn this off in Organization Settings with **Let SuperChat learn from
+  conversations**. When it is off, SuperChat still reads the documentation but never writes to it.
+
+<Note>
+  Saving learned items is switched on per account and is not on for every account yet. If you never see
+  **I learned from this conversation**, nothing has been saved.
+</Note>
+
+## Limits
+
+| Limit | Value |
+|-------|-------|
+| Question length | 4,000 characters |
+| Attachments | Not supported — SuperChat reads text questions only |
+| Conversation memory | The most recent messages, about 20,000 tokens, are sent with each question. Older messages stay in the conversation but SuperChat no longer reads them. |
+| Daily limit | A daily SuperChat credit limit per person can apply. It resets at midnight UTC. |
+| Scope | Questions about your agents and FluxPrompt. For anything else SuperChat replies **I can not help with that request. Try asking about your agents or about FluxPrompt.** |
+
+## Troubleshooting
+
+| You see | What it means | What to do |
+|---------|---------------|------------|
+| No **Superchat** button | SuperChat is not enabled for your account. | Contact your account manager or support. |
+| **SuperChat is not available for this account.** | Your account or organization is not enabled. | Contact your account manager or support. |
+| **SuperChat is paused for everyone right now. Please try again later.** | SuperChat is temporarily switched off for all accounts. | Try again later. |
+| **Your account is out of credits, so SuperChat cannot answer.** | Your plan's credits are used up. | Add credits or upgrade your plan. |
+| **You reached today's SuperChat limit. It resets at midnight UTC.** | You hit the daily limit. | Wait until midnight UTC. |
+| **That agent or conversation was not found.** | The agent or conversation was deleted, or you no longer have access. | Check the name, or ask about another agent. |
+| **SuperChat could not answer right now. Please try again.** | A temporary error. | Click **Try again**. |
+| **This changed after SuperChat saved it, so it could not be undone. Edit the documentation instead.** | Someone edited that section after SuperChat saved it. | Edit the documentation directly. |
+| An answer says something is missing | The documentation and the agent do not contain that detail. SuperChat does not guess. | Add the detail to the agent's documentation, or check the agent yourself. |
+
+## Related
+
+- [Building agents](/product-guide/superchat/building-agents)
+- [Concepts](/product-guide/concepts)
+- [Logs and retention](/product-guide/running-agents/logs-and-retention)

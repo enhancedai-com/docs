@@ -55,13 +55,6 @@ Caminho base `/integrations`. Documentada passo a passo, para quem não programa
 
 Quinze endpoints, cinco escopos de dono × três verbos. As respostas são **`text/markdown` puro**, não JSON. Os passo a passo completos estão em [endpoints de documentação companheira](/main-api/specific-features/integrations-api/companion-docs); a arquitetura está em [documentação companheira (entity docs)](/main-api/specific-features/companion-docs).
 
-<Warning>
-  **🚧 Ainda não está em produção.** Dos quinze, produção responde apenas
-  `GET /integrations/agents/:id/documentation`, e ali retorna o markdown legado de `flows.agentflow_md`
-  em vez de um documento de `entity_docs`. Os outros quatorze — todo `PUT`, todo
-  `regenerate` e todo escopo de dono que não é agente — existem apenas em `back@master`.
-</Warning>
-
 | Método | Caminho | Propósito | Autenticação |
 | --- | --- | --- | --- |
 | `GET` | `/integrations/agents/:id/documentation` | Lê o documento companheiro de um agente. | api-key or JWT |

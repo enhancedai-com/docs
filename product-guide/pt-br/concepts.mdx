@@ -1,0 +1,149 @@
+---
+title: "Conceitos"
+description: "As peças do FluxPrompt: organizações, spaces, pastas, agentes, versões, nodes, execuções, planos e créditos."
+---
+
+## Visão geral
+
+O FluxPrompt é onde equipes constroem agentes de IA de forma visual e os executam no dia a dia da empresa.
+Tudo o que você cria fica numa hierarquia simples:
+
+```
+Organização
+└── Space
+    └── Pasta (até 5 níveis)
+        └── Agente
+            └── Nodes, conectados num canvas
+```
+
+## Organização
+
+Uma **organização** ("Org" no produto) é a conta da sua empresa no FluxPrompt. Ela reúne os spaces, os
+membros e seus papéis, o plano e as configurações.
+
+- Você pode pertencer a várias organizações. Troque entre elas com **Switch Org** no menu do usuário.
+- Sua conta pessoal também aparece nessa lista, com o seu nome ou como **Personal**.
+- Cada membro tem um papel na organização: **Owner**, **Admin**, **Builder** ou **User**. Veja
+  [Papéis e permissões](/product-guide/pt-br/organizations/roles-and-permissions).
+- As configurações da organização ficam em **Settings** › **Org Settings** e **Org Users**.
+
+## Space
+
+Um **space** é uma área compartilhada dentro de uma organização — normalmente uma equipe, um departamento
+ou um cliente. Agentes, dados e documentação ficam nos spaces.
+
+- Cada space de que você participa tem a sua seção nas barras laterais **Agents** e **Data**, com uma pasta
+  **Shared**.
+- Você também tem uma seção **Private**, que só você vê.
+- Dentro de uma seção, os agentes ficam agrupados em **Fluxbots** (chatbots), **Agents** e **Interfaces**.
+- Um space pode ter um limite mensal de créditos. Quando ele é atingido, as execuções nesse space param com
+  **This space has used its monthly limit of … FluxTokens. Ask a space admin to raise it to keep running
+  agents.** O limite volta a zero no dia 1º de cada mês.
+- Os spaces são gerenciados em **Settings** › **Spaces**.
+
+## Pasta
+
+Uma **pasta** organiza os agentes dentro de um space. Pastas podem ter subpastas, até **5 níveis**.
+Apagar uma pasta apaga os agentes que estão nela.
+
+## Agente
+
+Um **agente** (chamado de *flow* na API) é um conjunto de nodes conectados num canvas: entradas, chamadas a
+modelos de IA, código, integrações e saídas. Crie um com **+** › **Add Agent** na barra lateral **Agents**,
+ou comece por **Templates**. O **Create with Ai** monta uma primeira versão a partir de uma descrição.
+
+A página de um agente tem três abas:
+
+- **Agent** — o editor no canvas.
+- **Logs** — as execuções do agente.
+- **Settings** — nome, gatilhos (API, email, agendamento), controle de versão e o **Run credit budget**, um
+  teto de créditos por execução.
+
+Tipos relacionados de agente:
+
+- **Fluxbot** — um agente usado como chatbot.
+- **Interface** — uma tela de formulário para um agente.
+
+## Versões e publicação
+
+Por padrão, um agente tem uma única cópia: o que você vê no editor é o que roda. Ligue **Enable Version
+Control** nas configurações do agente para manter uma versão publicada separada das suas edições.
+
+- O menu **Versions** mostra **CURRENTLY LIVE** (a versão publicada) e **YOUR VERSIONS** (seus rascunhos).
+- **Add New** cria uma versão; **Publish** coloca a versão no ar.
+- **Restore** traz de volta um estado anterior do histórico de uma versão.
+- Execuções pela API, por agendamento e por outros gatilhos usam a versão publicada.
+
+## Nodes
+
+Um **node** é uma etapa do agente. Você conecta a saída de um node à entrada de outro para passar os dados
+adiante. O seletor de nodes agrupa os nodes em categorias:
+
+| Categoria | Exemplos |
+|-----------|----------|
+| Text | Ai Text Generator, Text Box, Display Box, Report Builder |
+| Visual | Ai Image Generator, Ai Image Reader, Ai Video Generator |
+| Audio | Ai Voice Generator, Ai Audio Transcriber |
+| Data | Small Memory, Large Memory, Pull Data, Push Data, SQL Database |
+| Web | Web Search, Webpage Scraper, Search Trends |
+| Functions | Scripting, Decision Paths, Ai Model Switch, Grouping |
+| External | Data Input, Data Output, Agent Caller, Api Caller, Third Party Integration, MCP Client |
+| Library | Agentes compartilhados como blocos: System Library, Organization Library, Space Library |
+
+Todo agente tem um **node global**, onde a execução completa começa.
+
+## Execuções
+
+Uma **execução** (run) é uma vez em que o agente roda. Ela pode começar de várias formas:
+
+| Gatilho | Como |
+|---------|------|
+| Manual | **Run Agent** no node global, ou **Run Prompt** em um único node de IA |
+| API | Uma chamada à URL de API do agente, opcionalmente com uma callback URL para o resultado |
+| Email | Uma mensagem para o endereço de email do agente |
+| Agendada | De hora em hora, diária, semanal ou mensal — veja [Agendamentos](/product-guide/pt-br/running-agents/schedules) |
+| Chatbot | Uma conversa com um Fluxbot |
+| MCP | Um assistente de IA conectado pelo [MCP do FluxPrompt](/mcp/pt-br/overview) |
+
+Cada execução é registrada com status, duração, créditos e custo, e com o que cada node recebeu e produziu.
+Veja [Logs e retenção](/product-guide/pt-br/running-agents/logs-and-retention).
+
+## Planos
+
+O plano define o que a sua organização pode fazer: quantos agentes, chatbots, assentos e spaces da empresa
+você tem, quais modelos de IA pode usar e quantos créditos vêm incluídos por mês.
+
+| Plano | |
+|-------|---|
+| **Intro** | Plano inicial gratuito, com créditos de teste. Contas novas começam nele. |
+| **Starter** | Plano pago |
+| **Advanced** | Plano pago |
+| **Professional** | Plano pago |
+| **Organization** | Plano pago para organizações |
+| **Enterprise** | Plano negociado, com os termos definidos no seu contrato |
+
+Owners e Admins veem o que cada plano inclui hoje em **Settings** › **Pricing**. Quando você atinge um
+limite, o FluxPrompt avisa, por exemplo **You have used all 10 agents your Starter plan includes. Upgrade to
+keep building.** (o número e o plano são os seus).
+Se um modelo não está no seu plano: **The plan covering this agent does not include this model. Upgrade or
+choose another model.**
+
+## Créditos Flux
+
+Os **créditos** pagam o trabalho de IA. Toda chamada de IA — uma geração de texto, uma imagem, uma
+transcrição, uma busca na web — usa créditos de acordo com o modelo e o volume processado. O produto mostra
+os créditos como **Flux Credits** no histórico de execuções do editor e como **FluxTokens** nas
+estatísticas de uso; os dois são a mesma coisa.
+
+- O seu plano inclui créditos todo mês. Eles renovam junto com a assinatura.
+- Veja o uso em **Settings** › **Token Usage**, e por execução em **Logs**.
+- Um agente pode ter um **Run credit budget** para limitar o que uma execução gasta.
+- Quando os créditos acabam, as execuções param com **You have used the FluxTokens your plan includes.
+  Upgrade to keep running agents.**
+
+## Relacionados
+
+- [Papéis e permissões](/product-guide/pt-br/organizations/roles-and-permissions)
+- [Onboarding](/product-guide/pt-br/organizations/onboarding)
+- [SuperChat](/product-guide/pt-br/superchat/overview)
+- [Agendamentos](/product-guide/pt-br/running-agents/schedules)

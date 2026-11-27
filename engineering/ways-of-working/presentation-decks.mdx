@@ -1,0 +1,67 @@
+---
+title: "Presentation decks"
+description: "Turn an investigation into a deck a non-engineering audience can act on: one offline HTML file, an argument instead of a summary, charts nobody can attack."
+---
+
+The whole procedure is the [`presentation-deck`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/presentation-deck/SKILL.md) skill, so you do not have to remember it. Ask in one line, for example "build a simple, direct deck for the product team about `<topic>`, based on `<report path>`, as HTML slides". The skill starts from [`templates/deck-template.html`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/presentation-deck/templates/deck-template.html); the reference implementation is [`examples/api-instability-product-briefing.html`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/presentation-deck/examples/api-instability-product-briefing.html).
+
+## Why one HTML file
+
+- **No network at meeting time.** No remote fonts, chart library or images; bad room wifi cannot break it.
+- **It lives next to the report** it argues from, and diffs like code.
+- **It is reviewable before the meeting.** Every slide has a URL (`deck.html#7`), so it can be screenshotted and checked slide by slide.
+- **It still becomes a PDF** when someone wants to forward it: one 16:9 page per slide.
+
+## A deck is an argument, not a summary
+
+| # | Slide | Its job |
+| --- | --- | --- |
+| 1 | Title | The one sentence you want repeated after the meeting |
+| 2 | Where we are | Three or four stat tiles, then the single claim of the deck |
+| 3 | Customer impact | The symptom they already felt, and when it stepped up |
+| 4 | The cause, measured | The money chart: numbers from a lab, not opinions |
+| 5 | Mechanism | A diagram of why one unit of work is expensive |
+| 6 | The multiplier | A diagram of why it compounds |
+| 7 | Why now | The volume chart that dates the change |
+| 8 | Who drives it, by type | Ranked bars, the contributors that matter highlighted |
+| 9 | Who drives it, by entity | A table naming real flows and owners |
+| 10 | The uncomfortable part | What we got wrong, or what makes it worse today |
+| 11 | The plan | Now, next, the real fix |
+| 12 | The ask | The decisions that belong to the audience |
+
+Cut to fit: a six-slide deck with this shape beats twenty slides without it. Slide 10 is the one people want to skip and the one that earns the room.
+
+## Numbers you can defend, or no number
+
+<Warning>
+  Never invent a cell you cannot read in the source. A deck gets forwarded to people who were not in the room, and one fabricated owner name costs more than the deck earns.
+</Warning>
+
+- **Do not round into a bigger claim.** "~7x" comparing a full week with a three-day partial week became "4.4x in one week, and still climbing": true, and stronger because nobody can attack it.
+- **Drop rows you cannot verify.** The narrative rarely needs them.
+- **Mark partial periods on the axis**, not only in the footnote.
+- **Customer-facing or forwarded decks** get the same data hygiene as everything else: no personal data, and only the customer names the audience is entitled to see.
+
+## Charts and diagrams
+
+- **Form before colour.** Change over time: columns. Ranked categories: horizontal bars. Two measured series on a numeric axis: lines with markers. A single headline: a stat tile.
+- **One hue per chart.** Reserve red for status in text and tiles, always with a label; validate the palette instead of eyeballing it.
+- **Direct-label every bar.** A projector has no hover. Grey out every bar except the ones that carry the story.
+- **Redraw diagrams, do not screenshot them.** Keep the author's shapes, translate labels to English, add one caption with the sentence it proves, and credit the author.
+
+## Render it and look at every slide
+
+Loop a headless Chrome over `deck.html#1` to the last slide, one screenshot each, and read them. The same defects show up every time: content hugging the top, a page number printed twice, a chart letterboxed in half its column, a numeric header aligned left over right-aligned numbers.
+
+## Write for the audience you have
+
+- Humanise every identifier: `commandTextNode` becomes "AI text generator", `libraryNode` "Library node".
+- Bold two or three words per sentence at most.
+- At most two em dashes in the whole deck.
+- Say "runs", "flows", "at the same time"; leave "heap" and "orchestration" out unless the slide defines them.
+
+## Present, send, keep
+
+- **Present:** open the file, F11, arrows or space.
+- **Send:** export with `--print-to-pdf`; check the page count before sending.
+- **Keep:** commit the file next to the report it argues from, and cite that report in the last slide's footer.

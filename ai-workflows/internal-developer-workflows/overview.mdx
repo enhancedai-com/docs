@@ -17,16 +17,16 @@ It exists so that any teammate — not just the people who built the tooling —
 
 - **New engineers** joining the team who need to set up their environment and start using the tooling — start with [Onboarding](/ai-workflows/internal-developer-workflows/onboarding).
 - **Engineers already on the team** who want a reference for a specific skill, agent, or playbook — jump to the relevant card below.
-- **People curious about how we use Claude Code** — read [Best practices](/ai-workflows/internal-developer-workflows/best-practices).
+- **People curious about how we use Claude Code** — read [Best practices](/ai-workflows/internal-developer-workflows/best-practices) and [How we work with Claude Code](/engineering/ways-of-working).
 
 ## Prerequisites
 
 Before any of this works, you need:
 
 - **Claude Code installed** and authenticated. See the [Claude Code docs](https://docs.claude.com/en/docs/claude-code/overview) if you have never used it.
-- **The workspace cloned locally** with `back/`, `front/`, `docs/`, and the team-shared `.claude/` folder.
+- **The workspace cloned locally**: the Workflow repo as the root, with `back/`, `front/`, `worker/`, `docs/` and `mcp/` inside it. Follow [`ONBOARDING.md`](https://github.com/enhancedai-com/Workflow/blob/main/ONBOARDING.md).
 - **Access to the AWS bastion authorized by an admin** — covered in [Onboarding](/ai-workflows/internal-developer-workflows/onboarding).
-- **Node 18+, pnpm, and git** on your machine. AWS CLI v2 is optional but recommended for CloudWatch lookups.
+- **Node 22+, pnpm 9+, and git** on your machine. AWS CLI v2 is optional but recommended for CloudWatch lookups.
 
 ## Three building blocks: Skill, Agent, Playbook
 

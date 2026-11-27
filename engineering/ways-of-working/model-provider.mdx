@@ -1,0 +1,46 @@
+---
+title: "Models and providers"
+description: "The model is the source of truth and the provider is derived from it; billing shows Flux Credits; per-provider reasoning parameter gotchas."
+---
+
+A recurring bug class. Read this before touching model selection, provider routing, token or credit display, or reasoning parameters. The Claude-loadable version is [`.claude/kb/model-provider-handling.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/kb/model-provider-handling.md). Adding a model: [Add a new model](/main-api/specific-features/add-new-model).
+
+## The model is the source of truth
+
+A node stores an `aiModel` and a legacy `aiSystem`. The provider must be derived from the model, never read from a stale stored `aiSystem`.
+
+- **Desync symptom:** a node has `aiModel` set to a Claude model but `aiSystem` set to `openAi`. A service that routes by `aiSystem` sends a Claude model to OpenAI and fails with `Invalid model: <model> for openAi`.
+- **How it gets minted:** template or shorthand flow generators, copy and paste or clone of nodes, or a select that silently keeps an out-of-list model. A heal-on-open step misses these, because it runs only when the editor opens the flow, not on paste and not on API or cron runs.
+
+## Where routing can disagree
+
+| Path | Should route by |
+| --- | --- |
+| Worker (API, cron, webhook runs) | The model, through `system_ai_models.aiCompany` |
+| Front editor manual run | The model, through `getProviderForModel` |
+| Back per-provider services | The model, through `resolveProviderForModel` |
+
+Every routing, entitlement and billing point derives the provider from the model through one canonical resolver, reconciles the stored `aiSystem` as a derived mirror at execute time, and the write paths that mint a desync are fixed at the source. Existing poisoned rows get an idempotent reconcile migration.
+
+A capability flag on `system_ai_models` (vision, web search, image generation tool) also needs a toggle in the AI Models admin page; the [`system-ai-model-capability-sync`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/system-ai-model-capability-sync/SKILL.md) skill checks it.
+
+## Billing display: Flux Credits, not raw tokens
+
+Cost and usage displays show Flux Credits, never raw provider tokens. A change that returned raw tokens was reverted: it mixed units and inflated the flow-level cost. Billing itself is always credit-based. The canonical per-node credit is `SUM(token_transaction.used_tokens)` by `execId` and `nodeId`. For a customer cost question, use the [`flux-cost-report`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-cost-report/SKILL.md) skill: `token_transaction` has no `flowId`, so attribution needs its reconciliation gate.
+
+## Reasoning and thinking parameters
+
+- **Anthropic adaptive thinking** defaults to high effort, which is slow and can truncate at `max_tokens`. Default the effort to medium.
+- **Older Anthropic models** support only extended thinking; sending `thinking: {type: adaptive}` returns a 400. Gate by `isAdaptiveThinkingModel`.
+- **`temperature` on reasoning models** returns a 400 when a flow switches to one with temperature set. Strip it for reasoning models.
+- **`supportsReasoning = false`** seeded for a reasoning-capable model brings back a stale `max_tokens = 4096` and truncates output. Prefer auto tokens.
+
+The completions API has its own `max_tokens` gotcha for reasoning models; see the [`completions-api`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/completions-api/SKILL.md) and [`completions-api-validation`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/completions-api-validation/SKILL.md) skills.
+
+<Accordion title="Worked example: 'Invalid model for openAi' 500 for one customer">
+  A text node carried `aiSystem: 'openai'` with a Claude model. The editor routed by `aiSystem` to the OpenAI endpoint, whose validation rejected a model that `system_ai_models` lists as Anthropic only, and the error came in bursts of three (retries). The node had been created two minutes earlier, almost certainly pasted from a node that already carried the desync, so it ran before the heal-on-open step could fix it.
+
+  The layered fix: a back guard that resolves the real provider and throws an actionable "model X belongs to anthropic, not openai"; the front root fix that derives the provider from the model at execute time; and an idempotent migration for existing rows. It shipped across back, front and worker together, proven by a browser suite with zero invalid-model errors across Gemini, Claude and GPT switches.
+</Accordion>
+
+Routing differs by [execution world](/engineering/ways-of-working/two-worlds), and this is one of the first traps to check during [bug investigation](/engineering/ways-of-working/bug-investigation).
