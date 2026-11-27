@@ -21,11 +21,13 @@ description: "Entry point that triggers the flow execution. IMPORTANT: the node 
     "properties": {
       "isAutotrigger": {
         "type": "boolean",
-        "description": "Whether the editor shows the flow as running on a schedule; the platform copies it to the flow's isAutotrigger flag. Setting it does not schedule anything: the editor's Auto Trigger dialog creates the schedule through the schedule service, then writes isAutotrigger, intervalData and triggerMessage here."
+        "readOnly": true,
+        "description": "Read-only over MCP: add_node, update_node and create_version refuse a write that sets or changes it. Whether the editor shows the flow as running on a schedule; the platform copies it to the flow's isAutotrigger flag. Setting it does not schedule anything: the editor's Auto Trigger dialog creates the schedule through the schedule service, then writes isAutotrigger, intervalData and triggerMessage here."
       },
       "intervalData": {
         "type": "object",
-        "description": "The schedule the editor's Auto Trigger dialog last saved, kept for display. The runs themselves follow the schedule stored by the schedule service.",
+        "readOnly": true,
+        "description": "Read-only over MCP: add_node, update_node and create_version refuse a write that sets or changes it. The schedule the editor's Auto Trigger dialog last saved, kept for display. The runs themselves follow the schedule stored by the schedule service.",
         "properties": {
           "type": {"type": "string", "enum": ["hourly", "daily", "weekly", "monthly"]},
           "minutely": {"type": "string", "description": "Second of the minute."},
