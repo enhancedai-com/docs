@@ -1,0 +1,80 @@
+---
+title: "How we work with Claude Code"
+sidebarTitle: "Overview"
+description: "The team's working manual: the mental models, the delivery loop, and where each procedure lives in the Workflow repo."
+---
+
+This area is the team's working manual for building FluxPrompt with Claude Code: how a ticket becomes a shipped change, how we investigate a bug, and the few mental models that explain most of what happens on the platform. It replaces the `guide/` HTML site that used to live in the Workflow repo.
+
+<Note>
+  The procedures themselves live in the [Workflow repo](https://github.com/enhancedai-com/Workflow), which is the workspace root. These pages explain the practice and link to the source; when a page and the repo disagree, the repo wins. The order of authority is `CLAUDE.md`, [`ONBOARDING.md`](https://github.com/enhancedai-com/Workflow/blob/main/ONBOARDING.md), the rules in [`.claude/rules/`](https://github.com/enhancedai-com/Workflow/tree/main/.claude/rules), then each skill's `SKILL.md`.
+</Note>
+
+## Start here
+
+New on the team? Follow [`ONBOARDING.md`](https://github.com/enhancedai-com/Workflow/blob/main/ONBOARDING.md) first. It covers install, the clone layout, starting Claude Code from the workspace root, the enforced rules, and the path for each role (product writing tickets, product who codes, dev, QA). Database access through the bastion is set up with the `db-setup` agent; see [Onboarding](/ai-workflows/internal-developer-workflows/onboarding).
+
+## The 60-second mental model
+
+Two ideas explain most of what happens on this platform.
+
+### 1. Branch to environment
+
+Every product repo (`back`, `front`, `worker`, `mcp`) uses the same three env branches since 2026-10-13.
+
+| Branch | Environment | How it changes |
+| --- | --- | --- |
+| `main` | Production | Only through a reviewed PR. A merge does not deploy: prod ships when someone runs the repo's prod workflow (`workflow_dispatch`) on `main`. |
+| `staging` | Staging | Direct merge of the feature branch (prefer `--ff-only`). |
+| `develop` | Dev | Direct merge of the feature branch (prefer `--ff-only`). A push deploys dev. |
+
+Branch new work as `feat/<task id>` or `fix/<task id>` from `origin/main`. A feature branch may merge `main` into itself, never `develop` or `staging`. The legacy `production` and `master` branches are frozen: never branch from them, merge them or target a PR at them. The `docs` repo has only `main`.
+
+### 2. The two execution worlds
+
+A flow node runs down one of two different code paths depending on what triggered it.
+
+- **World A, editor run**: the front orchestrates node by node and calls each provider service directly. No `node_executions`, no `execId`, no Temporal.
+- **World B, apiV2 and Temporal**: the only path with `node_executions`, run scoping and live status. Reached by api-v2, webhook, chatbot, cron, form, Zapier, email, agents and in-app sub-flows.
+
+Most "works in the editor, fails through the API" bugs live in the gap. Full page: [The two execution worlds](/engineering/ways-of-working/two-worlds).
+
+## The operating loop
+
+Almost every task follows the same arc.
+
+1. **Task.** A ClickUp card, or a report such as "X is broken for a customer". Decide first whether it is a feature or a defect.
+2. **Reproduce.** For a bug, settle which trigger path failed before touching code.
+3. **Root cause.** Reproduce, then the database (read-only in prod), then Datadog, then CloudWatch. Stop when the evidence is conclusive.
+4. **Fix across repos.** A fix often spans back, front and worker. Consider every side.
+5. **Prove it.** Tests written from the card's scenarios fail first, then pass. A fix without proof is a hypothesis.
+6. **Ship.** Develop, QA on dev, staging, a PR to `main`, a person runs the prod workflow.
+7. **Announce and document.** The deploy announcement, and the docs page for any user-visible change.
+
+## Skills, agents and the hybrid
+
+- A **skill** is a procedure Claude loads on demand and runs in your conversation, with your context. Use one when you want to do the thing yourself with expert guidance: query prod read-only, migrate a flow, plan a task.
+- An **agent** is an isolated worker with its own context window. Delegate to one when the job should run apart and hand back a conclusion, not file dumps.
+- The **hybrid** is a thin agent that runs a skill in isolation: `mcp-validator` runs `mcp-validation`, `mcp-node-schema-validator` runs `mcp-node-schema-sync`, `terraform-infra-helper` runs `terraform-infra`, `node-worker-migration-analyst` runs `node-worker-migration`.
+
+Skills live in `.claude/skills/<name>/SKILL.md` and are auto-discovered: describe the task, or type `/` to list them. Every skill and agent, one line each: [Skills and agents catalog](/engineering/ways-of-working/skills-and-agents).
+
+## Pages in this area
+
+| Page | Reach for it when |
+| --- | --- |
+| [Delivery practice](/engineering/ways-of-working/delivery) | You take a ClickUp card from intake to production and docs. |
+| [Bug investigation](/engineering/ways-of-working/bug-investigation) | A flow fails, data looks wrong, or it works manually but not through the API. |
+| [Data integrity and DB access](/engineering/ways-of-working/data-integrity) | Concurrent runs clobber each other, or you need to read or change data in an environment. |
+| [Models and providers](/engineering/ways-of-working/model-provider) | A model and provider desync, a reasoning parameter gotcha, or a credits display question. |
+| [The two execution worlds](/engineering/ways-of-working/two-worlds) | You need to know which path a run took. |
+| [Presentation decks](/engineering/ways-of-working/presentation-decks) | You present an investigation or a plan to a non-engineering audience. |
+| [Testing](/engineering/ways-of-working/testing) | You need the right test for a scenario, or the local execution matrix. |
+| [Local environment](/engineering/ways-of-working/environment) | You run the stack on your machine. |
+| [Security](/engineering/ways-of-working/security) | You handle a credential or a production access question. |
+| [Glossary](/engineering/ways-of-working/glossary) | A term on another page is unclear. |
+| [Skills and agents catalog](/engineering/ways-of-working/skills-and-agents) | You want to know which skill or agent fits a request. |
+
+## Team knowledge goes into the repo
+
+Anything personal goes in `CLAUDE.local.md` at the workspace root (gitignored). When Claude learns something the whole team needs, it goes into the Workflow repo through a PR: a rule in `.claude/rules/`, a skill, or a note in [`.claude/kb/`](https://github.com/enhancedai-com/Workflow/tree/main/.claude/kb) indexed in its `README.md`. A fact kept in one person's memory helps no teammate.

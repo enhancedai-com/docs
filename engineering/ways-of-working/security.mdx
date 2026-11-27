@@ -1,0 +1,60 @@
+---
+title: "Security"
+description: "Secrets by tier (names only), the blast-radius principle, the access model we run today, and the hardening checklist."
+---
+
+Make every credential attributable to one person or service, revocable on its own, and scoped to least privilege. Rank everything by what a single leaked credential lets an attacker do. This page names secrets, never values.
+
+## Hygiene rules
+
+- Secrets live in `.env` files (each repo's `.env`, and the workspace-root `.env` for the skills). They are gitignored; never commit them, log them, print them, or paste them into a chat, a card or a PR.
+- Values come from a dev through a secure channel, never a group chat.
+- Never accept anyone's private SSH key, and never reuse someone else's AWS key: each person generates and rotates their own read-only key.
+- Never commit database endpoints. Treat dev and staging as holding partly real production data and credentials, because clones copy hashed passwords, API keys, OAuth tokens and webhook URLs in node data.
+- A skill or a pre-analysis that meets a secret cites `path:line` and writes "value not repeated".
+
+## Secret inventory by tier
+
+| Tier | Secrets (names only) | Where | Note |
+| --- | --- | --- | --- |
+| DB access | `PGPASSWORD_DEV`, `PGPASSWORD_STAGING`, `PGPASSWORD_PROD` | Root `.env` | One shared password per environment: a hardening target |
+| SSH | Per-person key pair, `SSH_PASSPHRASE`, `SSH_PASSPHRASE_PROD` | `~/.ssh`, root `.env` | Already per person: the model to copy |
+| App, crypto | `INTEGRATIONS_ENCRYPTION_KEY` | `back/.env`, worker | Decrypts every user's stored integration credentials |
+| App, cloud | `GOOGLE_APPLICATION_CREDENTIALS` | `back/.env` | Broad cloud access |
+| App, AI | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` and the other provider keys | `back/.env` | Shared keys; financial blast radius |
+| App, billing | `STRIPE_KEY`, `STRIPE_ACCOUNT_ID` | `back/.env` | Shared |
+| App, OAuth and email | Slack, Facebook, Apple, Google OAuth secrets, `EMAIL_PASSWORD` | `back/.env` | Shared |
+| Internal | `INTERNAL_API_KEY` (back to worker) | `.env` | Must match between back and worker |
+| Local only | Local JWT secret, the local test user's API key | Local stack | Not production secrets |
+
+In ECS, secrets come from SSM Parameter Store and Secrets Manager through the task definitions; see [`.claude/kb/ecs-secrets-and-ssm.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/kb/ecs-secrets-and-ssm.md). Before proposing a new secret or parameter, list what is already provisioned and what the code reads: the gap is usually a cheaper code change.
+
+## The access model
+
+| Scope | Access | How |
+| --- | --- | --- |
+| Dev and staging | Read and write | Your own SSH key on the non-prod bastion, `ec2-tunnel` |
+| Production | Read-only, granted per person | The admin authorizes your key on the prod bastion; `ec2-tunnel-prod` refuses writes three ways |
+| Production writes | None for teammates | A reviewed migration or PR, or an owner action with explicit authorization each time |
+| AWS (CloudWatch) | Your own read-only key | You create and rotate it |
+
+Prod read-only is a separate grant given when there is a reason, not part of day-one onboarding. Impersonating a user goes through the audited `flux-impersonate` skill; support access to a customer account goes through `flux-support-admin` and is revoked when the ticket closes.
+
+## Rotation
+
+- Rotate immediately on any exposure (a leak in a chat, a public commit) or a teammate's departure, within about 24 hours.
+- Do not hard-swap `INTEGRATIONS_ENCRYPTION_KEY`: it orphans every existing ciphertext. Add a key version to the encrypted records, encrypt new writes with the new key, re-encrypt existing rows in the background, then retire the old key. The best end state keeps the key in AWS KMS. Cross-repo details: [`.claude/kb/credential-storage-findings.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/kb/credential-storage-findings.md).
+
+## Hardening checklist
+
+1. Move `INTEGRATIONS_ENCRYPTION_KEY` and the Google service-account JSON out of `.env` into a secret manager or KMS.
+2. Replace the shared Postgres superuser with per-person roles, read-only by default.
+3. Stand up one secret manager for the team and stop ad-hoc sharing.
+4. Rotate every shared secret once it lives in the vault.
+5. Split API keys per environment and project, with spend limits and restricted Stripe keys.
+6. Publish the rotation rule.
+7. Move the encryption key to envelope encryption with a key-version column.
+8. Replace port 22 with SSM Session Manager or short-lived SSH certificates.
+9. Use RDS IAM authentication for human database access.
+
+Items 1 to 4 have the widest blast radius. Run `/security-review` on any change that touches auth, data, tenants or secrets.

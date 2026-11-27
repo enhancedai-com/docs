@@ -1,0 +1,113 @@
+---
+title: "Delivery practice"
+description: "How a ClickUp card moves from an idea to production and docs: intake, pre-analysis, plan, tests first, the loop, dev, QA, staging, prod."
+---
+
+One lifecycle, repeated the same way for every task. Each step has a skill or an agent that does the mechanical part, and the ClickUp card stays the running record of the work. The source of truth is the task table in [`ONBOARDING.md`](https://github.com/enhancedai-com/Workflow/blob/main/ONBOARDING.md#the-way-a-task-moves).
+
+## The pipeline
+
+```text
+idea or bug            → /ticket-intake          card in ClickUp (scenarios, rules)
+card picked up         → /ticket-preanalysis     where it lives, risk 1-5, tests per scenario
+feat/<task id>         → /task-plan              .claude/plans/<task id>.md, approved from risk 3
+tests first            → /scenario-tests         @auto scenarios fail, then freeze
+the loop               → /scenario-tests         change code until green, one commit per step
+checks                 → lint, typecheck, /code-review, /security-review
+develop                → feature-delivery        in dev → ready for qa + QA handoff comment
+QA on dev              → /qa-run                 passed qa or rejected in qa
+staging, then main     → pr-creator              PR to main, head is the feature branch
+prod workflow          → a person runs it        prod-health, deploy-announcer, deployed on live
+docs                   → docs repo               the user-visible page ships in the same release
+```
+
+## The steps
+
+| Step | What happens | Skill or agent | Who |
+| --- | --- | --- | --- |
+| 0. Intake | An idea or a bug becomes a card that follows the ticket standard. Claude searches ClickUp for duplicates, reads the docs and code, asks at most five questions per round and creates the card only after a yes. | [`ticket-intake`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/ticket-intake/SKILL.md) | Product + Claude |
+| 1. Pick up | Card from `up next` to `in progress`. Check nobody has a branch: `git fetch origin && git branch -r \| grep <task id>`. A subtask's code often lives on the parent's branch. | [`feature-delivery`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/feature-delivery/SKILL.md) | You |
+| 2. Pre-analysis | One comment on the card: where the change lives (code read at `origin/main`), related cards and PRs, a suggested risk level, the test type per scenario, docs impact, questions for product. | [`ticket-preanalysis`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/ticket-preanalysis/SKILL.md) | You + Claude |
+| 3. Branch | `feat/<task id>` or `fix/<task id>` from `origin/main`, in each repo you touch. If a clone has uncommitted work, use a worktree; never stash someone's work. | | You |
+| 4. Plan | Plan mode. Steps (one green commit each), files, tests per scenario, risks, risk level. A subagent that never saw the conversation reviews it. Risk 3 needs one human approval, risk 4-5 two. | [`task-plan`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/task-plan/SKILL.md) | You + Claude |
+| 5. Tests first | A separate subagent turns each `@auto` scenario into a test, proves it fails for the right reason, and the tests are frozen. | [`scenario-tests`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/scenario-tests/SKILL.md) | Claude, you review |
+| 6. The loop | Change code, run the frozen tests and checks, read the failure, fix the code (never the test). Stop after three rounds with no new test passing, or when a file outside the plan is needed. | [`scenario-tests`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/scenario-tests/SKILL.md) | Claude, you review |
+| 7. Check | The repo's lint, typecheck and tests; `/code-review`; `/security-review` when auth, data, tenants or secrets are touched. Fill the card's Test map. | | You + Claude |
+| 8. Dev | Merge the feature branch into `develop` (`git merge --ff-only`). Card to `in dev` with the summary comment. After the dev deploy finishes, `ready for qa` with the QA handoff comment. | [`feature-delivery`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/feature-delivery/SKILL.md) | You |
+| 9. QA | QA tests on dev from the card's scenarios and the handoff comment, records one line per scenario, and sets `passed qa` or `rejected in qa`. | [`qa-run`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/qa-run/SKILL.md) | QA |
+| 10. Staging and prod | Merge into `staging`. Open the PR to `main` with `pr-creator`. After review and merge, a person runs the prod workflow; then `prod-health`, verify the change live, `deploy-announcer`, `deployed on live`. | [`pr-creator`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/agents/pr-creator.md), [`prod-health`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/prod-health/SKILL.md), [`deploy-announcer`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/agents/deploy-announcer.md) | You, the release owner |
+| 11. Docs | A user-visible change updates its docs page in the same release. | [`mintlify-docs-writer`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/agents/mintlify-docs-writer.md) | You |
+
+<Note>
+  The dev loop is enforced. On a `<type>/<task id>` branch, the `guard-dev-loop` hook refuses a code edit in back, front, worker or mcp without `.claude/plans/<task id>.md`, refuses a risk 3+ edit without the approval line, and refuses edits to frozen tests while the lock exists. Only a person runs `node .claude/hooks/approve-plan.mjs <task id>`.
+</Note>
+
+## The ClickUp status ladder
+
+```text
+in progress → in dev → ready for qa → in qa → passed qa → in staging → ready for deploy → deployed on live
+                                           ↘ rejected in qa (back to in progress)
+```
+
+| Move to | The moment |
+| --- | --- |
+| `in progress` | You pick the task up. |
+| `in dev` | The feature branch is merged into `develop`. Not when a PR is open. |
+| `ready for qa` | The dev deploy finished and the change is live on dev. Not when the merge is done and the deploy is pending. |
+| `in qa`, `passed qa`, `rejected in qa` | QA sets these. A rejection bounces back to you. |
+| `in staging` | Merged into `staging` and the staging deploy finished. |
+| `ready for deploy` | The PR to `main` is open and approved for the release. |
+| `deployed on live` | The prod workflow ran on `main` and the change is confirmed live. A merged PR alone is not a deploy. |
+
+<Warning>
+  Never move the card ahead of reality. A card in `ready for qa` is a promise that QA can test it on dev right now. Merging into `develop` or `staging` and running the prod workflow are a person's decisions; Claude asks before each one.
+</Warning>
+
+Keep the card's **Progress** field current (about 70% at `in dev`, 90% at `ready for qa`, 100% at `passed qa`). Addenda (a changed criterion, a scope note, a finding) go in comments, never in the description. All card text is in English.
+
+## The handoff comments
+
+Two comments carry the story for someone who was not in the weeds with you. The exact templates live in the [`feature-delivery` skill](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/feature-delivery/SKILL.md#handoff-comments-write-in-english).
+
+- **At `in dev`, the summary:** problem (symptom and root cause), solution (back, front, worker), validation (what proves it), branches on `develop`.
+- **At `ready for qa`, the QA handoff:** where to test, a numbered checklist with the exact wrong and right values, the original repro, regression checks, and one sentence of pass criteria.
+
+QA records the result as a comment, one scenario per line:
+
+```text
+Manual test · dev · 11/27
+- Export a finished run: Pass
+- CSV opens in Excel: Fail · dates show as text (screenshot attached)
+```
+
+## Pull requests
+
+`pr-creator` finds the task's branches in back, front, worker, mcp and docs, refuses a head that is an env branch or carries `develop` or `staging` merges, and opens the PRs with the `[TYPE] Imperative` title and the team body (Description, Preview, Test map, Plan, References). The default base is `main`. It never merges and never runs a deploy. Details: [pr-creator](/ai-workflows/internal-developer-workflows/agents/pr-creator) and [PR and deploy flow](/ai-workflows/internal-developer-workflows/playbooks/pr-and-deploy-flow).
+
+<Warning>
+  Never open or merge a PR into `main` whose head carries content merged from `develop` or `staging`. In 2026-09 one such PR carried 27 dev-only migrations and production failed to boot until it was reverted.
+</Warning>
+
+## Deploy and verify
+
+- Only `develop` and `staging` deploy on push. Every prod workflow (back `cicd_prod.yml`, front `cicd-prod.yaml`, worker `cicd_prod.yml`, mcp `cicd_prod.yml`) is `workflow_dispatch` only, so a merge into `main` ships nothing until someone runs it. Never call a merge a deploy.
+- When GitHub Actions is blocked, deploy from your machine with the [`deploy-direct` skill](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/deploy-direct/SKILL.md). A prod write needs `--allow-prod` and a typed confirmation, so the person runs it in their own terminal.
+- A green deploy is not a finished rollout. Confirm the new task is the only one serving before concluding anything about a new route or fix ([`cicd-and-deploy-topology.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/kb/cicd-and-deploy-topology.md)).
+- After the prod run, `prod-health` checks the platform, and a deploy that carried a migration gets a read-only check that the migration is recorded and the API booted cleanly.
+- "Is it in dev?" is answered by the file content on the branch, never by a PR that says merged: env branches have been reset and reverted.
+
+## The announcement
+
+`deploy-announcer` builds the team message from what a successful prod workflow run actually deployed in the window, across back, front, worker and mcp, and lists merged-but-not-deployed PRs apart. Plain text, no emojis, one bullet per ClickUp task, an em dash before the URL:
+
+```text
+Hey team, I just deployed the following to production:
+
+- <Task name> — https://app.clickup.com/t/<task id>
+
+Please give me a shout if anything looks off after the rollout. Thanks!
+```
+
+## Reports for stakeholders
+
+Postmortems, product summaries and incident reports are one-off deliverables, kept out of the repo roots. Durable product documentation goes to the docs repo. To present one in a meeting, see [Presentation decks](/engineering/ways-of-working/presentation-decks).

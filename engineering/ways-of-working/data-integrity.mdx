@@ -1,0 +1,54 @@
+---
+title: "Data integrity and DB access"
+description: "Run scoping and the shared-row clobber, and how we read and change data in each environment: read-only prod, no prod write without authorization."
+---
+
+Two halves of the same discipline: the platform must not mix one run's data with another's, and we must not change data we were only asked to look at.
+
+## Run scoping: a row keyed by flow, not by run
+
+Node state on `flows_nodes.data` is keyed by `(flowId, nodeId, versionId)`. There is no run in that key. When two runs of the same flow version execute at once (a webhook while a cron fires, two API calls in the same second), both write into the same row: the later write wins and one session's content can surface in another.
+
+### How to spot it
+
+- **Symptom:** "a node shows data from another run or another customer", "the output is intermittently wrong under load", "fine alone, wrong in production". Intermittence tied to concurrency is the fingerprint.
+- **Confirm:** line the runs up by `flowId` and timestamp in a tight Datadog window. Overlapping runs writing the same node is the evidence.
+- **Check the key:** a value on `flows_nodes.data` with no `execId` or `runId` beside it is shared by definition.
+
+### The fix: pick the right axis
+
+- **Execution (`execId`, `runId`)** isolates each run. This is the default for anything that should be independent per execution. World B writes rows keyed this way; leaks happen when a path forgets to.
+- **Session (`sessionId`)** accumulates across turns, for chat history and session memory. Isolating a chat per run would drop its memory; accumulating a stateless run would leak it.
+
+An idempotency guard needs the run scope (`execId`) in its key, and realtime results go to a room, never to one stored `user.socketId`.
+
+### Prove it, do not eyeball it
+
+Fire N runs of the same flow at once and assert zero shared `execId`s and that every run finished with its own data. The `flux-e2e-local` skill's concurrency burst and the `flux-run-testing` skill do this. This test exists because a customer running many audio sessions concurrently once saw content from another session.
+
+## Database access
+
+| Scope | Access | How |
+| --- | --- | --- |
+| Local | Read and write | The local `app_db` of the dev stack. See [Local environment](/engineering/ways-of-working/environment). |
+| Dev and staging | Read and write | Your own SSH key on the non-prod bastion; the [`ec2-tunnel`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/ec2-tunnel/SKILL.md) skill. |
+| Production | Read-only, granted per person | The admin authorizes your key on the prod bastion. Queries go through [`ec2-tunnel-prod`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/ec2-tunnel-prod/SKILL.md), which refuses any write statement, sets `default_transaction_read_only = on` and wraps each query in `BEGIN TRANSACTION READ ONLY`. |
+| Production writes | Not shipped to teammates | A prod data change is a reviewed migration or PR, or an action the owner runs with explicit authorization. |
+
+Set up access with the `db-setup` agent; the manual walkthrough is in [Onboarding](/ai-workflows/internal-developer-workflows/onboarding). Bastion topology: [`.claude/kb/ec2-ssh-access.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/kb/ec2-ssh-access.md).
+
+<Warning>
+  **No write to production without explicit authorization, item by item.** This covers data, infrastructure (task definitions, `desiredCount`, security groups, WAF) and config, not only code deploys. Investigate prod freely in read mode. When the next step is a prod write, stop and hand over the ready command with what it does and how to revert it. "Light, reversible, no impact" is an assessment, not permission, and a yes to one action does not extend to the next. Source: [`.claude/rules/prod-and-infra.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/rules/prod-and-infra.md).
+</Warning>
+
+### Habits with customer data
+
+- Investigate read-only, keep query and log windows tight (a run is minutes, not days), and never export payloads.
+- No customer personal data in card comments or screenshots; crop or blur.
+- SQL gotchas: quote camelCase columns (`"userId"`), timestamps are UTC, cast ids to `uuid` when comparing.
+
+### Moving data between environments
+
+Copying a flow, a space or libraries between environments goes through the [`db-migration`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/db-migration/SKILL.md) skill: a generated SQL file applied in one transaction, `COPY` by column name, and a final check of zero dangling edges. The traps are in [`.claude/kb/db-migrations/`](https://github.com/enhancedai-com/Workflow/tree/main/.claude/kb/db-migrations). Fingerprint the database before any write (prod and non-prod differ in `max_connections`), and remember that clones carry real credentials in node data: never expose a backup outside the team.
+
+Access grants on dev and staging use [`flux-access`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-access/SKILL.md) and [`flux-plan`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-plan/SKILL.md). Putting support into a customer account uses [`flux-support-admin`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-support-admin/SKILL.md), dry-run first, and its prod path requires `PROD_AUTHORIZED_BY`. To act as a user for debugging, use the audited [`flux-impersonate`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-impersonate/SKILL.md) skill.

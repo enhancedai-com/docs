@@ -3,73 +3,49 @@ title: "Claude Code — Guardrails"
 description: "What the agent can and can't do in this workspace, and how to change it."
 ---
 
-The workspace enforces two layers of guardrails on Claude Code.
+The workspace enforces guardrails on Claude Code in two layers, both in the Workflow repo's [`.claude/settings.json`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/settings.json): permission lists and `PreToolUse` hooks. They apply to everyone who starts Claude Code from the workspace root and accepts the trust prompt, whatever they ask.
 
-## Allow / Deny lists
+## The rules that hold for everyone
 
-`.claude/settings.json` enumerates:
+- **No agent merges a PR, pushes to a remote branch or runs a deploy.** Those are a person's decisions. `gh pr merge` and `gh workflow run` always ask first, and a prod deploy is always a person running the prod workflow on purpose.
+- **Production is read-only.** Prod database access goes through `ec2-tunnel-prod`, which refuses writes three ways. No write to prod data, infrastructure or config without explicit authorization, item by item.
+- **Never hand-author commits on an env branch.** Work happens on `feat/<task id>` or `fix/<task id>` from `origin/main`.
+- **Do only what was requested.** No drive-by changes; anything outside the approved plan means stop and update the plan.
+- **Prove before you ship.** Every fix carries proof; every claim about prod data is backed by a read-only query, not memory.
 
-- **`permissions.allow`** — common read-only and build commands that run without prompting (`pnpm install`, `pnpm dev:*`, `pnpm test*`, `git status`, `git diff`, `git log`, `git fetch`, `gh pr list`, etc.).
-- **`permissions.deny`** — destructive commands that never run (`rm -rf`, `git reset --hard`, `git push --force`, `git clean -f`, `git branch -D`, `DROP TABLE`, `DROP DATABASE`, `TRUNCATE`).
+## Allow, deny and ask lists
 
-Anything not on either list prompts for confirmation the first time it is used in a session.
+- **`permissions.allow`**: common read and build commands that run without prompting (`pnpm install`, `pnpm dev:*`, `pnpm test*`, `pnpm lint:*`, `pnpm build*`, `git status`, `git diff`, `git log`, `git fetch`, `git branch`, `gh pr list`, `gh pr view`, `gh pr diff`, and read-only PowerShell cmdlets).
+- **`permissions.deny`**: destructive commands that never run (`rm -rf`, `rm -r`, `git reset --hard`, `git push --force`, `git push -f`, `git clean -f`, `git branch -D`, `DROP TABLE`, `DROP DATABASE`, `TRUNCATE`, `Remove-Item -Recurse -Force`).
+- **`permissions.ask`**: always confirm `gh pr merge`, `gh workflow run`, `gh workflow enable`, the plan approval script, and removing a frozen-tests lock file.
 
-## PreToolUse hooks
+Anything on no list prompts the first time it is used in a session.
 
-Two Node ESM scripts under `scripts/guardrails/`, wired via `.claude/settings.json` under `hooks.PreToolUse`.
+## Hooks
 
-### `block-sensitive-writes.mjs`
+| Hook | Runs on | What it enforces |
+| --- | --- | --- |
+| [`guard-env-branches.mjs`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/hooks/guard-env-branches.mjs) | Bash and PowerShell commands that call `git` | No commit on `main`, `staging`, `develop` or the frozen `master` and `production`; no merging or rebasing `develop` or `staging` into a feature branch; no force push; no push to `main`. |
+| [`guard-dev-loop.mjs`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/hooks/guard-dev-loop.mjs) | Edit, Write, MultiEdit, NotebookEdit | On a `<type>/<task id>` branch in back, front, worker or mcp: no code edit without `.claude/plans/<task id>.md`; from risk 3, no edit without the approval line; no edits to frozen tests, and no `.only` or `.skip`, while the lock exists. |
 
-Denies `Edit`, `Write`, `MultiEdit`, and `NotebookEdit` on paths matching:
-
-- `.env*` (except `.env.example`)
-- `*credentials*`
-- `*secrets*`
-- `*.pem`
-- `*.key`
-- `id_rsa*`
-
-### `confirm-shared-state.mjs`
-
-Prompts for confirmation before shell commands that touch shared state:
-
-- `git push`
-- `git merge`
-- `git rebase`
-- `gh pr merge`
-- deploy scripts (enumerated at setup time by grepping `apps/*/package.json` + `scripts/`)
-
-## Prerequisites
-
-- Node must be on `PATH` (hooks are `.mjs` run as `node scripts/guardrails/<hook>.mjs`).
-- No npm dependencies — pure Node ESM + `node:test`.
+The approval line is written only by [`approve-plan.mjs`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/hooks/approve-plan.mjs), run by the approver. The loop these hooks protect is the [Delivery practice](/engineering/ways-of-working/delivery).
 
 ## `settings.json` vs `settings.local.json`
 
-- **`settings.json`** — the team baseline. Committed. Changes go through PR.
-- **`settings.local.json`** — personal overrides. Gitignored. Escape hatch for individual workflows.
+- **`settings.json`**: the team baseline. Committed. Changes go through a PR in the Workflow repo.
+- **`settings.local.json`**: personal overrides. Gitignored. Escape hatch for individual workflows. Personal instructions to Claude go in `CLAUDE.local.md`.
 
 ## Changing the standard
 
-1. Edit `.claude/settings.json` and/or the hook scripts under `scripts/guardrails/`.
-2. Add or update tests under `scripts/guardrails/tests/`.
-3. Run `node --test scripts/guardrails/tests/`.
-4. Open a PR.
+1. Edit `.claude/settings.json` and/or the hook under `.claude/hooks/`.
+2. Smoke-test the hook with a JSON event on stdin, from Bash (a PowerShell pipe adds a BOM that breaks the JSON):
 
-Personal escape hatches that should NOT be part of the shared standard go in `.claude/settings.local.json`.
+   ```bash
+   printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git push --force"}}' \
+     | node .claude/hooks/guard-env-branches.mjs
+   echo "exit=$?"
+   # Expected: a "Blocked by guard-env-branches" message on stderr, then exit=2
+   ```
+3. Open a PR in the Workflow repo, and update this page in the docs repo.
 
-## Smoke-testing locally
-
-The hooks read JSON events on stdin and write a decision on stdout. Use Bash (not PowerShell — its pipe injects a BOM that breaks JSON parsing):
-
-```bash
-printf '%s' '{"tool_name":"Edit","tool_input":{"file_path":".env"}}' \
-  | node scripts/guardrails/block-sensitive-writes.mjs
-echo "exit=$?"
-# Expected: {"permissionDecision":"deny",...} then exit=2
-
-printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git push"}}' \
-  | node scripts/guardrails/confirm-shared-state.mjs
-echo "exit=$?"
-# Expected: {"permissionDecision":"ask",...} then exit=2
-```
+Never bypass a guard (`--no-verify`, a force flag) to get past it once. If a guard is wrong for a real case, change it deliberately in a PR.
