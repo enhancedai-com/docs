@@ -21,28 +21,34 @@
                 "group": "Concepts",
                 "public": true,
                 "pages": [
-                  "index"
+                  "index",
+                  "product-guide/concepts"
                 ]
               },
               {
                 "group": "SuperChat",
                 "public": true,
                 "pages": [
-                  "product-guide/superchat/overview"
+                  "product-guide/superchat/overview",
+                  "product-guide/superchat/building-agents"
                 ]
               },
               {
                 "group": "Organizations and roles",
                 "public": true,
                 "pages": [
-                  "product-guide/organizations/overview"
+                  "product-guide/organizations/overview",
+                  "product-guide/organizations/roles-and-permissions",
+                  "product-guide/organizations/onboarding"
                 ]
               },
               {
                 "group": "Running agents",
                 "public": true,
                 "pages": [
-                  "product-guide/running-agents/overview"
+                  "product-guide/running-agents/overview",
+                  "product-guide/running-agents/schedules",
+                  "product-guide/running-agents/logs-and-retention"
                 ]
               },
               {
@@ -154,6 +160,18 @@
               {
                 "group": "Ways of working",
                 "pages": [
+                  "engineering/ways-of-working/index",
+                  "engineering/ways-of-working/delivery",
+                  "engineering/ways-of-working/bug-investigation",
+                  "engineering/ways-of-working/data-integrity",
+                  "engineering/ways-of-working/two-worlds",
+                  "engineering/ways-of-working/model-provider",
+                  "engineering/ways-of-working/testing",
+                  "engineering/ways-of-working/environment",
+                  "engineering/ways-of-working/security",
+                  "engineering/ways-of-working/presentation-decks",
+                  "engineering/ways-of-working/skills-and-agents",
+                  "engineering/ways-of-working/glossary",
                   "getting-started/git-workflow",
                   "getting-started/delivery-workflow",
                   "ai-workflows/claude-code-setup",
@@ -183,7 +201,6 @@
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel",
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod",
                           "ai-workflows/internal-developer-workflows/skills/db-migration",
-                          "ai-workflows/internal-developer-workflows/skills/tlc-spec-driven",
                           "ai-workflows/internal-developer-workflows/skills/mcp-validation"
                         ]
                       },
@@ -384,28 +401,34 @@
                 "group": "Conceitos",
                 "public": true,
                 "pages": [
-                  "pt-br/index"
+                  "pt-br/index",
+                  "product-guide/pt-br/concepts"
                 ]
               },
               {
                 "group": "SuperChat",
                 "public": true,
                 "pages": [
-                  "product-guide/superchat/pt-br/overview"
+                  "product-guide/pt-br/superchat/overview",
+                  "product-guide/pt-br/superchat/building-agents"
                 ]
               },
               {
                 "group": "Organizações e papéis",
                 "public": true,
                 "pages": [
-                  "product-guide/organizations/pt-br/overview"
+                  "product-guide/pt-br/organizations/overview",
+                  "product-guide/pt-br/organizations/roles-and-permissions",
+                  "product-guide/pt-br/organizations/onboarding"
                 ]
               },
               {
                 "group": "Executar agentes",
                 "public": true,
                 "pages": [
-                  "product-guide/running-agents/pt-br/overview"
+                  "product-guide/pt-br/running-agents/overview",
+                  "product-guide/pt-br/running-agents/schedules",
+                  "product-guide/pt-br/running-agents/logs-and-retention"
                 ]
               },
               {
@@ -517,6 +540,18 @@
               {
                 "group": "Ways of working",
                 "pages": [
+                  "engineering/ways-of-working/index",
+                  "engineering/ways-of-working/delivery",
+                  "engineering/ways-of-working/bug-investigation",
+                  "engineering/ways-of-working/data-integrity",
+                  "engineering/ways-of-working/two-worlds",
+                  "engineering/ways-of-working/model-provider",
+                  "engineering/ways-of-working/testing",
+                  "engineering/ways-of-working/environment",
+                  "engineering/ways-of-working/security",
+                  "engineering/ways-of-working/presentation-decks",
+                  "engineering/ways-of-working/skills-and-agents",
+                  "engineering/ways-of-working/glossary",
                   "getting-started/pt-br/git-workflow",
                   "getting-started/pt-br/delivery-workflow",
                   "ai-workflows/claude-code-setup",
@@ -546,7 +581,6 @@
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel",
                           "ai-workflows/internal-developer-workflows/skills/ec2-tunnel-prod",
                           "ai-workflows/internal-developer-workflows/skills/db-migration",
-                          "ai-workflows/internal-developer-workflows/skills/tlc-spec-driven",
                           "ai-workflows/internal-developer-workflows/skills/mcp-validation"
                         ]
                       },

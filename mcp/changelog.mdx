@@ -3,6 +3,19 @@ title: "Changelog"
 description: "What's new in the FluxPrompt MCP integration."
 ---
 
+## 2026-11-18 — Scheduled runs read a six-field cron correctly
+
+**A schedule registered on Temporal Schedules now fires on the day and month you set.**
+
+- The editor saves a schedule as a six-field cron expression, with seconds first. Temporal Schedules
+  read five fields (`minute hour day month weekday`), so a six-field expression was read with every
+  field shifted by one, and the month was read as a year.
+- A six-field expression now drops its seconds field before it is registered on Temporal:
+  `20 20 4 1,31 * *` is registered as `20 4 1,31 * *`. A five-field expression is registered unchanged.
+  On this path a run starts at second `00` of the minute you chose.
+- No MCP tool changed, and the MCP does not create schedules. See
+  [Schedules](/product-guide/running-agents/schedules).
+
 ## 2026-11-17 — Node categories are described
 
 **`list_node_types` now tells you what each node category means.**
@@ -10,6 +23,40 @@ description: "What's new in the FluxPrompt MCP integration."
 - **`list_node_types`** returns `categories`: one `name` and `description` per category, next to `nodeTypes`.
 - **`get_node_type`** and the `fluxprompt://node-types` resource add `categoryDescription` to each node type.
 - Nothing was removed or renamed. A client that ignores the new fields keeps working.
+
+## 2026-11-09 — Run logs, version history and export
+
+**You can read any run of an agent, undo a publish, and export an agent as JSON.**
+
+### New tools
+- **[`list_runs`](/mcp/tools/running-agents#list_runs)** — lists an agent's runs from every trigger
+  (editor, API, webhook, schedule, chat, MCP), newest first, filtered by `status`, `trigger`, `since`
+  (`1h`, `24h`, `7d`) or a `from`/`to` range of up to 7 days within the last 30.
+- **[`get_node_input`](/mcp/tools/running-agents#get_node_input)** — what a node received in a run,
+  redacted and cut at 20 000 characters.
+- **[`export_agent`](/mcp/tools/versioning#export_agent)** — the nodes and edges of the live version,
+  or of a named version, in the editor's **Agent JSON** format.
+- **[`list_version_history`](/mcp/tools/versioning#list_version_history)** — the saved states of a
+  version; on the live version, one per publish.
+- **[`rollback_version`](/mcp/tools/versioning#rollback_version)** — restores an earlier state as a
+  new current state, the way the editor does.
+
+### Changed
+- **Reading runs needs `read`, not `execute`.** `get_run_status`, `get_run_nodes` and `get_node_output`
+  join the two new run tools on the `read` scope. They read any run the key's owner sees on the
+  **Logs** page. `run_agent` and `cancel_run` keep `execute`.
+- **Run data is marked untrusted.** Node inputs, outputs, previews and errors come inside
+  `untrustedContent`, next to `contentTrust: "untrusted"` and a `notice`.
+- **`publish_version` publishes like the editor.** It copies the version into the live version and
+  returns `deployedVersionId` and `deployedVersionName`.
+- **`create_version`** copies the live version by default, or a `sourceVersionId`, or takes `nodes`
+  and `edges` (what `export_agent` returns). On an agent without version control, the first call turns
+  it on, as the editor toggle does.
+- **The live version is read-only.** A graph write that targets the live version is refused, and so is
+  a write without `versionId` on an agent that has a live version. Call `create_version`, edit the
+  version it returns, then publish it.
+- **`list_workspaces`** returns an `access` object per workspace (`role`, `missingScopes`, `limitedBy`,
+  `howToGetMore`) and a `scopeGuide`. A refused call says which scope it needed and how to get it.
 
 ## 2026-10-29 — Removed node types are marked and refused
 

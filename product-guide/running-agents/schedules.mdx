@@ -1,0 +1,122 @@
+---
+title: "Schedules"
+description: "Run an agent automatically every hour, day, week or month."
+---
+
+## What it is
+
+A schedule runs an agent automatically at the times you choose — every hour, every day, on some days of
+the week, or on some days of the month. You do not need to open the editor: the run happens on its own and
+shows up in **Logs** with the trigger **Scheduled**.
+
+## Who can use it
+
+- Your plan must include scheduled triggers. If it does not, saving a schedule fails with
+  **You do not have access to this product** — upgrade your plan or ask your organization admin.
+- A schedule belongs to the person who created it. Only that person can change or delete it.
+
+## Set a schedule
+
+<Steps>
+  <Step title="Open the agent's settings">
+    Open the agent, then open **Settings** on the global node (or the agent's **Settings** tab, **General**
+    section).
+  </Step>
+  <Step title="Turn on Enable Auto Trigger">
+    Switch on **Enable Auto Trigger**. The **Set time** window opens.
+  </Step>
+  <Step title="Choose how often">
+    In **Select Type**, pick **hourly**, **daily**, **weekly** or **monthly**.
+    - **hourly** — pick the minute of each hour.
+    - **daily** — pick the time of day.
+    - **weekly** — pick the days in **Select Days of the Week**, then the time.
+    - **monthly** — pick the days of the month, then the time.
+  </Step>
+  <Step title="Save">
+    Click **Save**. The global node now shows the schedule, for example
+    *Runs every day at 09:00:00.*, and the agent gets a schedule badge in the sidebar.
+  </Step>
+</Steps>
+
+<Tip>
+  Set the first run at least 5 minutes after the current time, as the window reminds you. A time that has
+  just passed waits for the next hour, day, week or month.
+</Tip>
+
+### Change or remove a schedule
+
+- **Change it:** click the schedule on the global node, change the time, and click **Update**.
+- **Remove it:** click **Delete** in the **Set time** window, or switch **Enable Auto Trigger** off.
+- **Deleting the agent** also removes its schedule.
+
+## Time zone
+
+Schedules run in **US Eastern Time** (New York time). The time picker labels it **EST**, but the
+schedule follows New York time all year, including daylight saving time. There is no time zone setting.
+
+To run at 09:00 in São Paulo, for example, convert to New York time first and remember that the
+difference changes when daylight saving time starts or ends in either place.
+
+## What runs
+
+- **Which version:** with version control on and a published version, the schedule runs the published
+  (live) version. Otherwise it runs the agent as it is in the editor. Edits you have not published do not
+  change what a scheduled run does.
+- **Inputs:** the **Set time** window has no input fields, so a scheduled run gets no typed input.
+  Build the agent so that it finds its own data at run time — for example with a **Pull Data**, **Api Caller**
+  or **Web Search** node — or keeps the values it needs in its nodes.
+- **Credits:** a scheduled run uses credits like any other run, charged to the plan that covers the agent.
+- **Deliveries:** a **Data Output** node delivers its result (email or callback) as it does for other runs.
+
+## Pause and upcoming runs
+
+When a schedule supports it, the **Set time** window also shows a status section:
+
+- a status pill, **Active** or **Paused**;
+- a **Pause** / **Resume** button;
+- **Next runs**: the next five run times, in Eastern Time.
+
+If the window does not show this section, your schedule cannot be paused: switch **Enable Auto Trigger**
+off to stop it, and set it again later.
+
+## What happens when a run fails
+
+- A run where a node fails is recorded in **Logs** with the status **Failed** and the trigger
+  **Scheduled**. The schedule keeps running at the next time.
+- A failed run is not retried. Fix the agent; the next scheduled run uses the fix if it is published.
+- No email or alert is sent for a failed scheduled run. Check **Logs**, filtered by **Scheduled** and
+  **Failed**.
+- Runs missed while the platform was unavailable are not run later.
+
+When the **Set time** window shows the status section:
+
+- If it shows **Paused** and you did not pause it, the schedule stopped itself after a failure it could
+  not record as a normal run. Fix the agent, then click **Resume**.
+- If a run is still going when the next one is due, the next one is skipped.
+
+## Limits
+
+| Limit | Value |
+|-------|-------|
+| Frequency | hourly, daily, weekly or monthly. There is no "every N minutes" option. |
+| Time zone | US Eastern Time, fixed |
+| Seconds | The picker shows seconds, but do not rely on them: a run can start at second 00 of the minute you chose. |
+| Inputs | None |
+| Schedules per agent | One, managed from the agent's settings |
+| Created through the MCP | Not supported — set schedules in the editor |
+
+## Troubleshooting
+
+| Problem | What to check |
+|---------|---------------|
+| The schedule did not run at the time I expected | The time is US Eastern Time, not your local time. |
+| **You do not have access to this product** when saving | Your plan does not include scheduled triggers. |
+| A scheduled run did something different from my editor run | The schedule runs the published version. Publish your changes. |
+| A scheduled run had empty input | Schedules send no input. Make the agent fetch its own data. |
+| I cannot find a scheduled run | Open **Logs** and set **Filter by trigger** to **Scheduled**. Logs show the last 30 days. |
+| **Could not read the schedule settings, so nothing was changed. Try again.** | A temporary error. Try again. |
+
+## Related
+
+- [Logs and retention](/product-guide/running-agents/logs-and-retention)
+- [Concepts](/product-guide/concepts)

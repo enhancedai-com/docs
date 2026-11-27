@@ -1,0 +1,148 @@
+---
+title: "Concepts"
+description: "The building blocks of FluxPrompt: organizations, spaces, folders, agents, versions, nodes, runs, plans and credits."
+---
+
+## The big picture
+
+FluxPrompt is where teams build AI agents visually and run them across their business. Everything you
+build lives in a simple hierarchy:
+
+```
+Organization
+└── Space
+    └── Folder (up to 5 levels deep)
+        └── Agent
+            └── Nodes, connected on a canvas
+```
+
+## Organization
+
+An **organization** ("Org" in the product) is your company's account in FluxPrompt. It holds the spaces,
+the members and their roles, the plan and the settings.
+
+- You can belong to several organizations. Switch between them with **Switch Org** in the user menu.
+- Your own personal account appears in that list too, under your name or **Personal**.
+- Each member has a role in the organization: **Owner**, **Admin**, **Builder** or **User**. See
+  [Roles and permissions](/product-guide/organizations/roles-and-permissions).
+- Organization-wide settings are under **Settings** › **Org Settings** and **Org Users**.
+
+## Space
+
+A **space** is a shared area inside an organization — usually a team, a department or a client. Agents,
+data and documentation live in spaces.
+
+- Each space you belong to has its own section in the **Agents** and **Data** sidebars, with a **Shared**
+  folder.
+- You also have a **Private** section that only you can see.
+- Inside a section, agents are grouped as **Fluxbots** (chatbots), **Agents** and **Interfaces**.
+- A space can have a monthly credit limit. When it is reached, runs in that space stop with
+  **This space has used its monthly limit of … FluxTokens. Ask a space admin to raise it to keep running
+  agents.** The limit resets on the 1st of each month.
+- Spaces are managed in **Settings** › **Spaces**.
+
+## Folder
+
+A **folder** organizes agents inside a space. Folders can contain subfolders, up to **5 levels** deep.
+Deleting a folder deletes the agents inside it.
+
+## Agent
+
+An **agent** (called a *flow* in the API) is a set of nodes connected on a canvas: inputs, AI model calls,
+code, integrations and outputs. Create one with **+** › **Add Agent** in the **Agents** sidebar, or start from
+**Templates**. **Create with Ai** builds a first version from a description.
+
+An agent's page has three tabs:
+
+- **Agent** — the canvas editor.
+- **Logs** — the agent's runs.
+- **Settings** — name, triggers (API, email, schedule), version control and the **Run credit budget**, a
+  credit cap per run.
+
+Related kinds of agents:
+
+- **Fluxbot** — an agent used as a chatbot.
+- **Interface** — a form-based front end for an agent.
+
+## Versions and publishing
+
+By default, an agent has one copy: what you see in the editor is what runs. Turn on **Enable Version
+Control** in the agent's settings to keep a published version separate from your edits.
+
+- The **Versions** menu shows **CURRENTLY LIVE** (the published version) and **YOUR VERSIONS** (your drafts).
+- **Add New** creates a version; **Publish** makes it live.
+- **Restore** brings back an earlier state from a version's history.
+- Runs from the API, schedules and other triggers use the published version.
+
+## Nodes
+
+A **node** is one step of an agent. You connect a node's output to another node's input to pass data along.
+The node picker groups nodes into categories:
+
+| Category | Examples |
+|----------|----------|
+| Text | Ai Text Generator, Text Box, Display Box, Report Builder |
+| Visual | Ai Image Generator, Ai Image Reader, Ai Video Generator |
+| Audio | Ai Voice Generator, Ai Audio Transcriber |
+| Data | Small Memory, Large Memory, Pull Data, Push Data, SQL Database |
+| Web | Web Search, Webpage Scraper, Search Trends |
+| Functions | Scripting, Decision Paths, Ai Model Switch, Grouping |
+| External | Data Input, Data Output, Agent Caller, Api Caller, Third Party Integration, MCP Client |
+| Library | Agents shared as building blocks: System Library, Organization Library, Space Library |
+
+Every agent has one **global node**, where the whole run starts.
+
+## Runs
+
+A **run** is one execution of an agent. Runs start in several ways:
+
+| Trigger | How |
+|---------|-----|
+| Manual | **Run Agent** on the global node, or **Run Prompt** on a single AI node |
+| API | A call to the agent's API URL, optionally with a callback URL for the result |
+| Email | A message to the agent's email address |
+| Scheduled | Hourly, daily, weekly or monthly — see [Schedules](/product-guide/running-agents/schedules) |
+| Chatbot | A conversation with a Fluxbot |
+| MCP | An AI assistant connected through the [FluxPrompt MCP](/mcp/overview) |
+
+Each run is recorded with its status, duration, credits and cost, and what each node received and produced.
+See [Logs and retention](/product-guide/running-agents/logs-and-retention).
+
+## Plans
+
+Your plan decides what your organization can do: how many agents, chatbots, seats and company spaces you
+get, which AI models you can use, and how many credits are included each month.
+
+| Plan | |
+|------|---|
+| **Intro** | Free starting plan with trial credits. New accounts start here. |
+| **Starter** | Paid plan |
+| **Advanced** | Paid plan |
+| **Professional** | Paid plan |
+| **Organization** | Paid plan for organizations |
+| **Enterprise** | Negotiated plan, with terms set in your contract |
+
+Owners and Admins see what each plan includes today in **Settings** › **Pricing**. When you reach a limit,
+FluxPrompt tells you, for example **You have used all 10 agents your Starter plan includes. Upgrade to keep
+building.** (the number and plan name are yours).
+If a model is not in your plan: **The plan covering this agent does not include this model. Upgrade or
+choose another model.**
+
+## Flux credits
+
+**Credits** pay for AI work. Every AI call — a text generation, an image, a transcription, a web search —
+uses credits according to the model and how much it processes. The product shows them as **Flux Credits**
+in the editor's run history and as **FluxTokens** in usage statistics; both mean the same thing.
+
+- Your plan includes credits every month. They renew with your subscription.
+- See your usage in **Settings** › **Token Usage**, and per run in **Logs**.
+- An agent can have a **Run credit budget** to cap what one run spends.
+- When your credits run out, runs stop with **You have used the FluxTokens your plan includes. Upgrade to
+  keep running agents.**
+
+## Related
+
+- [Roles and permissions](/product-guide/organizations/roles-and-permissions)
+- [Onboarding](/product-guide/organizations/onboarding)
+- [SuperChat](/product-guide/superchat/overview)
+- [Schedules](/product-guide/running-agents/schedules)

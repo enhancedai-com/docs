@@ -1,0 +1,151 @@
+---
+title: "Roles and permissions"
+description: "What the Owner, Admin, Builder and User roles can do in an organization, and how to change a member's role."
+---
+
+## What it is
+
+Every member of an organization has one **role**. The role decides what the member can see and do in that
+organization: build agents, use API keys, manage members, or only use what is published on boards.
+
+| Role | In one line |
+|------|-------------|
+| **Owner** | The person responsible for the organization. There is exactly one. Can do everything. |
+| **Admin** | Manages the organization: members, settings, billing, models. Builds agents. |
+| **Builder** | Builds and runs agents. Opens the canvas. Does not manage members or billing. |
+| **User** | Uses what is published on boards. Does not open the canvas, and cannot use API keys. |
+
+If you belong to several organizations, you can have a different role in each. Your role applies to the
+organization you are working in (see **Switch Org** in the user menu).
+
+## Who can use it
+
+Owners and Admins manage members and roles. Builders and Users cannot change anyone's role, including their
+own.
+
+## What each role can do
+
+| Action | Owner | Admin | Builder | User |
+|--------|:-----:|:-----:|:-------:|:----:|
+| See boards and what is published on them | ✓ | ✓ | ✓ | ✓ |
+| Open the canvas; create, edit, duplicate, share and delete agents | ✓ | ✓ | ✓ | — |
+| Create versions, publish, restore an earlier version | ✓ | ✓ | ✓ | — |
+| Create interfaces, boards and folders | ✓ | ✓ | ✓ | — |
+| See **Agents**, **Logs** and **Data** in the sidebar | ✓ | ✓ | ✓ | — |
+| Run agents | ✓ | ✓ | ✓ | Only if **Allow Users to run flows** is on |
+| Get, generate and use a personal API key | ✓ | ✓ | ✓ | — |
+| Create an MCP key | ✓ | ✓ | ✓ (read-only, unless the organization allows more) | — |
+| See and revoke MCP keys | All | All | Their own | — |
+| Invite and remove members | Admins, Builders, Users | Builders, Users | — | — |
+| Change a member's role | Admin, Builder, User | Builder, User | — | — |
+| Turn **Allow Users to run flows** on or off | ✓ | ✓ | — | — |
+| Turn AI models on or off for the organization or a space | ✓ | ✓ | — | — |
+| Organization settings, **Pricing**, **Billing**, **Log Retention** | ✓ | ✓ | — | — |
+| Add or remove people in a space | ✓ | ✓ | — | — |
+| Create a space | ✓ | — | — | — |
+| Change the log retention default for all spaces | ✓ | — | — | — |
+| Transfer ownership | ✓ | — | — | — |
+
+<Note>
+  **The User role cannot use an API key or create an MCP key.** A User who calls the API with a key gets
+  **The User role cannot use an API key. Ask an Admin for the access you need.** Give the person the Builder
+  role if they need programmatic access.
+</Note>
+
+### What each role sees in Settings
+
+| Role | Settings tabs |
+|------|---------------|
+| Owner, Admin | Profile, Org Settings, Ai Configurations, Org Users, Agents, Token Usage, Completion Logs, Log Retention, Integrations, MCP Keys, Pricing, Billing, Ai Technologies, Spaces |
+| Builder | Profile, Ai Configurations, Org Users, Agents, Token Usage, Completion Logs, Integrations, MCP Keys, Ai Technologies, Spaces |
+| User | Profile |
+
+## Space roles
+
+Inside a space, a person is either a space **admin** or a space **member**. The person who creates a space
+is its admin. A space admin can manage that space's log retention (if they are also an organization Admin or
+the Owner), refresh the space's API key, and edit the space's documentation. Space roles are separate from
+organization roles and are not shown in the member list.
+
+## Invite a member
+
+<Steps>
+  <Step title="Open Org Users">
+    Open **Settings** and choose **Org Users**.
+  </Step>
+  <Step title="Add the person">
+    Click **Add User**. In **Add a New User**, enter the **User Email** and pick a **Role**.
+    The role list only shows the roles you can give: an Owner can invite Admins, Builders and Users; an
+    Admin can invite Builders and Users.
+  </Step>
+  <Step title="The person accepts">
+    They receive an email inviting them to join the organization in FluxPrompt with that role.
+  </Step>
+</Steps>
+
+## Change a member's role
+
+<Steps>
+  <Step title="Open Org Users">
+    Open **Settings** and choose **Org Users**.
+  </Step>
+  <Step title="Open the member's role menu">
+    Click the member's role and pick the new one. You cannot change your own role.
+  </Step>
+  <Step title="Check the confirmation">
+    FluxPrompt shows **Role updated to Builder.** (or the role you chose).
+  </Step>
+</Steps>
+
+A role change takes effect right away, also for that person's MCP keys: lowering someone to **User**
+removes their ability to change or run agents through an AI assistant within about a minute.
+
+## Let Users run agents
+
+By default, members with the **User** role can see what is published on boards but cannot run it. To let
+them run it, an Owner or Admin turns on **Allow Users to run flows** in **Org Users**. FluxPrompt confirms
+with **Users in this organization can now run what they can see.**
+
+## The Owner
+
+- Every organization has exactly one Owner.
+- The Owner cannot be invited, removed or deactivated, and nobody can change the Owner's role.
+- Ownership moves only by a transfer to an **active** member. The previous Owner becomes an **Admin**.
+- Every role change and transfer is recorded.
+
+<Note>
+  The organization settings do not have a **Transfer ownership** button yet. To transfer ownership, contact
+  FluxPrompt support.
+</Note>
+
+## Seats
+
+Your plan includes a number of seats. **User** members take a User seat; Owner, Admin and Builder members
+take a Builder seat. Promoting someone to a Builder seat needs a free Builder seat; lowering a role always
+works.
+
+## Limits
+
+- One Owner per organization.
+- An Admin cannot invite, remove or change other Admins.
+- Builders and Users cannot manage members.
+
+## Troubleshooting
+
+| Message | What it means |
+|---------|---------------|
+| **The User role cannot use an API key. Ask an Admin for the access you need.** | The key belongs to a member with the User role. Change their role to Builder. |
+| **The User role cannot create an MCP token. Ask an Admin for the access you need.** | Same as above, for MCP keys. |
+| **Your organization has not enabled running for User accounts. Ask an Owner or an Admin to turn on "Allow Users to run flows".** | Turn on **Allow Users to run flows**, or change the member's role. |
+| **Your organization has not given you access to agents. Ask an administrator if you need it.** | You have the User role. Ask an Owner or Admin for the Builder role. |
+| **Only an Owner or an Admin can manage the members of this organization.** | Builders and Users cannot invite or remove members. |
+| **You cannot invite somebody as admin. Ask an Owner of this organization.** | Only the Owner can add Admins. |
+| **The organization Owner cannot be removed or deactivated. Transfer ownership first.** | The Owner must transfer ownership before leaving. |
+| **No Builder seats left: this plan allows 3 and all of them are taken. Change a member's role or upgrade the plan.** | Your plan's Builder seats are full. |
+| **Access denied: the user role cannot perform this action. Allowed roles: …** | Your role does not allow this action. |
+
+## Related
+
+- [Concepts](/product-guide/concepts)
+- [Onboarding](/product-guide/organizations/onboarding)
+- [MCP authentication](/mcp/authentication)
