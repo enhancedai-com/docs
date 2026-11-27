@@ -1,0 +1,19 @@
+---
+title: "Running agents"
+description: "The ways to run a FluxPrompt agent: from the editor, over the API, from a webhook, in a chatbot, through a form, or on a schedule."
+---
+
+An agent is a flow of nodes you build in the FluxPrompt editor. Once it is built, you can run it in several ways:
+
+| Way | When to use it |
+|---|---|
+| Editor | Press **Run** to test the whole agent, or run a single node while you build. |
+| API | Call `POST /flux/api-v2` with an API key from your own code. The call waits a short time for the result; a longer run returns a status URL to poll, or calls your `callback_url` when it finishes. |
+| Webhook | Let another service, such as Zapier, start the agent by posting to its webhook URL. |
+| Chatbot | Publish the agent as a chatbot that keeps a conversation going across messages. |
+| Form | Share a form that people fill in to run the agent. |
+| Schedule | Run the agent automatically at the times you set on its starter node. |
+
+Every run is recorded, so you can see what each node received and returned. A run can be cancelled while it is in progress.
+
+The pages in this group explain each way to run an agent in detail.

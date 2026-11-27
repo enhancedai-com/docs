@@ -1,5 +1,6 @@
 ---
 title: "Environment Variables"
+description: "Every environment variable the worker reads, from worker/.env.example and the src/env.ts schema, with whether it is required and what it does."
 ---
 
 51 env vars in `worker/.env.example`. `src/env.ts`'s Zod schema validates those plus 18 more vars that aren't in `.env.example` at all (several Required) — both sets are in the table below, 69 rows total. Legend: **Required** = app breaks or a feature silently fails without it, **Optional** = has a default/fallback in code.

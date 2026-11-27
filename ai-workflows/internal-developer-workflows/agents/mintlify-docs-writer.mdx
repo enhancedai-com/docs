@@ -42,23 +42,18 @@ The agent is defined at `docs/.claude/agents/mintlify-docs-writer.md`.
   </Step>
 </Steps>
 
-## Folder → group mapping
+## Tab and group mapping
 
-The agent uses this reference to place new pages in the right navigation group:
+The agent places a page by who reads it:
 
-| Folder | Group in `docs.json` |
-| --- | --- |
-| `getting-started/` | "Getting started" in "Guides" |
-| `ai-workflows/` | "Ai Workflows" in "Guides" |
-| `main-api/` | "Main API" in "Guides" |
-| `worker/node/` | "Node" subgroup under "Worker" |
-| `worker/workflows/` | "Workflows" subgroup under "Worker" |
-| `worker/activities/` | "Activities" subgroup under "Worker" |
-| `client/` | "Client" in "Guides" |
-| `client/specific-features/` | "Specific features" subgroup under "Client" |
-| `api-reference/` | groups in "🚧 API reference" tab |
+| Tab | Audience | Public | Groups |
+| --- | --- | --- | --- |
+| Product guide | People who use FluxPrompt | Yes, bilingual | Concepts, SuperChat, Organizations and roles, Running agents, Integrations |
+| API & MCP | Integrators | Yes, bilingual | Completions API, Integrations API, Memory Pods API, MCP |
+| Engineering | The engineering team | No, English only | Ways of working, Runbooks, Architecture, Execution, Main API, Worker, Client, MCP server, Incidents and audits |
+| Team | Everyone on the team | No, English only | Welcome |
 
-If the folder doesn't match any of the above, the agent inspects `docs.json` and asks you where to place the page.
+If no group fits, the agent inspects `docs.json` and asks you where to place the page.
 
 ## Writing standards it follows
 

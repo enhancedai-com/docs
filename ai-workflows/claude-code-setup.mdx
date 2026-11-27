@@ -278,21 +278,10 @@ The documentation project uses Mintlify to generate the help site at [help.enhan
 5. **Writes the documentation** — Creates MDX with proper frontmatter, components, and code examples
 6. **Updates `docs.json`** — Registers the new page in the correct navigation group
 
-**Folder-to-group mapping:**
-
-| Folder | Navigation group |
-| --- | --- |
-| `getting-started/` | "Getting started" in Guides tab |
-| `ai-workflows/` | "Ai Workflows" in Guides tab |
-| `main-api/` | "Main API" in Guides tab |
-| `worker/node/` | "Node" subgroup under Worker |
-| `worker/workflows/` | "Workflows" subgroup under Worker |
-| `worker/activities/` | "Activities" subgroup under Worker |
-| `client/` | "Client" in Guides tab |
-| `client/specific-features/` | "Specific features" under Client |
+**Placement:** the agent picks the tab by audience. **Product guide** and **API & MCP** are public and bilingual (English and pt-BR); **Engineering** and **Team** are internal and English only. The full tab and group list is in [the docs writer agent page](/ai-workflows/internal-developer-workflows/agents/mintlify-docs-writer).
 
 <Warning>
-  Documentation content is always written in English regardless of the language you communicate in. The `docs.json` file is the only navigation config — never use the deprecated `mint.json`.
+  Documentation content is written in English regardless of the language you communicate in; pages in the two public tabs also get a pt-BR twin. The `docs.json` file is the only navigation config — never use the deprecated `mint.json`.
 </Warning>
 
 ### Backend (`back/`)

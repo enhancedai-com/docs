@@ -3,3 +3,6 @@ node_modules
 # Agent worktrees — created inside the repo, never shareable
 .claude/worktrees/
 .worktrees/
+
+# Local Claude Code settings, per developer
+.claude/settings.local.json
