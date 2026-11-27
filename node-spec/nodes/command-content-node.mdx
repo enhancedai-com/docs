@@ -156,7 +156,8 @@ TIP: Use when the agent needs to reference a large body of knowledge that won't 
     "frontComponent": "src/components/nodes/LargeMemory.tsx",
     "frontFields": [
       "applyDimensionsToUpload", "applyFiltersToUpload", "clearFiltersOnExecution",
-      "clearOnExecution", "connectedContent", "executionStatus", "id", "label", "model",
+      "clearOnExecution", "connectedContent", "executionStatus", "filterRules", "filters",
+      "id", "label", "model",
       "nameSpace", "placement", "podIdData", "query", "queryData", "returnRaw", "searchType",
       "sensitiveFields", "systemAi", "text", "topK"
     ],
@@ -173,8 +174,9 @@ TIP: Use when the agent needs to reference a large body of knowledge that won't 
     "connectedContent": "Editor state: the connected content items the node has listed and processed. No executor reads it.",
     "applyFiltersToUpload": "Editor setting for the node's upload panel. No executor reads it.",
     "applyDimensionsToUpload": "Editor setting for the node's upload panel. No executor reads it; the executor reads the differently named applyDimensionsToUploads.",
-    "clearFiltersOnExecution": "Editor setting: clears the filters the editor holds after a completed run. No executor reads it.",
-    "filters": "Metadata filter the executor applies to the search. The editor keeps its filters in local state and never writes this field, so stored nodes do not carry it.",
+    "clearFiltersOnExecution": "Editor setting: after a completed run the editor clears filterRules and sets filters to null. No executor reads it.",
+    "filterRules": "Editor state: the label filter rules as the user built them ({id, label, operator, value}), restored on load. No executor reads it; the editor derives filters from it on every change.",
+    "filters": "Pinecone metadata filter the executor applies to the search, for example {\"author_name\": \"Jane\"} or {\"$and\": [...]}. Keys are the snake_case metadata names the pod stores, without the metadata_ prefix the executor adds. The editor writes it from filterRules; a node without filterRules keeps whatever value was written here.",
     "uploadNewContent": "Ids of files the executor waits for before searching. The editor never writes this field to the node.",
     "uploadMetadata": "Passed into the vector search request; the worker's search ignores it. The editor never writes this field to the node.",
     "applyDimensionsToUploads": "Passed into the vector search request; the worker's search ignores it. The editor never writes this field to the node.",
