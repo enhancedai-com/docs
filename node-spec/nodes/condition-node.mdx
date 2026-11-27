@@ -15,7 +15,7 @@ SuperChat reads this text word for word in its system prompt.
 ```markdown superchat-guide
 Decision Paths — Routes the flow based on conditions. IF/ELSE mode (true/false branches) or SWITCH mode (routes to first match).
 FIELDS:
-- conditions: Array of condition rules. Each has type (number/charCount/text), operator (>, <, = for number and charCount; begins, contains, ends for text), and value (what number/charCount compares against). Text conditions compare against sentimentValue. The sentiment type never matches.
+- conditions: Array of condition rules. Each has type (number/charCount/text), operator (>, <, = for number and charCount; begins, contains, ends for text), and value (what number/charCount compares against). Text conditions compare against sentimentValue. The sentiment type is not supported: it never matches, and the editor no longer offers it.
 TIP: Conditions evaluate the incoming data from the previous node. SWITCH = first match wins. IF/ELSE = conditions combine with AND/OR into one true and one false branch.
 ```
 
@@ -38,7 +38,7 @@ TIP: Conditions evaluate the incoming data from the previous node. SWITCH = firs
           "properties": {
             "type": {
               "type": "string",
-              "description": "Comparison kind. \"number\" compares the input, parsed as an integer, with value; \"charCount\" compares the input's character count (spaces and line breaks removed) with value; \"text\" compares the input with sentimentValue. \"sentiment\" is offered by the editor but no evaluator handles it, so it always evaluates to false.",
+              "description": "Comparison kind. \"number\" compares the input, parsed as an integer, with value; \"charCount\" compares the input's character count (spaces and line breaks removed) with value; \"text\" compares the input with sentimentValue. \"sentiment\" is no longer offered for new conditions and no evaluator handles it, so it always evaluates to false; the editor shows a warning on a node that still has one. Do not write it.",
               "enum": ["number", "charCount", "text", "sentiment"]
             },
             "operator": {
