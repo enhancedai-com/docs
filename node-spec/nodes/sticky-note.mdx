@@ -1,0 +1,57 @@
+---
+title: "Sticky Note"
+sidebarTitle: "Sticky Note"
+description: "Adds a freeform annotation or comment note to the flow canvas."
+---
+
+<Info>
+  Node type `stickyNote` in the [Utility](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Sticky Note — Annotation node for documentation. Does not affect flow execution at all.
+FIELDS:
+- text: Note content for documenting flow logic, TODOs, or explanations.
+TIP: Use liberally to document complex flows. Visible to anyone viewing the agent but never executed.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "stickyNote",
+  "label": "Sticky Note",
+  "category": "Utility",
+  "description": "Adds a freeform annotation or comment note to the flow canvas.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {"type": "string", "description": "Note content"}
+    },
+    "required": []
+  },
+  "outputSchema": {"type": "object", "properties": {}},
+  "handles": {
+    "sourceHandles": [],
+    "targetHandles": [],
+    "patterned": [],
+    "handlesPatterned": false,
+    "unresolved": false,
+    "canContinueExecutionChain": false
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/StickyNote.tsx",
+    "frontFields": ["collapsed", "disabled", "inputSize", "text"],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {
+    "disabled": "Legacy editor state: the component still reads it to lock the note's text area, but the current editor never writes it."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

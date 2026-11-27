@@ -1,0 +1,77 @@
+---
+title: "Agent Data Caller (Deep Reference Node)"
+sidebarTitle: "Agent Data Caller"
+description: "Reads a specific field from a node in another flow. RUNTIME BEHAVIOUR: this node is resolved by the builder, which calls the provider from the browser — there is no server-side executor. Inside a running flow it produces no output at all: the run reports completed and the node stores only its own configuration, so nothing downstream can consume a result. Use it on the canvas, not as a step another node reads from."
+---
+
+<Info>
+  Node type `deepRefNode` in the [Utility](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Deep Reference — References a specific field from a specific node in another agent flow.
+FIELDS:
+- flowId: Target agent UUID.
+- nodeId: Target node ID within that agent.
+- field: Which field to read from that node.
+TIP: Enables cross-agent data sharing. The editor copies the referenced field's value when the field is picked or refreshed; it is not pulled at runtime.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "deepRefNode",
+  "label": "Deep Reference Node (Flow Data Caller)",
+  "category": "Utility",
+  "description": "Reads a specific field from a node in another flow. RUNTIME BEHAVIOUR: this node is resolved by the builder, which calls the provider from the browser — there is no server-side executor. Inside a running flow it produces no output at all: the run reports completed and the node stores only its own configuration, so nothing downstream can consume a result. Use it on the canvas, not as a step another node reads from.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "flowId": {"type": "string", "description": "Id of the flow that owns the referenced node."},
+      "nodeId": {"type": "string", "description": "Id of the node to read within that flow."},
+      "field": {
+        "type": "string",
+        "description": "Name of the field to read from that node's data. The editor copies that field's current value into text when the field is picked or refreshed; setting field without the editor does not fill text."
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "The referenced field's value, copied by the editor when the field was picked or refreshed."
+      }
+    }
+  },
+  "handles": {
+    "sourceHandles": [{"handle": "output", "role": "data"}],
+    "targetHandles": [{"handle": "input"}],
+    "patterned": [
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": false
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/FlowDataCaller.tsx",
+    "frontFields": [
+      "collapsed", "field", "flowId", "label", "nodeId", "outputSize", "placement",
+      "sensitiveFields", "text"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {},
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

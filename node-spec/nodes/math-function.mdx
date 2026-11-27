@@ -1,0 +1,109 @@
+---
+title: "Functions (Math Function)"
+sidebarTitle: "Functions"
+description: "Evaluates a spreadsheet-style formula (hot-formula-parser) over named variables. The syntax is Excel, not JavaScript: \"&\" concatenates strings, while \"+\" on two string variables evaluates to #VALUE!. Supply the formula in either formula or formulaData — at least one must be non-empty, or the run fails with \"Formula is required.\""
+---
+
+<Info>
+  Node type `mathFunction` in the [Logic](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Functions — Performs mathematical or string operations on variables - in an excel-like formula.
+FIELDS:
+- variables: Named variables (varOne, varTwo, etc.) with values. Can receive dynamic input from upstream.
+- formula: The calculation or operation using those variable name - using excel-like formulas, or more specifically: https://formulajs.info/functions/
+TIP: Supports standard math operations and Excel string functions like LEN and CONCATENATE. Join text with "&", not "+".
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "mathFunction",
+  "label": "Math Function",
+  "category": "Logic",
+  "description": "Evaluates a spreadsheet-style formula (hot-formula-parser) over named variables. The syntax is Excel, not JavaScript: \"&\" concatenates strings, while \"+\" on two string variables evaluates to #VALUE!. Supply the formula in either formula or formulaData — at least one must be non-empty, or the run fails with \"Formula is required.\"",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "formula": {
+        "type": "string",
+        "description": "Formula to evaluate. Used only when formulaData is empty; formulaData[*].text (joined) takes precedence when present. Must be non-empty unless formulaData is supplied."
+      },
+      "formulaData": {
+        "type": "array",
+        "description": "Formula content fed from an upstream edge, as tokens joined with a space.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "variables": {
+        "type": "array",
+        "description": "Named variables usable inside the formula. Reference them by name, never by handle id.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "name": {
+              "type": "string",
+              "description": "Variable name. Must NOT end in a digit: hot-formula-parser reads \"animal1\" as a cell reference and the formula silently evaluates to true instead of using your value. Use \"animal_1\" or \"animalOne\"."
+            },
+            "value": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"result": {"description": "Result of the evaluated formula (number or string)"}}
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [{"handle": "formula", "dataField": "formula"}, {"handle": "input"}],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/MathFunction.tsx",
+    "frontFields": [
+      "collapsed", "executionError", "executionStatus", "flowTrigger", "formula", "formulaData",
+      "id", "label", "myId", "outputSize", "placement", "previewIndex", "result",
+      "sensitiveFields", "text", "variables"
+    ],
+    "workerModule": "src/modules/nodes/math-function",
+    "workerFields": [
+      "executionStatus", "formula", "formulaData", "result", "variables"
+    ]
+  },
+  "internalFields": {
+    "text": "Not read by this node: the extractor picks up data.text in the shared TagInput (Test/TagInput.tsx:1321), where data is one item of a connected formulaData array, and neither the component nor the worker reads the node's own text."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```
+
+## Related pages
+
+- [Worker: math function](/worker/node/math-function)

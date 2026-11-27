@@ -1,0 +1,127 @@
+---
+title: "Small Memory (Flux Object)"
+sidebarTitle: "Small Memory"
+description: "A memory/session store node — reads and writes chat entries across runs."
+---
+
+<Info>
+  Node type `fluxObject` in the [Data](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Chat Memory / Small Memory — Stores conversation history across turns in chat-style agents.
+FIELDS:
+- Entries accumulate at runtime. Generally configured, not manually text-edited.
+TIP: This makes agents "remember" previous messages. Stores User/Assistant message pairs with timestamps.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "fluxObject",
+  "label": "Flux Object (Memory)",
+  "category": "Data",
+  "description": "A memory/session store node — reads and writes chat entries across runs.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "entries": {
+        "type": "array",
+        "description": "Stored memory entries. A run appends each new value that reaches the \"inputAdd\" handle, unless chat is true; with sessionEnabled the entries of the selectedChat session are mirrored here.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "role": {"type": "string"},
+            "content": {"type": "string"},
+            "timestamp": {"type": "string"}
+          }
+        }
+      },
+      "chat": {
+        "type": "boolean",
+        "description": "Chat mode: the node delivers the entries of the selectedChat session in userSessionsChat instead of entries. The editor allows only one node per agent with chat on."
+      },
+      "selectedType": {
+        "type": "string",
+        "description": "Which entries the node delivers downstream. Defaults to \"Load All Entries\". Only these exact strings are recognised — any other value falls through every branch and delivers nothing.",
+        "enum": [
+          "Load All Entries", "Load First X Entries", "Load Last X Entries", "Load First X Words",
+          "Load Last X Words"
+        ]
+      },
+      "selectedNumber": {
+        "type": "number",
+        "description": "Number of words delivered for \"Load First X Words\" and \"Load Last X Words\". Defaults to 50."
+      },
+      "selectedIndex": {
+        "type": "number",
+        "description": "Number of entries delivered for \"Load First X Entries\" and \"Load Last X Entries\". Defaults to 5."
+      },
+      "selectedChat": {
+        "type": "string",
+        "description": "Id of the session in userSessionsChat that chat and sessionEnabled read and write. Defaults to \"default\"."
+      },
+      "sessionEnabled": {
+        "type": "boolean",
+        "description": "Whether new entries are also stored in the selectedChat session of userSessionsChat. Turning chat on in the editor also turns this on."
+      },
+      "userSessionsChat": {
+        "type": "array",
+        "description": "Stored sessions: one object per session with its own entries. The editor and the platform keep it as entries accumulate; it is state, not a switch.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "name": {"type": "string"},
+            "entries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "role": {"type": "string"},
+                  "content": {"type": "string"},
+                  "timestamp": {"type": "string"}
+                }
+              }
+            }
+          }
+        }
+      },
+      "clearOnExecution": {
+        "type": "boolean",
+        "description": "Whether entries are cleared at the start of each run."
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {"type": "object", "properties": {}},
+  "handles": {
+    "sourceHandles": [{"handle": "output", "role": "data"}],
+    "targetHandles": [{"handle": "input"}, {"handle": "inputAdd"}],
+    "patterned": [
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": false
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/SmallMemory.tsx",
+    "frontFields": [
+      "chat", "clearOnExecution", "entries", "selectedChat", "selectedIndex", "selectedNumber",
+      "selectedType", "sensitiveFields", "sessionEnabled", "userSessionsChat"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {},
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

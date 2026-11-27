@@ -1,0 +1,84 @@
+---
+title: "Agent Creator (Nodes Creator)"
+sidebarTitle: "Agent Creator"
+description: "Injects raw React Flow nodes/edges JSON (as text, usually fed from an upstream edge) into the current flow when its Run button (Automate Nodes) is pressed in the editor. There is no nodeType/config/position — the payload is a serialized nodes/edges array. RUNTIME BEHAVIOUR: there is no server-side executor, so inside a running flow the node injects nothing."
+---
+
+<Info>
+  Node type `nodesAdd` in the [Utility](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## Specification
+
+```json node-spec
+{
+  "type": "nodesAdd",
+  "label": "Nodes Creator (Flow Creator)",
+  "category": "Utility",
+  "description": "Injects raw React Flow nodes/edges JSON (as text, usually fed from an upstream edge) into the current flow when its Run button (Automate Nodes) is pressed in the editor. There is no nodeType/config/position — the payload is a serialized nodes/edges array. RUNTIME BEHAVIOUR: there is no server-side executor, so inside a running flow the node injects nothing.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "nodes": {
+        "type": "string",
+        "description": "Serialized JSON array of React Flow nodes to add. Fallback, used only when nodesData is empty."
+      },
+      "nodesData": {
+        "type": "array",
+        "description": "nodes content fed from an upstream edge. When non-empty, its joined text is parsed instead of nodes.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "edges": {
+        "type": "string",
+        "description": "Serialized JSON array of React Flow edges to add. Fallback, used only when edgesData is empty."
+      },
+      "edgesData": {
+        "type": "array",
+        "description": "edges content fed from an upstream edge. When non-empty, its joined text is parsed instead of edges.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {"type": "object", "properties": {}},
+  "handles": {
+    "sourceHandles": [{"handle": "outputFlow", "role": "control"}],
+    "targetHandles": [
+      {"handle": "edgesInput", "dataField": "edges"},
+      {"handle": "input"},
+      {"handle": "nodesInput", "dataField": "nodes"}
+    ],
+    "patterned": [
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/FlowCreator.tsx",
+    "frontFields": [
+      "edges", "edgesData", "nodes", "nodesData", "sensitiveFields"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {},
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

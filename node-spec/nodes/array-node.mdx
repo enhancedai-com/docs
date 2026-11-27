@@ -1,0 +1,174 @@
+---
+title: "Sequence Node (Array Node)"
+sidebarTitle: "Sequence Node"
+description: "Splits a text into a sequence of chunks, then iterates the flow over each chunk."
+---
+
+<Info>
+  Node type `arrayNode` in the [Data](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Sequence Node — Loops over a list. Splits input into chunks and runs downstream nodes once per chunk.
+FIELDS:
+- options: How to split — Paragraph (default, groups sentences up to breakWords words), Sentence, or Custom Separator.
+- customOperator: The separator character(s) to split on (comma, newline, pipe, etc.). Used only when options is Custom Separator.
+- content: The text to split. Often piped in from upstream.
+- preInput: Text prepended to each item before processing.
+- postInput: Text appended to each item after the item.
+TIP: content, preInput and postInput take effect only when the chunk list (processorArray) is derived from content. preInput/postInput are useful for wrapping each item in a prompt template, like "Research the following company: " as preInput.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "arrayNode",
+  "label": "Array Node (Sequence)",
+  "category": "Data",
+  "description": "Splits a text into a sequence of chunks, then iterates the flow over each chunk.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "processorArray": {
+        "type": "array",
+        "description": "The chunks the node iterates over, and what back's flow executor actually reads. The builder derives it from \"content\" as the user types; a client that sets only \"content\" leaves this empty, and the run completes without iterating anything. Set it directly.",
+        "items": {"type": "string"}
+      },
+      "content": {
+        "type": "string",
+        "description": "Text to split into a sequence. Used by the builder to derive processorArray — on its own it drives nothing at run time."
+      },
+      "contentData": {
+        "type": "array",
+        "description": "content fed from an upstream edge; connecting an edge to the content handle fills it. When the run projects edges, the upstream text replaces content and processorArray is derived again from it with options, breakWords, customOperator, processorArrayItemLength, preInput and postInput.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "options": {
+        "type": "string",
+        "description": "How to split content. Defaults to \"Paragraph\".",
+        "enum": ["Paragraph", "Sentence", "Custom Separator"]
+      },
+      "customOperator": {
+        "type": "string",
+        "description": "Used only when options is \"Custom Separator\"."
+      },
+      "startingPoint": {
+        "type": "number",
+        "description": "1-based position of the first chunk to process, applied even when auto is true. Must be a JSON number."
+      },
+      "endingPoint": {
+        "type": "number",
+        "description": "1-based position of the last chunk to process; ignored when auto is true. Must be a JSON number."
+      },
+      "auto": {
+        "type": "boolean",
+        "description": "true processes every chunk from startingPoint to the end and ignores endingPoint; false stops at endingPoint. When the field is absent the editor shows true."
+      },
+      "executing": {
+        "type": "string",
+        "description": "Where the loop body ends: \"default\" loops through the first node after this one only; a node id runs every node from the first one after this node up to that node, in execution order, once per chunk."
+      },
+      "breakWords": {
+        "type": ["number", "string"],
+        "description": "Maximum words per chunk when options is \"Paragraph\": sentences are grouped until the next one would exceed it. Defaults to 200. Used only when processorArray is derived from content."
+      },
+      "processorArrayItemLength": {
+        "type": ["number", "string"],
+        "description": "How many split pieces are merged into one chunk, joined by a blank line, when processorArray is derived from content. Defaults to 1."
+      },
+      "preInput": {
+        "type": "string",
+        "description": "Text prepended to each chunk when processorArray is derived from content. The loop itself adds nothing."
+      },
+      "postInput": {
+        "type": "string",
+        "description": "Text appended to each chunk when processorArray is derived from content. The loop itself adds nothing."
+      },
+      "preInputTextData": {
+        "type": "array",
+        "description": "Filled when an edge connects to the preInputText handle. Nothing applies it to the chunks: processorArray is derived with preInput only, so an edge-fed prefix has no effect on a run.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "postInputTextData": {
+        "type": "array",
+        "description": "Filled when an edge connects to the postInputText handle. Nothing applies it to the chunks: processorArray is derived with postInput only, so an edge-fed suffix has no effect on a run.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "content": {
+        "type": "string",
+        "description": "The chunk of the current iteration, written by the platform before the loop body runs. Downstream nodes receive it as the node's output; an object chunk arrives as JSON text."
+      },
+      "iteration": {"type": "number", "description": "0-based index of the current iteration within the processed slice."}
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "content", "dataField": "content"},
+      {"handle": "input"},
+      {"handle": "postInputText", "dataField": "postInputText"},
+      {"handle": "preInputText", "dataField": "preInputText"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/SequenceNode.tsx",
+    "frontFields": [
+      "auto", "breakWords", "completed", "content", "customOperator", "endingPoint", "executing",
+      "flowTrigger", "id", "label", "options", "postInput", "postInputTextData", "preInput",
+      "preInputTextData", "processorArray", "processorArrayItemLength", "sensitiveFields",
+      "startingPoint", "text"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {
+    "completed": "Run state: the progress marker the editor and back's executor write when a run starts and advances.",
+    "text": "Not read by this node: the extractor picks up data.text in the shared TagInput (Test/TagInput.tsx:1321), where data is one item of a connected preInputTextData or postInputTextData array."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

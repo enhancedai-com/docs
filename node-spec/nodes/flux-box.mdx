@@ -1,0 +1,159 @@
+---
+title: "Agent Caller (Flux Box)"
+sidebarTitle: "Agent Caller"
+description: "Calls another flow inline. The field is selectedFlow, not flowId; there is no generic inputs/outputs object. The called flow's variable inputs are fed per-node: for each of its varInputNode ids, the executor first looks for a value at textData[<varInputNodeId>] (textData is a map keyed by that id, each value a list of edge entries), and falls back to a dynamic field literally named \"<varInputNodeId>Text\" on this node's own data. Both routes are run through \"{{<nodeId>.<key>}}\" interpolation. File links (fileLinkData[<varInputNodeId>] or \"<varInputNodeId>FileLink\") reach the called flow only when the editor runs the node itself; a server run does not pass them. These per-node keys depend on the target flow's contents and are not part of this schema — do not invent or guess the id; read it from the called flow instead. \"input\" overrides all of them at once."
+---
+
+<Info>
+  Node type `fluxBox` in the [Utility](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Agent Caller — Calls another FluxPrompt agent as a sub-agent. Enables modular, composable architectures.
+FIELDS:
+- selectedFlow: UUID of the target agent to call.
+TIP: The target agent's Data Input and Data Output fields become connectable handles on this node. Great for reusable sub-workflows.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "fluxBox",
+  "label": "Flux Box (Flow Caller)",
+  "category": "Utility",
+  "description": "Calls another flow inline. The field is selectedFlow, not flowId; there is no generic inputs/outputs object. The called flow's variable inputs are fed per-node: for each of its varInputNode ids, the executor first looks for a value at textData[<varInputNodeId>] (textData is a map keyed by that id, each value a list of edge entries), and falls back to a dynamic field literally named \"<varInputNodeId>Text\" on this node's own data. Both routes are run through \"{{<nodeId>.<key>}}\" interpolation. File links (fileLinkData[<varInputNodeId>] or \"<varInputNodeId>FileLink\") reach the called flow only when the editor runs the node itself; a server run does not pass them. These per-node keys depend on the target flow's contents and are not part of this schema — do not invent or guess the id; read it from the called flow instead. \"input\" overrides all of them at once.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "selectedFlow": {"type": "string", "description": "Id of the flow to call."},
+      "sessionId": {
+        "type": "string",
+        "description": "Session id for the called flow when sessionSource is custom and sessionIdData is empty. Back's executor also uses it when agentSessionMode is off and sessionSource is not pass_current."
+      },
+      "textData": {
+        "type": "object",
+        "description": "Edge-fed values per variable input of the called flow: a map keyed by the called flow's varInputNode id, each value the list of edge entries for that input's \"<varInputNodeId>Text\" handle. The entries' text is joined and takes precedence over \"<varInputNodeId>Text\". Not an array: an array here is ignored. Back's executor runs each entry's text through \"{{<nodeId>.<key>}}\" interpolation.",
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "text": {"type": "string"},
+              "label": {"type": "string"}
+            }
+          }
+        }
+      },
+      "input": {
+        "type": "string",
+        "description": "Single value applied to every variable input of the called flow uniformly, overriding the per-variable values described above. Run through \"{{<nodeId>.<key>}}\" interpolation before use."
+      },
+      "executionMode": {
+        "type": "string",
+        "description": "triggerOnly starts the called flow without waiting for it; returnAfterFlow, the default, waits and copies its outputs onto this node. Back's executor and the editor's own run read it.",
+        "enum": ["triggerOnly", "returnAfterFlow"]
+      },
+      "agentSessionMode": {
+        "type": "boolean",
+        "description": "Agent Session Mode: when true, sessionSource decides the called flow's session. Back's executor and the editor's own run read the session settings."
+      },
+      "sessionSource": {
+        "type": "string",
+        "description": "Where the called flow's session id comes from: generate (a new random id, the default), pass_current (this run's session), custom (sessionIdData, then sessionId).",
+        "enum": ["generate", "pass_current", "custom"]
+      },
+      "sessionIdData": {
+        "type": "array",
+        "description": "sessionId fed from an upstream edge. With sessionSource custom, takes precedence over sessionId: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only sessionId means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "fileLinkData": {
+        "type": "object",
+        "description": "Edge-fed file links per variable input of the called flow: a map keyed by the called flow's varInputNode id, each value the list of edge entries for that input's \"<varInputNodeId>FileLink\" handle. Only the editor's own run sends them to the called flow; back's executor does not pass them.",
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "text": {"type": "string"},
+              "label": {"type": "string"}
+            }
+          }
+        }
+      },
+      "clearOnExecution": {
+        "type": "object",
+        "description": "Per output of the called flow, keyed by its output node id: true clears that output on this node before each run.",
+        "additionalProperties": {"type": "boolean"}
+      }
+    },
+    "required": ["selectedFlow"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "description": "One key per output node of the called flow, named by that node's id, holding its text.",
+    "properties": {},
+    "additionalProperties": {
+      "type": "string",
+      "description": "The text of the called flow's output node with this id."
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [{"handle": "input"}, {"handle": "sessionId", "dataField": "sessionId"}],
+    "patterned": [
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.+Text$", "discriminating": true},
+      {"direction": "target", "pattern": "^.+FileLink$", "discriminating": true},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/FlowCaller.tsx",
+    "frontFields": [
+      "agentSessionMode", "canceled", "clearOnExecution", "collapsed", "errorMessage",
+      "errorStatusCode", "executionMode", "fileLink", "fileLinkData", "flowTrigger",
+      "hasExecutionError", "id", "isExtraction", "label", "myId", "overwrite", "paused",
+      "placement", "run", "selectedFlow", "sensitiveFields", "sessionId", "sessionIdData",
+      "sessionSource", "text", "textData", "title", "type", "typeOCR"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {
+    "fileLink": "Legacy: copied into the editor's form state on load; per-variable file links live in fileLinkData or \"<varInputNodeId>FileLink\".",
+    "hasExecutionError": "Run state: whether the last run failed, written by the editor and the platform.",
+    "isExtraction": "Editor setting the server run ignores: only the editor's own run sends it to the called flow; back's executor never reads it.",
+    "overwrite": "Editor setting the server run ignores: it makes the editor's own run send isExtraction and typeOCR instead of the called flow's own values.",
+    "run": "Dead editor state: written only by a run handler the node frame never calls; no executor reads it.",
+    "text": "Legacy: copied into the editor's form state on load; no executor reads it. Per-variable values go in textData or \"<varInputNodeId>Text\", and input overrides them all.",
+    "title": "Legacy: copied into the editor's form state on load; the current editor never writes it and no executor reads it.",
+    "type": "Legacy: copied into the editor's form state on load; the node's type lives on the node, not in data.",
+    "typeOCR": "Editor setting the server run ignores: the OCR engine (mistral_ocr, mistral_vision or google_ocr) only the editor's own run sends to the called flow."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

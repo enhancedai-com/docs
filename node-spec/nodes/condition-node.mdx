@@ -1,0 +1,142 @@
+---
+title: "Decision Paths (Condition Node)"
+sidebarTitle: "Decision Paths"
+description: "Evaluates a list of conditions (with AND/OR chaining) against the incoming text and routes accordingly."
+---
+
+<Info>
+  Node type `conditionNode` in the [Logic](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Decision Paths — Routes the flow based on conditions. IF/ELSE mode (true/false branches) or SWITCH mode (routes to first match).
+FIELDS:
+- conditions: Array of condition rules. Each has type (number/charCount/text), operator (>, <, = for number and charCount; begins, contains, ends for text), and value (what number/charCount compares against). Text conditions compare against sentimentValue. The sentiment type never matches.
+TIP: Conditions evaluate the incoming data from the previous node. SWITCH = first match wins. IF/ELSE = conditions combine with AND/OR into one true and one false branch.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "conditionNode",
+  "label": "Condition Node",
+  "category": "Logic",
+  "description": "Evaluates a list of conditions (with AND/OR chaining) against the incoming text and routes accordingly.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "conditions": {
+        "type": "array",
+        "description": "List of conditions to evaluate, in order, combined by each entry's logicOperator with the previous one.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Comparison kind. \"number\" compares the input, parsed as an integer, with value; \"charCount\" compares the input's character count (spaces and line breaks removed) with value; \"text\" compares the input with sentimentValue. \"sentiment\" is offered by the editor but no evaluator handles it, so it always evaluates to false.",
+              "enum": ["number", "charCount", "text", "sentiment"]
+            },
+            "operator": {
+              "type": "string",
+              "description": "\">\", \"<\" or \"=\" for number and charCount; \"begins\", \"contains\" or \"ends\" for text. Any other value evaluates to false.",
+              "enum": [">", "<", "=", "begins", "contains", "ends"]
+            },
+            "value": {"description": "Value a number or charCount condition compares against, parsed as an integer. A text condition ignores it and compares against sentimentValue."},
+            "logicOperator": {
+              "type": "string",
+              "enum": ["AND", "OR", "SWITCH"],
+              "description": "\"AND\"/\"OR\" combining this condition with the previous one, or \"SWITCH\". This value decides which output handles exist: only when a second condition carries \"SWITCH\" does the node expose \"conditionHandle-T{n}\"/\"conditionHandle-F{n}\". With \"AND\"/\"OR\" the node evaluates the combined conditions at run time and routes on \"outputHandle-0\" when the result is true and \"outputHandle-1\" when it is false."
+            },
+            "sentimentValue": {
+              "type": "string",
+              "description": "The text a \"text\" condition matches the input against with begins, contains or ends. Despite its name, it is not a sentiment setting."
+            },
+            "sentimentOperatorValue": {
+              "description": "Threshold from 0 to 100 the editor stores for a \"sentiment\" condition. No evaluator reads it."
+            },
+            "textType": {
+              "type": "string",
+              "description": "Declared on the editor's condition type but never written by the editor nor read by any evaluator; it has no effect."
+            }
+          }
+        }
+      },
+      "loopBehavior": {
+        "type": "string",
+        "enum": ["continue", "stop"],
+        "description": "What a looping condition does once loopCount is reached. \"continue\": the true branch is taken only while the loop counter is within loopCount, then the false branch. \"stop\": a true result after loopCount iterations stops the run. When the field is absent the editor displays \"continue\" but the executor uses \"stop\", so set it explicitly."
+      },
+      "loopCount": {"type": "number", "description": "Max loop iterations. When the field is absent the editor displays 3 but the executor uses 0, so set it explicitly."},
+      "text": {
+        "type": "string",
+        "description": "Text the conditions evaluate, typed in the editor. Used only when textData is absent."
+      },
+      "textData": {
+        "type": "array",
+        "description": "text fed from an upstream edge, joined with line breaks. Takes precedence over text: whenever textData is present, even as an empty array, the executor evaluates it and ignores text. Land an edge reference here — setting only text means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "statement": {
+        "type": "boolean",
+        "description": "Evaluated condition result, written at run time. true routes to \"outputHandle-0\", false to \"outputHandle-1\"."
+      },
+      "loopStatus": {
+        "type": "object",
+        "description": "How the run decided, written at run time: iteration, maxIterations, userCondition, loopLimitCheck, systemLimitCheck, maxSystemIterations, finalResult and reason."
+      }
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "outputHandle-0", "role": "condition"},
+      {"handle": "outputHandle-1", "role": "condition"}
+    ],
+    "targetHandles": [{"handle": "input"}, {"handle": "text", "dataField": "text"}],
+    "patterned": [
+      {"direction": "source", "pattern": "^conditionHandle-T.+$", "discriminating": true},
+      {"direction": "source", "pattern": "^conditionHandle-F.+$", "discriminating": true},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/DecisionPaths.tsx",
+    "frontFields": [
+      "canceled", "collapsed", "conditions", "currentLoopCounter", "flowTrigger", "id", "label",
+      "loopBehavior", "loopCount", "paused", "run", "sensitiveFields", "statement", "text",
+      "textData"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {
+    "currentLoopCounter": "Run state: how many times the node has been evaluated in the current run; the platform resets it to 0 when a run starts and increments it on each evaluation.",
+    "run": "Editor state: which run option (\"Run from start\" or \"Run from here\") the node's Run button last used."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

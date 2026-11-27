@@ -1,0 +1,108 @@
+---
+title: "Web Amazon"
+sidebarTitle: "Web Amazon"
+description: "Retrieves Amazon data through Oxylabs: a page by URL, search results, products, pricing, reviews, questions, best sellers or sellers. \"domain\" replaces \"marketplace\"; there is no \"category\"/\"maxResults\". RUNTIME BEHAVIOUR: the Run button on the node executes it on the worker, but a full flow run has no step for this type and skips it, so inside a running flow it produces no output and nothing downstream can consume a result. Use it on the canvas, not as a step another node reads from."
+---
+
+<Info>
+  Node type `webAmazon` in the [Integration](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Amazon Search — Retrieves Amazon pages, search results, products or best sellers.
+FIELDS:
+- query: What to look up. With the default system "amazon-url" it holds the Amazon product URL; otherwise the search term or id the chosen system expects.
+- system: Search mode — amazon-url (default), amazon-search, amazon-product, amazon-best-sellers, amazon-pricing, amazon-review, amazon-qa or amazon-seller.
+TIP: Keep queries product-focused and specific.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "webAmazon",
+  "label": "Web Amazon",
+  "category": "Integration",
+  "description": "Retrieves Amazon data through Oxylabs: a page by URL, search results, products, pricing, reviews, questions, best sellers or sellers. \"domain\" replaces \"marketplace\"; there is no \"category\"/\"maxResults\". RUNTIME BEHAVIOUR: the Run button on the node executes it on the worker, but a full flow run has no step for this type and skips it, so inside a running flow it produces no output and nothing downstream can consume a result. Use it on the canvas, not as a step another node reads from.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "What to look up: the Amazon page URL when system is \"amazon-url\", otherwise the search term, product id or seller id the chosen system expects. The run fails when neither query nor urlData has a value."
+      },
+      "domain": {
+        "type": "string",
+        "description": "Amazon top-level domain without \"amazon.\", e.g. \"com\", \"co.uk\" or \"de\". Defaults to \"com\" (\"de\" for \"amazon-seller\"). Not used by \"amazon-url\"."
+      },
+      "pages": {"type": "number", "description": "Number of result pages to fetch. Defaults to 1."},
+      "start_page": {"type": "number", "description": "First page to fetch. Defaults to 1."},
+      "system": {
+        "type": "string",
+        "description": "Which Amazon scrape to run (through Oxylabs). Defaults to \"amazon-url\".",
+        "enum": [
+          "amazon-url", "amazon-best-sellers", "amazon-pricing", "amazon-product", "amazon-qa",
+          "amazon-review", "amazon-search", "amazon-seller"
+        ]
+      },
+      "url": {
+        "type": "string",
+        "description": "Not read at run time. Put a direct Amazon URL in query with system \"amazon-url\"."
+      },
+      "urlData": {
+        "type": "array",
+        "description": "Value fed from an upstream edge into the \"queryUrl\" handle. Takes precedence over query (not url): the executor reads this first and falls back to query only when this is empty.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"text": {"type": "string", "description": "Serialized product listing results"}}
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [{"handle": "input"}, {"handle": "queryUrl", "dataField": "url"}],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/WebAmazon.tsx",
+    "frontFields": [
+      "canceled", "collapsed", "domain", "executionStatus", "flowTrigger", "id", "label",
+      "outputSize", "pages", "paused", "placement", "previewIndex", "previewResponses", "query",
+      "run", "sensitiveFields", "start_page", "system", "text", "url", "urlData"
+    ],
+    "workerModule": "src/modules/nodes/web-amazon",
+    "workerFields": [
+      "domain", "errorMessage", "errorStatusCode", "executionStatus", "label", "pages", "query",
+      "start_page", "system", "text", "urlData"
+    ]
+  },
+  "internalFields": {
+    "run": "Dead editor field: the component passes a handler that would write it, but the Node wrapper never calls that handler, and no executor reads it."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

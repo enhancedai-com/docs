@@ -1,0 +1,42 @@
+---
+title: "Grouping (Nodes Group)"
+sidebarTitle: "Grouping"
+description: "Visual grouping of related nodes for organisational purposes."
+---
+
+<Info>
+  Node type `nodesGroup` in the [Utility](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## Specification
+
+```json node-spec
+{
+  "type": "nodesGroup",
+  "label": "Nodes Group",
+  "category": "Utility",
+  "description": "Visual grouping of related nodes for organisational purposes.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {"label": {"type": "string", "description": "Group label"}},
+    "required": []
+  },
+  "outputSchema": {"type": "object", "properties": {}},
+  "handles": {
+    "sourceHandles": [],
+    "targetHandles": [],
+    "patterned": [],
+    "handlesPatterned": false,
+    "unresolved": false,
+    "canContinueExecutionChain": false
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/NodesGroup.tsx",
+    "frontFields": ["collapsed"],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {},
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

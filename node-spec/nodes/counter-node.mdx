@@ -1,0 +1,101 @@
+---
+title: "Process Counter (Counter Node)"
+sidebarTitle: "Process Counter"
+description: "Either waits a fixed number of seconds, or increments/decrements a counter, depending on counterMode."
+---
+
+<Info>
+  Node type `counterNode` in the [Logic](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## Specification
+
+```json node-spec
+{
+  "type": "counterNode",
+  "label": "Counter Node",
+  "category": "Logic",
+  "description": "Either waits a fixed number of seconds, or increments/decrements a counter, depending on counterMode.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "counterMode": {
+        "type": "string",
+        "description": "\"wait\" pauses for waitSeconds; \"up\"/\"down\" increments/decrements the counter.",
+        "enum": ["up", "down", "wait"]
+      },
+      "waitSeconds": {
+        "type": "number",
+        "description": "Seconds to wait, from 0 to 60; a value outside that range fails the run. Used only when counterMode is \"wait\" and waitSecondsData is empty."
+      },
+      "waitSecondsData": {
+        "type": "array",
+        "description": "Wait duration fed from an upstream edge. Takes precedence over waitSeconds: the first entry's text is used. Land an edge reference here, not in waitSeconds.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "step": {
+        "type": ["number", "string"],
+        "description": "Increment/decrement size when counterMode is \"up\" or \"down\". Defaults to 1 when omitted."
+      },
+      "isIncreasing": {
+        "type": "boolean",
+        "description": "Direction flag the UI keeps alongside counterMode. Set it consistently with counterMode (\"up\" is increasing)."
+      },
+      "text": {
+        "type": "string",
+        "description": "Current counter value, as a string. Seeds the counter and is overwritten by each run."
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {"type": "string", "description": "Result text (current counter value, as a string)"}
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "outputFlow", "role": "control"},
+      {"handle": "textOutput", "role": "data"}
+    ],
+    "targetHandles": [
+      {"handle": "input"},
+      {"handle": "waitSecondsInput", "dataField": "waitSeconds"}
+    ],
+    "patterned": [
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/ProcessCounter.tsx",
+    "frontFields": [
+      "collapsed", "counterMode", "executionStatus", "isIncreasing", "sensitiveFields", "step",
+      "text", "waitSeconds", "waitSecondsData"
+    ],
+    "workerModule": "src/modules/nodes/counter",
+    "workerFields": [
+      "counterMode", "executionStatus", "isIncreasing", "step", "text", "waitSeconds",
+      "waitSecondsData"
+    ]
+  },
+  "internalFields": {},
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```
+
+## Related pages
+
+- [Worker: process counter](/worker/node/counter)

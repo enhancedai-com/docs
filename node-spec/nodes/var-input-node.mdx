@@ -1,0 +1,100 @@
+---
+title: "Data Input (Variable Input Node)"
+sidebarTitle: "Data Input"
+description: "Accepts a text value and optional file links to parameterise the flow. The files are passed downstream as URLs, one per line, on the outputExtractText handle. This node does not read file contents; connect outputExtractText to an AI Image Reader node to extract text from the files."
+---
+
+<Info>
+  Node type `varInputNode` in the [Input/Output](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Data Input — Receives user input or webhook data at runtime. Entry point for interactive or API-triggered agents.
+FIELDS:
+- Configured via settings. Label describes what input is expected.
+TIP: For webhook agents, this receives the incoming API payload. For chat agents, this is where the user types.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "varInputNode",
+  "label": "Variable Input Node",
+  "category": "Input/Output",
+  "description": "Accepts a text value and optional file links to parameterise the flow. The files are passed downstream as URLs, one per line, on the outputExtractText handle. This node does not read file contents; connect outputExtractText to an AI Image Reader node to extract text from the files.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {"type": "string", "description": "Text value passed downstream. A run started through the API or a webhook replaces it with the input it carries."},
+      "textData": {
+        "type": "array",
+        "description": "Filled when an edge connects to the inputText handle, which the editor does not render. The editor reads and writes only text.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "uploadedFiles": {
+        "type": "array",
+        "description": "Files attached to the node, as name and URL pairs.",
+        "items": {
+          "type": "object",
+          "properties": {"name": {"type": "string"}, "url": {"type": "string"}},
+          "required": ["url"]
+        }
+      },
+      "extractText": {
+        "type": "string",
+        "description": "The URLs of uploadedFiles joined by a newline. Keep it in sync with uploadedFiles; it is the value sent on the outputExtractText handle."
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {"type": "string", "description": "Text value passed downstream"},
+      "extractText": {
+        "type": "string",
+        "description": "File URLs, one per line, sent on the outputExtractText handle."
+      }
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputExtractText", "role": "data"}
+    ],
+    "targetHandles": [{"handle": "input"}, {"handle": "inputText", "dataField": "text"}],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": false
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/ApiInput.tsx",
+    "frontFields": [
+      "collapsed", "extractText", "id", "inputSize", "label", "myId", "sensitiveFields", "text",
+      "uploadedFiles"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {},
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

@@ -366,6 +366,91 @@
                   "main-api/specific-features/output-controller-stall-incident",
                   "main-api/specific-features/redis-ttl-audit"
                 ]
+              },
+              {
+                "group": "Node specification",
+                "pages": [
+                  "node-spec/overview",
+                  "node-spec/categories",
+                  "node-spec/superchat-guide",
+                  "node-spec/shared-fields",
+                  {
+                    "group": "Input/Output",
+                    "pages": [
+                      "node-spec/nodes/var-input-node",
+                      "node-spec/nodes/output-object-node",
+                      "node-spec/nodes/output-controller",
+                      "node-spec/nodes/global-starter",
+                      "node-spec/nodes/output-table"
+                    ]
+                  },
+                  {
+                    "group": "AI",
+                    "pages": [
+                      "node-spec/nodes/audio-reader-node",
+                      "node-spec/nodes/image-generator",
+                      "node-spec/nodes/image-reader-node",
+                      "node-spec/nodes/command-text-node",
+                      "node-spec/nodes/animation-node",
+                      "node-spec/nodes/voice-box-node",
+                      "node-spec/nodes/command-content-node"
+                    ]
+                  },
+                  {
+                    "group": "Logic",
+                    "pages": [
+                      "node-spec/nodes/condition-node",
+                      "node-spec/nodes/math-function",
+                      "node-spec/nodes/counter-node",
+                      "node-spec/nodes/scripting"
+                    ]
+                  },
+                  {
+                    "group": "Data",
+                    "pages": [
+                      "node-spec/nodes/table-processor",
+                      "node-spec/nodes/file-save",
+                      "node-spec/nodes/report-builder",
+                      "node-spec/nodes/array-node",
+                      "node-spec/nodes/flux-object",
+                      "node-spec/nodes/sql-querier",
+                      "node-spec/nodes/stored-data-caller"
+                    ]
+                  },
+                  {
+                    "group": "Integration",
+                    "pages": [
+                      "node-spec/nodes/api-caller",
+                      "node-spec/nodes/hub-spot-crm",
+                      "node-spec/nodes/mcp-node",
+                      "node-spec/nodes/pull-data",
+                      "node-spec/nodes/push-data",
+                      "node-spec/nodes/web-trends",
+                      "node-spec/nodes/sec-api-node",
+                      "node-spec/nodes/third-party-integration",
+                      "node-spec/nodes/us-census-node",
+                      "node-spec/nodes/web-amazon",
+                      "node-spec/nodes/web-search",
+                      "node-spec/nodes/web-crawling"
+                    ]
+                  },
+                  {
+                    "group": "Utility",
+                    "pages": [
+                      "node-spec/nodes/flux-box",
+                      "node-spec/nodes/nodes-add",
+                      "node-spec/nodes/deep-ref-node",
+                      "node-spec/nodes/dynamic-settings-node",
+                      "node-spec/nodes/nodes-group",
+                      "node-spec/nodes/media-box",
+                      "node-spec/nodes/nodes-box",
+                      "node-spec/nodes/rich-text-box",
+                      "node-spec/nodes/library-node",
+                      "node-spec/nodes/sticky-note",
+                      "node-spec/nodes/text-box"
+                    ]
+                  }
+                ]
               }
             ]
           },
@@ -745,6 +830,91 @@
                 "pages": [
                   "main-api/specific-features/output-controller-stall-incident",
                   "main-api/specific-features/redis-ttl-audit"
+                ]
+              },
+              {
+                "group": "Especificação de nós",
+                "pages": [
+                  "node-spec/pt-br/overview",
+                  "node-spec/categories",
+                  "node-spec/superchat-guide",
+                  "node-spec/shared-fields",
+                  {
+                    "group": "Input/Output",
+                    "pages": [
+                      "node-spec/nodes/var-input-node",
+                      "node-spec/nodes/output-object-node",
+                      "node-spec/nodes/output-controller",
+                      "node-spec/nodes/global-starter",
+                      "node-spec/nodes/output-table"
+                    ]
+                  },
+                  {
+                    "group": "AI",
+                    "pages": [
+                      "node-spec/nodes/audio-reader-node",
+                      "node-spec/nodes/image-generator",
+                      "node-spec/nodes/image-reader-node",
+                      "node-spec/nodes/command-text-node",
+                      "node-spec/nodes/animation-node",
+                      "node-spec/nodes/voice-box-node",
+                      "node-spec/nodes/command-content-node"
+                    ]
+                  },
+                  {
+                    "group": "Logic",
+                    "pages": [
+                      "node-spec/nodes/condition-node",
+                      "node-spec/nodes/math-function",
+                      "node-spec/nodes/counter-node",
+                      "node-spec/nodes/scripting"
+                    ]
+                  },
+                  {
+                    "group": "Data",
+                    "pages": [
+                      "node-spec/nodes/table-processor",
+                      "node-spec/nodes/file-save",
+                      "node-spec/nodes/report-builder",
+                      "node-spec/nodes/array-node",
+                      "node-spec/nodes/flux-object",
+                      "node-spec/nodes/sql-querier",
+                      "node-spec/nodes/stored-data-caller"
+                    ]
+                  },
+                  {
+                    "group": "Integration",
+                    "pages": [
+                      "node-spec/nodes/api-caller",
+                      "node-spec/nodes/hub-spot-crm",
+                      "node-spec/nodes/mcp-node",
+                      "node-spec/nodes/pull-data",
+                      "node-spec/nodes/push-data",
+                      "node-spec/nodes/web-trends",
+                      "node-spec/nodes/sec-api-node",
+                      "node-spec/nodes/third-party-integration",
+                      "node-spec/nodes/us-census-node",
+                      "node-spec/nodes/web-amazon",
+                      "node-spec/nodes/web-search",
+                      "node-spec/nodes/web-crawling"
+                    ]
+                  },
+                  {
+                    "group": "Utility",
+                    "pages": [
+                      "node-spec/nodes/flux-box",
+                      "node-spec/nodes/nodes-add",
+                      "node-spec/nodes/deep-ref-node",
+                      "node-spec/nodes/dynamic-settings-node",
+                      "node-spec/nodes/nodes-group",
+                      "node-spec/nodes/media-box",
+                      "node-spec/nodes/nodes-box",
+                      "node-spec/nodes/rich-text-box",
+                      "node-spec/nodes/library-node",
+                      "node-spec/nodes/sticky-note",
+                      "node-spec/nodes/text-box"
+                    ]
+                  }
                 ]
               }
             ]

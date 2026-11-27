@@ -1,0 +1,77 @@
+---
+title: "Rich Text Box"
+sidebarTitle: "Rich Text Box"
+description: "Displays or passes rich-formatted text through the flow. The fields are text/textData, not content/format."
+---
+
+<Info>
+  Node type `richTextBox` in the [Utility](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Rich Text Box — Same as Text Box but supports HTML formatting. Content-only node with NO process connections.
+FIELDS:
+- text: HTML-formatted text content. Can include tags for bold, lists, headers, etc.
+TIP: Use when downstream nodes need formatted content, especially if feeding into a Display Box or email output.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "richTextBox",
+  "label": "Rich Text Box",
+  "category": "Utility",
+  "description": "Displays or passes rich-formatted text through the flow. The fields are text/textData, not content/format.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {"type": "string", "description": "Fallback text, used only when textData is empty."},
+      "textData": {
+        "type": "array",
+        "description": "Text content fed from an upstream edge. When non-empty, takes precedence over text.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {"text": {"type": "string", "description": "Rich text output"}}
+  },
+  "handles": {
+    "sourceHandles": [{"handle": "textOutput", "role": "data"}],
+    "targetHandles": [{"handle": "input", "dataField": "text"}],
+    "patterned": [
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": false
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/RichTextBoxNode.tsx",
+    "frontFields": [
+      "collapsed", "myId", "sensitiveFields", "size", "text", "textData"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {
+    "size": "Editor layout: the width and height the node was resized to on the canvas."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

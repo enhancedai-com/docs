@@ -1,0 +1,93 @@
+---
+title: "Data Table Builder (Table Processor)"
+sidebarTitle: "Data Table Builder"
+description: "Holds a spreadsheet-like table and forwards a selected column downstream."
+---
+
+<Info>
+  Node type `tableProcessor` in the [Data](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Data Table Builder — Processes and structures tabular data.
+FIELDS:
+- tableData: The table content, filled in the editor. It is not piped in from upstream: the tableInput connection feeds nothing.
+TIP: Use for organizing data into rows and columns before display or export.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "tableProcessor",
+  "label": "Table Processor",
+  "category": "Data",
+  "description": "Holds a spreadsheet-like table and forwards a selected column downstream.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "tableData": {
+        "type": "array",
+        "description": "The table, one object per row. Every row carries the same columns; a column with selected true is one the node forwards. The editor creates a two-column table when this is missing. Not an edge companion: nothing fills it from a connection.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {"type": ["string", "number"]},
+                  "name": {"type": "string"},
+                  "value": {"type": "string"},
+                  "selected": {"type": "boolean"}
+                }
+              }
+            }
+          }
+        }
+      },
+      "selectOutputTable": {
+        "type": "string",
+        "description": "Id of the outputTable node that receives the selected columns. When empty and the flow has exactly one outputTable, the editor uses that one."
+      },
+      "executing": {
+        "type": "string",
+        "description": "Id of the node the editor's table loop runs for each row, picked from the flow's nodes; when empty, the next node in the flow's execution order."
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {"type": "object", "properties": {}},
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [{"handle": "input"}, {"handle": "tableInput"}],
+    "patterned": [
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/TableProcessor.tsx",
+    "frontFields": [
+      "canceled", "collapsed", "executing", "flowTrigger", "myId", "paused", "selectOutputTable",
+      "tableData"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {},
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

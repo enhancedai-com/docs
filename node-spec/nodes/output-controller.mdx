@@ -1,0 +1,133 @@
+---
+title: "Display Box (Output Controller)"
+sidebarTitle: "Display Box"
+description: "Displays/saves the final output of the flow."
+---
+
+<Info>
+  Node type `outputController` in the [Input/Output](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Display Box — Renders final output for the user to see. Typically an end point in the flow.
+FIELDS:
+- Receives content via connector. Label can be customized.
+TIP: If the user wants formatted output, suggest adding an ATG before the Display Box to convert content to HTML.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "outputController",
+  "label": "Output Controller",
+  "category": "Input/Output",
+  "description": "Displays/saves the final output of the flow.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {"type": "string", "description": "Fallback text, used only when textData is absent."},
+      "textData": {
+        "type": "array",
+        "description": "Text content fed from upstream edges. Whenever textData is an array, even an empty one, the worker joins every entry's text with line breaks and ignores text.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "saveOutput": {
+        "type": "boolean",
+        "description": "Whether to persist the output as a downloadable file. When true and the resolved text is empty, the run fails."
+      },
+      "fileExtension": {
+        "type": "string",
+        "description": "File extension used when saveOutput is true; absent means .txt. The worker accepts txt, pdf, docx, md, json, csv and html, with or without the leading dot, and fails the run on anything else. The editor writes the dotted form and also offers .xml, .yaml, .png, .jpg and .webp, which fail a worker run.",
+        "enum": [".txt", ".html", ".json", ".csv", ".pdf", ".docx"]
+      },
+      "customFileName": {
+        "type": "string",
+        "description": "Custom file name used when saveOutput is true: 1 to 100 letters, digits, underscores, hyphens, dots or spaces, or the run fails."
+      },
+      "customFileNameData": {
+        "type": "array",
+        "description": "Filled when an edge connects to the customFileNameIn handle. The worker reads only customFileName, never this array; the editor copies an edge-fed name into customFileName when it projects edges itself.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "useDocRaptor": {
+        "type": "boolean",
+        "description": "Whether to render the file via DocRaptor (PDF). This is the spelling the worker reads. The editor's toggle writes useDocraptor instead, which the worker ignores, so a toggle set in the editor does not reach a worker run: set useDocRaptor, and useDocraptor too if the editor should show the toggle on."
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {"type": "string", "description": "The resolved output text"},
+      "fileLink": {
+        "type": "object",
+        "description": "Present when saveOutput is true",
+        "properties": {"src": {"type": "string"}, "name": {"type": "string"}}
+      }
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "contentOut", "role": "data"},
+      {"handle": "fileLink", "role": "data"},
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "contentIn", "dataField": "text"},
+      {"handle": "customFileNameIn", "dataField": "customFileName"},
+      {"handle": "input"}
+    ],
+    "patterned": [
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/OutputControllerNode.tsx",
+    "frontFields": [
+      "canceled", "collapsed", "customFileName", "executionStatus", "fileExtension", "fileLink",
+      "fileLinkSize", "filter", "flowTrigger", "label", "paused", "saveOutput", "sensitiveFields",
+      "text", "textData", "useDocraptor"
+    ],
+    "workerModule": "src/modules/nodes/display-box",
+    "workerFields": [
+      "customFileName", "errorMessage", "errorStatusCode", "executionStatus", "fileExtension",
+      "fileLink", "saveOutput", "text", "textData", "useDocRaptor"
+    ]
+  },
+  "internalFields": {
+    "fileLinkSize": "Editor metric: the size of the file link output, computed for display.",
+    "filter": "Editor display setting (all, code or table) that decides which parts of the content the panel shows; runs ignore it.",
+    "useDocraptor": "The editor's spelling of the DocRaptor toggle. The worker reads only useDocRaptor, so this value never reaches a worker run; set useDocRaptor."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```
+
+## Related pages
+
+- [Worker: display box](/worker/node/display-box)

@@ -1,0 +1,278 @@
+---
+title: "Push Data"
+sidebarTitle: "Push Data"
+description: "Writes text/content to a connected Google (Sheets/Docs/Slides) or Microsoft (Excel/Word/PowerPoint/raw file) destination."
+---
+
+<Info>
+  Node type `pushData` in the [Integration](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Push Data — Writes data to Google (Sheets, Docs, Slides, Raw Files) or Microsoft (Excel, Word, PowerPoint, Raw Files).
+FIELDS:
+- selectedFolderDoc: Target Google Drive folder for a new Google Doc or an uploaded file.
+- newDocumentName: Name for a newly created document.
+- name: Title of the new Google Sheets worksheet (when sheets is "new").
+TIP: Creates or updates documents in the specified folder.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "pushData",
+  "label": "Push Data",
+  "category": "Integration",
+  "description": "Writes text/content to a connected Google (Sheets/Docs/Slides) or Microsoft (Excel/Word/PowerPoint/raw file) destination.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "provider": {
+        "type": "string",
+        "description": "Defaults to \"google\".",
+        "enum": ["google", "microsoft"]
+      },
+      "selectedGoogleService": {
+        "type": "string",
+        "description": "google only. Defaults to \"Google Sheets\".",
+        "enum": ["Google Sheets", "Google Docs", "Google Slides", "Raw Files"]
+      },
+      "textContent": {
+        "type": "string",
+        "description": "The text to write. Used by Google Sheets, Google Docs, Excel, Word and PowerPoint; Google Slides and Raw Files ignore it."
+      },
+      "textContentData": {
+        "type": "array",
+        "description": "textContent fed from an upstream edge. Takes precedence over textContent: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only textContent means an edge-linked value never arrives. When populated, its joined text is also run through \"{{<nodeId>.<key>}}\" interpolation before use; the plain textContent fallback is not interpolated.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "spreadsheet": {"type": "string", "description": "google Sheets only — spreadsheet id. The run writes nothing when it is empty."},
+      "sheets": {
+        "type": ["number", "string"],
+        "description": "google Sheets only — worksheet (tab) id, or \"new\" to create a worksheet named by name or sheetNameData. The text is appended to it."
+      },
+      "name": {
+        "type": "string",
+        "description": "google Sheets only — title of the worksheet created when sheets is \"new\"."
+      },
+      "sheetNameData": {
+        "type": "array",
+        "description": "The new worksheet title fed from an upstream edge (the sheetName handle). Takes precedence over name when sheets is \"new\" (google Sheets). The worker does not read it for microsoft Excel, which uses sheetName.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "docs": {
+        "type": "string",
+        "description": "google Docs only — existing document id. Omit to create a new one via newDocumentName."
+      },
+      "newDocumentName": {
+        "type": "string",
+        "description": "google Docs/microsoft Word — name for a newly created document."
+      },
+      "selectedFolderDoc": {
+        "type": "string",
+        "description": "google Docs and google Raw Files — Google Drive folder id for a newly created document or an uploaded file. Empty uses the Drive root."
+      },
+      "selectedPushDataOption": {
+        "type": "string",
+        "description": "google Docs and microsoft Word — where the text goes in an existing document. Defaults to \"End of document\".",
+        "enum": [
+          "Beginning of document", "End of document", "Start of document as a new page",
+          "End of document as a new page", "After a specific page"
+        ]
+      },
+      "specifiedPage": {
+        "type": ["number", "string"],
+        "description": "Page number used when selectedPushDataOption is \"After a specific page\"."
+      },
+      "presentationId": {
+        "type": "string",
+        "description": "google Slides only — presentation id. The run writes nothing when it is empty."
+      },
+      "slideContent": {
+        "type": "string",
+        "description": "google Slides only — a JSON object {\"requests\": [...]} of Google Slides batchUpdate requests. Invalid JSON fails the run; an empty requests list writes nothing."
+      },
+      "slideContentData": {
+        "type": "array",
+        "description": "slideContent fed from an upstream edge. Takes precedence over slideContent; only the first item's text is used. Land an edge reference here — setting only slideContent means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "selectedMicrosoftService": {
+        "type": "string",
+        "description": "microsoft only. Defaults to \"Excel\".",
+        "enum": ["Excel", "Word", "PowerPoint", "Raw Files"]
+      },
+      "microsoftFileId": {
+        "type": "string",
+        "description": "microsoft Excel only — existing workbook id."
+      },
+      "microsoftWorksheetId": {"type": "string", "description": "microsoft Excel only — id of the worksheet the text is written to."},
+      "createNewSheet": {
+        "type": "boolean",
+        "description": "microsoft Excel only. When true and sheetName is set, the run creates that worksheet and writes to it."
+      },
+      "sheetName": {
+        "type": "string",
+        "description": "microsoft Excel only, used when createNewSheet is true."
+      },
+      "microsoftWordFileId": {
+        "type": "string",
+        "description": "microsoft Word only — existing document id."
+      },
+      "microsoftPowerPointFileId": {
+        "type": "string",
+        "description": "microsoft PowerPoint only — existing presentation id."
+      },
+      "newPresentationName": {
+        "type": "string",
+        "description": "microsoft PowerPoint only, used to create a new presentation."
+      },
+      "microsoftRawFilesFolderId": {
+        "type": "string",
+        "description": "microsoft Raw Files only — OneDrive folder id for the uploaded files. Empty uses the drive root."
+      },
+      "fileUrl": {
+        "type": "string",
+        "description": "Raw Files upload (google or microsoft) — source file URL."
+      },
+      "fileUrlData": {
+        "type": "array",
+        "description": "fileUrl fed from an upstream edge. Takes precedence over fileUrl: the executor reads this first and falls back to the plain field only when this is empty; each item's text is uploaded as one file. Land an edge reference here — setting only fileUrl means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "fileName": {
+        "type": "string",
+        "description": "Raw Files upload (google or microsoft) — target file name."
+      },
+      "fileNameData": {
+        "type": "array",
+        "description": "fileName fed from an upstream edge. Takes precedence over fileName; only the first item's text is used. Land an edge reference here — setting only fileName means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {"type": "object", "properties": {}},
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "fileName", "dataField": "fileName"},
+      {"handle": "fileUrl", "dataField": "fileUrl"},
+      {"handle": "input"},
+      {"handle": "paragraphEnd"},
+      {"handle": "paragraphStart"},
+      {"handle": "rangeFilter"},
+      {"handle": "sheetName", "dataField": "sheetName"},
+      {"handle": "slideContent", "dataField": "slideContent"},
+      {"handle": "slidesFilter"},
+      {"handle": "textContent", "dataField": "textContent"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/PushDataNode/PushDataNode.tsx",
+    "frontFields": [
+      "clearOnExecution", "collapsed", "creatorId", "currentDocContent", "docs", "docsData",
+      "executionStatus", "fileName", "fileNameData", "fileUrl", "fileUrlData", "id", "label",
+      "microsoftFileId", "microsoftPowerPointFileId", "microsoftRawFilesFolderId",
+      "microsoftWordFileId", "microsoftWorksheetId", "myId", "name", "newDocumentName",
+      "newPresentationName", "outputSize", "paragraphEndData", "paragraphStartData", "placement",
+      "presentationId", "previewIndex", "provider", "publicRangeFilter", "rangeFilterData",
+      "selectedDoc", "selectedFolderDoc", "selectedGoogleService", "selectedMicrosoftService",
+      "selectedPublicGoogleService", "selectedPushDataOption", "selectedSlideOption",
+      "selectedSpreadSheet", "selectedWorkSheet", "sensitiveFields", "setPublicRangeFilter",
+      "setSelectedPublicGoogleService", "sheetNameData", "sheets", "slideContent",
+      "slideContentData", "slidesFilterData", "spaceId", "specifiedPage", "spreadsheet", "text",
+      "textContent", "textContentData", "updatePublicWorkSheets", "updateSelectedDoc",
+      "updateSelectedPublicDoc", "updateSelectedSpreadSheet", "updateSelectedWorkSheet"
+    ],
+    "workerModule": "src/modules/nodes/push-data",
+    "workerFields": [
+      "createNewSheet", "docs", "errorMessage", "errorStatusCode", "executionStatus", "fileName",
+      "fileNameData", "fileUrl", "fileUrlData", "label", "microsoftFileId",
+      "microsoftPowerPointFileId", "microsoftRawFilesFolderId", "microsoftWordFileId",
+      "microsoftWorksheetId", "name", "newDocumentName", "newPresentationName", "presentationId",
+      "provider", "selectedFolderDoc", "selectedGoogleService", "selectedMicrosoftService",
+      "selectedPushDataOption", "selectedSlideOption", "sheetName", "sheetNameData", "sheets",
+      "slideContent", "slideContentData", "specifiedPage", "spreadsheet", "textContent",
+      "textContentData"
+    ]
+  },
+  "internalFields": {
+    "clearOnExecution": "Read only to show the output panel's clear switch (PushDataNode.tsx:1825); Push Data passes no onChangeOnExecute handler, so the editor never writes it and no executor reads it.",
+    "creatorId": "Read by the editor to decide whether the viewer may edit the node (PushDataNode.tsx:967-973); no executor reads it.",
+    "currentDocContent": "Read by PushGoogleDocsData.tsx:47 to copy into text, but nothing in front, worker or stored data sets it.",
+    "docsData": "Editor prop: PushDataNode.tsx passes the Google Docs list it loaded into the child's data prop (PushDataNode.tsx:1755); it is not stored on the node.",
+    "paragraphEndData": "Read only by Pull Data components that Push Data reaches through enum imports (PushDataNode.tsx:60, PushMicrosoftData.tsx:8); Push Data renders no paragraph input and the push worker never reads it.",
+    "paragraphStartData": "Read only by Pull Data components that Push Data reaches through enum imports (PushDataNode.tsx:60, PushMicrosoftData.tsx:8); Push Data renders no paragraph input and the push worker never reads it.",
+    "publicRangeFilter": "Editor prop for the no-connection public preview, which only Pull Data renders (NoConnection.tsx:34); it is not stored on the node.",
+    "rangeFilterData": "Read only in Pull Data branches of shared components (NoConnection.tsx:34, MicrosoftExcelSelect with showRangeFilter); the push worker never reads it.",
+    "selectedDoc": "Copy of docs the editor saves when a document is picked (PushDataNode.tsx:1213); the executor reads docs.",
+    "selectedPublicGoogleService": "Editor prop for the no-connection public preview, which only Pull Data renders (NoConnection.tsx:34); it is not stored on the node.",
+    "selectedSlideOption": "Editor dropdown whose only value is \"Append to end\" (PushGoogleSlidesData.tsx:20-22); the worker declares it but never reads it and always appends.",
+    "selectedSpreadSheet": "Editor prop: the spreadsheet object the editor loaded, passed into the child's data prop (PushDataNode.tsx:1739); it is not stored on the node.",
+    "selectedWorkSheet": "Editor prop: the worksheet object the editor loaded, passed into the child's data prop (PushDataNode.tsx:1740); it is not stored on the node.",
+    "setPublicRangeFilter": "Editor callback passed into the shared NoConnection component (PushDataNode.tsx:1372); it is not stored on the node.",
+    "setSelectedPublicGoogleService": "Editor callback passed into the shared NoConnection component (PushDataNode.tsx:1366); it is not stored on the node.",
+    "slidesFilterData": "Read only by Pull Data components that Push Data reaches through enum imports (PushDataNode.tsx:60, PushMicrosoftData.tsx:8); the push worker never reads it.",
+    "text": "Editor preview: after a manual push the editor stores the destination's current content here (PushDataNode.tsx:418-421, PushGoogleDocsData.tsx:47). A flow run does not write it; it is not configuration.",
+    "updatePublicWorkSheets": "Editor callback passed into the shared NoConnection component (PushDataNode.tsx:1369); it is not stored on the node.",
+    "updateSelectedDoc": "Editor callback passed into the child's data prop (PushDataNode.tsx:1753); it is not stored on the node.",
+    "updateSelectedPublicDoc": "Editor callback passed into the shared NoConnection component (PushDataNode.tsx:1373); it is not stored on the node.",
+    "updateSelectedSpreadSheet": "Editor callback passed into the child's data prop (PushDataNode.tsx:1736); it is not stored on the node.",
+    "updateSelectedWorkSheet": "Editor callback passed into the child's data prop (PushDataNode.tsx:1737); it is not stored on the node."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

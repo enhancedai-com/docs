@@ -1,0 +1,86 @@
+---
+title: "Table Output (Output Table)"
+sidebarTitle: "Table Output"
+description: "Renders a table for display. There is no separate \"columns\" field — tableData carries both."
+---
+
+<Info>
+  Node type `outputTable` in the [Input/Output](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Table Output — Displays data as a formatted table in the output.
+FIELDS:
+- tableData: The rows to display. Not piped in via connector; filled in the editor or by a Table Processor run.
+TIP: Works best paired with a Table Processor, which writes its selected columns here.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "outputTable",
+  "label": "Output Table",
+  "category": "Input/Output",
+  "description": "Renders a table for display. There is no separate \"columns\" field — tableData carries both.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "tableData": {
+        "type": "array",
+        "description": "The table to display, one object per row, each with the same columns. The editor saves an empty table when this is missing, and a Table Processor run in the editor appends its selected columns here. Not an edge companion: nothing fills it from a connection.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {"type": ["string", "number"]},
+                  "name": {"type": "string"},
+                  "value": {"type": "string"},
+                  "selected": {"type": "boolean"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {"type": "object", "properties": {}},
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [{"handle": "input"}, {"handle": "tableInput"}],
+    "patterned": [
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/TableOutput.tsx",
+    "frontFields": [
+      "canceled", "collapsed", "flowTrigger", "myId", "newText", "paused", "tableData"
+    ],
+    "workerModule": null,
+    "workerFields": []
+  },
+  "internalFields": {
+    "newText": "Dead reference: only the dependency list of a commented-out block reads it, and nothing writes it."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

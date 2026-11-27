@@ -1,0 +1,334 @@
+---
+title: "SQL Database (SQL Querier)"
+sidebarTitle: "SQL Database"
+description: "Executes a query against an inline-configured external database. There is no saved \"connection\" concept — connection credentials are set directly on the node, per dbms."
+---
+
+<Info>
+  Node type `sqlQuerier` in the [Data](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+SQL Database — Executes queries against a connected MySQL, PostgreSQL, SQL Server, MongoDB or Firebase database.
+FIELDS:
+- dbms: Required — MySQL, PostgreSQL, MongoDB, SqlServer or Firebase. It decides which fields below apply.
+- query: The SQL query to execute (MySQL/PostgreSQL/SqlServer). Can include dynamic values from upstream.
+- host / port / database / username / password: Connection details for MySQL/PostgreSQL/SqlServer.
+- uri: MongoDB connection URI, required for MongoDB.
+TIP: Write production-safe SQL. Be careful about injection if upstream data comes from user input. Test queries with LIMIT before running on full tables.
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "sqlQuerier",
+  "label": "SQL Querier",
+  "category": "Data",
+  "description": "Executes a query against an inline-configured external database. There is no saved \"connection\" concept — connection credentials are set directly on the node, per dbms.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dbms": {
+        "type": "string",
+        "description": "Which fields below are required depends on this. The values are the editor's; the worker lowercases dbms, so \"postgresql\" also runs, but the editor then shows no connection fields for the node.",
+        "enum": ["MySQL", "PostgreSQL", "MongoDB", "SqlServer", "Firebase"]
+      },
+      "query": {
+        "type": "string",
+        "description": "Query to execute, mysql/postgresql/sqlserver only; the run fails without one. Used only when queryData is empty; queryData[0].text takes precedence when present."
+      },
+      "queryData": {
+        "type": "array",
+        "description": "Query content fed from an upstream edge. When non-empty, queryData[0].text is used instead of query.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "host": {"type": "string", "description": "mysql/postgresql/sqlserver only."},
+      "port": {"type": "number", "description": "mysql/postgresql/sqlserver only."},
+      "username": {"type": "string", "description": "mysql/postgresql/sqlserver only."},
+      "password": {"type": "string", "description": "mysql/postgresql/sqlserver only."},
+      "database": {"type": "string", "description": "mysql/postgresql/sqlserver/mongodb."},
+      "ssl": {"type": "boolean", "description": "mysql/postgresql/sqlserver/mongodb. Defaults to false."},
+      "ca": {"type": "string", "description": "CA certificate used when ssl is true, mysql/postgresql/sqlserver/mongodb."},
+      "uri": {
+        "type": "string",
+        "description": "mongodb only — the connection URI the worker connects with. The editor does not offer it: its Connection String field writes connectionString, which the worker ignores, so set uri for a run."
+      },
+      "collection": {"type": "string", "description": "mongodb/firebase only."},
+      "filter": {
+        "type": "object",
+        "description": "mongodb only — the filter object passed to find(); without one, every document in the collection is returned. The editor's Filter field stores the typed text as a string. Firebase ignores it and filters with filterOptions."
+      },
+      "filterOptions": {
+        "type": ["object", "array"],
+        "description": "firebase only — Firestore where filters: one {field, operator, value} object or an array of them, applied in order. The editor does not offer it.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "field": {"type": "string"},
+            "operator": {
+              "type": "string",
+              "enum": ["==", "!=", ">", ">=", "<", "<=", "array-contains", "in", "array-contains-any"]
+            },
+            "value": {}
+          }
+        }
+      },
+      "projectId": {"type": "string", "description": "firebase only."},
+      "apiKey": {"type": "string", "description": "firebase only."},
+      "authDomain": {"type": "string", "description": "firebase only."},
+      "databaseURL": {"type": "string", "description": "firebase only — passed to the Firebase app configuration. The editor does not offer it."},
+      "hostData": {
+        "type": "array",
+        "description": "Filled when an edge connects to the host handle. The worker reads only host, never this array, so an edge-fed value does not reach the run; set host directly.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "portData": {
+        "type": "array",
+        "description": "Filled when an edge connects to the port handle. The worker reads only port, never this array, so an edge-fed value does not reach the run; set port directly.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "databaseData": {
+        "type": "array",
+        "description": "Filled when an edge connects to the database handle. The worker reads only database, never this array, so an edge-fed value does not reach the run; set database directly.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "usernameData": {
+        "type": "array",
+        "description": "Filled when an edge connects to the username handle. The worker reads only username, never this array, so an edge-fed value does not reach the run; set username directly.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "passwordData": {
+        "type": "array",
+        "description": "Filled when an edge connects to the password handle. The worker reads only password, never this array, so an edge-fed value does not reach the run; set password directly.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "connectionStringData": {
+        "type": "array",
+        "description": "Filled when an edge connects to the connectionString handle. Neither connectionString nor this array reaches the run: the worker connects with uri.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "collectionData": {
+        "type": "array",
+        "description": "Filled when an edge connects to the collection handle. The worker reads only collection, never this array, so an edge-fed value does not reach the run; set collection directly.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "filterData": {
+        "type": "array",
+        "description": "Filled when an edge connects to the filter handle. The worker reads only filter, never this array, so an edge-fed value does not reach the run; set filter directly.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "apiKeyData": {
+        "type": "array",
+        "description": "No edge fills it: the apiKey handle has no data destination. The editor only displays it, and the worker reads apiKey.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "authDomainData": {
+        "type": "array",
+        "description": "No edge fills it: the authDomain handle has no data destination. The editor only displays it, and the worker reads authDomain.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "messagingSenderIdData": {
+        "type": "array",
+        "description": "No edge fills it: the messagingSenderId handle has no data destination. The editor only displays it, and the worker does not use messagingSenderId at all.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "appIdData": {
+        "type": "array",
+        "description": "No edge fills it: the appId handle has no data destination. The editor only displays it, and the worker does not use appId at all.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "projectIdData": {
+        "type": "array",
+        "description": "No edge fills it: the projectId handle has no data destination. The editor only displays it, and the worker reads projectId.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      },
+      "storageBucketData": {
+        "type": "array",
+        "description": "No edge fills it: the storageBucket handle has no data destination. The editor only displays it, and the worker does not use storageBucket at all.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": ["dbms"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {"type": "string", "description": "Query result, serialized as a string"}
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [
+      {"handle": "apiKey"},
+      {"handle": "appId"},
+      {"handle": "authDomain"},
+      {"handle": "collection", "dataField": "collection"},
+      {"handle": "connectionString", "dataField": "connectionString"},
+      {"handle": "database", "dataField": "database"},
+      {"handle": "filter", "dataField": "filter"},
+      {"handle": "host", "dataField": "host"},
+      {"handle": "input"},
+      {"handle": "messagingSenderId"},
+      {"handle": "password", "dataField": "password"},
+      {"handle": "port", "dataField": "port"},
+      {"handle": "projectId"},
+      {"handle": "query", "dataField": "query"},
+      {"handle": "storageBucket"},
+      {"handle": "username", "dataField": "username"}
+    ],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/SqlQuerier.tsx",
+    "frontFields": [
+      "apiKey", "apiKeyData", "appId", "appIdData", "authDomain", "authDomainData", "ca",
+      "collapsed", "collection", "collectionData", "connectionString", "connectionStringData",
+      "database", "databaseData", "dbms", "executionError", "executionStatus", "filter",
+      "filterData", "flowTrigger", "host", "hostData", "id", "label", "messagingSenderId",
+      "messagingSenderIdData", "outputSize", "password", "passwordData", "placement", "port",
+      "portData", "previewIndex", "projectId", "projectIdData", "query", "queryData", "response",
+      "sensitiveFields", "ssl", "storageBucket", "storageBucketData", "text", "username",
+      "usernameData"
+    ],
+    "workerModule": "src/modules/nodes/sql-querier",
+    "workerFields": [
+      "apiKey", "authDomain", "ca", "collection", "database", "databaseURL", "dbms",
+      "errorMessage", "errorStatusCode", "executionStatus", "filter", "filterOptions", "host",
+      "password", "port", "projectId", "query", "queryData", "ssl", "text", "uri", "username"
+    ]
+  },
+  "internalFields": {
+    "appId": "Firebase setting the editor offers, but the worker never passes it to Firebase, so it has no effect on a run.",
+    "connectionString": "The editor's MongoDB Connection String field; the worker never reads it and connects with uri instead.",
+    "messagingSenderId": "Firebase setting the editor offers, but the worker never passes it to Firebase, so it has no effect on a run.",
+    "response": "Legacy run output: the response object an earlier executor stored, which the editor still loads; the worker writes text instead.",
+    "storageBucket": "Firebase setting the editor offers, but the worker never passes it to Firebase, so it has no effect on a run."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```
+
+## Related pages
+
+- [Worker: SQL querier](/worker/node/sql-querier)

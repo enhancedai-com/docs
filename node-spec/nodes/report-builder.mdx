@@ -1,0 +1,146 @@
+---
+title: "Report Builder"
+sidebarTitle: "Report Builder"
+description: "Lays out a grid report from positioned text blocks (\"variables\") plus a header/footer. There is no generic template/data/format."
+---
+
+<Info>
+  Node type `reportBuilder` in the [Data](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## Specification
+
+```json node-spec
+{
+  "type": "reportBuilder",
+  "label": "Report Builder",
+  "category": "Data",
+  "description": "Lays out a grid report from positioned text blocks (\"variables\") plus a header/footer. There is no generic template/data/format.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "variables": {
+        "type": "array",
+        "description": "Positioned text blocks making up the report grid. An empty or missing array produces no report: the run completes without generating a file.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The block's id, which is also its target handle: an edge into that handle feeds this block."
+            },
+            "name": {"type": "string", "description": "The block's name in the editor."},
+            "x": {"type": "number", "description": "Grid column start."},
+            "y": {"type": "number", "description": "Grid row start."},
+            "w": {"type": "number", "description": "Width in grid columns."},
+            "h": {
+              "type": "number",
+              "description": "Height in grid rows, used only when settings.dynamicHeight is false."
+            },
+            "textData": {
+              "type": "array",
+              "description": "Text content of this block: the worker joins every entry's text with line breaks.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {"type": "string"},
+                  "text": {"type": "string"},
+                  "label": {"type": "string"}
+                }
+              }
+            },
+            "settings": {
+              "type": "object",
+              "properties": {
+                "dynamicHeight": {"type": "boolean", "description": "Defaults to true."}
+              }
+            }
+          }
+        }
+      },
+      "headerFooterConfig": {
+        "type": "object",
+        "properties": {
+          "leftHeader": {"type": "string"},
+          "centerHeader": {"type": "string"},
+          "rightHeader": {"type": "string"},
+          "leftFooter": {"type": "string"},
+          "centerFooter": {"type": "string"},
+          "rightFooter": {"type": "string"}
+        }
+      },
+      "fileExtension": {
+        "type": "string",
+        "description": "Format of the generated file, written with its leading dot as the editor stores it. The worker strips the dot and generates a .txt file when the field is absent.",
+        "enum": [".txt", ".html", ".json", ".csv", ".xml", ".yaml", ".pdf", ".docx", ".png", ".jpg", ".webp"]
+      },
+      "textData": {
+        "type": "array",
+        "description": "Values fed from upstream edges, one entry per source node. The editor copies each entry into the textData of the block whose handle the edge connects to; the worker reads only variables[].textData, never this array.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "text": {"type": "string"},
+            "label": {"type": "string"}
+          }
+        }
+      }
+    },
+    "required": []
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {"type": "string", "description": "The report as an HTML document, with the header, the block grid and the footer."},
+      "fileLink": {
+        "type": "object",
+        "description": "The generated file, in the format fileExtension names.",
+        "properties": {"src": {"type": "string"}, "name": {"type": "string"}}
+      }
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {"handle": "contentOut", "role": "data"},
+      {"handle": "fileLink", "role": "data"},
+      {"handle": "output", "role": "data"},
+      {"handle": "outputFlow", "role": "control"}
+    ],
+    "targetHandles": [{"handle": "input"}],
+    "patterned": [
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "target", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false},
+      {"direction": "source", "pattern": "^.*$", "discriminating": false}
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/ReportBuilderNode.tsx",
+    "frontFields": [
+      "activeTab", "collapsed", "contentIn", "executionStatus", "fileExtension", "fileLink",
+      "fileLinkSize", "filter", "headerFooterConfig", "isNewNode", "label", "saveOutput",
+      "sensitiveFields", "text", "textData", "variables"
+    ],
+    "workerModule": "src/modules/nodes/report-builder",
+    "workerFields": [
+      "fileExtension", "fileLink", "headerFooterConfig", "spaceId", "text", "variables"
+    ]
+  },
+  "internalFields": {
+    "activeTab": "Editor state: which tab of the node's panel is open.",
+    "contentIn": "Legacy input: the editor moves an old contentIn value into the first block's textData and clears it; nothing else reads it.",
+    "fileLinkSize": "Editor metric: the size of the file link output, computed for display.",
+    "filter": "Editor setting (all, code or table) the editor stores but no code applies; the worker ignores it.",
+    "isNewNode": "Editor state: set when the editor creates the first block for a node that had none.",
+    "saveOutput": "Editor setting read only by the editor's own file generation; the worker ignores it and always generates the file when there are blocks."
+  },
+  "review": {"fieldsCheckedOn": "2026-11-25", "realRunCheckedOn": null}
+}
+```

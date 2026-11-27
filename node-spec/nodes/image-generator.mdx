@@ -1,0 +1,633 @@
+---
+title: "Ai Image Generator"
+sidebarTitle: "Ai Image Generator"
+description: "Generates an image from a text prompt. aiSystem selects the provider — aiModel alone is ambiguous without it."
+---
+
+<Info>
+  Node type `imageGenerator` in the [AI](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
+</Info>
+
+## SuperChat guide
+
+SuperChat reads this text word for word in its system prompt.
+
+```markdown superchat-guide
+Image Generator — Generates images from text prompts using AI.
+FIELDS:
+- prompt: Visual description of the desired image. Include subject, style, mood, composition, lighting, color palette. More detail = better results.
+TIP: Describe what you SEE, not what you MEAN. "A cozy kitchen with warm golden lighting, rustic wooden countertops, copper pots hanging from ceiling, photorealistic" beats "a nice kitchen."
+```
+
+## Specification
+
+```json node-spec
+{
+  "type": "imageGenerator",
+  "label": "Ai Image Generator",
+  "category": "AI",
+  "description": "Generates an image from a text prompt. aiSystem selects the provider — aiModel alone is ambiguous without it.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "prompt": {
+        "type": "string",
+        "description": "Text prompt describing the image to generate. Supports \"{{<nodeId>.<key>}}\" interpolation, resolved against that node's schema entry for <key> at run time; an unresolved placeholder is left in the string as-is. Overridden by promptData when that array is non-empty — at least one of prompt or promptData must be present."
+      },
+      "aiSystem": {
+        "type": "string",
+        "description": "Image provider, e.g. \"stabilityai\", \"openai\", \"flux\" (fal), \"ideogram\", \"gemini\", \"meta\" (Muse)."
+      },
+      "aiModel": {
+        "type": "string",
+        "description": "Model name, valid for the selected aiSystem."
+      },
+      "type": {
+        "type": "string",
+        "description": "Operation mode; meaning and accepted values depend on aiSystem. For \"stabilityai\": unset/\"Text to Image\" generates from prompt+engineId; \"Image to image\" requires inputPreview and dispatches on imageToImageSelectedType; \"Upscale Image\" upscales inputPreview. The front only ever stores the label \"Enhance resolution\" for the upscale mode, but the executor checks for the literal string \"Upscale Image\" — so \"Enhance resolution\" (and any other value, e.g. \"AI Edit\"/\"AI erase\") matches no branch and silently produces no image. For \"ideogram\": \"Image to image\" remixes inputPreview; \"Expand Image\" upscales inputPreview; any other value (including unset) generates fresh from prompt. For \"meta\" (Muse): unset/\"Text to Image\" generates from prompt alone; \"Image to image\" requires inputPreview and dispatches to fal's meta/muse-image/edit endpoint through the AI SDK's own prompt.images mechanism (a single image, not multi-reference); no other mode is supported. Ignored by other providers."
+      },
+      "inputPreview": {
+        "type": "string",
+        "description": "Source image URL for image-to-image/upscale/expand modes (stabilityai, ideogram, meta). There is no separate inputPreviewData companion for this field — connect an edge directly to the \"inputPreview\" handle via connect_nodes; the platform resolves that edge into this scalar before the node runs, the same mechanism the front's drag-and-drop upload box uses."
+      },
+      "height": {
+        "type": "number",
+        "description": "Image height in pixels. Only read by stabilityai's legacy text-to-image path (engineId outside sd3/sd3.5/core/stability-ultra); defaults to 1024."
+      },
+      "width": {
+        "type": "number",
+        "description": "Image width in pixels. Only read by stabilityai's legacy text-to-image path (engineId outside sd3/sd3.5/core/stability-ultra); defaults to 1024."
+      },
+      "negativePrompt": {
+        "type": "string",
+        "description": "Elements to exclude from the image. Whether this runs through \"{{<nodeId>.<key>}}\" interpolation depends on the selected image provider/engine: it interpolates for the \"core\" Stability engine and for the legacy Stability text-to-image path, but is passed through raw (no interpolation) for other engines (e.g. \"sd3\"/\"sd3.5\"/\"stability-ultra\", Replicate/Kandinsky, and other providers). Do not assume interpolation works here regardless of provider. Overridden by negativePromptData when that array is non-empty."
+      },
+      "subject": {
+        "type": "string",
+        "description": "Subject of the image, merged into the final prompt text alongside prompt/environment/tone/view/style. Supports \"{{<nodeId>.<key>}}\" interpolation; an unresolved placeholder is left in the string as-is. Overridden by subjectData when that array is non-empty."
+      },
+      "environment": {
+        "type": "string",
+        "description": "Environment/setting of the image, merged into the final prompt text alongside prompt/subject/tone/view/style. Supports \"{{<nodeId>.<key>}}\" interpolation; an unresolved placeholder is left in the string as-is. Overridden by environmentData when that array is non-empty."
+      },
+      "tone": {
+        "type": "string",
+        "description": "Tone/mood of the image, merged into the final prompt text alongside prompt/subject/environment/view/style. Supports \"{{<nodeId>.<key>}}\" interpolation; an unresolved placeholder is left in the string as-is. Overridden by toneData when that array is non-empty."
+      },
+      "view": {
+        "type": "string",
+        "description": "Camera view/angle of the image, merged into the final prompt text alongside prompt/subject/environment/tone/style. Supports \"{{<nodeId>.<key>}}\" interpolation; an unresolved placeholder is left in the string as-is. Overridden by viewData when that array is non-empty."
+      },
+      "style": {
+        "type": "string",
+        "description": "Visual style of the image, merged into the final prompt text alongside prompt/subject/environment/tone/view. Only applied when style_present is \"None\". Supports \"{{<nodeId>.<key>}}\" interpolation; an unresolved placeholder is left in the string as-is. Overridden by styleData when that array is non-empty."
+      },
+      "promptData": {
+        "type": "array",
+        "description": "prompt fed from an upstream edge. Takes precedence over prompt: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only prompt means an edge-linked value never arrives. Its joined text is then merged into the final prompt and run through \"{{<nodeId>.<key>}}\" interpolation, exactly like the plain prompt fallback.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "subjectData": {
+        "type": "array",
+        "description": "subject fed from an upstream edge. Takes precedence over subject: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only subject means an edge-linked value never arrives. Its joined text is then merged into the final prompt and run through \"{{<nodeId>.<key>}}\" interpolation, exactly like the plain subject fallback.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "environmentData": {
+        "type": "array",
+        "description": "environment fed from an upstream edge. Takes precedence over environment: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only environment means an edge-linked value never arrives. Its joined text is then merged into the final prompt and run through \"{{<nodeId>.<key>}}\" interpolation, exactly like the plain environment fallback.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "toneData": {
+        "type": "array",
+        "description": "tone fed from an upstream edge. Takes precedence over tone: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only tone means an edge-linked value never arrives. Its joined text is then merged into the final prompt and run through \"{{<nodeId>.<key>}}\" interpolation, exactly like the plain tone fallback.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "viewData": {
+        "type": "array",
+        "description": "view fed from an upstream edge. Takes precedence over view: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only view means an edge-linked value never arrives. Its joined text is then merged into the final prompt and run through \"{{<nodeId>.<key>}}\" interpolation, exactly like the plain view fallback.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "styleData": {
+        "type": "array",
+        "description": "style fed from an upstream edge. Takes precedence over style: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only style means an edge-linked value never arrives. Its joined text is then merged into the final prompt and run through \"{{<nodeId>.<key>}}\" interpolation, exactly like the plain style fallback.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "negativePromptData": {
+        "type": "array",
+        "description": "negativePrompt fed from an upstream edge. Takes precedence over negativePrompt: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only negativePrompt means an edge-linked value never arrives. Whether its joined text is then run through \"{{<nodeId>.<key>}}\" interpolation depends on the selected provider/engine, exactly like the plain negativePrompt field.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "searchPromptData": {
+        "type": "array",
+        "description": "searchPrompt fed from an upstream edge. Takes precedence over searchPrompt: the executor reads this first and falls back to the plain field only when this is empty. Land an edge reference here — setting only searchPrompt means an edge-linked value never arrives.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "engineId": {
+        "type": "string",
+        "description": "stabilityai only. Text-to-image engine. \"sd3\"/\"sd3.5-large\"/\"sd3.5-large-turbo\" route to the SD3 API, \"core\" to Stability Core, \"stability-ultra\" to Stability Ultra; any other value falls back to the legacy text-to-image API (which reads height/width/cfg_scale/steps). Defaults to \"sd3\"."
+      },
+      "clip_guidance_preset": {
+        "type": "string",
+        "description": "stabilityai legacy text-to-image only.",
+        "enum": [
+          "NONE",
+          "FAST_BLUE",
+          "FAST_GREEN",
+          "SIMPLE",
+          "SLOW",
+          "SLOWER",
+          "SLOWEST"
+        ]
+      },
+      "cfg_scale": {
+        "type": "number",
+        "description": "stabilityai legacy text-to-image only. Prompt-adherence scale. Defaults to 9."
+      },
+      "steps": {
+        "type": "number",
+        "description": "stabilityai legacy text-to-image only. Diffusion step count. Defaults to 50."
+      },
+      "promptWeight": {
+        "type": "number",
+        "description": "stabilityai only. Defaults to 1.0."
+      },
+      "image_strength": {
+        "type": "number",
+        "description": "stabilityai legacy image-to-image only. How much the source image is preserved. Defaults to 0.0."
+      },
+      "style_present": {
+        "type": "string",
+        "description": "stabilityai only. The sentinel value \"None\" is what enables the style field to be merged into the prompt at all — any other value suppresses style."
+      },
+      "imageToImageSelectedType": {
+        "type": "string",
+        "description": "stabilityai \"Image to image\" only. Selects the sub-method; unset/unrecognized falls back to \"sketch\".",
+        "enum": [
+          "sketch",
+          "structure",
+          "style"
+        ]
+      },
+      "influenceStrength": {
+        "type": "number",
+        "description": "stabilityai \"Image to image\" only, all three sub-methods. A percentage from 0 to 100, as the canvas slider shows it (\"Influence Strength: N%\"), not a 0-1 fraction: the value is divided by 100 before use, so 0.5 means 0.5%. Higher keeps more of the source image. Defaults to 0."
+      },
+      "seed": {
+        "type": "string",
+        "description": "stabilityai \"Image to image\" only. Coerced to a string before use; defaults to \"0\"."
+      },
+      "aspect_ratio": {
+        "type": "string",
+        "description": "stabilityai text-to-image only (sd3/sd3.5/core/stability-ultra engines), used when type is unset or \"Text to Image\". Same value set as selectedImageToImageAspectRatio.",
+        "enum": [
+          "1:1",
+          "2:3",
+          "3:2",
+          "4:5",
+          "5:4",
+          "9:16",
+          "9:21",
+          "16:9",
+          "21:9"
+        ]
+      },
+      "selectedImageToImageAspectRatio": {
+        "type": "string",
+        "description": "stabilityai only, used when type is \"Image to image\". Same value set as aspect_ratio — the front reuses one picker for both, writing to whichever field the current mode reads.",
+        "enum": [
+          "1:1",
+          "2:3",
+          "3:2",
+          "4:5",
+          "5:4",
+          "9:16",
+          "9:21",
+          "16:9",
+          "21:9"
+        ]
+      },
+      "output_format": {
+        "type": "string",
+        "description": "stabilityai text-to-image only (unset/\"Text to Image\"). Defaults to \"png\". Distinct field from outputFormat, which the image-to-image path reads instead."
+      },
+      "outputFormat": {
+        "type": "string",
+        "description": "stabilityai \"Image to image\" only. Defaults to \"png\". Distinct field from output_format, which the text-to-image path reads instead."
+      },
+      "size": {
+        "type": "string",
+        "description": "openai only.",
+        "enum": [
+          "auto",
+          "1024x1024",
+          "1536x1024",
+          "1024x1536"
+        ]
+      },
+      "quality": {
+        "type": "string",
+        "description": "openai only.",
+        "enum": [
+          "high",
+          "medium",
+          "low"
+        ]
+      },
+      "aspectRatio": {
+        "type": "string",
+        "description": "gemini only. Read by the executor, but not exposed in the front UI today — only aiModel is offered for gemini."
+      },
+      "imageSize": {
+        "type": "string",
+        "description": "fal only. Defaults to \"landscape_4_3\".",
+        "enum": [
+          "square_hd",
+          "square",
+          "portrait_4_3",
+          "portrait_16_9",
+          "landscape_4_3",
+          "landscape_16_9"
+        ]
+      },
+      "sync_mode": {
+        "type": "string",
+        "description": "fal only. Quirk: the executor treats this as boolean-false only when the value is the literal string \"false\" — any other value, including the boolean false, is treated as true. Defaults to false in the front UI."
+      },
+      "guidance_scalefloat": {
+        "type": "number",
+        "description": "fal only. Defaults to 3.5."
+      },
+      "inference_steps": {
+        "type": "number",
+        "description": "fal only. Defaults to 28."
+      },
+      "fal_seed": {
+        "type": "number",
+        "description": "fal only. Defaults to 0."
+      },
+      "num_images": {
+        "type": "number",
+        "description": "fal only."
+      },
+      "safety_tolerance": {
+        "type": "string",
+        "description": "fal only. Digit-string, not a number.",
+        "enum": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      },
+      "aspect_ratio_ideogram": {
+        "type": "string",
+        "description": "ideogram only.",
+        "enum": [
+          "1x1",
+          "1x3",
+          "3x1",
+          "1x2",
+          "2x1",
+          "2x3",
+          "3x2",
+          "3x4",
+          "4x3",
+          "4x5",
+          "5x4",
+          "9x16",
+          "16x9",
+          "10x16",
+          "16x10"
+        ]
+      },
+      "style_type": {
+        "type": "string",
+        "description": "ideogram only.",
+        "enum": [
+          "AUTO",
+          "GENERAL",
+          "REALISTIC",
+          "DESIGN"
+        ]
+      },
+      "magicPrompt": {
+        "type": "string",
+        "description": "ideogram only.",
+        "enum": [
+          "AUTO",
+          "ON",
+          "OFF"
+        ]
+      },
+      "resolution": {
+        "type": "string",
+        "description": "ideogram only. Format \"<width>x<height>\" (e.g. \"1024x1024\", \"512x1536\") — around 65 valid combinations exist; not enumerated here to keep this schema readable."
+      }
+    },
+    "required": [
+      "aiSystem"
+    ]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "URL of the generated image"
+      }
+    }
+  },
+  "handles": {
+    "sourceHandles": [
+      {
+        "handle": "output",
+        "role": "data"
+      },
+      {
+        "handle": "outputFlow",
+        "role": "control"
+      },
+      {
+        "handle": "outputPreview",
+        "role": "data"
+      }
+    ],
+    "targetHandles": [
+      {
+        "handle": "input"
+      },
+      {
+        "handle": "inputPreview",
+        "dataField": "inputPreview"
+      },
+      {
+        "handle": "negativePrompt",
+        "dataField": "negativePrompt"
+      },
+      {
+        "handle": "searchPrompt",
+        "dataField": "searchPrompt"
+      },
+      {
+        "handle": "prompt",
+        "dataField": "prompt"
+      },
+      {
+        "handle": "style",
+        "dataField": "style"
+      },
+      {
+        "handle": "view",
+        "dataField": "view"
+      },
+      {
+        "handle": "subject",
+        "dataField": "subject"
+      },
+      {
+        "handle": "environment",
+        "dataField": "environment"
+      },
+      {
+        "handle": "tone",
+        "dataField": "tone"
+      }
+    ],
+    "patterned": [
+      {
+        "direction": "target",
+        "pattern": "^.*$",
+        "discriminating": false
+      },
+      {
+        "direction": "target",
+        "pattern": "^.*$",
+        "discriminating": false
+      },
+      {
+        "direction": "target",
+        "pattern": "^.*$",
+        "discriminating": false
+      },
+      {
+        "direction": "target",
+        "pattern": "^.*$",
+        "discriminating": false
+      },
+      {
+        "direction": "target",
+        "pattern": "^.*$",
+        "discriminating": false
+      },
+      {
+        "direction": "source",
+        "pattern": "^.*$",
+        "discriminating": false
+      },
+      {
+        "direction": "source",
+        "pattern": "^.*$",
+        "discriminating": false
+      },
+      {
+        "direction": "target",
+        "pattern": "^.*$",
+        "discriminating": false
+      }
+    ],
+    "handlesPatterned": true,
+    "unresolved": false,
+    "canContinueExecutionChain": true
+  },
+  "implementation": {
+    "frontComponent": "src/components/nodes/ImageGenerator.tsx",
+    "frontFields": [
+      "aiEditSelectedType",
+      "aiEraseSelectedType",
+      "aiModel",
+      "aiSystem",
+      "clearOnExecution",
+      "collapsed",
+      "customToneValues",
+      "customViewValues",
+      "dimensions",
+      "environment",
+      "executionStatus",
+      "expandedImagePreview",
+      "height",
+      "id",
+      "imageToImageSelectedType",
+      "image_strength",
+      "influenceStrength",
+      "inputPreview",
+      "inputSize",
+      "label",
+      "maskInputPreview",
+      "maskInputPreviewToShow",
+      "negativePrompt",
+      "negativePromptData",
+      "nonTextData",
+      "placement",
+      "previewIndex",
+      "previewResponses",
+      "prompt",
+      "searchPrompt",
+      "searchPromptData",
+      "selectedEnhancedResolution",
+      "selectedImageToImageAspectRatio",
+      "sensitiveFields",
+      "sizeGenerate",
+      "src",
+      "style",
+      "subject",
+      "text",
+      "tone",
+      "toneDefaultValues",
+      "uploadImage",
+      "view",
+      "viewDefaultValues",
+      "width"
+    ],
+    "workerModule": "src/modules/nodes/image-generator",
+    "workerFields": [
+      "aiSystem",
+      "flowTrigger",
+      "previewResponses",
+      "spaceId"
+    ]
+  },
+  "internalFields": {
+    "aiEditSelectedType": "Editor setting: the AI Edit sub-mode picked in the node's settings. Not part of this release's MCP schema; the executor does not read it.",
+    "aiEraseSelectedType": "Editor setting: the AI erase sub-mode picked in the node's settings. Not part of this release's MCP schema; the executor does not read it.",
+    "clearOnExecution": "Editor setting on the output panel: a run started from the editor clears the flow's sessions when any node has it set. No executor reads it for this node.",
+    "customToneValues": "Editor state: custom options the user added to the tone selector. No executor reads it.",
+    "customViewValues": "Editor state: custom options the user added to the view selector. No executor reads it.",
+    "dimensions": "Legacy Expand Image edges from the editor's older expand tool. The worker refuses a node that has only this and no expandPixels.",
+    "expandedImagePreview": "Editor state: the preview of the expanded image. No executor reads it.",
+    "maskInputPreview": "Legacy mask URL from the editor's older mask tool. The worker refuses a node that has only this and no editMask.",
+    "maskInputPreviewToShow": "Editor state: the unmasked image the upload box shows while a mask is set. No executor reads it.",
+    "nonTextData": "Not a node field: the extractor reads the rest element of the component's destructuring of data (everything except the prompt fields) as a data field.",
+    "searchPrompt": "Editor text for the search-based edit modes; an edge into the searchPrompt handle fills searchPromptData. Not part of this release's MCP schema.",
+    "selectedEnhancedResolution": "Editor setting: the upscale factor picked in the node's settings. Not part of this release's MCP schema; the executor does not read it.",
+    "sizeGenerate": "Editor state: the size preset label the stabilityai picker writes with width and height. No executor reads it.",
+    "src": "Editor copy of the uploaded image URL, kept beside inputPreview. No executor reads it.",
+    "toneDefaultValues": "Editor state: the options picked in the tone selector. The editor joins them into tone, which is what the executor reads.",
+    "uploadImage": "Editor state: the File object of the last upload, which serializes to an empty object. The uploaded image's URL is in inputPreview.",
+    "viewDefaultValues": "Editor state: the options picked in the view selector. The editor joins them into view, which is what the executor reads."
+  },
+  "review": {
+    "fieldsCheckedOn": "2026-11-25",
+    "realRunCheckedOn": null
+  }
+}
+```
+
+## Related pages
+
+- [Worker: image generator](/worker/node/image-generator)
