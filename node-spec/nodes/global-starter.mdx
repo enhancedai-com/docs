@@ -8,6 +8,10 @@ description: "Entry point that triggers the flow execution. IMPORTANT: the node 
   Node type `globalStarter` in the [Input/Output](/node-spec/categories) category. The `node-spec` block below is the specification the MCP (`get_node_type`) and SuperChat (`read_node_type`) serve. Read [how the node specification works](/node-spec/overview) before you edit it.
 </Info>
 
+## Scheduling over MCP
+
+An agent runs on a schedule only when a schedule row exists for it. `isAutotrigger`, `intervalData` and `triggerMessage` on this node only mirror that row for the editor. Over MCP, read the schedule with `get_agent_schedule`, and create, replace or delete it with `set_agent_schedule` and `remove_agent_schedule`. These tools save the row the scheduler runs and update the mirror, exactly as the editor's Auto Trigger settings do. Times are in the America/New_York time zone.
+
 ## Specification
 
 ```json node-spec
@@ -22,12 +26,12 @@ description: "Entry point that triggers the flow execution. IMPORTANT: the node 
       "isAutotrigger": {
         "type": "boolean",
         "readOnly": true,
-        "description": "Read-only over MCP: add_node, update_node and create_version refuse a write that sets or changes it. Whether the editor shows the flow as running on a schedule; the platform copies it to the flow's isAutotrigger flag. Setting it does not schedule anything: the editor's Auto Trigger dialog creates the schedule through the schedule service, then writes isAutotrigger, intervalData and triggerMessage here."
+        "description": "Read-only over MCP: add_node, update_node and create_version refuse a write that sets or changes it; set_agent_schedule and remove_agent_schedule create or delete the real schedule and write it. Whether the editor shows the flow as running on a schedule; the platform copies it to the flow's isAutotrigger flag. Setting it does not schedule anything: the editor's Auto Trigger dialog creates the schedule through the schedule service, then writes isAutotrigger, intervalData and triggerMessage here."
       },
       "intervalData": {
         "type": "object",
         "readOnly": true,
-        "description": "Read-only over MCP: add_node, update_node and create_version refuse a write that sets or changes it. The schedule the editor's Auto Trigger dialog last saved, kept for display. The runs themselves follow the schedule stored by the schedule service.",
+        "description": "Read-only over MCP: add_node, update_node and create_version refuse a write that sets or changes it; set_agent_schedule and remove_agent_schedule create or delete the real schedule and write it. The schedule the editor's Auto Trigger dialog last saved, kept for display. The runs themselves follow the schedule stored by the schedule service.",
         "properties": {
           "type": {"type": "string", "enum": ["hourly", "daily", "weekly", "monthly"]},
           "minutely": {"type": "string", "description": "Second of the minute."},
