@@ -2,42 +2,46 @@
 title: "Worker service"
 description: "How the Worker service connects to Temporal and routes workflows through environment-specific task queues"
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## Overview
 
 The `WorkerService` is the entry point of the worker microservice. It creates a Temporal Worker instance, registers all workflows and activities, and starts polling a task queue for work.
 
-**Source:** `flux-prompt-worker/src/modules/temporal/worker.service.ts`
+**Source:** `src/modules/temporal/worker.service.ts` in the worker repo. `src/main.ts` creates the Nest application context and calls `WorkerService.run()`.
 
 ## How it works
 
 When the application starts, the `WorkerService.run()` method:
 
 1. Reads the task queue name from the `TEMPORAL_TASK_QUEUE` environment variable
-2. Creates a Temporal Worker connected to the Temporal server
-3. Registers all workflow definitions and activity implementations
+2. Creates a Temporal Worker on the connection `TemporalService` opened to `TEMPORAL_ADDRESS` (default `localhost:7233`)
+3. Registers all workflow definitions (`workflowsPath: require.resolve("./workflows")`) and activity implementations
 4. Starts polling the task queue for workflow and activity tasks
 
 ```typescript
-const taskQueue = process.env.TEMPORAL_TASK_QUEUE || "enhanced-ai-queue";
-
 const worker = await Worker.create({
   connection: this.temporalService.connection,
   namespace: "default",
-  taskQueue,
+  taskQueue: process.env.TEMPORAL_TASK_QUEUE || "enhanced-ai-queue",
+  maxConcurrentWorkflowTaskExecutions: 20,
+  maxConcurrentActivityTaskExecutions: MAX_CONCURRENT_ACTIVITY_TASK_EXECUTIONS,
+  maxCachedWorkflows: 20,
+  defaultHeartbeatThrottleInterval: "2 seconds",
+  maxHeartbeatThrottleInterval: "2 seconds",
+  shutdownGraceTime: WORKER_SHUTDOWN_GRACE_MS,
+  shutdownForceTime: WORKER_SHUTDOWN_FORCE_MS,
   workflowsPath: require.resolve("./workflows"),
-  activities: {
+  activities: bindRunToken({
+    chargeTokensActivity: ...,
     textGeneratorActivity: ...,
-    scriptingActivity: ...,
-    notifyStatusActivity: ...,
     // all other activities
-  },
+  }),
 });
 
-await worker.run();
+return worker.run();
 ```
 
 ## Task queue configuration
@@ -62,7 +66,7 @@ Temporal server
 
 ### Configuration
 
-Set the `TEMPORAL_TASK_QUEUE` environment variable in **both** the API and the worker for each environment:
+Set the `TEMPORAL_TASK_QUEUE` environment variable in **both** the API and the worker for each environment. The values live in each environment's deployment configuration, not in the code; this is the naming pattern:
 
 | Environment | `TEMPORAL_TASK_QUEUE` value |
 |-------------|---------------------------|
@@ -71,92 +75,124 @@ Set the `TEMPORAL_TASK_QUEUE` environment variable in **both** the API and the w
 | Production  | `enhanced-ai-queue-prod`    |
 
 <Note>
-If the variable is not set, it defaults to `enhanced-ai-queue`. This fallback exists to avoid breaking existing setups, but you should always set it explicitly in deployed environments.
+If the variable is not set, both sides default to `enhanced-ai-queue`. This fallback exists to avoid breaking existing setups, but you should always set it explicitly in deployed environments.
 </Note>
 
-**API side** (`Flux-Prompt/src/temporal/temporal.controller.ts`):
+**API side.** Every place in back that starts a workflow or registers a schedule reads the same variable: `src/temporal/temporal.controller.ts`, `src/app-api/flux/flux.service.ts`, `src/app-api/flux/flux.controller.ts`, `src/app-api/flux/output-delivery/output-delivery.service.ts`, `src/app-api/router/router.service.ts` and `src/app-api/schedule/temporal-schedule-registrar.service.ts`. For example, `POST /process/single-node`:
 
 ```typescript
-const handle = await this.temporalService.client.start('processSingleNode', {
-  taskQueue: process.env.TEMPORAL_TASK_QUEUE || 'enhanced-ai-queue',
-  args: [nodeId, user.id, sessionId, flowId],
-  workflowId: `node-process-${nodeId}-${Date.now()}`,
-});
+const handle = await this.temporalService.client.start<ProcessSingleNodeInterface>(
+  'processSingleNode',
+  {
+    taskQueue: process.env.TEMPORAL_TASK_QUEUE || 'enhanced-ai-queue',
+    args: [nodeId, user.id, sessionId, flowId, flowVersionHistoryId ?? null],
+    workflowId: `node-process-${nodeId}-${Date.now()}`,
+  },
+);
 ```
 
-**Worker side** (`flux-prompt-worker/src/modules/temporal/worker.service.ts`):
+**Worker side** (`src/modules/temporal/worker.service.ts`):
 
 ```typescript
-const taskQueue = process.env.TEMPORAL_TASK_QUEUE || "enhanced-ai-queue";
-
-const worker = await Worker.create({
-  connection: this.temporalService.connection,
-  namespace: "default",
-  taskQueue,
-  // ...
-});
+taskQueue: process.env.TEMPORAL_TASK_QUEUE || "enhanced-ai-queue",
 ```
 
-## Worker concurrency
-
-The worker limits concurrent execution to prevent resource exhaustion:
+## Worker settings
 
 | Setting | Value | Description |
 |---------|-------|-------------|
 | `maxConcurrentWorkflowTaskExecutions` | 20 | Maximum workflow tasks processed simultaneously |
 | `maxConcurrentActivityTaskExecutions` | 10 (`MAX_CONCURRENT_ACTIVITY_TASK_EXECUTIONS`, `temporal.constants.ts`) | Maximum activity tasks processed simultaneously |
 | `maxCachedWorkflows` | 20 | Maximum workflows kept in memory cache |
+| `defaultHeartbeatThrottleInterval` / `maxHeartbeatThrottleInterval` | 2 seconds | How often activity heartbeats are sent to the server |
+| `shutdownGraceTime` | 100 000 ms (`WORKER_SHUTDOWN_GRACE_MS`) | Time running activities get to finish after shutdown starts |
+| `shutdownForceTime` | 110 000 ms (`WORKER_SHUTDOWN_FORCE_MS`) | Time after which shutdown is forced |
+
+## Registered workflows
+
+`workflows/index.ts` exports the workflows the worker runs:
+
+| Workflow | Started by |
+|----------|-----------|
+| `processSingleNode` | The main API, once per worker-executed node, and `processFlow` as a child. See [processSingleNode](/worker/workflows/process-single-node) |
+| `processFlow` | The main API's `apiV2` path when the `engine_in_workflow` flag is on and the flow is eligible; also `processBatch` and `runScheduledFlow` as a child |
+| `processBatch` | `flux.controller.ts` for a batch file. See [processBatch](/worker/workflows/process-batch) |
+| `runScheduledFlow` | Temporal schedules that back's `temporal-schedule-registrar.service.ts` registers |
+| `completionWorkflow` | The Completions API (`router.service.ts`) |
+| `deliverRunOutputs` | Output delivery (`output-delivery.service.ts`). See [deliverRunOutputs](/worker/activities/deliver-run-outputs) |
+
+[`processAgent`](/worker/workflows/process-agent) is not exported, so it is not registered.
 
 ## Registered activities
 
-The worker registers **42** activity implementations from `ActivitiesService` (`worker.service.ts:33-190`):
+The worker registers **64** activities: 60 from `ActivitiesService` and 4 from `DeliveryActivities`. All of them are wrapped by `bindRunToken` before registration.
 
 | Activity | Description |
 |----------|-------------|
 | `notifyStatusActivity` | Sends execution status updates to the frontend |
 | `getInfoInDatabaseActivity` | Registered, but dead code — no workflow calls it |
 | `getNodeInfoActivity` | Fetches node type/flow_id/trimmed data; the one `processSingleNode` actually calls |
+| `resolveNodeInputActivity` | Writes a node's resolved input when the API passes an `inputResolution` |
 | `validateModelAccessActivity` | Validates user access to AI models |
+| `nodeCreditGateActivity` | Asks the main API (`POST /worker/node-credit-gate`) whether the paying account can still be charged |
 | `chargeTokensActivity` | Records token usage for billing |
 | `generateFileActivity` | Generates output files; registered, but not called from any live workflow today |
 | `generateExecutionLogsActivity` | Creates execution log entries; also updates `node_executions`/`flows_nodes` on error |
 | `nodeExecutionErrorActivity` | Called on node error; currently a no-op |
 | `persistCancelledNodeActivity` | Persists a cancelled node's partial output |
-| `completionActivity` | Completion-related bookkeeping |
+| `completionActivity` | Runs one Completions API request for `completionWorkflow`, streaming chunks when a `streamKey` is set |
 | `textGeneratorActivity` | Executes the text generator node |
 | `scriptingActivity` | Executes the scripting node |
 | `audioTranscriberActivity` | Executes the audio transcriber node |
+| `chargeTranscriptionActivity` | Charges usage after an audio transcription |
 | `mathFunctionActivity` | Executes the Functions (math function) node |
 | `apiCallerActivity` | Executes the API caller node |
 | `counterActivity` | Executes the process counter node |
 | `sqlQuerierActivity` | Executes the SQL querier node |
 | `displayBoxActivity` | Executes the display box node |
+| `dataOutputActivity` | Executes the Data Output node |
 | `pullDataActivity` | Executes the pull data node |
 | `pushDataActivity` | Executes the push data node |
+| `fileSaveActivity` | Executes the file save node |
 | `mcpActivity` | Executes the MCP node |
 | `thirdPartyIntegrationActivity` | Executes third-party integration nodes (and `HUB_SPOT_CRM`) |
 | `imageGeneratorActivity` | Executes the image generator node |
+| `imageReaderActivity` | Executes the image reader node |
+| `aiVideoGeneratorActivity` | Executes the AI video generator node |
+| `reportBuilderActivity` | Executes the report builder node |
 | `webCrawlingActivity` | Executes the web crawling node |
+| `webAmazonActivity` | Executes the Amazon web node |
 | `largeMemoryActivity` | Executes the Large Memory node |
 | `validateLargeMemoryAccessActivity` | Validates access before a Large Memory run |
 | `chargeLargeMemoryUsageActivity` | Charges usage after a Large Memory run |
 | `webSearchActivity` | Executes the web search node |
-| `validateApiAccessActivity` | Validates API-capability access (web search) |
-| `chargeApiCallActivity` | Charges usage after a web search run |
+| `secApiNodeActivity` | Executes the SEC data node |
+| `usCensusNodeActivity` | Executes the US Census data node |
+| `validateApiAccessActivity` | Validates API-capability access (web search, SEC data, US Census data) |
+| `chargeApiCallActivity` | Charges usage after an API-capability node run |
 | `voiceGeneratorActivity` | Executes the voice generator node |
 | `chargeVoiceActivity` | Charges usage after a voice generation run |
 | `loadRunSeedActivity` | Loads a run seed snapshot the API persisted before starting a flow run |
+| `persistRunSeedActivity` | Persists a run seed snapshot (scheduled runs) |
 | `emitRunEventActivity` | Appends run events (started / node started / node finished / finished) to the API's run-events ingest endpoint |
 | `storeRunResultActivity` | Persists the final run result via the API's claim-check storage |
 | `openNodeExecutionActivity` | Opens the `node_executions` row the child `processSingleNode` will read from and returns its `runToken` |
+| `finishApiRunActivity` | Reports the end of an API run to the main API (`POST /worker/api-run-finish`) |
 | `loadBatchContextActivity` | Reads a `batch_processing_file` row + its Variable Input node list for the batch loop ([`processBatch`](/worker/workflows/process-batch)) |
 | `loadRowInputActivity` | Reads one CSV row from `batch_processing_file_input_output` |
 | `prepareBatchRowRunActivity` | Calls the main API's `POST /worker/batch-row-run` to allocate `runId` + seed snapshot for the row |
+| `finishBatchRowRunActivity` | Reports a batch row's outputs to the main API (`POST /worker/batch-row-outputs`) |
 | `writeRowOutputActivity` | Writes the child flow run's result on the input/output row |
 | `updateLastProcessedLineActivity` | Advances `batch_processing_file.lastProcessedLine` monotonically |
 | `markBatchTerminalActivity` | Sets `batch_processing_file.status` to `completed` / `error` / `stopped` |
-
-All are wrapped through `bindRunToken` before registration.
+| `resolveScheduledRunActivity` | Loads the schedule, its user and the flow graph for a scheduled run |
+| `prepareScheduledRunActivity` | Calls the main API's `POST /worker/scheduled-run` to prepare a scheduled run |
+| `finishScheduledRunActivity` | Reports a scheduled run's outputs to the main API (`POST /worker/scheduled-run-outputs`) |
+| `logMissedFireActivity` | Records a schedule fire that was missed |
+| `deliverEmailActivity` | Sends a run's outputs by email (`DeliveryActivities`) |
+| `deliverCallbackActivity` | Posts a run's outputs to a callback URL (`DeliveryActivities`) |
+| `reportDeliveryOutcomeActivity` | Reports the delivery outcome to the main API (`DeliveryActivities`) |
+| `deleteDeliveryPlanActivity` | Deletes the stored delivery plan (`DeliveryActivities`) |
 
 ## Troubleshooting
 
@@ -164,10 +200,9 @@ All are wrapped through `bindRunToken` before registration.
 
 If workflows appear in the Temporal UI as scheduled but never execute:
 
-1. Verify the worker is running and connected to the Temporal server
-2. Check the worker logs for the `Worker starting on task queue:` message
-3. Confirm the task queue name matches between the API and worker
-4. Ensure `TEMPORAL_ADDRESS` points to the correct Temporal server
+1. Verify the worker is running and connected to the Temporal server (the worker does not log a startup line of its own; check that the ECS task is running and that the Temporal UI lists a poller on the task queue)
+2. Confirm the task queue name matches between the API and worker
+3. Ensure `TEMPORAL_ADDRESS` points to the correct Temporal server
 
 ### Workflows executing with wrong data
 

@@ -1,36 +1,31 @@
 ---
 title: "processAgent"
-description: "Workflow for executing complete agent workflows"
+description: "A placeholder workflow that the worker does not register; full agent runs use processFlow"
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## Overview
 
-The `processAgent` workflow is designed to execute complete agent workflows consisting of multiple connected nodes. This workflow orchestrates the execution of nodes in the correct order based on their dependencies.
+`processAgent` was meant to execute a complete agent: every node of a flow, in dependency order. It was never finished, and the worker does not run it today.
 
 ## Status
 
 <Warning>
-This workflow is currently **in development**. The implementation logic has been removed and is being redesigned.
+`processAgent` is **not registered** with the worker. The file `src/modules/temporal/workflows/process-agent.workflow.ts` still exists, but `workflows/index.ts` does not export it, so the Temporal worker has no workflow by that name.
 </Warning>
 
-## Intended purpose
+The function body is a placeholder: everything except `return results` is commented out, so it would return an empty object even if it were registered.
 
-When fully implemented, this workflow will:
+The main API still has a route that starts it: `POST /process/agent` in back's `src/temporal/temporal.controller.ts` calls `client.start('processAgent', …)` with `args: [flowId, user.id]`. Because no worker registers the workflow type, the workflow tasks of a run started there fail and it never runs a node.
 
-- Execute multiple nodes in a dependency-aware order
-- Handle node dependencies and execution order
-- Process nodes that can be executed in parallel
-- Manage the complete lifecycle of agent execution
-- Handle errors and retries at the agent level
+## What runs a full agent instead
 
-## Current implementation
-
-The current implementation is a placeholder that returns an empty results object. The previous implementation logic has been commented out and removed as part of the redesign process.
+A full agent run goes through the main API's `apiV2` path in back's `src/app-api/flux/flux.service.ts`. When the `engine_in_workflow` feature flag is on and every node type in the flow is eligible, `apiV2` starts the `processFlow` workflow, which dispatches a child [`processSingleNode`](/worker/workflows/process-single-node) per node. Otherwise the main API's own loop orchestrates the nodes and starts `processSingleNode` for each worker-executed node. See [Worker service](/worker/workflows/worker-service#registered-workflows) for every workflow the worker registers.
 
 ## Related documentation
 
 - [Worker overview](/worker/overview)
 - [processSingleNode workflow](/worker/workflows/process-single-node)
+- [processBatch workflow](/worker/workflows/process-batch)

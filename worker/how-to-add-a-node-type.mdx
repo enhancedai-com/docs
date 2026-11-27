@@ -1,9 +1,9 @@
 ---
 title: How to add a node type
-description: The seven layers (plus the registry entry) that a node type needs to run. Miss one and the node either silently does nothing or throws "Node type X not supported".
+description: The eight layers (plus the registry entry) that a node type needs to run. Miss one and the node either silently does nothing or throws "Node type X not supported".
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f, back@master 9609806b
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## Before you start
@@ -14,63 +14,65 @@ state_verified_against: worker@develop 5fe389f, back@master 9609806b
 
 Never write on an environment branch (`main`, `staging`, `develop`, or the frozen legacy `production` and `master`). If a repo has uncommitted work, do not stash it: create a worktree off `origin/main` for your feature branch instead.
 
-## The seven layers
+## The eight layers
 
 <Steps>
   <Step title="1. Worker module">
-    Create `worker/src/modules/nodes/<node>/` with four files: `<node>.module.ts`, `<node>.service.ts`, `<node>.type.ts`, `<node>.service.spec.ts`.
-
-    **If you skip this:** the workflow throws `Cannot find module` at execute.
+    Create `worker/src/modules/nodes/<node>/` with four files: `<node>.module.ts`, `<node>.service.ts`, `<node>.type.ts`, `<node>.service.spec.ts`. The service reads its input with `fetchNodeRow` and writes its output with `persistNodeSuccess` (see [Persistence contract](/worker/persistence-contract)).
   </Step>
 
   <Step title="2. Enum entry">
-    Add the new type to `worker/src/modules/nodes/nodes.types.ts`.
+    Add the new type to `NodeType` in `worker/src/modules/nodes/nodes.types.ts`. The value must be the exact type string the front saves.
 
-    **If you skip this:** TypeScript compiles, but the workflow's `case` for your type never matches.
+    **If you skip this:** nothing in the workflow can name the type, so it falls through to `Node type X not supported`.
   </Step>
 
   <Step title="3. Temporal module import">
-    Import your module in `worker/src/modules/temporal/temporal.module.ts`.
+    Import your module in `worker/src/modules/temporal/temporal.module.ts` and inject its service in the `ActivitiesService` constructor.
 
-    **If you skip this:** injection fails at worker boot.
+    **If you skip this:** Nest dependency injection fails at worker boot.
   </Step>
 
   <Step title="4. Activities wrapper">
-    Add `<node>Activity` in `worker/src/modules/temporal/activities/activities.service.ts`, wrapped by `runNodeActivity`.
-
-    **If you skip this:** Temporal reports `activity not registered`.
+    Add `<node>Activity` in `worker/src/modules/temporal/activities/activities.service.ts`, wrapped in `runNodeActivity` (from `worker/src/modules/nodes/shared/run-node-activity.ts`), which turns a thrown error into a typed Temporal failure.
   </Step>
 
   <Step title="5. Worker binding and proxy">
-    Bind the activity in `worker/src/modules/temporal/worker.service.ts` and add the proxy entry in `worker/src/modules/temporal/workflows/configs.ts`.
+    Bind the activity in `worker/src/modules/temporal/worker.service.ts` and add the `proxyActivities` entry in `worker/src/modules/temporal/workflows/configs.ts`.
 
-    **If you skip this:** the workflow has the `case` but calls an activity absent from the proxy — the activity never runs, no error is raised, the run completes with no output. This is the silent no-op the task spec warns about.
+    **If you skip this:** without the binding, the activity task fails because the activity is not registered on the worker; without the proxy entry, the workflow cannot import the activity.
   </Step>
 
-  <Step title="6. Workflow case">
-    Add a `case NodeType.<YOUR_TYPE>:` branch in `worker/src/modules/temporal/workflows/process-single-node.workflow.ts`.
+  <Step title="6. Workflow dispatch">
+    Add your activity to `UNIFORM_NODE_ACTIVITIES` in `worker/src/modules/temporal/workflows/node-activities.ts`. The `default` branch of `process-single-node.workflow.ts` resolves it through `resolveNodeActivity`. Add an explicit `case NodeType.<YOUR_TYPE>:` only when the type needs its own workflow logic, such as a validation activity before the run or a charge after it (Text Generator, Large Memory, Web Search, SEC API, US Census, Voice, Audio Transcriber and Image Reader have one today).
 
     **If you skip this:** the workflow throws `Node type X not supported` from the default branch.
   </Step>
 
-  <Step title="7. Backend inline twin">
+  <Step title="7. Full-run loop branch">
+    In the legacy loop of `FluxService.apiV2` (`back/src/app-api/flux/flux.service.ts`), add a `node.type === '<type>'` branch that calls `processNodeViaTemporal`, in the main loop and in the `arrayNode` inner loop.
+
+    **If you skip this:** the loop has no generic dispatch, so a full run on the legacy route skips the node without an error, even though the single-node **Run** reaches the worker. Runs on the `processFlow` route do not need this branch; they need the registry entry below.
+  </Step>
+
+  <Step title="8. Backend inline twin">
     Delete the inline twin in `back/src/app-api/flux/flux.service.ts`, or guard it so it cannot double-fire.
 
     **If you skip this:** either the back and the worker both run the node (double-fire), or the back runs it and the worker module is dead code.
   </Step>
 </Steps>
 
-## The registry entry (step 8)
+## The registry entry
 
 Add an entry for your type to `back/src/shared/node-dispatch/node-dispatch-registry.ts` with all five fields set on purpose:
 
-- `execution: "worker"` (the class of the type: `worker`, `source`, `visual`, `back`, `sink` or `state`; a `back`, `sink` or `state` entry must also name its owner in `handoffOwner`)
-- `flowDispatch: "worker"` (your type is dispatched to the worker in a full flow run)
+- `execution: "worker"` (the class of the type: `worker`, `source`, `visual`, `sink`, `state` or `back`; a `back` or `state` entry also names the task that owns its move in `handoffOwner`)
+- `flowDispatch: "worker"` (your type is dispatched to the worker; the other value is `"inline"`)
 - `legacyEndpoint` (the verdict of the legacy single-node endpoint: `"refuse-migrated"` for a worker type, or `"accept"`, `"refuse-mutating"`, `"refuse-unsupported"`)
 - `prefetchSafe: true | false` (is prefetch resolution safe for your type)
 - `workerModule: true`
 
-The class drives the worker workflow gate, the prefetch skip set and the legacy endpoint. A type missing from the registry makes the gate refuse any flow that holds it. See [Execution classes](/main-api/specific-features/flow-and-single-node-execution#execution-classes).
+The class drives the `processFlow` route gate (`isWorkflowAcceptedNodeType`, used by `ineligibleWorkflowNodeTypes` in `back/src/app-api/flux/engine-selector.ts`), the prefetch skip set and the legacy endpoint; `flowDispatch` drives `dispatchesToWorker`. A type missing from the registry sends any flow that holds it to the legacy loop. See [Execution classes](/main-api/specific-features/flow-and-single-node-execution#execution-classes).
 
 Then regenerate the machine-readable contract:
 
@@ -78,9 +80,9 @@ Then regenerate the machine-readable contract:
 cd back && pnpm generate:node-dispatch-contract
 ```
 
-Two Jest specs fail if the registry and the contract drift: `node-dispatch-contract.spec.ts`, `node-types-contract.spec.ts`.
+Jest specs in `back/src/shared/node-dispatch/` fail if the registry and the contracts drift: `node-dispatch-contract.spec.ts`, `node-types-contract.spec.ts` and `node-dispatch-drift.spec.ts`.
 
-**If you skip this:** the contract lies, A1/D2 gates fail, and dispatch may fall through to the inline path.
+**If you skip this:** the drift specs fail, and the back neither sends your type to the worker nor lets a flow that holds it take the `processFlow` route.
 
 ## Verify
 
@@ -88,7 +90,7 @@ Two Jest specs fail if the registry and the contract drift: `node-dispatch-contr
 
    ```bash
    cd back && pnpm generate:node-dispatch-contract
-   pnpm test -- --testPathPattern=node-dispatch-contract
+   pnpm test -- --runInBand --testPathPattern=node-dispatch
    ```
 
 2. Run the worker's node module spec (scoped):
@@ -106,6 +108,7 @@ Two Jest specs fail if the registry and the contract drift: `node-dispatch-contr
 <Check>Import in `temporal.module.ts`.</Check>
 <Check>Activity wrapper in `activities.service.ts`.</Check>
 <Check>Binding in `worker.service.ts` and proxy in `workflows/configs.ts`.</Check>
-<Check>`case` in `process-single-node.workflow.ts`.</Check>
+<Check>Entry in `UNIFORM_NODE_ACTIVITIES` (or an explicit `case` in `process-single-node.workflow.ts`).</Check>
+<Check>`node.type` branch in the `apiV2` loop, main and `arrayNode`.</Check>
 <Check>Inline twin in `flux.service.ts` removed or guarded.</Check>
 <Check>Registry entry + contract regenerated.</Check>

@@ -2,14 +2,14 @@
 title: "getInfoInDatabase"
 description: "Queries the database to retrieve node information"
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## Overview
 
 <Warning>
-`getInfoInDatabaseActivity` is currently **dead code**. It's implemented and registered with the Temporal worker (`worker.service.ts`), but no workflow (`process-single-node.workflow.ts`, `process-agent.workflow.ts`, or any other) ever calls it. The activity that actually fetches node info in its place is [`getNodeInfoActivity`](#the-activity-actually-used-getnodeinfoactivity), described below.
+`getInfoInDatabaseActivity` is currently **dead code**. It's implemented (`src/modules/temporal/activities/activities.service.ts:481-491`), registered with the Temporal worker (`worker.service.ts`) and proxied in `workflows/configs.ts`, but no workflow (`process-single-node.workflow.ts`, `process-agent.workflow.ts`, or any other) ever calls it. The activity that actually fetches node info in its place is [`getNodeInfoActivity`](#the-activity-actually-used-getnodeinfoactivity), described below.
 </Warning>
 
 `getInfoInDatabaseActivity` executes an arbitrary, caller-supplied SQL query against the worker's database pool and returns the first row. It's a generic query-runner, not specific to nodes — there's nothing in its implementation that reads node data, only what a caller's `query`/`params` ask for.
@@ -78,14 +78,9 @@ const node = await getInfoInDatabaseActivity({
 });
 ```
 
-### Get multiple nodes
+### Queries that match several rows
 
-```typescript
-const nodes = await getInfoInDatabaseActivity({
-  query: `SELECT node_id, type, data FROM flows_nodes WHERE flow_id = $1`,
-  params: [flowId],
-});
-```
+The activity returns only `rows[0]`. A query such as `SELECT node_id, type, data FROM flows_nodes WHERE flow_id = $1` returns the first matching node, not a list.
 
 ## Error handling
 
@@ -99,13 +94,13 @@ The activity throws an error if:
 
 The returned object structure depends on the query, but typically includes:
 
-- `type`: Node type (e.g., `TEXT_GENERATOR`)
+- `type`: Node type string (for example `commandTextNode`, the value of `NodeType.TEXT_GENERATOR`)
 - `flow_id`: ID of the flow containing the node
 - `data`: JSON object containing node configuration and settings
 
 ## The activity actually used: `getNodeInfoActivity`
 
-[`processSingleNode`](/worker/workflows/process-single-node) calls `getNodeInfoActivity` (`activities.service.ts:206-219`), not `getInfoInDatabaseActivity`. It runs right after `notifyStatusActivity` announces the node as `PENDING`, and before the `switch (node.type)` dispatch that runs the node-specific activity — so the "right after notifying execution has started, before any node-specific processing" framing above is correct, it's just the wrong activity name.
+[`processSingleNode`](/worker/workflows/process-single-node) calls `getNodeInfoActivity` (`activities.service.ts:438-452`), not `getInfoInDatabaseActivity`. It runs after `notifyStatusActivity` announces the node as `PENDING` and after `resolveNodeInputActivity` (when the back sent an input resolution), and before the node credit gate and the `switch (node.type)` dispatch that runs the node-specific activity.
 
 ```typescript
 async getNodeInfoActivity({
@@ -121,9 +116,9 @@ async getNodeInfoActivity({
 }>
 ```
 
-It fetches the node row via the shared `fetchNodeRow` helper (the same claim-check-aware lookup other node activities use), then narrows `data` down to a fixed, small set of fields — `NODE_CONFIG_FIELDS = ["label", "aiSystem", "aiModel", "type"]` — rather than returning the node's full `data` blob. This trimmed result is only used by the workflow to decide which activity to dispatch to and to label the run; each node-specific service (e.g. `TextGeneratorService`, `MathFunctionService`) does its own separate `fetchNodeRow` call to read the full node `data` it actually needs.
+It fetches the node row via the shared `fetchNodeRow` helper (`src/modules/nodes/shared/fetch-node-row.ts`, the same claim-check-aware lookup other node activities use). With an `execId` it reads the run's snapshot, the `input` column of the latest `node_executions` row for that node; without one it reads the live `flows_nodes` row. It then narrows `data` down to a fixed, small set of fields — `NODE_CONFIG_FIELDS = ["label", "aiSystem", "aiModel", "type"]` — rather than returning the node's full `data` blob. The workflow uses this trimmed result to pick the activity to dispatch to, to pass `aiModel`/`aiSystem` to the credit gate, model-access check and token charge, and to label the run; each node-specific service (e.g. `TextGeneratorService`, `MathFunctionService`) does its own separate `fetchNodeRow` call to read the full node `data` it actually needs.
 
-If no row is found, `fetchNodeRow` throws before the workflow's own `if (!node) throw new Error("Node not found")` check is reached in practice.
+If no row is found, `fetchNodeRow` throws a `NodeNotFoundError` (user message "This node no longer exists. Refresh the page."), so the workflow's own `if (!node) throw new Error("Node not found")` check is not reached in practice.
 
 ## Related documentation
 

@@ -2,8 +2,8 @@
 title: "Development"
 description: "Set up your development environment and run the Worker service locally"
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## Repository
@@ -101,12 +101,20 @@ Run the linter and automatically fix issues:
 pnpm run lint:fix
 ```
 
-This checks your code for issues and applies automatic fixes where possible.
+This checks your code for issues and applies automatic fixes where possible. To check without writing, run `pnpm run lint:check`.
+
+### Test
+
+Run the Jest suite:
+
+```bash
+pnpm test
+```
 
 ## Development workflow
 
 1. **Clone the repository** and install dependencies
-2. **Set up environment variables** (see [configuration](/worker/overview#configuration))
+2. **Set up environment variables** (see [Environment variables](/worker/environment-variables); copy `.env.example` to `.env`)
 3. **Start Temporal server** if running locally
 4. **Run in development mode**: `pnpm run start:dev`
 5. **Make changes** to the codebase

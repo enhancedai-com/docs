@@ -2,8 +2,8 @@
 title: "Large Memory: dynamic pod id"
 description: "How the Large Memory node accepts a memory pod id at runtime via the podIdData input — the natural pairing for pods created through the Public API."
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f, back@master 9609806b
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 The Large Memory node (technical name Command Content Node, node type `commandContentNode`) reads from a FluxPrompt memory pod during flow execution. Until commit `663f20e5`, the node was hard-tied to a single pod selected manually in the UI (`node.data.nameSpace`). External applications that already know which pod belongs to the current case, project, or client now have a runtime alternative: pass the pod id into the flow as a variable, and the node picks it up.
@@ -28,17 +28,21 @@ The node has a `podIdData` input slot with the **same shape as `queryData`** (bo
 
 ### Resolution rules
 
-The worker's `LargeMemoryService.resolvePod` (private method, `large-memory.service.ts:74-105`) computes the final pod at execution time:
+The worker's `LargeMemoryService.resolvePod` (private method, `large-memory.service.ts:144-164`) computes the final pod at execution time:
 
 <Steps>
   <Step title="Collect connected items">
     `resolveEdgeData(data.podIdData, undefined)` dedupes the connected `podIdData` items by `id`, filters out empty `text` values, and joins the rest with no separator, in order. There is no `{{var}}` placeholder substitution anywhere in this path — it's a plain edge-array text join, the same helper other worker nodes use for edge-driven fields.
   </Step>
   <Step title="Dynamic id present">
-    If the joined value is a non-empty string, the worker queries the `namespace` table directly by SQL: `SELECT id, "podName" FROM namespace WHERE id = $1 AND "deletedAt" IS NULL LIMIT 1`. A match is used as the pod for this execution only. **No match** throws — see [Error case](#error-case) — the node does **not** fall back to the manually selected pod once a dynamic id was supplied but not found.
+    If the joined value is a non-empty string, the worker looks the id up in the `namespace` table with an access check (`QUERY_FIND_ACCESSIBLE_POD`): the pod must not be soft-deleted, and either the run's user or the flow's owner must own it or be an active member (`company_user.status = 'active'`) of the company that owns the pod's space. A match is used as the pod for this execution only. **No match** throws — see [Error case](#error-case) — the node does **not** fall back to the manually selected pod once a dynamic id was supplied but not found or not accessible.
   </Step>
   <Step title="No dynamic id">
-    If `podIdData` has no upstream connection (or every connected item is empty), the joined value is `""` and the node falls back to the manually selected pod (`data.nameSpace`, `{ id, name }`). If that's also unset, it throws a `UserConfigError` ("Configure a Large Memory pod before running this node.").
+    If `podIdData` has no upstream connection (or every connected item is empty), the joined value is `""` and the node falls back to the manually selected pod (`data.nameSpace`, `{ id, name }`):
+
+    - No `nameSpace.name` → `UserConfigError` (field `nameSpace`): "Select a Large Memory pod for node \<nodeId\> before running it."
+    - `nameSpace.id` set → the same access-checked lookup by id as above, with field `nameSpace` on the error.
+    - Name only → lookup by `podName` in the flow's space (or, for a flow outside any space, among the user's own pods). No match → "Large Memory pod "\<name\>" was not found for node \<nodeId\>. Select the pod again."
   </Step>
 </Steps>
 
@@ -60,7 +64,7 @@ The typical integration looks like this:
       }'
     ```
 
-    Persist `data.pods.id` against your internal record.
+    Persist the returned pod's id (`pods.id` in the response body) against your internal record.
   </Step>
   <Step title="Ingest documents">
     As documents arrive, ingest them:
@@ -96,7 +100,7 @@ The typical integration looks like this:
 
 ## Error case
 
-If the resolved pod id does not exist (or has been soft-deleted), `resolvePod` throws a `UserConfigError` (field `podIdData`):
+If the resolved pod id does not exist, has been soft-deleted, or neither the run's user nor the flow's owner can open it, `resolvePod` throws a `UserConfigError` (field `podIdData`):
 
 ```
 userMessage: "Large Memory pod not found (id: <podId>)."
@@ -108,13 +112,16 @@ The id is included in the message so the upstream variable can be traced quickly
 
 - The UI experience for picking a pod manually is unchanged. Flows without `podIdData` connections behave exactly as before.
 - The `queryData` input (the search query) is independent — connect it however you do today.
-- The node's underlying retrieval logic (chunking, similarity search, top-k) is unchanged.
+- The node's retrieval logic is independent of how the pod was chosen: `VectorService.search` with `model` (default `gpt-5.4`), `topK` (default 10), `maxTokenModel` (at least 4000) and `returnRaw`. The query comes from `queryData`/`query` and defaults to `"Hi"` when empty.
+- Before searching, the node deletes the file named by `textInputDeleteData[0].text` and adds the text from `textInputData` to the same pod, when those inputs are connected.
+- The result is persisted with `persistNodeSuccess` as `text: { result, linesWhereQuestionWasFound, referencesHeader }` on `flows_nodes.data` and the run's `node_executions.outputData`.
 
 ## Where to read the code
 
 - `worker/src/modules/nodes/large-memory/large-memory.service.ts` — `LargeMemoryService.process`/`resolvePod`, the code that actually runs this node today
 - `worker/src/modules/nodes/large-memory/large-memory.types.ts` — `LargeMemoryNodeData`, `LargeMemoryNamespaceRef`
 - `worker/src/modules/nodes/large-memory/large-memory.service.spec.ts` — covers the dynamic-id and static-fallback paths
+- `worker/src/modules/nodes/large-memory/large-memory.pod-access.integration.spec.ts` — covers the pod access check
 
 Refs commit `663f20e5` and ClickUp task `868jm7ja9`.
 

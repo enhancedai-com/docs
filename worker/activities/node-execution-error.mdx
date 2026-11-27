@@ -2,14 +2,14 @@
 title: "nodeExecutionError"
 description: "Updates node data with execution error information"
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## Overview
 
 <Warning>
-`nodeExecutionErrorActivity` is currently a **complete no-op**: `async nodeExecutionErrorActivity(_props) { return; }` (`activities.service.ts:387-391`). It is still called from the workflow's error path, with a real props shape, but it does nothing when it runs — no query, no update. This page documents the prop shape it's still typed to receive and the call site that still invokes it, for whenever it gets a real implementation.
+`nodeExecutionErrorActivity` is currently a **complete no-op**: `async nodeExecutionErrorActivity(_props) { return; }` (`src/modules/temporal/activities/activities.service.ts:631-635`). It is still called from the workflow's error path, with a real props shape, but it does nothing when it runs — no query, no update. This page documents the prop shape it's still typed to receive and the call site that still invokes it, for whenever it gets a real implementation.
 </Warning>
 
 ## Purpose (as typed, not as implemented)

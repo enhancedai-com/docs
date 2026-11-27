@@ -2,13 +2,13 @@
 title: "generateExecutionLogs"
 description: "Creates execution log entries for workflow tracking and debugging"
 state: production
-state_verified: 2026-10-07
-state_verified_against: worker@develop 5fe389f
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 ## Overview
 
-The `generateExecutionLogsActivity` creates log entries in the database to track workflow executions. These logs are used for debugging, auditing, and monitoring workflow performance.
+The `generateExecutionLogsActivity` (`src/modules/temporal/activities/activities.service.ts`) creates log entries in the database to track workflow executions. These logs are used for debugging, auditing, and monitoring workflow performance.
 
 ## Purpose
 
@@ -20,10 +20,11 @@ The `generateExecutionLogsActivity` creates log entries in the database to track
 
 ## When it's executed
 
-This activity is called at two key points:
+`processSingleNode` calls it at three points:
 
-1. **After successful execution**: Logs successful node completion with execution details
-2. **On error**: Logs error information including stack traces and error messages
+1. **After successful execution**: logs the message built by `buildSuccessMessage` (`src/modules/temporal/workflows/build-success-message.ts`)
+2. **On error**: logs the error detail from `extractNodeError`, including the stack, category and field
+3. **On cancellation**: logs the cancelled-node message with `isError: false`
 
 ## Signature
 
@@ -41,6 +42,7 @@ async generateExecutionLogsActivity({
   errorCategory?: string | null,
   errorField?: string | null,
   isError: boolean,
+  runToken?: string,
 }): Promise<void>
 ```
 
@@ -57,9 +59,10 @@ async generateExecutionLogsActivity({
 | `message` | `string` | Dev-facing log message describing the execution result |
 | `userMessage` | `string \| null` (optional) | User-facing message; combined with `message` in the node's `errorMessage` when both are set and differ |
 | `errorStack` | `string \| null` (optional) | Error stack trace (omitted for successful executions) |
-| `errorCategory` | `string \| null` (optional) | Error classification (e.g. the thrown error's `NodeError` subclass) |
+| `errorCategory` | `string \| null` (optional) | Error category of the thrown `NodeError`: `user_config`, `integration`, `provider`, `timeout`, `system`, `schema_validation` or `node_not_found` |
 | `errorField` | `string \| null` (optional) | The node data field the error is attributed to, when known |
 | `isError` | `boolean` | Flag indicating whether this is an error log |
+| `runToken` | `string` (optional) | Token the back minted when it opened the node's row; typed on the props but not read by this activity |
 
 There is no `metadata` parameter — the activity does not accept one. The `execution_logs.metadata` column is always written as a literal `null` by this INSERT.
 
@@ -69,12 +72,12 @@ Returns `void`. The activity completes when the log entry is successfully create
 
 ## Implementation details
 
-The activity inserts one row into `execution_logs` — `nodeId`, `flowId`, `userId`, `sessionId`, `message`, `userMessage`, `errorStack`, `errorCategory`, `errorField`, `metadata` (always `null`), `isError`, `execId`. For an error log with an `execId`, the insert is deduplicated: it's skipped (no row, no side effects below) if an error log already exists for that exact `(flowId, nodeId, execId)` triple.
+The activity inserts one row into `execution_logs` — `nodeId`, `flowId`, `userId`, `sessionId`, `message`, `userMessage`, `errorStack`, `errorCategory`, `errorField`, `metadata` (always `null`), `isError`, `execId`. For an error log with an `execId`, the insert is deduplicated: no new row is written if a non-deleted error log already exists for that exact `(flowId, nodeId, execId)` triple. The updates below still run; `executionLogId` then keeps its existing value (`COALESCE`).
 
 This activity does **more** than insert a log row — when `execId` is present, it also keeps `node_executions` and `flows_nodes` in sync with the outcome:
 
-- **On error** (`isError: true`): updates the matching `node_executions` row (`isError = true`, `executionLogId`, `output` set to the combined `userMessage`/`message`, `outputType: 'error'`), then resets any stale output already written onto the live `flows_nodes.data` row via `buildFailedNodeOutputReset` (type-specific reset shape) merged with `errorMessage` and `executionStatus: "FAILED"`.
-- **On success** (`isError: false`): re-reads the `node_executions` row's `outputData`, resolves it through the claim-check layer if needed, extracts `{ output, outputType }` for the node's type, sums the node's `token_transaction` rows into `nodeUsedTokens`, and updates `node_executions` (`output`, `outputType`, `metadata.nodeUsedTokens`, `outputData.nodeUsedTokens`, `executionLogId`).
+- **On error** (`isError: true`): updates the matching `node_executions` row (`isError = true`, `executionLogId`, `output` set to the combined `userMessage`/`message`, `outputType: 'error'`), then resets any stale output already written onto the live `flows_nodes.data` row via `buildFailedNodeOutputReset` (type-specific reset shape) merged with `errorMessage` (the same combined message). It does not write `executionStatus`.
+- **On success** (`isError: false`): re-reads the `node_executions` row's `outputData`, resolves it through the claim-check layer if needed, extracts `{ output, outputType }` for the node's type, sums the node's `token_transaction` rows (by `execId` and `nodeId`) into `nodeUsedTokens` (or removes `nodeUsedTokens` when there are none), and updates `node_executions` (`output`, `outputType`, `metadata.nodeUsedTokens`, `outputData.nodeUsedTokens`, `executionLogId`).
 
 If `execId` is not provided, the activity only inserts the log row and returns — none of the `node_executions`/`flows_nodes` updates above happen.
 
@@ -88,9 +91,11 @@ await generateExecutionLogsActivity({
   nodeId,
   flowId,
   flowVersionHistoryId,
+  runToken,
   userId,
   sessionId,
-  message: 'Node executed successfully',
+  message,
+  errorStack: null,
   isError: false,
 });
 ```
@@ -98,19 +103,22 @@ await generateExecutionLogsActivity({
 ### Error logging
 
 ```typescript
-const errorMessage = error instanceof Error ? error.message : String(error || "Error unknown in workflow");
-const stack = error.cause?.stack || error.stack || 'No stack';
+const detail = extractNodeError(error);
+const stack = error?.cause?.stack ?? error?.stack ?? 'No stack';
 
 await generateExecutionLogsActivity({
   execId,
   nodeId,
   flowId,
   flowVersionHistoryId,
+  runToken,
   userId,
   sessionId,
-  message: errorMessage,
-  userMessage: error instanceof NodeError ? error.userMessage : undefined,
+  message: detail.devMessage,
+  userMessage: detail.userMessage,
   errorStack: stack,
+  errorCategory: detail.category,
+  errorField: detail.field,
   isError: true,
 });
 ```
@@ -125,13 +133,7 @@ Each log entry contains:
 
 ## Error handling
 
-The activity may throw an error if:
-
-- Database connection fails
-- The insert query fails
-- Required fields are missing
-
-Errors in logging should not block workflow execution, but they may be caught and handled silently.
+The activity throws when a query fails (database connection, insert or update). The workflow does not catch it: the activity runs with `maximumAttempts: 1` and a 60-second `startToCloseTimeout` (`SINGLE_ATTEMPT_GROUP_TIMEOUT_MS`), so a logging failure fails the `processSingleNode` workflow.
 
 ## Use cases
 

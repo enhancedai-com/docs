@@ -3,8 +3,8 @@ title: "AI audio transcriber"
 sidebarTitle: "AI audio transcriber"
 description: "Temporal activity for the AI Audio Transcriber node: speech-to-text (OpenAI, Groq, Google), FLAC chunking for long files, YouTube transcripts via SearchAPI, and per-run credit billing."
 state: production
-state_verified: 2026-10-21
-state_verified_against: worker@refactor/868m0vn4x fe2ab97, back@refactor/868m0vn4x 92b36ee1
+state_verified: 2026-11-27
+state_verified_against: worker@main c34de93 · back@main 90b7ef66 · 2026-11-27
 ---
 
 <Note>
@@ -26,7 +26,7 @@ Unlike the [AI Text Generator](/worker/node/text-generator), this node does not 
 
 ## When it runs
 
-`audioTranscriberActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **AI Audio Transcriber** (`NodeType.AUDIO_TRANSCRIBER`). In a full flow run, the back dispatches `audioReaderNode` to the worker on the main path and in the `arrayNode` loop body (see [Flow and single-node execution](/main-api/specific-features/flow-and-single-node-execution)).
+`audioTranscriberActivity` is invoked from the [`processSingleNode`](/worker/workflows/process-single-node) workflow when the node type is **AI Audio Transcriber** (`NodeType.AUDIO_TRANSCRIBER`), through its own `case` in the workflow (it is not in the `UNIFORM_NODE_ACTIVITIES` map). The proxy uses a `startToCloseTimeout` of 15 minutes, a 3-minute heartbeat timeout and the `RETRY_ON_WORKER_LOSS` retry policy. In a full flow run, the back dispatches `audioReaderNode` to the worker on the main path and in the `arrayNode` loop body (see [Flow and single-node execution](/main-api/specific-features/flow-and-single-node-execution)).
 
 ## Activity signature
 
@@ -65,7 +65,7 @@ The activity returns `{ text, charge }`. The `text` string is merged into the no
 
 ## AI transcription flow
 
-1. **Load node** — `SELECT` from `flows_nodes` by `nodeId`; read `data`.
+1. **Load node** — `fetchNodeRow` reads the run's input snapshot (`node_executions.input`) during a run, or `flows_nodes.data` when there is no `execId`.
 2. **Resolve the provider and model** — `resolveTranscriptionPair(aiSystem, aiModel)` maps the stored values to a provider and billing model (see [Models](#models)).
 3. **Check the URL** — If `inputPreview` is empty, an OpenAI or Google node fails with `Please upload an audio file`. A Groq node (including a node whose model fell back to Groq) skips transcription and keeps its existing `text`.
 4. **Transcribe**:
@@ -80,14 +80,14 @@ The activity runs under a keep-alive heartbeat (`withKeepAliveHeartbeat`). The s
 
 The OpenAI and Groq path always re-encodes the audio with `fluent-ffmpeg`, even for short files.
 
-1. **Download** — `GET` the full file into a temporary directory (`audio-*` under the OS temp directory). A non-OK response or an empty body fails the node with a message about the URL.
+1. **Download** — `downloadAudioFile` fetches the full file through `SafeFetchService.getBuffer` (egress policy, 5-minute timeout, `AUDIO_DOWNLOAD_MAX_BYTES` = 100 MB) and writes it into a temporary directory (`audio-*` under the OS temp directory). A blocked or unreachable URL, a non-2xx response or an empty body fails the node with a message about the URL; a file over 100 MB fails with `The audio file is larger than the 100 MB limit. Use a shorter or compressed file.`
 2. **Probe** — `ffprobe` reads the audio stream's duration. A file with no audio stream fails the node with `Could not read the audio file.`
 3. **Plan** — `planChunks(durationSeconds, sizeBytes)` returns a single chunk when the file is at most **25 MiB** (`MAX_CHUNK_BYTES`) **and** at most **20 minutes** (`CHUNK_SECONDS = 1200`). Otherwise it returns `max(ceil(duration / 1200), ceil(size / 25 MiB))` chunks of equal length.
 4. **Split** — `splitToFlacChunks` writes each chunk, one after another, as `chunk_<n>.flac`: mono, 8 kHz, FLAC codec. A single chunk is a full re-encode with no time window. A chunk that is empty or larger than 25 MiB fails the node.
 5. **Transcribe** — The chunks go to the provider in parallel through the AI SDK `transcribe` function. The texts are joined in chunk order with a newline (`join('\n')`).
 6. **Clean up** — The temporary directory is removed when the node finishes, on success or failure.
 
-`ffmpeg-static` supplies the ffmpeg binary when it is installed (`ffmpeg.setFfmpegPath`).
+`ffmpeg-static` supplies the ffmpeg binary (`ffmpeg.setFfmpegPath`).
 
 ### Models
 
@@ -109,7 +109,7 @@ An unknown or missing `aiModel` does not fail the node. `resolveTranscriptionPai
 The `gemini` selector sends the audio to Google Cloud Speech-to-Text instead of an AI SDK model. It does not use the FLAC chunking above.
 
 1. **Check configuration** — `GOOGLE_PROJECT_ID` and `GOOGLE_BUCKET_NAME` must be set, and `GOOGLE_APPLICATION_CREDENTIALS` must hold a service account key (the JSON contents or an absolute file path). Otherwise the call throws, and the node fails with `The transcription provider could not process this audio.`
-2. **Download and probe** — The file goes to the OS temp directory, and `ffprobe` reads its codec and sample rate.
+2. **Download and probe** — The file is downloaded with the same `downloadAudioFile` helper (egress policy, 100 MB cap) into the OS temp directory, and `ffprobe` reads its codec and sample rate.
 3. **Upload** — The file goes to `gs://<GOOGLE_BUCKET_NAME>/uploads/audio_<timestamp>.mp3`, as a private object. The worker deletes the local copy but not the uploaded object.
 4. **Recognize** — `longRunningRecognize` runs with `languageCode: "en-US"` and an encoding derived from the probed codec (`MP3`, `OGG_OPUS`, `FLAC`, `MULAW`, `AMR`, `AMR_WB`; any other codec maps to `LINEAR16`).
 5. **Join** — The first alternative of each result is joined with a newline. The response's `totalBilledTime.seconds` becomes the billed quantity.
@@ -133,6 +133,8 @@ Requires `process.env.SEARCH_API_KEY` at runtime. A missing key makes SearchAPI 
 
 The node is charged per run, for every path including YouTube.
 
+Both steps run only on workflow executions that took the `AUDIO_TRANSCRIBER_BILLING_PATCH` branch (every new run; the patch keeps older histories replayable).
+
 1. **Credit gate** — Before the activity, the workflow calls `nodeCreditGateActivity` with the node's billing model (`transcriptionBillingModel`). It refuses the run with a `402` `UserConfigError` when the account paying for the flow can no longer be charged.
 2. **Charge** — After the activity, if the result carries a `charge`, the workflow calls `chargeTranscriptionActivity`. The activity posts to the back at [`POST /worker/charge-transcription`](/worker/callback-reference#charge-transcription).
 
@@ -144,7 +146,7 @@ The `charge` the service returns depends on the path:
 | Google Speech-to-Text | `gemini-speech-to-text` | Billed seconds reported by Google |
 | YouTube transcript | `youtube-transcript` | `1` |
 
-The back requires the plan flag that matches the model (`transcribe` for `whisper-1`, `groq` for the two Groq models, `gemini` for `gemini-speech-to-text`) and charges under the label `Audio`. `youtube-transcript` needs no plan flag. If the charge request returns a non-2xx status, the activity throws `charge-transcription returned HTTP <status>` and the workflow fails the node, even though the transcript is already saved.
+The back (`TRANSCRIPTION_PLAN_FLAGS` in `back/src/shared/transcription/transcription-billing.ts`) requires the plan flag that matches the model (`transcribe` for `whisper-1`, `groq` for the two Groq models, `gemini` for `gemini-speech-to-text`) and charges under the label `Audio`; a missing flag returns `403`. `youtube-transcript` needs no plan flag. If the charge request returns a non-2xx status, the activity throws `charge-transcription returned HTTP <status>` and the workflow fails the node, even though the transcript is already saved.
 
 ## Persisted node `data`
 
@@ -164,9 +166,9 @@ Other `data` fields are preserved via spread (`...nodeData`). A Groq node with n
 
 The service throws typed node errors, so the workflow reports a user-facing message.
 
-- Missing node row → `NodeNotFoundError`.
+- Missing node row → `NodeNotFoundError` ("This node no longer exists. Refresh the page.").
 - Missing audio file for an OpenAI or Google node → `UserConfigError` (`Please upload an audio file`).
-- Download failure on the OpenAI and Groq path (unreachable URL, non-OK response, or empty body) → `UserConfigError` with a message about the URL or the empty file.
+- Download failure on the OpenAI and Groq path (unreachable or blocked URL, non-2xx response, or empty body) → `UserConfigError` with a message about the URL or the empty file. A file over 100 MB → `UserConfigError` on either path.
 - Unreadable audio on the OpenAI and Groq path (ffprobe or FFmpeg failure, or a chunk that is empty or over 25 MiB) → `UserConfigError` (`Could not read the audio file.`).
 - Provider or SDK failure, including a failed download on the Google path and Google Speech-to-Text that is not configured → `ProviderError` (`The transcription provider could not process this audio.`). The provider's own message goes to the developer message only.
 - YouTube path: invalid link or no transcript segments → `UserConfigError`; SearchAPI failure or a missing video id → `ProviderError` (`Could not get transcript`).
