@@ -69,7 +69,7 @@ Returns:
 | `cost` | number | Cost attributed to the run. |
 | `durationMs` | number | Wall-clock duration. |
 | `error` | string \| null | Failure reason, or `null` when there is none. |
-| `triggeredBy` | string \| null | Name of the key or client that started the run, or `null` when it cannot be resolved. |
+| `triggeredBy` | string \| null | For a run started through MCP, the name of the MCP key that started it, or `MCP (revoked key)` when that key was revoked. For any other run, the name of the person who started it, or how it started (`api`, `webhook`, `scheduled` or `manual`) when no person is recorded. `null` when none of these is known. |
 
 Poll at a sensible interval — a run that calls several AI models takes seconds to minutes, and every
 poll counts against your [rate limit](/mcp/environment-variables).

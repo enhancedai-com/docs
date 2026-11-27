@@ -71,7 +71,7 @@ Retorna:
 | `cost` | number | Custo atribuído à execução. |
 | `durationMs` | number | Duração real. |
 | `error` | string \| null | Motivo da falha, ou `null` quando não houver. |
-| `triggeredBy` | string \| null | Nome da chave ou do cliente que iniciou a execução, ou `null` quando não dá para resolver. |
+| `triggeredBy` | string \| null | Em uma execução iniciada pelo MCP, o nome da chave MCP que a iniciou, ou `MCP (revoked key)` quando essa chave foi revogada. Em qualquer outra execução, o nome da pessoa que a iniciou, ou a forma como começou (`api`, `webhook`, `scheduled` ou `manual`) quando nenhuma pessoa foi registrada. `null` quando nada disso é conhecido. |
 
 Consulte em intervalos razoáveis — uma execução que chama vários modelos de IA leva de segundos a
 minutos, e cada consulta conta no seu [rate limit](/mcp/pt-br/environment-variables).

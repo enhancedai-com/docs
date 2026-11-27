@@ -1,9 +1,9 @@
 ---
 title: "Cancel a run"
-description: "How a canvas run is cancelled: the request endpoint, the flow_run_states record, the cooperative stop between nodes, and the flag-gated interruption of the step already in flight."
+description: "How a canvas or API run is cancelled: the request endpoint, the flow_run_states record, the cooperative stop between nodes, and the flag-gated interruption of the step already in flight."
 ---
 
-A run started from the canvas can be cancelled while it is still going. Cancelling never rolls anything
+A run started from the canvas or through the API can be cancelled while it is still going. Cancelling never rolls anything
 back — the nodes that already finished keep their outputs — it stops the run from scheduling anything
 else and records where it stopped.
 
@@ -23,17 +23,23 @@ There are two levels to it, and they are not the same feature:
 
 ## What can be cancelled
 
-Only runs whose run type is `canvas` — the ones a person started by pressing Run in the editor. The
-allowlist is a single constant:
+Only runs whose run type is `canvas` (a person pressed Run in the editor) or `api` (a call to the
+public API). The allowlist is a single constant:
 
 ```ts
 // back/src/app-api/executions_logs/run-cancellation.service.ts
-export const CANCELLABLE_RUN_TYPES = ['canvas'];
+export const CANCELLABLE_RUN_TYPES = ['canvas', 'api'];
 ```
 
-A run triggered by the API, a webhook, the chatbot, or a schedule is rejected with `422`. Nested runs
+A run triggered by a webhook, the chatbot, or a schedule is rejected with `422`. Only the account that
+started the run can cancel it: for an API run, that is the account whose API key made the call. Nested runs
 are a special case: they are *watched* for cancellation even when their own run type is not
-cancellable, so cancelling the parent canvas run also stops the child (`shouldWatchCancellation`).
+cancellable, so cancelling the parent run also stops the child (`shouldWatchCancellation`).
+
+<Note>
+  A run started through MCP has its own run type (`mcp`) and is cancelled with the MCP
+  [`cancel_run`](/mcp/tools/running-agents) tool, not with this endpoint.
+</Note>
 
 ## Requesting the cancellation
 
