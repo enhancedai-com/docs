@@ -85,7 +85,7 @@ Please give me a shout if anything looks off after the rollout. Thanks!
 - **Never merges** a PR it created.
 - **Never pushes** to production or any branch directly.
 - **Never amends or force-pushes** the source branch.
-- **Default base = `main`** — only changes if you explicitly say so. Before it opens a PR into `main`, it runs `scripts/check-no-dev-in-prod-pr.sh` and refuses a branch that merged `develop`, `staging`, or `master`.
+- **Default base = `main`** — only changes if you explicitly say so. Before it opens a PR into `main`, it lists the branch's merges and the commits that arrived through them (`git log --merges`, `git rev-list --first-parent`), and refuses a branch that merged `develop`, `staging`, `master` or `production`.
 - **Always includes the ClickUp link** under References.
 - If `gh` auth is missing, surfaces it and stops (does not work around).
 

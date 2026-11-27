@@ -16,14 +16,14 @@ The agent is defined at `.claude/agents/db-setup.md`. It operates on **the teamm
 ## Two phases
 
 ```
-Phase A — Before the admin authorizes the public key
-  1. Prereqs check         Node 18+, pnpm, git, optionally AWS CLI
+Phase A — Before your public key is authorized on the bastion
+  1. Prereqs check         Node 22+, pnpm 9+, git, optionally AWS CLI
   2. SSH key               Generate if missing; print the pubkey
-  3. .env                  Copy from .env.example, ask for each value
-  4. Skill deps            pnpm install inside skills/*/templates/
-  5. Print handoff         "send this pubkey to <admin>"
+  3. .env                  Copy .env.example to .env at the workspace root, ask for each value
+  4. Skill deps            pnpm install inside .claude/skills/ec2-tunnel*/templates/
+  5. Print handoff         "send this pubkey to a dev with bastion access"
 
-Phase B — After the admin authorizes the pubkey
+Phase B — After the pubkey is authorized
   6. Smoke test            SELECT against dev, then staging
   7. Done                  "what's next" message
 ```
@@ -38,14 +38,14 @@ Reports a small table of installed tools and what to do if anything is missing:
 
 | Tool | Required | Action if missing |
 | --- | --- | --- |
-| Node 18+ | yes | Install from [nodejs.org](https://nodejs.org/) (LTS) |
-| pnpm | yes | `npm install -g pnpm` |
+| Node 22+ | yes | Install from [nodejs.org](https://nodejs.org/) (LTS) |
+| pnpm 9+ | yes | `npm install -g pnpm` |
 | git | yes | [git-scm.com](https://git-scm.com/) |
 | AWS CLI v2 | optional | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
 
 ### SSH key
 
-Checks if `~/.ssh/id_rsa` exists. If yes, uses it (asks before overwriting). If no, asks the teammate to generate one interactively (so they can set the passphrase). Always prints the **public** key so they can hand it to the admin.
+Checks if `~/.ssh/id_rsa` exists. If yes, uses it (asks before overwriting). If no, asks the teammate to generate one interactively (so they can set the passphrase). Always prints the **public** key so they can hand it to a dev with bastion access.
 
 <Warning>
   The agent will never accept, ask for, or display a **private** key. The setup doesn't need it.
@@ -53,21 +53,21 @@ Checks if `~/.ssh/id_rsa` exists. If yes, uses it (asks before overwriting). If 
 
 ### `.env` population
 
-Copies `.env.example` to `.env` at the workspace root if missing, then walks through each variable one at a time (using `AskUserQuestion` so secrets don't all get pasted into a single response). Confirms by key name only — never echoes values back to the chat.
+Copies `.env.example` to `.env` at the workspace root (the Workflow repo root, next to `CLAUDE.md`) if missing, then walks through each variable one at a time (using `AskUserQuestion` so secrets don't all get pasted into a single response). Confirms by key name only — never echoes values back to the chat.
 
 Writes the file with `-Encoding utf8` (not the default UTF-16 BOM that PowerShell 5.1 produces, which the dotenv loader can't read).
 
 ### Skill deps
 
-Runs `pnpm install --silent` inside `templates/` for each skill that has a `package.json`.
+Runs `pnpm install --silent` inside `.claude/skills/ec2-tunnel/templates/` and `.claude/skills/ec2-tunnel-prod/templates/`, the skills that have a `package.json`.
 
 ### Handoff
 
-Prints a copy-paste-ready message containing the teammate's public key, addressed to the admin. The agent stops here and waits.
+Prints a copy-paste-ready message containing the teammate's public key, to send to a dev with bastion access. The agent stops here and waits.
 
 ## Phase B — post-authorization
 
-Once the admin confirms the key is authorized:
+Once that dev confirms the key is authorized:
 
 ### Smoke test
 
@@ -77,15 +77,17 @@ Runs a SELECT against **dev** (least sensitive env) to verify SSH + DB connectiv
 SELECT current_database(), current_user, now() AS server_time;
 ```
 
+It runs `.claude/skills/ec2-tunnel/templates/tunnel-and-query.mjs` with `ENV=dev`, which reads `.env` from the workspace root.
+
 Expected: `current_database`, `current_user = postgres`, current timestamp. If it works, the agent repeats once against staging. If the dev test fails, it does **not** continue to staging — it triages dev first.
 
 ### Common failure modes
 
 | Error | Cause | Fix |
 | --- | --- | --- |
-| `All configured authentication methods failed` | Pubkey not authorized yet, or wrong passphrase in `.env` | Confirm admin ran `add-key.mjs`; re-check `SSH_PASSPHRASE` |
+| `All configured authentication methods failed` | Pubkey not authorized yet, or wrong passphrase in `.env` | Confirm the key was added with `add-key.mjs`; re-check `SSH_PASSPHRASE` |
 | `connect ETIMEDOUT <ip>:22` | Network blocks port 22 | Check VPN; try a different network |
-| `password authentication failed for user "postgres"` | Wrong `PGPASSWORD_<env>` | Re-fetch from admin |
+| `password authentication failed for user "postgres"` | Wrong `PGPASSWORD_<env>` | Ask a dev with bastion access for the current value |
 | `getaddrinfo ENOTFOUND <host>` | DB hostname typo or empty | Re-check `DB_HOST_<env>` |
 
 ## Hard rules
@@ -94,9 +96,9 @@ Expected: `current_database`, `current_user = postgres`, current timestamp. If i
 - **Never print or log `.env` contents** after writing. Confirm by key name only.
 - **Never put secrets on the shell command line** where they'd hit shell history.
 - **Never regenerate an existing SSH key** without explicit confirmation — invalidates every authorization.
-- **Never run `add-key.mjs`.** Authorizing the new pubkey is the admin's action; the new teammate hands off and stops.
+- **Never run `add-key.mjs`.** A dev with bastion access authorizes the new pubkey; the new teammate hands off and stops.
 - **Default smoke test is against dev**, not staging or prod. Even though `ec2-tunnel` doesn't enforce read-only for non-prod, the smoke test is a SELECT.
-- **For prod, always use `ec2-tunnel-prod`** — the agent mentions this once in the "what's next" message.
+- **For prod, always use `ec2-tunnel-prod`** — the agent mentions this once in the "what's next" message. Prod is a separate, per-person, read-only grant.
 
 ## How to invoke
 
@@ -112,7 +114,7 @@ Agent(subagent_type="db-setup", prompt="bootstrap my environment for the workspa
 
 ## Out of scope
 
-- Authorizing pubkeys on the bastion (admin's `add-key.mjs` run)
+- Authorizing pubkeys on the bastion (an `add-key.mjs` run by a dev with bastion access)
 - Provisioning RDS users or rotating shared DB passwords
 - Installing Node, pnpm, AWS CLI, or git (points to installers)
 - Anything outside `.claude/` tooling

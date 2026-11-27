@@ -9,7 +9,7 @@ O `CLAUDE.md` da raiz descreve o **workspace** (localização dos artefatos, est
 
 | Conteúdo | Raiz | Por repo |
 |---|---|---|
-| Layout do workspace, lista de `apps/*` | ✓ | — |
+| Layout do workspace, lista das pastas dos repos de produto | ✓ | — |
 | Estratégia de branches | ✓ | — |
 | Onde cada coisa mora (skills/agents/etc.) | ✓ | — |
 | Arquitetura específica do repo | — | ✓ |
@@ -23,4 +23,5 @@ Na dúvida: o específico vai no arquivo do sub-repo, o transversal vai na raiz.
 
 - Adicionou uma nova skill ou agent → atualiza a raiz.
 - Mudou o comando de build de um repo → atualiza o sub-repo (e o quickstart da raiz se o comando estiver no snippet do quickstart).
-- Nova regra de código para o frontend → `apps/Flux-Prompt-Frontend/.claude/rules/` e um resumo de uma linha no CLAUDE.md do sub-repo.
+- Nova regra de código para o frontend → `front/.claude/rules/` e um resumo de uma linha no CLAUDE.md do sub-repo.
+- Nova regra para todos os repos, ou sobre como o time trabalha → `.claude/rules/` do repo Workflow e um resumo de uma linha no CLAUDE.md da raiz.
