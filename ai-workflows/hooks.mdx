@@ -9,8 +9,8 @@ A script wired into `.claude/settings.json` under `hooks.PreToolUse` / `PostTool
 
 ## Where they live
 
-- Workspace-wide: `scripts/guardrails/*.mjs` + top-level `.claude/settings.json`.
-- Per-repo: `apps/<repo>/.claude/hooks/*.mjs` + the repo's `.claude/settings.json`.
+- Workspace-wide: `.claude/hooks/*.mjs` in the Workflow repo, wired in its `.claude/settings.json`.
+- Per-repo: `<repo>/.claude/hooks/*.mjs` + the repo's `.claude/settings.json`, when a product repo needs its own.
 
 ## Shape
 
@@ -49,10 +49,11 @@ Use `pathToFileURL(process.argv[1]).href` for the CLI gate — the naive `file:/
 
 ## Real examples
 
-- `scripts/guardrails/block-sensitive-writes.mjs`
-- `scripts/guardrails/confirm-shared-state.mjs`
-- `apps/Flux-Prompt-Frontend/.claude/hooks/design-system-check.mjs`
+- [`.claude/hooks/guard-env-branches.mjs`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/hooks/guard-env-branches.mjs): blocks commits on env branches, merging `develop` or `staging` into a feature branch, force pushes and pushes to `main`. It blocks by writing the reason to stderr and exiting `2`.
+- [`.claude/hooks/guard-dev-loop.mjs`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/hooks/guard-dev-loop.mjs): enforces the plan, approval and frozen tests on task branches.
+
+What each one enforces: [Guardrails](/ai-workflows/claude-code-guardrails).
 
 ## Testing
 
-Hooks are plain Node modules; test with `node:test`. See `scripts/guardrails/tests/`.
+Hooks are plain Node modules; test them with `node:test`, or pipe a JSON event into the script from Bash and check the exit code.

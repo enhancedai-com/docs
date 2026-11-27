@@ -1,0 +1,87 @@
+---
+title: "Local environment"
+description: "Run the whole app on your machine: the Docker dev-DB stack (the golden path) or native back and front. The app writes a local Postgres, never dev."
+---
+
+Two options: the Docker dev-DB stack, or native back and front. Done when you can open `http://localhost:3000`, log in, open a flow, the back answers on `http://localhost:3001`, and you know your test runs hit the local `app_db`, not dev.
+
+The full reference is [`docker/devdb/DEVDB.md`](https://github.com/enhancedai-com/Workflow/blob/main/docker/devdb/DEVDB.md) in the Workflow repo. Per-repo details: [back local development](/main-api/specific-features/local-development) and [worker running locally](/worker/running-locally).
+
+## Before you start
+
+Follow the install and clone steps in [`ONBOARDING.md`](https://github.com/enhancedai-com/Workflow/blob/main/ONBOARDING.md): Node.js 22+, pnpm 9+ (never npm or yarn), the GitHub CLI, Claude Code, and Docker Desktop. Clone the Workflow repo as `enhanced`, then the product repos inside it under their exact folder names (`back`, `front`, `worker`, `docs`, `mcp`): the skills, the stack and the agents expect those names.
+
+Secrets: each repo's `.env` (`back/.env`, `front/.env`, `worker/.env`) and the workspace-root `.env` for the skills (copy `.env.example`). Ask a dev for the values; never commit them or paste them into chats or cards. On Windows, use `127.0.0.1` instead of `localhost` for database and Redis hosts.
+
+## Option A: the dev-DB Docker stack
+
+`docker/devdb/docker-compose.devdb.yaml` runs the API, worker, Temporal, Redis, a local Postgres (`app_db`) and an SSH tunnel. The front runs on your host with hot reload.
+
+| Service | Role | Host port |
+| --- | --- | --- |
+| `app_db` | Local Postgres that back and worker use; boots empty | 5434 |
+| `tunnel` | SSH bridge to the live dev RDS, for host tools only | 5433 |
+| `back` | NestJS API, built image, no hot reload | 3001 |
+| `worker` | Temporal worker, queue `enhanced-ai-queue` | |
+| `temporal` and UI | Workflow engine and UI (`http://localhost:8080`) | 7233, 8080 |
+| `redis` | Queue and cache, no auth | 6379 |
+| front | Vite dev server on the host | 3000 |
+
+<Warning>
+  Back and worker read and write the local `app_db` (`TYPEORM_HOST=app_db` in the compose), not dev. The tunnel only lets your `psql` or DBeaver read the live dev database on `localhost:5433`; the app never touches it.
+</Warning>
+
+```powershell
+./docker/devdb/devdb-up.ps1            # stack and front, from the workspace root
+./docker/devdb/devdb-up.ps1 -NoFront   # only the compose stack
+./docker/devdb/devdb-down.ps1          # stop containers
+./docker/devdb/devdb-down.ps1 -Volumes # also drop volumes
+```
+
+The first run builds the back image (a few minutes). The script waits for `http://localhost:3001/health`, then starts the front.
+
+The compose sets safety flags so the stack cannot fire side effects: `TYPEORM_MIGRATIONS_RUN=false`, `DISABLE_CRONS=true` (every `@Cron` stops at startup) and `DISABLE_EMAIL_SENDS=true`.
+
+### Getting data into `app_db`
+
+It boots empty. Fill it one of four ways: restore the dev snapshot (`docker/devdb.dump`) into `:5434`; migrate specific flows from staging or prod with the `ec2-tunnel` templates and re-home them to the local test user; read live dev through the tunnel; or build deterministic test flows (see [Testing](/engineering/ways-of-working/testing)). Dev RDS uses the `postgres` database.
+
+### Rebuild after a change
+
+The compose paths are relative to the workspace root, so always pass `--project-directory .`:
+
+```bash
+docker compose -f docker/devdb/docker-compose.devdb.yaml --project-directory . up -d --build back
+docker compose -f docker/devdb/docker-compose.devdb.yaml --project-directory . up -d --build worker
+# front changes hot-reload
+```
+
+Chromium is skipped in the back image, so puppeteer-based nodes (some scraper and document flows) do not run locally.
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| back or worker keep restarting | Temporal still warming up | Wait; check `logs -f temporal` |
+| tunnel unhealthy | Wrong SSH key, passphrase or `SSH_HOST_NONPROD` | Check the root `.env` |
+| worker exits on boot | Its env validation failed | The log names the missing variable; add it to `back/.env` |
+| `psql` cannot reach `:5433` | Tunnel not ready or port in use | Wait, then check the port |
+
+## Option B: native back and front
+
+```bash
+cd back
+pnpm install
+pnpm infra:up          # Postgres and Redis (docker-compose-local.yaml)
+pnpm dev:api           # API on :3001, add -- --watch for reload
+
+cd front
+pnpm install
+pnpm dev               # Vite on :3000
+```
+
+Back migrations are written by hand (`pnpm migration:generate` is broken); follow [`.claude/kb/back-migrations-authoring.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/kb/back-migrations-authoring.md). Windows shell traps (paths in Git Bash, PowerShell quoting, UTF-8 BOMs, the `node_modules` junction in worktrees) are in [`.claude/kb/windows-shell-gotchas.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/kb/windows-shell-gotchas.md).
+
+## Remote environments
+
+Dev is `https://dev.fluxprompt.ai`. Database access to dev, staging and prod goes through the bastion; see [Data integrity and DB access](/engineering/ways-of-working/data-integrity).

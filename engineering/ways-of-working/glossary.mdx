@@ -1,0 +1,49 @@
+---
+title: "Glossary"
+description: "The domain, access, execution and infrastructure terms used across the Ways of working pages."
+---
+
+## Domain
+
+- **Company**: the top-level tenant, an account or organization.
+- **Space**: a shared workspace inside a company. Access to space-owned flows is granted at the space.
+- **Folder**: groups flows. Owned by a space, a company, or a user directly (a personal folder).
+- **Flow**: a node-based workflow (an agent, in the product). Its ownership chain is flow, folder, then space or company or user. There is no per-flow ACL: you grant at the owning scope.
+- **Node**: one step in a flow (AI text generator, API Caller, Condition, Scripting). Each has a `type` and a `data` blob.
+- **Edge**: a connection between nodes. A **control edge** (`outputFlow`, condition branches) orders steps; a **data edge** feeds a value into an input handle. Both create a dependency in World B.
+- **Dangling edge**: an edge pointing at a node that no longer exists. Cleaned during migrations.
+- **Library**: reusable assets referenced by flows (`flows.library_id`; never nullified on copy).
+- **Version history**: a version-scoped row carries `flow_version_history_id`; `NULL` is the live row. Querying the wrong one is a common "data missing" cause.
+- **Node spec**: one docs page per node type in `docs/node-spec/nodes/`, synced into back; what the MCP and SuperChat serve.
+
+## Access
+
+- **`company_user`**: links a user to a company.
+- **`user_spaces`**: links a user to spaces and drives the sidebar. Giving someone access to a flow means adding them to its space plus a `company_user` row.
+- **`user_product`**: the user's plan. The account type is `products.type` of the active row (`intro`, `starter`, `advanced`, `professional`, `organization`, `enterprise`).
+
+## Execution
+
+- **World A**: the editor run. The front orchestrates node by node and calls provider services directly. No `node_executions`, no `execId`, no Temporal.
+- **World B**: the apiV2 engine (`processNodeViaTemporal` per node). The only path with `node_executions`, run scoping and live status.
+- **Execution (`execId`, `runId`)**: isolated per run. World B writes `node_executions` keyed by `execId`.
+- **Session (`sessionId`)**: accumulates across runs (chat history, session memory). Defaults to `default`.
+- **`node_executions`**: the per-node execution log, World B only, written before each node runs, so the row count shows how far a run reached.
+- **`room_status_updated`**: the socket event carrying live node statuses, keyed by `runId`.
+- **Claim-check**: payloads above 256 KB are offloaded to S3 and replaced by a `{__claimRef}` envelope that must be hydrated before use.
+- **Starter**: the global starter node; its id must contain `flow-global-starter`.
+
+## Delivery
+
+- **Env branches**: `develop` (dev), `staging`, `main` (prod). `master` and `production` are frozen legacy names.
+- **Risk level**: 1 to 5 on a card's plan. Level 3 and up need human approval before code changes.
+- **`@auto` and `@manual` scenarios**: the card's acceptance scenarios; `@auto` ones become tests first, `@manual` ones are tested by a person.
+- **Test map**: the card section that maps each scenario to its test or tester and the result.
+- **Living bug report**: Discovery, What, How, PROOF after every fix.
+
+## Infrastructure
+
+- **Bastion**: the EC2 jump host you SSH through to reach the RDS databases in the private VPC. Non-prod and prod have separate bastions.
+- **ECS**: where back, worker and mcp run in each environment. The image tag on the task definition is the deployed git commit.
+- **Temporal**: the workflow engine the worker uses to execute nodes durably.
+- **`app_db`**: the local Postgres of the dev-DB Docker stack.

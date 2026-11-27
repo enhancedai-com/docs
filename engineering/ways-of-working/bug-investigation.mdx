@@ -1,0 +1,74 @@
+---
+title: "Bug investigation"
+description: "The ordered method for 'a flow is failing, the data is wrong, or it works manually but not through the API', and the habit of proving the fix."
+---
+
+One ordered method, and a habit of proving the fix before calling it fixed. The Claude-loadable version is [`.claude/kb/bug-investigation-playbook.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/kb/bug-investigation-playbook.md), with the rules in [`.claude/rules/investigation.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/rules/investigation.md). The step-by-step queries for each source are in the [Flux error investigation playbook](/ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation).
+
+## Ask the reporter first
+
+Get the `flowId` (from the URL), the approximate time converted to UTC right away, and what they saw: the HTTP status and response body, or a screenshot. Half the bugs are a payload-shape mismatch, and the body shows it in seconds.
+
+## The order: reproduce, DB, Datadog, CloudWatch
+
+Go in this order and stop as soon as the evidence is conclusive. Jumping to logs before the database wastes most investigations.
+
+<Steps>
+  <Step title="Reproduce on the path that failed">
+    Settle which trigger path failed: editor, or API, webhook, cron. Many "API fails, editor works" bugs live only on the World B path, so reproduce on the front that actually failed, not the convenient one. See [The two execution worlds](/engineering/ways-of-working/two-worlds). Tools: the `flux-run-testing` and `flux-e2e-local` skills.
+  </Step>
+  <Step title="Database first, read-only in prod">
+    Most "X is missing" reports are a UUID typo, the wrong environment, a missing migration or a versioning issue, not a code bug. Check the row, its `versionId`, the ownership chain (flow, folder, space or company or user), `flows_logs`, and `node_executions` (World B only). Use the `ec2-tunnel-prod` skill, or delegate to the `db-investigator` agent.
+  </Step>
+  <Step title="Datadog for the application error shape">
+    Datadog (US5) holds the request body the customer sent and the structured error logs. Keep time windows tight.
+  </Step>
+  <Step title="CloudWatch for crashes and cadence">
+    `/ecs/api-task-definition-{dev,staging,prod}` for container-level evidence. A clockwork hourly failure almost always means a cron.
+  </Step>
+</Steps>
+
+When flows fail broadly across node types, or right after a deploy, run the `prod-health` skill first, before blaming a node or rolling back.
+
+## "Successfully ran" is not a useful run
+
+`flows_logs.status = 'Successfully ran'` only means no exception escaped. When the customer says it is broken and the database says it is fine, go straight to the request body in Datadog. An AI node that returns an apology or a fallback string usually ran on bad input.
+
+## Prove the execution path before fixing again
+
+When QA rejects a fix, first prove which execution path the reporter's action took, then check that the fix is on it. Find a write marker that only one path produces, trace from the UI handler the reporter clicked, and grep the exact error text across every repo. One team spent two sessions re-verifying a fix on the apiV2 path while the reported test used the editor's per-node Run.
+
+<Warning>
+  A hand-built fixture is the weakest evidence in the room. Before your repro contradicts QA, diff the fixture's node `data` key by key against the same node type in a real flow (read-only), and take enum values verbatim from the node spec.
+</Warning>
+
+## Traps to check before going deep
+
+- **Route shadowing.** Deleting an explicit `@Get('/foo')` in a controller that also has `@Get('/:id')` turns the request into an invalid-UUID database error that looks like a 500.
+- **Claim-check not hydrated.** Node input above 256 KB becomes a `{__claimRef}` envelope; the worker must hydrate it before reading critical fields such as `model`.
+- **Shared-row clobber.** State on `flows_nodes.data` with no run scoping, so concurrent runs overwrite each other. See [Data integrity and DB access](/engineering/ways-of-working/data-integrity).
+- **Model and provider desync.** See [Models and providers](/engineering/ways-of-working/model-provider).
+- **Error masking in image providers.** A non-200 response read as a `Buffer` turns the real provider message into `Cannot read properties of undefined (reading '0')`.
+- **Attributing a cron failure by timestamp.** Many crons fire at `:00`; attribute through the owner's `schedule` rows, not the second the error was logged.
+- **Empty upstream output.** An AI text node that returns empty text with no error makes a strict downstream node fail. Look at the output content, not only the error node.
+
+## Root cause and workaround are layers
+
+A workaround unblocks the customer now (fix their flow, delete a stale edge, pass a URL instead of binary). The root fix stops the recurrence (the error parser that masked the message, the input guard, the run-scoped storage). Ship the workaround when someone is blocked, and still land the root fix.
+
+<Accordion title="Worked example: an image node failing every hour">
+  A Stability AI image node failed like clockwork once an hour in prod. CloudWatch showed the hourly cadence. In the code, the Stability error parser read `.errors` off a raw `Buffer` and masked the real message. A local repro with an empty prompt reproduced it. Prod `node_executions` showed the source: a customer's hourly cron fed an empty AI text output into the image prompt.
+
+  Three layers: a platform bug (the parser hid the message), a platform gap (an image node sends an empty prompt), and the customer's flow (an AI text node returning empty text). The workaround fixed the flow; the root fix was the parser plus an input guard.
+</Accordion>
+
+## The living bug report
+
+After every fix, update the report with **Discovery / What / How / PROOF** and annotate scope. Status legend: 🔴 open, 🟡 in progress, 🟢 fixed and shipped, ⚪ won't fix or parked. A fix without a PROOF line is a hypothesis.
+
+## Related
+
+- [`.claude/kb/execution-two-worlds.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/kb/execution-two-worlds.md)
+- [`.claude/kb/crash-diagnosis.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/kb/crash-diagnosis.md) and the [memory leak diagnosis playbook](/ai-workflows/internal-developer-workflows/playbooks/memory-leak-diagnosis)
+- [`.claude/kb/production-lessons.md`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/kb/production-lessons.md)
+- The `db-investigator` agent for "the row is not in the table" reports

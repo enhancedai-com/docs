@@ -1,0 +1,84 @@
+---
+title: "Skills and agents catalog"
+description: "Every skill and agent in the Workflow repo, one line each, with a link to its source."
+---
+
+Generated from the frontmatter of `.claude/skills/*/SKILL.md` and `.claude/agents/*.md` on the Workflow repo's `main` on 2026-11-27. The `SKILL.md` or agent file is the authoritative runbook; follow the link. Skills are auto-discovered: describe the task, or type `/` in Claude Code to list them. Agents are invoked with the Agent tool (`subagent_type: "<name>"`) or by naming them ("use the db-investigator agent").
+
+<Note>
+  No agent merges a PR, pushes to a remote branch or runs a deploy. Those are a person's decisions.
+</Note>
+
+## Skills
+
+### Delivery
+
+| Skill | Use it when |
+| --- | --- |
+| [`ticket-intake`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/ticket-intake/SKILL.md) | Turn an idea, bug or request into a ClickUp card that follows the ticket standard, by interviewing the person; creates it only after a yes. |
+| [`ticket-preanalysis`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/ticket-preanalysis/SKILL.md) | Post a technical pre-analysis on a card: where the change lives, related work, suggested risk 1-5, tests per scenario, docs impact, questions for product. |
+| [`task-plan`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/task-plan/SKILL.md) | Write the technical plan before any code, get it reviewed by an independent subagent, and get a person to approve it. |
+| [`scenario-tests`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/scenario-tests/SKILL.md) | Turn a card's `@auto` scenarios into failing tests written by a separate subagent, freeze them, loop until green, fill the Test map. |
+| [`feature-delivery`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/feature-delivery/SKILL.md) | Drive a card through the status ladder and write the handoff comments until QA signs off. |
+| [`qa-run`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/qa-run/SKILL.md) | Build the manual test sheet for a card in `ready for qa`, optionally do a browser pass, and post the result in the team format. |
+| [`deploy-direct`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/deploy-direct/SKILL.md) | Deploy, check, redeploy or roll back back, worker, mcp or front from your machine when GitHub Actions is blocked. |
+| [`prod-health`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/prod-health/SKILL.md) | Read-only platform health check (Temporal and app DBs, worker timeouts, ECS rollout and image SHAs, run error rate); first when flows fail broadly, and before and after a deploy. |
+| [`presentation-deck`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/presentation-deck/SKILL.md) | Build a self-contained HTML slide deck for a meeting from data you can defend. |
+| [`docs-bilingual`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/docs-bilingual/SKILL.md) | Keep the EN and pt-BR versions of a public docs page in step and wired into `docs.json`. |
+
+### Database and access
+
+| Skill | Use it when |
+| --- | --- |
+| [`ec2-tunnel`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/ec2-tunnel/SKILL.md) | Query dev or staging Postgres through a programmatic SSH tunnel, or manage SSH keys on the bastion. |
+| [`ec2-tunnel-prod`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/ec2-tunnel-prod/SKILL.md) | Read-only queries against production; refuses any write with three layers of defense. |
+| [`prod-sql-files`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/prod-sql-files/SKILL.md) | Run a batch of `.sql` files read-only against production and save each result in a new Desktop folder, then read the results against what each file expects. |
+| [`db-migration`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/db-migration/SKILL.md) | Copy spaces, flows or libraries between prod, dev and staging, grant access to migrated spaces, clean dangling edges. |
+| [`flux-access`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-access/SKILL.md) | Grant or inspect a user's company, space and flow access on dev or staging. |
+| [`flux-plan`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-plan/SKILL.md) | Change a user's plan or account type on dev or staging. |
+| [`flux-support-admin`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-support-admin/SKILL.md) | Put a support engineer into an existing account as admin, with every space, and revoke it when the ticket closes. |
+| [`flux-impersonate`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-impersonate/SKILL.md) | Mint a short-lived, audited impersonation token to act as a user for debugging or QA. |
+| [`flux-cost-report`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-cost-report/SKILL.md) | Build a per-customer AI cost and usage report from prod, by week and by flow, with a reconciliation gate. |
+
+### Execution and testing
+
+| Skill | Use it when |
+| --- | --- |
+| [`flux-e2e-local`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-e2e-local/SKILL.md) | Run the local execution matrix (api-v2, Temporal, worker) on seeded fixture flows, with a concurrency burst and duration budgets. Local only. |
+| [`flux-run-testing`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-run-testing/SKILL.md) | Test the execution fronts (API, webhook, chatbot, editor), run scoping, live status and concurrency isolation. |
+| [`flux-execution-scheduler`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/flux-execution-scheduler/SKILL.md) | Understand World B execution order, or diagnose a node that ran with empty input or never ran. |
+| [`e2e-debug-frontend`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/e2e-debug-frontend/SKILL.md) | Drive the deployed front with Playwright and a known JWT to capture network and console activity while reproducing a bug. |
+| [`node-run-flush-check`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/node-run-flush-check/SKILL.md) | Check that a node's Run button flushes pending edits before it dispatches, whenever its Run wiring or debounce changes. |
+| [`node-worker-migration`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/node-worker-migration/SKILL.md) | Profile a node type across front, back and worker and decide whether its execution should move into the Temporal worker. |
+
+### MCP, models and integrations
+
+| Skill | Use it when |
+| --- | --- |
+| [`mcp-validation`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/mcp-validation/SKILL.md) | Run the local MCP validation tracks before an MCP PR and report go or no-go. |
+| [`mcp-node-schema-sync`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/mcp-node-schema-sync/SKILL.md) | Check that a node type's MCP schema matches the real front and worker data shape, including `<field>Data` companions and handles. |
+| [`mcp-node-validation`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/mcp-node-validation/SKILL.md) | Prove a node type authored through the MCP delivers a value to the next node on a real local stack. |
+| [`completions-api`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/completions-api/SKILL.md) | Call the OpenAI-compatible `/v1/chat/completions` endpoint across providers, streamed or not. |
+| [`completions-api-validation`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/completions-api-validation/SKILL.md) | Validate that reasoning parameters reach each provider's SDK, with a sweep over every available model. |
+| [`system-ai-model-capability-sync`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/system-ai-model-capability-sync/SKILL.md) | Check whether a new `system_ai_models` capability flag needs a toggle in the AI Models admin page. |
+| [`third-party-integrations`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/third-party-integrations/SKILL.md) | Add a provider to the Third Party Integration node or change adapter and config contracts. |
+| [`terraform-infra`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/skills/terraform-infra/SKILL.md) | Fill and validate the mcp Terraform `<env>.tfvars` against the real AWS account before plan or apply. |
+
+## Agents
+
+| Agent | Use it when | Writes? |
+| --- | --- | --- |
+| [`pr-creator`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/agents/pr-creator.md) | Open the PRs for a ClickUp task across back, front, worker, mcp and docs, with the team title and body; refuses env-branch heads. | Creates PRs |
+| [`deploy-announcer`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/agents/deploy-announcer.md) | Compose the team deploy message from what a prod workflow run actually deployed in the window. | Read-only |
+| [`db-investigator`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/agents/db-investigator.md) | Diagnose "X is missing from the database" in dev, staging or prod and draft a reply. | Read-only |
+| [`db-setup`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/agents/db-setup.md) | Bootstrap a new teammate's database access: SSH key, `.env`, AWS key, dependencies, smoke test. | Local only |
+| [`e2e-playwright-runner`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/agents/e2e-playwright-runner.md) | Run the local browser E2E suite (model switch and concurrency isolation). Owner-only today; teammates use `flux-e2e-local`. | Local only |
+| [`mintlify-docs-writer`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/agents/mintlify-docs-writer.md) | Write or improve Mintlify pages in the docs repo. | Writes docs |
+| [`mcp-validator`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/agents/mcp-validator.md) | Run the `mcp-validation` skill in isolation and return go or no-go. | Read-only |
+| [`mcp-node-schema-validator`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/agents/mcp-node-schema-validator.md) | Run the `mcp-node-schema-sync` skill in isolation and report per-type verdicts with evidence. | Read-only |
+| [`node-worker-migration-analyst`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/agents/node-worker-migration-analyst.md) | Run the `node-worker-migration` skill in isolation and return a profile and a go or no-go verdict. | Read-only |
+| [`terraform-infra-helper`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/agents/terraform-infra-helper.md) | Run the `terraform-infra` skill: discover the AWS ids, write them to `<env>.tfvars` after confirmation, validate. | Writes tfvars |
+
+## Hooks and settings
+
+The shared `.claude/settings.json` allows common read and build commands, denies destructive ones, asks before `gh pr merge` and `gh workflow run`, and wires two hooks: [`guard-env-branches.mjs`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/hooks/guard-env-branches.mjs) (no commits on env branches, no merging `develop` or `staging` into a feature branch, no force push, no push to `main`) and [`guard-dev-loop.mjs`](https://github.com/enhancedai-com/Workflow/blob/main/.claude/hooks/guard-dev-loop.mjs) (plan, approval and frozen tests on task branches). See [Guardrails](/ai-workflows/claude-code-guardrails).

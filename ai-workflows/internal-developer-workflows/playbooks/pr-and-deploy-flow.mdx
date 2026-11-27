@@ -22,11 +22,13 @@ You finished work on a ClickUp task and need to ship it. This is the team's stan
 | Flux-Prompt (`back/`) | `develop` | `staging` | `main` |
 | Flux-Prompt-Frontend (`front/`) | `develop` | `staging` | `main` |
 | Flux-Prompt-Worker (`worker/`) | `develop` | `staging` | `main` |
-| FLuxPrompt-MCP (`mcp-server/`) | `develop` | `staging` | `main` |
+| FluxPrompt-MCP (`mcp/`) | `develop` | `staging` | `main` |
 
 The legacy `production` and `master` branches are frozen since 2026-10-13. Never branch from them or target a PR at them.
 
-Feature branches follow `<change_type>/<task_code>` where `change_type` ∈ `fix`, `feat`, `refactor`. Example: `feat/868jk7x3j`.
+Feature branches follow `<change_type>/<task_code>` where `change_type` ∈ `fix`, `feat`, `refactor`, `chore`. Example: `feat/868jk7x3j`.
+
+This page covers the PR and deploy end of the lifecycle. The whole lifecycle, from the ticket to docs, is the [Delivery practice](/engineering/ways-of-working/delivery).
 
 All PRs target `main`. To test on dev or staging, merge your feature branch into `develop` or `staging` and push. Never merge `develop` or `staging` into your feature branch. The full flow is in [Git workflow](/getting-started/git-workflow).
 
@@ -38,7 +40,7 @@ Use the [`pr-creator` agent](/ai-workflows/internal-developer-workflows/agents/p
 use the pr-creator agent — https://app.clickup.com/t/868jk7x3j
 ```
 
-The agent finds the matching branch in both `back/` and `front/`, formats the title (`[FEAT] Imperative name`), fills the body template (Description / Preview / References), runs `scripts/check-no-dev-in-prod-pr.sh`, and runs `gh pr create --base main`.
+The agent finds the task's branches in `back/`, `front/`, `worker/`, `mcp/` and `docs/`, refuses a head that is an env branch or carries `develop` or `staging` merges, formats the title (`[FEAT] Imperative name`), fills the body (Description / Preview / Test map / Plan / References), runs `gh pr create --base main`, and cross-links the PRs. It never merges and never runs a deploy.
 
 ## Stage 2 — Review
 
@@ -54,7 +56,9 @@ Standard team review. The agent leaves `Preview` as a placeholder for you to fil
 | `cicd_staging.yml` | `push` to `staging` or `workflow_dispatch` | Auto on push, manual on demand |
 | `cicd_prod.yml` | `workflow_dispatch` **only** | Manual command — never auto-deploys |
 
-Front repo has the equivalent S3 deploys: `Deploy to S3 Dev` (push to `develop`), `Deploy to S3 Staging` (push to `staging`), `Deploy to S3 Prod` (`workflow_dispatch`).
+Front repo has the equivalent S3 deploys: `Deploy to S3 Dev` (push to `develop`), `Deploy to S3 Staging` (push to `staging`), `Deploy to S3 Prod` (`workflow_dispatch`). Every prod workflow (back `cicd_prod.yml`, front `cicd-prod.yaml`, worker `cicd_prod.yml`, mcp `cicd_prod.yml`) is `workflow_dispatch` only: a PR merged into `main` ships nothing until a person runs it. Running it is always a person's decision, never an agent's.
+
+When GitHub Actions is blocked (out of minutes), deploy from your machine with the `deploy-direct` skill (`scripts/deploy-direct/deploy.sh` in the Workflow repo).
 
 ### Production deploy command
 
@@ -85,6 +89,8 @@ aws ecs describe-task-definition \
 
 The SHA tag in the image URI equals the git commit.
 
+A green deploy is not a finished rollout: confirm the new task is the only one serving before concluding anything about a new route or fix. Then run the `prod-health` skill, and for a deploy that carried a migration, check read-only that the migration is recorded and the API booted cleanly.
+
 ## ECS topology (back/, us-east-1)
 
 | Env | Cluster | Service | Task def family | ECR repo |
@@ -100,6 +106,10 @@ Container env is mostly empty — secrets come from AWS Secrets Manager. Adding 
 ## Resizing a task definition
 
 When a task needs more CPU/memory (e.g., after diagnosing a [memory leak](/ai-workflows/internal-developer-workflows/playbooks/memory-leak-diagnosis)):
+
+<Warning>
+  Registering a task definition and updating a service in prod are production infrastructure writes. They need explicit authorization from the owner for that specific change; prepare the commands with what they do and how to revert them, and let the owner run them.
+</Warning>
 
 <Steps>
   <Step title="Pull current task def JSON">
@@ -148,7 +158,7 @@ When a task needs more CPU/memory (e.g., after diagnosing a [memory leak](/ai-wo
 
 ## Stage 4 — Deploy announcement
 
-After the rollout completes, ask the [`pr-creator` agent](/ai-workflows/internal-developer-workflows/agents/pr-creator) to compose the team message. The agent collects every ClickUp task deployed in the session and produces:
+After the rollout completes, use the `deploy-announcer` agent (or, for the PRs created in the same session, step 10 of the [`pr-creator` agent](/ai-workflows/internal-developer-workflows/agents/pr-creator)). A PR counts only when a successful prod workflow run in the window contains its merge commit; merged PRs not yet deployed are listed apart. The message:
 
 ```
 Hey team, I just deployed the following to production:
@@ -166,10 +176,11 @@ Format rules:
 - One bullet per ClickUp task, even if it had PRs in both repos
 - Em dash (`—`) between task name and URL
 
-The agent copies the message to your clipboard. Paste into the team channel.
+The agent copies the message to your clipboard. Paste into the team channel, then move each card to `deployed on live`.
 
 ## Related
 
 - [`pr-creator` agent](/ai-workflows/internal-developer-workflows/agents/pr-creator) — automates PR creation and the announcement
 - [Memory leak diagnosis](/ai-workflows/internal-developer-workflows/playbooks/memory-leak-diagnosis) — when the deploy fix is a resize
 - [Flux error investigation](/ai-workflows/internal-developer-workflows/playbooks/flux-error-investigation) — when a deploy needs to be diagnosed post-rollout
+- [Delivery practice](/engineering/ways-of-working/delivery) — the whole lifecycle, from the ticket to docs
