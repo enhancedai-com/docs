@@ -1,0 +1,80 @@
+---
+title: "Building agents with SuperChat"
+description: "What SuperChat can and cannot do for you while you build an agent today."
+---
+
+## What SuperChat does while you build
+
+SuperChat does not build or edit agents. It helps you build them yourself: it explains nodes and
+fields, reads the agent you have open, and tells you why a run failed and where to fix it.
+
+<Note>
+  **Coming soon:** building and changing an agent from SuperChat, with a preview of each change and
+  **Apply** / **Undo** buttons. This is not available yet. Today SuperChat cannot add, remove or connect
+  nodes, change a field, or run an agent.
+</Note>
+
+## Who can use it
+
+Anyone SuperChat is enabled for can ask it about the agents they can open. To change an agent you
+still need permission to edit agents in that organization — see
+[Roles and permissions](/product-guide/organizations/roles-and-permissions).
+
+## Build an agent, with SuperChat at your side
+
+<Steps>
+  <Step title="Create the agent">
+    In the **Agents** sidebar, click **+** and choose **Add Agent**. Give it a name.
+    To start from a description instead of an empty canvas, open **Create with Ai** in the same window
+    and describe what the agent should do, then click **Create**. FluxPrompt builds a first version
+    for you to review. You can also start from **Templates**.
+  </Step>
+  <Step title="Ask SuperChat which nodes to use">
+    Open SuperChat (**Ctrl+K**, or **⌘K** on a Mac) on the agent's page and ask, for example,
+    *"Which node should I use to read a PDF?"* or *"What does the Target Input Node setting do?"*.
+    SuperChat answers from the node catalogue and does not invent fields.
+  </Step>
+  <Step title="Add and connect the nodes yourself">
+    Make the change on the canvas. SuperChat reads the agent live, so you can then ask
+    *"Is anything in this agent not connected?"* — it can list the nodes that have no connections.
+  </Step>
+  <Step title="Run the agent">
+    Click **Run Agent** on the global node. SuperChat cannot start a run for you.
+  </Step>
+  <Step title="If a run fails, ask why">
+    Ask *"Why did the last run fail?"*. SuperChat reads the latest run of the agent and the error of
+    each failed node, then tells you what to change and where.
+  </Step>
+</Steps>
+
+## What SuperChat can tell you about an agent
+
+| Ask about | What SuperChat reads |
+|-----------|----------------------|
+| What the agent does | The agent's documentation and its current configuration |
+| How it is built | Every node with its type and key settings, the connections, and the nodes that are not connected |
+| A node type or field | The node catalogue: what the node does and what each field is for |
+| A failed run | The run's status, how it was started, and the error of each failed node |
+| An agent it calls | The agent behind an **Agent Caller** or **Library** node |
+
+## Limits
+
+- SuperChat cannot change an agent, a node, a file or a setting.
+- It cannot run an agent or a single node.
+- It reads a run's status and node errors. To read a node's full output, open the run in **Logs**.
+- When the node catalogue does not cover a setting you see on your node, SuperChat says so instead of
+  guessing.
+
+## Troubleshooting
+
+| Problem | What to do |
+|---------|------------|
+| SuperChat describes a different agent than the one you meant | Use the agent's exact name, or ask from the agent's own page so SuperChat focuses on it. |
+| SuperChat says it cannot make a change | That is expected today. Follow the steps it gives you on the canvas. |
+| SuperChat says the documentation does not cover something | Add the missing detail to the agent's documentation; SuperChat reads it on the next question. |
+
+## Related
+
+- [SuperChat overview](/product-guide/superchat/overview)
+- [Concepts](/product-guide/concepts)
+- [Schedules](/product-guide/running-agents/schedules)

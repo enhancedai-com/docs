@@ -1,0 +1,81 @@
+---
+title: "Construindo agentes com o SuperChat"
+description: "O que o SuperChat pode e não pode fazer por você enquanto você constrói um agente hoje."
+---
+
+## O que o SuperChat faz enquanto você constrói
+
+O SuperChat não constrói nem edita agentes. Ele ajuda você a construí-los: explica nodes e campos, lê o
+agente que você tem aberto e diz por que uma execução falhou e onde corrigir.
+
+<Note>
+  **Em breve:** construir e alterar um agente pelo SuperChat, com uma prévia de cada mudança e botões
+  **Apply** / **Undo**. Isso ainda não está disponível. Hoje o SuperChat não adiciona, remove nem conecta
+  nodes, não altera campos e não executa agentes.
+</Note>
+
+## Quem pode usar
+
+Qualquer pessoa com o SuperChat liberado pode perguntar sobre os agentes que consegue abrir. Para alterar um
+agente, você continua precisando de permissão para editar agentes nessa organização — veja
+[Papéis e permissões](/product-guide/pt-br/organizations/roles-and-permissions).
+
+## Construa um agente com o SuperChat ao lado
+
+<Steps>
+  <Step title="Crie o agente">
+    Na barra lateral **Agents**, clique em **+** e escolha **Add Agent**. Dê um nome.
+    Para começar de uma descrição em vez de um canvas vazio, abra **Create with Ai** na mesma janela,
+    descreva o que o agente deve fazer e clique em **Create**. O FluxPrompt monta uma primeira versão para
+    você revisar. Você também pode começar por **Templates**.
+  </Step>
+  <Step title="Pergunte ao SuperChat quais nodes usar">
+    Abra o SuperChat (**Ctrl+K**, ou **⌘K** no Mac) na página do agente e pergunte, por exemplo,
+    *"Qual node uso para ler um PDF?"* ou *"O que faz a configuração Target Input Node?"*.
+    O SuperChat responde a partir do catálogo de nodes e não inventa campos.
+  </Step>
+  <Step title="Adicione e conecte os nodes você mesmo">
+    Faça a mudança no canvas. O SuperChat lê o agente ao vivo, então depois você pode perguntar
+    *"Tem algo neste agente que não está conectado?"* — ele consegue listar os nodes sem conexão.
+  </Step>
+  <Step title="Execute o agente">
+    Clique em **Run Agent** no node global. O SuperChat não consegue iniciar uma execução por você.
+  </Step>
+  <Step title="Se a execução falhar, pergunte por quê">
+    Pergunte *"Por que a última execução falhou?"*. O SuperChat lê a execução mais recente do agente e o erro
+    de cada node que falhou, e diz o que mudar e onde.
+  </Step>
+</Steps>
+
+## O que o SuperChat consegue dizer sobre um agente
+
+| Pergunte sobre | O que o SuperChat lê |
+|----------------|----------------------|
+| O que o agente faz | A documentação do agente e a configuração atual dele |
+| Como ele é montado | Cada node com o tipo e as principais configurações, as conexões e os nodes sem conexão |
+| Um tipo de node ou campo | O catálogo de nodes: o que o node faz e para que serve cada campo |
+| Uma execução que falhou | O status da execução, como ela começou e o erro de cada node que falhou |
+| Um agente que ele chama | O agente por trás de um node **Agent Caller** ou **Library** |
+
+## Limites
+
+- O SuperChat não altera agentes, nodes, arquivos nem configurações.
+- Ele não executa um agente nem um único node.
+- Ele lê o status de uma execução e os erros dos nodes. Para ler a saída completa de um node, abra a
+  execução em **Logs**.
+- Quando o catálogo de nodes não cobre uma configuração que você vê no seu node, o SuperChat diz isso em
+  vez de chutar.
+
+## Solução de problemas
+
+| Problema | O que fazer |
+|----------|-------------|
+| O SuperChat descreve outro agente, não o que você queria | Use o nome exato do agente, ou pergunte a partir da página do próprio agente para o SuperChat focar nele. |
+| O SuperChat diz que não consegue fazer uma mudança | É o esperado hoje. Siga os passos que ele dá no canvas. |
+| O SuperChat diz que a documentação não cobre algo | Acrescente o detalhe na documentação do agente; o SuperChat lê na próxima pergunta. |
+
+## Relacionados
+
+- [Visão geral do SuperChat](/product-guide/pt-br/superchat/overview)
+- [Conceitos](/product-guide/pt-br/concepts)
+- [Agendamentos](/product-guide/pt-br/running-agents/schedules)

@@ -1,0 +1,151 @@
+---
+title: "Papéis e permissões"
+description: "O que os papéis Owner, Admin, Builder e User podem fazer numa organização, e como mudar o papel de um membro."
+---
+
+## O que é
+
+Cada membro de uma organização tem um **papel**. O papel define o que o membro vê e faz naquela
+organização: construir agentes, usar chaves de API, gerenciar membros, ou só usar o que está publicado nos
+boards.
+
+| Papel | Em uma linha |
+|-------|--------------|
+| **Owner** | A pessoa responsável pela organização. Existe exatamente um. Pode fazer tudo. |
+| **Admin** | Gerencia a organização: membros, configurações, cobrança, modelos. Constrói agentes. |
+| **Builder** | Constrói e executa agentes. Abre o canvas. Não gerencia membros nem cobrança. |
+| **User** | Usa o que está publicado nos boards. Não abre o canvas e não pode usar chaves de API. |
+
+Se você pertence a várias organizações, pode ter um papel diferente em cada uma. O seu papel vale para a
+organização em que você está trabalhando (veja **Switch Org** no menu do usuário).
+
+## Quem pode usar
+
+Owners e Admins gerenciam membros e papéis. Builders e Users não mudam o papel de ninguém, nem o próprio.
+
+## O que cada papel pode fazer
+
+| Ação | Owner | Admin | Builder | User |
+|------|:-----:|:-----:|:-------:|:----:|
+| Ver os boards e o que está publicado neles | ✓ | ✓ | ✓ | ✓ |
+| Abrir o canvas; criar, editar, duplicar, compartilhar e apagar agentes | ✓ | ✓ | ✓ | — |
+| Criar versões, publicar, restaurar uma versão anterior | ✓ | ✓ | ✓ | — |
+| Criar interfaces, boards e pastas | ✓ | ✓ | ✓ | — |
+| Ver **Agents**, **Logs** e **Data** na barra lateral | ✓ | ✓ | ✓ | — |
+| Executar agentes | ✓ | ✓ | ✓ | Só se **Allow Users to run flows** estiver ligado |
+| Obter, gerar e usar uma chave de API pessoal | ✓ | ✓ | ✓ | — |
+| Criar uma chave MCP | ✓ | ✓ | ✓ (somente leitura, a não ser que a organização permita mais) | — |
+| Ver e revogar chaves MCP | Todas | Todas | As próprias | — |
+| Convidar e remover membros | Admins, Builders, Users | Builders, Users | — | — |
+| Mudar o papel de um membro | Admin, Builder, User | Builder, User | — | — |
+| Ligar ou desligar **Allow Users to run flows** | ✓ | ✓ | — | — |
+| Ligar ou desligar modelos de IA na organização ou num space | ✓ | ✓ | — | — |
+| Configurações da organização, **Pricing**, **Billing**, **Log Retention** | ✓ | ✓ | — | — |
+| Adicionar ou remover pessoas de um space | ✓ | ✓ | — | — |
+| Criar um space | ✓ | — | — | — |
+| Mudar o padrão de retenção de logs de todos os spaces | ✓ | — | — | — |
+| Transferir a propriedade | ✓ | — | — | — |
+
+<Note>
+  **O papel User não pode usar chave de API nem criar chave MCP.** Um User que chama a API com uma chave
+  recebe **The User role cannot use an API key. Ask an Admin for the access you need.** Dê o papel Builder à
+  pessoa se ela precisar de acesso programático.
+</Note>
+
+### O que cada papel vê em Settings
+
+| Papel | Abas de Settings |
+|-------|------------------|
+| Owner, Admin | Profile, Org Settings, Ai Configurations, Org Users, Agents, Token Usage, Completion Logs, Log Retention, Integrations, MCP Keys, Pricing, Billing, Ai Technologies, Spaces |
+| Builder | Profile, Ai Configurations, Org Users, Agents, Token Usage, Completion Logs, Integrations, MCP Keys, Ai Technologies, Spaces |
+| User | Profile |
+
+## Papéis no space
+
+Dentro de um space, a pessoa é **admin** ou **member** do space. Quem cria um space é o admin dele. Um admin
+do space pode gerenciar a retenção de logs desse space (se também for Admin ou Owner da organização),
+renovar a chave de API do space e editar a documentação do space. Os papéis do space são separados dos
+papéis da organização e não aparecem na lista de membros.
+
+## Convidar um membro
+
+<Steps>
+  <Step title="Abra Org Users">
+    Abra **Settings** e escolha **Org Users**.
+  </Step>
+  <Step title="Adicione a pessoa">
+    Clique em **Add User**. Em **Add a New User**, preencha o **User Email** e escolha um **Role**.
+    A lista só mostra os papéis que você pode dar: um Owner pode convidar Admins, Builders e Users; um Admin
+    pode convidar Builders e Users.
+  </Step>
+  <Step title="A pessoa aceita">
+    Ela recebe um email convidando para entrar na organização no FluxPrompt com esse papel.
+  </Step>
+</Steps>
+
+## Mudar o papel de um membro
+
+<Steps>
+  <Step title="Abra Org Users">
+    Abra **Settings** e escolha **Org Users**.
+  </Step>
+  <Step title="Abra o menu de papel do membro">
+    Clique no papel do membro e escolha o novo. Você não pode mudar o seu próprio papel.
+  </Step>
+  <Step title="Confira a confirmação">
+    O FluxPrompt mostra **Role updated to Builder.** (ou o papel que você escolheu).
+  </Step>
+</Steps>
+
+A mudança de papel vale na hora, inclusive para as chaves MCP da pessoa: rebaixar alguém para **User** tira a
+capacidade de alterar ou executar agentes por um assistente de IA em cerca de um minuto.
+
+## Deixar Users executarem agentes
+
+Por padrão, membros com o papel **User** veem o que está publicado nos boards, mas não conseguem executar.
+Para permitir, um Owner ou Admin liga **Allow Users to run flows** em **Org Users**. O FluxPrompt confirma com
+**Users in this organization can now run what they can see.**
+
+## O Owner
+
+- Toda organização tem exatamente um Owner.
+- O Owner não pode ser convidado, removido nem desativado, e ninguém muda o papel do Owner.
+- A propriedade só muda por transferência para um membro **ativo**. O Owner anterior vira **Admin**.
+- Toda mudança de papel e toda transferência ficam registradas.
+
+<Note>
+  As configurações da organização ainda não têm um botão **Transfer ownership**. Para transferir a
+  propriedade, fale com o suporte do FluxPrompt.
+</Note>
+
+## Assentos
+
+O seu plano inclui um número de assentos. Membros **User** ocupam um assento de User; membros Owner, Admin e
+Builder ocupam um assento de Builder. Promover alguém para um assento de Builder exige um assento de Builder
+livre; rebaixar sempre funciona.
+
+## Limites
+
+- Um Owner por organização.
+- Um Admin não convida, não remove e não muda o papel de outros Admins.
+- Builders e Users não gerenciam membros.
+
+## Solução de problemas
+
+| Mensagem | O que significa |
+|----------|-----------------|
+| **The User role cannot use an API key. Ask an Admin for the access you need.** | A chave pertence a um membro com o papel User. Mude o papel dele para Builder. |
+| **The User role cannot create an MCP token. Ask an Admin for the access you need.** | O mesmo, para chaves MCP. |
+| **Your organization has not enabled running for User accounts. Ask an Owner or an Admin to turn on "Allow Users to run flows".** | Ligue **Allow Users to run flows** ou mude o papel do membro. |
+| **Your organization has not given you access to agents. Ask an administrator if you need it.** | Você tem o papel User. Peça o papel Builder a um Owner ou Admin. |
+| **Only an Owner or an Admin can manage the members of this organization.** | Builders e Users não convidam nem removem membros. |
+| **You cannot invite somebody as admin. Ask an Owner of this organization.** | Só o Owner adiciona Admins. |
+| **The organization Owner cannot be removed or deactivated. Transfer ownership first.** | O Owner precisa transferir a propriedade antes de sair. |
+| **No Builder seats left: this plan allows 3 and all of them are taken. Change a member's role or upgrade the plan.** | Os assentos de Builder do seu plano estão todos ocupados. |
+| **Access denied: the user role cannot perform this action. Allowed roles: …** | O seu papel não permite essa ação. |
+
+## Relacionados
+
+- [Conceitos](/product-guide/pt-br/concepts)
+- [Onboarding](/product-guide/pt-br/organizations/onboarding)
+- [Autenticação do MCP](/mcp/pt-br/authentication)
